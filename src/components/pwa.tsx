@@ -41,12 +41,15 @@ export function PWA() {
 
   return (
     <>
-      {/* Update-available banner (option to update) */}
+      {/* Forced update — full-screen blocker: must update to continue */}
       {updateReady && (
-        <div className="fixed top-3 inset-x-3 lg:left-auto lg:right-6 lg:w-96 z-[60] rounded-xl border bg-card shadow-lg p-4 flex items-center gap-3 no-print">
-          <div className="rounded-lg bg-primary/15 p-2"><RefreshCw className="h-4 w-4 text-primary" /></div>
-          <div className="flex-1"><p className="text-sm font-medium">A new version is available</p><p className="text-xs text-muted-foreground">Update to get the latest features & fixes.</p></div>
-          <button onClick={update} className="rounded-lg bg-primary text-primary-foreground h-8 px-3 text-xs font-medium">Update now</button>
+        <div className="fixed inset-0 z-[200] bg-background/95 backdrop-blur grid place-items-center p-6 no-print">
+          <div className="max-w-sm text-center">
+            <div className="h-14 w-14 rounded-2xl bg-primary/15 grid place-items-center mx-auto"><RefreshCw className="h-7 w-7 text-primary" /></div>
+            <h2 className="mt-4 text-xl font-semibold">Update required</h2>
+            <p className="mt-2 text-sm text-muted-foreground">A new version of MNB Cortex is available. Please update to continue using the app.</p>
+            <button onClick={update} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-11 px-6 text-sm font-medium hover:opacity-90"><RefreshCw className="h-4 w-4" /> Update now</button>
+          </div>
         </div>
       )}
 
