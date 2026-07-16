@@ -1,0 +1,34 @@
+import {
+  LayoutDashboard, MessageSquare, TrendingUp, Wallet, Factory, Boxes,
+  Users, Globe, Brain, FileText, Video, Workflow, Shield, Settings, FileBarChart, CheckCircle2, Upload, Sparkles, Database, Plug, Inbox, Contact, Activity, KanbanSquare, Code2, Bot, CreditCard
+} from "lucide-react";
+
+export const NAV = [
+  { href: "/dashboard", label: "Business Health", icon: LayoutDashboard, group: "Overview" },
+  { href: "/chat", label: "AI CEO Chat", icon: MessageSquare, group: "Overview" },
+  { href: "/sales", label: "Sales", icon: TrendingUp, group: "Intelligence" },
+  { href: "/finance", label: "Finance", icon: Wallet, group: "Intelligence" },
+  { href: "/production", label: "Production", icon: Factory, group: "Intelligence" },
+  { href: "/inventory", label: "Inventory", icon: Boxes, group: "Intelligence" },
+  { href: "/hr", label: "HR", icon: Users, group: "Intelligence" },
+  { href: "/market", label: "Market", icon: Globe, group: "Intelligence" },
+  { href: "/customers", label: "Customers", icon: Contact, group: "Intelligence" },
+  { href: "/pipeline", label: "Deals Pipeline", icon: KanbanSquare, group: "Intelligence" },
+  { href: "/strategy", label: "Strategy Consultant", icon: Brain, group: "Advisory" },
+  { href: "/documents", label: "Documents", icon: FileText, group: "Advisory" },
+  { href: "/meetings", label: "Meetings", icon: Video, group: "Advisory" },
+  { href: "/reports", label: "Reports", icon: FileBarChart, group: "Advisory" },
+  { href: "/workflows", label: "Workflows", icon: Workflow, group: "Automation" },
+  { href: "/approvals", label: "Approvals", icon: CheckCircle2, group: "Automation" },
+  { href: "/import", label: "Import data", icon: Upload, group: "Automation" },
+  { href: "/data", label: "Data Explorer", icon: Database, group: "Automation" },
+  { href: "/integrations", label: "Integrations", icon: Plug, group: "Automation" },
+  { href: "/leads", label: "Leads", icon: Inbox, group: "Automation" },
+  { href: "/activity", label: "Activity", icon: Activity, group: "Automation" },
+  { href: "/developers", label: "Developers · API", icon: Code2, group: "Automation" },
+  { href: "/autopilot", label: "AI Autopilot", icon: Bot, group: "Automation" },
+  { href: "/billing", label: "Billing & Plan", icon: CreditCard, group: "Automation" },
+  { href: "/admin", label: "Admin & Access", icon: Shield, group: "Automation" },
+  { href: "/settings", label: "Settings", icon: Settings, group: "Automation" },
+  { href: "/pricing", label: "Pricing & plans", icon: Sparkles, group: "Automation" },
+] as const;
