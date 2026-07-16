@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Field, ActionForm } from "@/components/forms";
 import { getOrgProfile, getUserAndOrg } from "@/lib/data";
 import { updateOrgProfile, seedDemoData, signOut } from "@/lib/actions";
+import { APP_VERSION } from "@/lib/config";
 import { Database, LogOut, Building2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -66,7 +67,7 @@ export default async function Settings() {
 
             <Section title="Account">
               <div className="flex items-center justify-between">
-                <div className="text-sm"><span className="text-muted-foreground">Signed in as</span> {user.email}</div>
+                <div className="text-sm"><span className="text-muted-foreground">Signed in as</span> {user.email}<span className="ml-3 text-xs text-muted-foreground">· App v{APP_VERSION}</span></div>
                 <form action={signOut}>
                   <button className="inline-flex items-center gap-2 rounded-lg border h-9 px-4 text-sm hover:bg-accent" type="submit"><LogOut className="h-4 w-4" /> Sign out</button>
                 </form>
