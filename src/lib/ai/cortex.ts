@@ -195,6 +195,11 @@ Use realistic estimates; state assumptions. Question:`,
 ## SWOT
 ## Recommended roadmap (with KPIs)
 Ground it in the BUSINESS SNAPSHOT. Question:`,
+  outreach: `You are a B2B sales copywriter for an Indian SME. Write ready-to-send outreach for the described customer/opportunity. Produce markdown with:
+## WhatsApp message (short, friendly)
+## Cold email (subject + 4-6 line body)
+## Follow-up line
+Keep it specific and India-appropriate. Details:`,
   pulse: `Give a 3-sentence executive pulse on the business RIGHT NOW: (1) what's happening, (2) the single biggest risk, (3) the one action to take today. Be specific with numbers.`,
 };
 
