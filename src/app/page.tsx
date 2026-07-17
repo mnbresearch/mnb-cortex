@@ -57,6 +57,24 @@ export default function Home() {
 
       <section className="px-6 lg:px-12 py-12"><RoiCalculator /></section>
 
+      <section className="px-6 lg:px-12 pb-16 max-w-4xl mx-auto">
+        <h2 className="text-2xl font-semibold text-center mb-2">Why not just an ERP, CRM or ChatGPT?</h2>
+        <p className="text-center text-muted-foreground mb-8">MNB Cortex is an AI COO — it doesn\'t just store data, it acts on it.</p>
+        <div className="overflow-x-auto rounded-xl border bg-card">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b text-left"><th className="p-3"></th><th className="p-3 text-primary font-semibold">MNB Cortex</th><th className="p-3 text-muted-foreground">ERP</th><th className="p-3 text-muted-foreground">CRM</th><th className="p-3 text-muted-foreground">ChatGPT</th></tr></thead>
+            <tbody>
+              {[["Reads all your business data","yes","part","part","no"],["Diagnoses problems","yes","no","no","part"],["Predicts outcomes","yes","no","no","no"],["Recommends actions","yes","no","no","part"],["Executes tasks for you","yes","no","no","no"],["Plain-language answers","yes","no","no","yes"]].map((r,i)=>(
+                <tr key={i} className="border-b border-border/50">
+                  <td className="p-3 font-medium">{r[0]}</td>
+                  {r.slice(1).map((c,j)=>(<td key={j} className="p-3">{c==="yes"?<span className="text-success">✓</span>:c==="part"?<span className="text-warning">~</span>:<span className="text-muted-foreground">✕</span>}</td>))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section className="px-6 lg:px-12 pb-16 max-w-5xl mx-auto">
         <h2 className="text-2xl font-semibold text-center mb-8">Built for SME owners</h2>
         <div className="grid sm:grid-cols-3 gap-4">
