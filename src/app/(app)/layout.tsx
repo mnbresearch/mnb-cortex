@@ -7,6 +7,7 @@ import { ConsentBanner } from "@/components/consent-banner";
 import { Copilot } from "@/components/copilot";
 import { Shortcuts } from "@/components/shortcuts";
 import { Toaster } from "@/components/toaster";
+import { WhatsNew } from "@/components/whats-new";
 import { getOrgProfile } from "@/lib/data";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -23,6 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Copilot />
       <Shortcuts />
       <Toaster />
+      <WhatsNew />
     </div>
   );
 }
