@@ -1,11 +1,12 @@
 import {
   LayoutDashboard, MessageSquare, TrendingUp, Wallet, Factory, Boxes,
-  Users, Globe, Brain, FileText, Video, Workflow, Shield, Settings, FileBarChart, CheckCircle2, Upload, Sparkles, Database, Plug, Inbox, Contact, Activity, KanbanSquare, Code2, Bot, CreditCard
+  Users, Globe, Brain, FileText, Video, Workflow, Shield, Settings, FileBarChart, CheckCircle2, Upload, Sparkles, Database, Plug, Inbox, Contact, Activity, KanbanSquare, Code2, Bot, CreditCard, BarChart3
 } from "lucide-react";
 
 export const NAV = [
   { href: "/dashboard", label: "Business Health", icon: LayoutDashboard, group: "Overview" },
   { href: "/chat", label: "AI CEO Chat", icon: MessageSquare, group: "Overview" },
+  { href: "/analytics", label: "Analytics", icon: BarChart3, group: "Overview" },
   { href: "/sales", label: "Sales", icon: TrendingUp, group: "Intelligence" },
   { href: "/finance", label: "Finance", icon: Wallet, group: "Intelligence" },
   { href: "/production", label: "Production", icon: Factory, group: "Intelligence" },
