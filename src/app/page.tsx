@@ -46,6 +46,13 @@ export default function Home() {
           </div>
         ))}
       </section>
+      <section className="px-6 lg:px-12 pb-10 max-w-4xl mx-auto text-center">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground mb-4">Works with your stack</p>
+        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm font-medium text-muted-foreground">
+          {["Tally","Zoho","Shopify","QuickBooks","WhatsApp","Salesforce","Google Sheets","Slack"].map((n)=>(<span key={n}>{n}</span>))}
+        </div>
+      </section>
+
       <section className="px-6 lg:px-12 pb-8 max-w-5xl mx-auto">
         <h2 className="text-2xl font-semibold text-center mb-8">How it works</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
