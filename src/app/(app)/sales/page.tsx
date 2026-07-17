@@ -9,6 +9,7 @@ import { DataTable } from "@/components/data-table";
 import { CollapsibleForm, Field, SelectField } from "@/components/forms";
 import { getInsights, getSalesOrders } from "@/lib/data";
 import { addSalesOrder } from "@/lib/actions";
+import { AIPanel } from "@/components/ai-panel";
 
 export const dynamic = "force-dynamic";
 const region = [{ name: "West", value: 1.62 }, { name: "South", value: 1.18 }, { name: "North", value: 0.74 }, { name: "East", value: 0.41 }, { name: "Export", value: 0.30 }];
@@ -46,6 +47,7 @@ export default async function Sales() {
         <DataTable title="Sales orders" rows={rows} live={live} table="sales_orders" path="/sales"
           cols={[{key:"order_no",label:"Order #"},{key:"customer_name",label:"Customer"},{key:"region",label:"Region"},{key:"product",label:"Product"},{key:"amount",label:"Amount",kind:"inr"},{key:"status",label:"Status"},{key:"order_date",label:"Date",kind:"date"}]} />
 
+        <AIPanel mode="outreach" multiline placeholder="Describe the customer or deal to write outreach for..." cta="Draft outreach (WhatsApp + email)" />
         <div className="grid md:grid-cols-2 gap-3">{insights.map((i) => <InsightCard key={i.id} ins={i} />)}</div>
       </PageShell>
     </>
