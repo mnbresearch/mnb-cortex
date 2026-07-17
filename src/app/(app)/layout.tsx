@@ -4,6 +4,8 @@ import { CommandPalette } from "@/components/command-palette";
 import { PWA } from "@/components/pwa";
 import { Branding } from "@/components/branding";
 import { ConsentBanner } from "@/components/consent-banner";
+import { Copilot } from "@/components/copilot";
+import { Shortcuts } from "@/components/shortcuts";
 import { getOrgProfile } from "@/lib/data";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -17,6 +19,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <PWA />
       <Branding accent={profile?.accent} />
       <ConsentBanner />
+      <Copilot />
+      <Shortcuts />
     </div>
   );
 }
