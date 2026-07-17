@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Activity, Brain, Workflow, ShieldCheck } from "lucide-react";
+import { ArrowRight, Activity, Brain, Workflow, ShieldCheck, Eye, TrendingUp, Zap, CheckCircle2 } from "lucide-react";
+import { RoiCalculator } from "@/components/roi-calculator";
 
 const feats = [
   { icon: Activity, t: "Monitors continuously", d: "Reads sales, finance, production, inventory & HR in real time." },
@@ -45,9 +46,32 @@ export default function Home() {
           </div>
         ))}
       </section>
+      <section className="px-6 lg:px-12 pb-8 max-w-5xl mx-auto">
+        <h2 className="text-2xl font-semibold text-center mb-8">How it works</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[{i:Eye,t:"Monitors",d:"Reads sales, finance, inventory, production & HR in real time."},{i:TrendingUp,t:"Predicts",d:"Forecasts stockouts, churn and cash crunches before they hit."},{i:Brain,t:"Recommends",d:"McKinsey-grade advice, grounded in your live numbers."},{i:Zap,t:"Executes",d:"Drafts POs, invoices, reminders and reports for you."}].map((x,i)=>(
+            <div key={i} className="rounded-xl border p-5 bg-card"><x.i className="h-6 w-6 text-primary" /><h3 className="mt-3 font-semibold">{x.t}</h3><p className="mt-1 text-sm text-muted-foreground">{x.d}</p></div>
+          ))}
+        </div>
+      </section>
+
+      <section className="px-6 lg:px-12 py-12"><RoiCalculator /></section>
+
+      <section className="px-6 lg:px-12 pb-16 max-w-5xl mx-auto">
+        <h2 className="text-2xl font-semibold text-center mb-8">Built for SME owners</h2>
+        <div className="grid sm:grid-cols-3 gap-4">
+          {[{q:"I finally stopped living in spreadsheets. I just ask.",n:"Manufacturing owner"},{q:"It caught a stockout 9 days early and drafted the PO.",n:"Distributor"},{q:"Feels like having a COO I can afford.",n:"D2C founder"}].map((t,i)=>(
+            <div key={i} className="rounded-xl border p-5 bg-card"><CheckCircle2 className="h-5 w-5 text-success" /><p className="mt-3 text-sm">“{t.q}”</p><p className="mt-2 text-xs text-muted-foreground">— {t.n}</p></div>
+          ))}
+        </div>
+        <div className="text-center mt-10"><Link href="/pricing" className="rounded-lg bg-primary text-primary-foreground px-6 h-12 inline-flex items-center gap-2 font-medium">Start free — 14 days <ArrowRight className="h-4 w-4" /></Link><div className="mt-3 text-sm text-muted-foreground"><Link href="/help" className="hover:text-foreground underline">Read the FAQ</Link></div></div>
+      </section>
+
       <footer className="px-6 lg:px-12 py-8 border-t text-sm text-muted-foreground flex flex-wrap gap-4 justify-center">
         <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
         <Link href="/status" className="hover:text-foreground">System status</Link>
+        <Link href="/changelog" className="hover:text-foreground">Changelog</Link>
+        <Link href="/help" className="hover:text-foreground">Help</Link>
         <Link href="/login" className="hover:text-foreground">Sign in</Link>
         <span>© MNB Cortex</span>
       </footer>
