@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Activity, Brain, Workflow, ShieldCheck, Eye, TrendingUp, Zap, CheckCircle2 } from "lucide-react";
 import { RoiCalculator } from "@/components/roi-calculator";
+import { Logo } from "@/components/logo";
 
 const feats = [
   { icon: Activity, t: "Monitors continuously", d: "Reads sales, finance, production, inventory & HR in real time." },
@@ -12,35 +13,40 @@ const feats = [
 export default function Home() {
   return (
     <main className="min-h-screen">
-      <header className="flex items-center justify-between px-6 lg:px-12 h-16 border-b">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold">C</div>
-          <span className="font-semibold">MNB Cortex</span>
+      <header className="sticky top-0 z-30 glass flex items-center justify-between px-6 lg:px-12 h-16 border-b">
+        <div className="flex items-center gap-2.5">
+          <Logo size={34} />
+          <span className="font-semibold tracking-tight">MNB Cortex</span>
         </div>
-        <div className="flex items-center gap-4 text-sm"><Link href="/pricing" className="text-muted-foreground hover:text-foreground">Pricing</Link><Link href="/login" className="rounded-lg bg-primary text-primary-foreground px-4 py-2 font-medium">Sign in</Link></div>
+        <div className="flex items-center gap-4 text-sm"><Link href="/pricing" className="text-muted-foreground hover:text-foreground">Pricing</Link><Link href="/login" className="rounded-lg brand-gradient text-white px-4 py-2 font-medium shadow-sm hover:opacity-90 transition-opacity">Sign in</Link></div>
       </header>
 
-      <section className="px-6 lg:px-12 py-20 lg:py-28 max-w-5xl mx-auto text-center">
-        <span className="inline-block text-xs font-medium rounded-full border px-3 py-1 text-muted-foreground mb-6">The AI COO for SMEs</span>
-        <h1 className="text-4xl lg:text-6xl font-semibold tracking-tight leading-[1.05]">
-          Run your company by <span className="gradient-text">asking</span>, not by opening spreadsheets.
-        </h1>
-        <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
-          MNB Cortex is an AI Operating System that observes your business, detects problems, predicts outcomes, recommends actions — and executes them.
-        </p>
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <Link href="/login" className="rounded-lg bg-primary text-primary-foreground px-6 h-12 inline-flex items-center gap-2 font-medium">
-            Open the dashboard <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link href="/dashboard" className="rounded-lg border px-6 h-12 inline-flex items-center font-medium">View live demo</Link>
-          <Link href="/pricing" className="rounded-lg border px-6 h-12 inline-flex items-center font-medium">See pricing</Link>
+      <section className="relative px-6 lg:px-12 py-20 lg:py-28 max-w-5xl mx-auto text-center overflow-hidden">
+        <div className="aurora" aria-hidden />
+        <div className="relative z-10">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium rounded-full border bg-card/60 px-3 py-1 text-muted-foreground mb-6">
+            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> Live AI · watching your business 24/7
+          </span>
+          <h1 className="text-4xl lg:text-6xl font-extrabold tracking-tight leading-[1.05]">
+            Run your company by <span className="gradient-text">asking</span>, not by opening spreadsheets.
+          </h1>
+          <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
+            MNB Cortex is an AI Operating System that observes your business, detects problems, predicts outcomes, recommends actions — and executes them.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Link href="/login" className="rounded-lg brand-gradient text-white px-6 h-12 inline-flex items-center gap-2 font-medium shadow-md hover:opacity-90 transition-opacity">
+              Open the dashboard <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link href="/dashboard" className="rounded-lg border px-6 h-12 inline-flex items-center font-medium hover:bg-accent transition-colors">View live demo</Link>
+            <Link href="/pricing" className="rounded-lg border px-6 h-12 inline-flex items-center font-medium hover:bg-accent transition-colors">See pricing</Link>
+          </div>
         </div>
       </section>
 
       <section className="px-6 lg:px-12 pb-24 max-w-6xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {feats.map((f) => (
-          <div key={f.t} className="rounded-xl border p-5 bg-card">
-            <f.icon className="h-6 w-6 text-primary" />
+          <div key={f.t} className="hover-lift rounded-xl border p-5 bg-card">
+            <div className="h-11 w-11 rounded-xl brand-gradient grid place-items-center text-white"><f.icon className="h-5 w-5" /></div>
             <h3 className="mt-3 font-semibold">{f.t}</h3>
             <p className="mt-1 text-sm text-muted-foreground">{f.d}</p>
           </div>
@@ -57,7 +63,7 @@ export default function Home() {
         <h2 className="text-2xl font-semibold text-center mb-8">How it works</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[{i:Eye,t:"Monitors",d:"Reads sales, finance, inventory, production & HR in real time."},{i:TrendingUp,t:"Predicts",d:"Forecasts stockouts, churn and cash crunches before they hit."},{i:Brain,t:"Recommends",d:"McKinsey-grade advice, grounded in your live numbers."},{i:Zap,t:"Executes",d:"Drafts POs, invoices, reminders and reports for you."}].map((x,i)=>(
-            <div key={i} className="rounded-xl border p-5 bg-card"><x.i className="h-6 w-6 text-primary" /><h3 className="mt-3 font-semibold">{x.t}</h3><p className="mt-1 text-sm text-muted-foreground">{x.d}</p></div>
+            <div key={i} className="hover-lift rounded-xl border p-5 bg-card"><div className="h-11 w-11 rounded-xl brand-gradient grid place-items-center text-white"><x.i className="h-5 w-5" /></div><h3 className="mt-3 font-semibold">{x.t}</h3><p className="mt-1 text-sm text-muted-foreground">{x.d}</p></div>
           ))}
         </div>
       </section>
