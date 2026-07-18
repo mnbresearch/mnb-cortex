@@ -3,7 +3,8 @@ import {
   Users, Globe, Brain, FileText, Video, Workflow, Shield, Settings, FileBarChart, CheckCircle2, Upload, Sparkles, Database, Plug, Inbox, Contact, Activity, KanbanSquare, Code2, Bot, CreditCard, BarChart3,
   LineChart, Target, ListChecks, Gauge, ShieldAlert, BadgeIndianRupee,
   Sunrise, Handshake, UserPlus, Receipt, UserMinus,
-  Presentation, Megaphone, Swords
+  Presentation, Megaphone, Swords,
+  Coins, Calculator, Landmark, FileSignature, Truck, ClipboardList
 } from "lucide-react";
 
 export const NAV = [
@@ -29,6 +30,12 @@ export const NAV = [
   { href: "/investor", label: "Investor Update", icon: Presentation, group: "Advisory" },
   { href: "/marketing", label: "Marketing Studio", icon: Megaphone, group: "Advisory" },
   { href: "/competitors", label: "Competitor Intel", icon: Swords, group: "Advisory" },
+  { href: "/vendors", label: "Vendor Scorecard", icon: Truck, group: "Advisory" },
+  { href: "/sops", label: "SOP Builder", icon: ClipboardList, group: "Advisory" },
+  { href: "/cashflow", label: "Cash Flow", icon: Coins, group: "Money" },
+  { href: "/unit-economics", label: "Unit Economics", icon: Calculator, group: "Money" },
+  { href: "/funding", label: "Funding & Loans", icon: Landmark, group: "Money" },
+  { href: "/invoice", label: "GST Invoice", icon: FileSignature, group: "Money" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
   { href: "/forecast", label: "Forecasting", icon: LineChart, group: "Foresight" },
   { href: "/action-center", label: "Action Center", icon: ListChecks, group: "Foresight" },
