@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { WHATSAPP_NUMBER } from "@/lib/config";
+import { Logo } from "@/components/logo";
 export const metadata = { title: "Help & FAQ — MNB Cortex" };
 const faqs = [
   { q: "What is MNB Cortex?", a: "An AI Operating System — your 'AI COO' — that monitors your business, predicts problems, recommends actions, and executes them, so you can run your company by asking instead of opening spreadsheets." },
@@ -13,7 +14,7 @@ export default function Help() {
   return (
     <main className="min-h-screen">
       <header className="flex items-center justify-between px-6 lg:px-12 h-16 border-b">
-        <Link href="/" className="flex items-center gap-2"><div className="h-8 w-8 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold">C</div><span className="font-semibold">MNB Cortex</span></Link>
+        <Link href="/" className="flex items-center gap-2"><Logo size={32} /><span className="font-semibold">MNB Cortex</span></Link>
         <Link href="/pricing" className="text-sm text-muted-foreground hover:text-foreground">Pricing</Link>
       </header>
       <section className="max-w-2xl mx-auto px-6 py-14">
