@@ -4,7 +4,7 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
   const key = process.env.RESEND_API_KEY;
   if (!key || !to) return { sent: false, reason: "no RESEND_API_KEY" };
   try {
-    const from = process.env.EMAIL_FROM || "MNB Cortex <onboarding@resend.dev>";
+    const from = process.env.EMAIL_FROM || "MNB Cortex <noreply@updates.mnbresearch.com>";
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
