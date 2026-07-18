@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Download, RefreshCw, X } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 declare global { interface Window { __pwaPrompt?: any } }
 
@@ -58,7 +59,7 @@ export function PWA() {
         <div className="fixed bottom-20 lg:bottom-6 inset-x-3 lg:left-auto lg:right-6 lg:w-96 z-[55] rounded-xl border bg-card shadow-lg p-4 no-print">
           <button onClick={() => { setShowInstall(false); localStorage.setItem("pwa-install-dismissed", "1"); }} className="absolute top-2 right-2 text-muted-foreground"><X className="h-4 w-4" /></button>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold">C</div>
+            <Logo size={40} />
             <div className="flex-1"><p className="text-sm font-medium">Install MNB Cortex</p><p className="text-xs text-muted-foreground">Add the app to your phone for a faster, full-screen experience.</p></div>
           </div>
           <button onClick={install} className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground h-10 text-sm font-medium"><Download className="h-4 w-4" /> Install app</button>
