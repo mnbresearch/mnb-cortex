@@ -1,5 +1,6 @@
 import { createClient, hasSupabase } from "@/lib/supabase/server";
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 
 export const dynamic = "force-dynamic";
 function fmt(v: number, unit: string) {
@@ -13,7 +14,7 @@ export default async function PublicReport({ params }: { params: { token: string
   return (
     <main className="min-h-screen">
       <header className="flex items-center justify-between px-6 lg:px-12 h-16 border-b">
-        <Link href="/" className="flex items-center gap-2"><div className="h-8 w-8 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold">C</div><span className="font-semibold">MNB Cortex</span></Link>
+        <Link href="/" className="flex items-center gap-2"><Logo size={32} /><span className="font-semibold">MNB Cortex</span></Link>
         <span className="text-xs text-muted-foreground">Shared business snapshot · read-only</span>
       </header>
       <section className="max-w-4xl mx-auto px-6 py-12">
