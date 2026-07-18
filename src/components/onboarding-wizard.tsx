@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { updateOrgProfile, seedDemoData } from "@/lib/actions";
 import { Check, Sparkles, ArrowRight, Building2, Database } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 export function OnboardingWizard() {
   const [step, setStep] = useState(0);
@@ -20,9 +21,18 @@ export function OnboardingWizard() {
   async function loadDemo() { setBusy(true); try { await seedDemoData(); setStep(2); } catch (e: any) { alert(e.message); } finally { setBusy(false); } }
 
   return (
-    <Card className="p-6 max-w-xl mx-auto">
+    <Card className="relative p-6 max-w-xl mx-auto overflow-hidden">
+      <div className="aurora opacity-60" aria-hidden />
+      <div className="relative z-10">
+      <div className="flex flex-col items-center gap-2 mb-5">
+        <div className="animate-float"><Logo size={52} /></div>
+        <div className="text-center">
+          <div className="font-semibold tracking-tight">Welcome to MNB Cortex</div>
+          <div className="text-xs text-muted-foreground">Let's set up your AI COO in three quick steps</div>
+        </div>
+      </div>
       <div className="flex items-center gap-2 mb-6">
-        {[0, 1, 2].map((i) => <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= step ? "bg-primary" : "bg-secondary"}`} />)}
+        {[0, 1, 2].map((i) => <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= step ? "brand-gradient" : "bg-secondary"}`} />)}
       </div>
       {step === 0 && (
         <div className="space-y-3">
@@ -51,9 +61,10 @@ export function OnboardingWizard() {
           <div className="h-12 w-12 rounded-full bg-success/15 grid place-items-center mx-auto"><Check className="h-6 w-6 text-success" /></div>
           <h2 className="mt-3 text-lg font-semibold">You're all set!</h2>
           <p className="text-sm text-muted-foreground">Your AI COO is ready. Ask it "How is my business?"</p>
-          <Link href="/dashboard" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-10 px-5 text-sm font-medium">Go to dashboard <ArrowRight className="h-4 w-4" /></Link>
+          <Link href="/dashboard" className="mt-4 inline-flex items-center gap-2 rounded-lg brand-gradient text-white h-10 px-5 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity">Go to dashboard <ArrowRight className="h-4 w-4" /></Link>
         </div>
       )}
+      </div>
     </Card>
   );
 }
