@@ -2,7 +2,8 @@ import Link from "next/link";
 import { APP_VERSION } from "@/lib/config";
 export const metadata = { title: "Changelog — MNB Cortex" };
 const releases = [
-  { v: "1.5.0", date: "Latest", items: ["Working-capital / cash-conversion-cycle simulator", "Unit economics & break-even calculator", "Loan / EMI calculator with AI CFO advice", "GST invoice generator with PDF export", "Vendor Scorecard & SOP Builder", "3 new AI reasoning modes (loan, vendor, SOP)"] },
+  { v: "1.6.0", date: "Latest", items: ["Inventory Reorder Optimizer (EOQ + safety stock)", "WhatsApp Broadcast Composer with wa.me links", "Sales Target Planner (annual → monthly, per-rep)", "Board Deck Generator", "Cost Optimizer", "3 new AI reasoning modes (broadcast, board, costs)"] },
+  { v: "1.5.0", date: "Earlier", items: ["Working-capital / cash-conversion-cycle simulator", "Unit economics & break-even calculator", "Loan / EMI calculator with AI CFO advice", "GST invoice generator with PDF export", "Vendor Scorecard & SOP Builder", "3 new AI reasoning modes (loan, vendor, SOP)"] },
   { v: "1.4.0", date: "Earlier", items: ["Investor & Board Update generator", "Marketing Studio — full campaign kits in one click", "Competitor Intelligence battlecards", "Hindi & Hinglish replies in the AI CEO chat", "Email now delivers from your verified domain"] },
   { v: "1.3.0", date: "Earlier", items: ["Daily CEO Brief — generated + emailed to your inbox", "Customer Churn Predictor with editable risk model", "Negotiation Coach & Hiring/Org Advisor", "GST & Compliance assistant with filing calendar", "New GST-aware AI reasoning mode"] },
   { v: "1.2.0", date: "Earlier", items: ["Foresight Suite: 90-day AI forecasting + interactive what-if scenario planner", "AI Action Center — every decision ranked by impact", "Goals & OKR tracker with live progress rings", "Risk Radar, Industry Benchmarks & AI Pricing Optimizer", "Voice input in the AI CEO chat", "8 new CFO-grade AI reasoning modes"] },
