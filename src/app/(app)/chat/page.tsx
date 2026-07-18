@@ -19,6 +19,7 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
+  const [lang, setLang] = useState("English");
   const endRef = useRef<HTMLDivElement>(null);
   const started = useRef(false);
   const recogRef = useRef<any>(null);
@@ -55,9 +56,12 @@ export default function Chat() {
     setMessages([...base, { role: "assistant", content: "" }]);
     setInput(""); setLoading(true);
     try {
+      const langSuffix = lang === "Hindi" ? "\n\n(Reply in clear, simple Hindi using Devanagari script.)"
+        : lang === "Hinglish" ? "\n\n(Reply in Hinglish — Hindi written in Latin script, mixed with English, casual and friendly.)" : "";
+      const outgoing = base.map(({ role, content }, i) => ({ role, content: i === base.length - 1 ? content + langSuffix : content }));
       const r = await fetch("/api/chat/stream", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: base.map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify({ messages: outgoing }),
       });
       if (r.body) {
         const reader = r.body.getReader(); const dec = new TextDecoder(); let acc = "";
@@ -117,6 +121,12 @@ export default function Chat() {
         </div>
         <div className="border-t glass px-4 lg:px-8 py-4">
           <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="max-w-3xl mx-auto flex items-center gap-2">
+            <select value={lang} onChange={(e) => setLang(e.target.value)} title="Reply language"
+              className="h-12 rounded-xl border bg-card px-2 text-sm outline-none focus:ring-2 focus:ring-ring shrink-0">
+              <option value="English">EN</option>
+              <option value="Hindi">हिं</option>
+              <option value="Hinglish">Hinglish</option>
+            </select>
             <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening…" : "Ask your AI COO…"}
               className="flex-1 rounded-xl border bg-card px-4 h-12 text-sm outline-none focus:ring-2 focus:ring-ring" />
             <Button type="button" variant={listening ? "default" : "outline"} size="icon" className={`h-12 w-12 rounded-xl ${listening ? "animate-pulse" : ""}`} onClick={toggleMic} title="Voice input"><Mic className="h-4 w-4" /></Button>
