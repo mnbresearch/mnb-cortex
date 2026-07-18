@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Topbar } from "@/components/topbar";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Send, User } from "lucide-react";
+import { Sparkles, Send, User, Mic } from "lucide-react";
 import type { ChatMessage } from "@/types";
 
 const SUGGESTIONS = [
@@ -18,8 +18,25 @@ export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const started = useRef(false);
+  const recogRef = useRef<any>(null);
+
+  function toggleMic() {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { alert("Voice input isn't supported in this browser. Try Chrome."); return; }
+    if (listening) { recogRef.current?.stop(); return; }
+    const rec = new SR();
+    rec.lang = "en-IN"; rec.interimResults = true; rec.continuous = false;
+    rec.onresult = (e: any) => {
+      const t = Array.from(e.results).map((r: any) => r[0].transcript).join(" ");
+      setInput(t);
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recogRef.current = rec; setListening(true); rec.start();
+  }
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
@@ -100,8 +117,9 @@ export default function Chat() {
         </div>
         <div className="border-t glass px-4 lg:px-8 py-4">
           <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="max-w-3xl mx-auto flex items-center gap-2">
-            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask your AI COO…"
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening…" : "Ask your AI COO…"}
               className="flex-1 rounded-xl border bg-card px-4 h-12 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            <Button type="button" variant={listening ? "default" : "outline"} size="icon" className={`h-12 w-12 rounded-xl ${listening ? "animate-pulse" : ""}`} onClick={toggleMic} title="Voice input"><Mic className="h-4 w-4" /></Button>
             <Button size="icon" className="h-12 w-12 rounded-xl" disabled={loading}><Send className="h-4 w-4" /></Button>
           </form>
         </div>
