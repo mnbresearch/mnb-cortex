@@ -2,7 +2,8 @@ import {
   LayoutDashboard, MessageSquare, TrendingUp, Wallet, Factory, Boxes,
   Users, Globe, Brain, FileText, Video, Workflow, Shield, Settings, FileBarChart, CheckCircle2, Upload, Sparkles, Database, Plug, Inbox, Contact, Activity, KanbanSquare, Code2, Bot, CreditCard, BarChart3,
   LineChart, Target, ListChecks, Gauge, ShieldAlert, BadgeIndianRupee,
-  Sunrise, Handshake, UserPlus, Receipt, UserMinus
+  Sunrise, Handshake, UserPlus, Receipt, UserMinus,
+  Presentation, Megaphone, Swords
 } from "lucide-react";
 
 export const NAV = [
@@ -25,6 +26,9 @@ export const NAV = [
   { href: "/negotiate", label: "Negotiation Coach", icon: Handshake, group: "Advisory" },
   { href: "/hiring", label: "Hiring Advisor", icon: UserPlus, group: "Advisory" },
   { href: "/gst", label: "GST & Compliance", icon: Receipt, group: "Advisory" },
+  { href: "/investor", label: "Investor Update", icon: Presentation, group: "Advisory" },
+  { href: "/marketing", label: "Marketing Studio", icon: Megaphone, group: "Advisory" },
+  { href: "/competitors", label: "Competitor Intel", icon: Swords, group: "Advisory" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
   { href: "/forecast", label: "Forecasting", icon: LineChart, group: "Foresight" },
   { href: "/action-center", label: "Action Center", icon: ListChecks, group: "Foresight" },
