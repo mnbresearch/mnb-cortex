@@ -279,6 +279,26 @@ Keep it India-appropriate, specific, and tied to the business where relevant. Br
 ## How we should respond (specific plays)
 ## What to monitor
 Ground it in the BUSINESS SNAPSHOT (e.g. the rival's recent 8% price cut). Details:`,
+  loan: `You are a CFO advising an Indian SME owner on debt/funding. Using the BUSINESS SNAPSHOT (cash runway ~5 months), assess the loan/funding described. Produce markdown with:
+## Should you take it? (yes / no / yes-with-conditions)
+## Impact on cash & runway (quantified, INR)
+## Can you service the EMI? (coverage vs monthly profit)
+## Cheaper / smarter alternatives
+## If you proceed — terms to negotiate
+Be direct and numeric. Details:`,
+  vendor: `You are a procurement analyst for an Indian SME. Build a supplier/vendor scorecard for the vendor(s) described. Produce markdown with:
+## Scorecard (table: criterion | rating /5 | note) covering price, quality, reliability, lead time, terms, risk
+## Overall verdict
+## Red flags
+## Actions (renegotiate, add backup, consolidate)
+Ground it in the BUSINESS SNAPSHOT where relevant (e.g. RM-204 single-source risk). Details:`,
+  sop: `You are an operations expert writing a Standard Operating Procedure (SOP) for an Indian SME. For the process described, produce a clear markdown SOP with:
+## Purpose
+## Scope & owner
+## Step-by-step procedure (numbered, specific)
+## Checks & controls
+## What "good" looks like (KPIs)
+Keep it practical for a small team. Process:`,
 };
 
 export async function generateFor(mode: string, input: string, context: string): Promise<string> {
