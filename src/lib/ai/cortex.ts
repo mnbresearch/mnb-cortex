@@ -251,6 +251,12 @@ Question (may be blank):`,
 ## 2 risks on the horizon
 ## Your 3 moves today
 Keep it under 200 words, specific and numeric.`,
+  gst: `You are a GST & compliance assistant for an Indian SME (not a substitute for a CA). For the question, produce markdown with:
+## Short answer
+## How it applies here (rates, ITC, place of supply as relevant)
+## Filing / due-date implications (GSTR-1, GSTR-3B, etc.)
+## What to do next
+State clearly that this is general guidance, and to confirm edge cases with a chartered accountant. Question:`,
 };
 
 export async function generateFor(mode: string, input: string, context: string): Promise<string> {
