@@ -257,6 +257,28 @@ Keep it under 200 words, specific and numeric.`,
 ## Filing / due-date implications (GSTR-1, GSTR-3B, etc.)
 ## What to do next
 State clearly that this is general guidance, and to confirm edge cases with a chartered accountant. Question:`,
+  investor: `You are writing a monthly investor / board update for an Indian SME, using the BUSINESS SNAPSHOT. Produce a crisp, confident markdown update with:
+## TL;DR (3 bullets)
+## Financials (revenue, margin, profit, cash — with % changes)
+## Highlights this month
+## Challenges & how we're addressing them
+## Asks (if any)
+## Next month's focus
+Board-ready, honest, quantified in INR (lakh/crore). Extra context (may be blank):`,
+  marketing: `You are a growth marketer for an Indian SME. For the campaign/goal described, produce ready-to-use markdown with:
+## Positioning angle
+## 3 WhatsApp/SMS messages (short)
+## 2 social captions (LinkedIn + Instagram)
+## 1 promotional email (subject + body)
+## Suggested offer & target segment
+Keep it India-appropriate, specific, and tied to the business where relevant. Brief:`,
+  competitor: `You are a competitive-intelligence analyst for an Indian SME. For the competitor(s)/market described, produce markdown with:
+## Competitor snapshot (positioning, likely pricing, strengths)
+## Where they beat us / where we beat them
+## Their likely next move
+## How we should respond (specific plays)
+## What to monitor
+Ground it in the BUSINESS SNAPSHOT (e.g. the rival's recent 8% price cut). Details:`,
 };
 
 export async function generateFor(mode: string, input: string, context: string): Promise<string> {
