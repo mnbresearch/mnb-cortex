@@ -2,50 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   MNB Cortex identity — "Living Intelligence"
+   Teal → Emerald brand: growth, money, trust (not generic AI purple)
+   ============================================================ */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 24% 11%;
+  --background: 180 33% 99%;
+  --foreground: 200 24% 12%;
   --card: 0 0% 100%;
-  --card-foreground: 222 24% 11%;
-  --primary: 244 75% 59%;
+  --card-foreground: 200 24% 12%;
+  --primary: 178 74% 33%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 220 14% 96%;
-  --secondary-foreground: 222 24% 11%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 9% 46%;
-  --accent: 244 75% 96%;
-  --accent-foreground: 244 75% 40%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 244 75% 59%;
-  --success: 142 71% 40%;
+  --secondary: 180 24% 96%;
+  --secondary-foreground: 200 24% 12%;
+  --muted: 185 20% 96%;
+  --muted-foreground: 200 10% 42%;
+  --accent: 176 55% 93%;
+  --accent-foreground: 178 78% 26%;
+  --border: 186 22% 90%;
+  --input: 186 22% 90%;
+  --ring: 178 74% 33%;
+  --success: 150 68% 38%;
   --success-foreground: 0 0% 100%;
-  --warning: 38 92% 50%;
+  --warning: 34 94% 48%;
   --warning-foreground: 0 0% 100%;
-  --danger: 0 72% 51%;
+  --danger: 356 74% 52%;
   --danger-foreground: 0 0% 100%;
-  --radius: 0.85rem;
-  --font-sans: "Inter", ui-sans-serif, system-ui;
+  --brand-2: 158 74% 42%;   /* emerald */
+  --brand-3: 190 90% 42%;   /* cyan */
+  --radius: 0.9rem;
+  --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui;
 }
 .dark {
-  --background: 224 32% 6%;
-  --foreground: 210 20% 96%;
-  --card: 224 28% 9%;
-  --card-foreground: 210 20% 96%;
-  --primary: 245 80% 66%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 223 24% 14%;
-  --secondary-foreground: 210 20% 96%;
-  --muted: 223 24% 14%;
-  --muted-foreground: 217 14% 60%;
-  --accent: 245 40% 18%;
-  --accent-foreground: 245 80% 80%;
-  --border: 223 20% 18%;
-  --input: 223 20% 18%;
-  --ring: 245 80% 66%;
-  --success: 142 65% 45%;
-  --warning: 38 92% 55%;
-  --danger: 0 72% 58%;
+  --background: 195 44% 6%;
+  --foreground: 180 22% 95%;
+  --card: 197 34% 9%;
+  --card-foreground: 180 22% 95%;
+  --primary: 172 68% 44%;
+  --primary-foreground: 197 60% 6%;
+  --secondary: 197 26% 14%;
+  --secondary-foreground: 180 22% 95%;
+  --muted: 197 24% 14%;
+  --muted-foreground: 190 12% 62%;
+  --accent: 183 48% 17%;
+  --accent-foreground: 172 72% 72%;
+  --border: 197 22% 17%;
+  --input: 197 22% 17%;
+  --ring: 172 68% 44%;
+  --success: 150 62% 46%;
+  --warning: 36 92% 56%;
+  --danger: 356 74% 62%;
+  --brand-2: 158 70% 48%;
+  --brand-3: 190 85% 52%;
 }
 
 * { border-color: hsl(var(--border)); }
@@ -54,22 +62,62 @@ body {
   color: hsl(var(--foreground));
   font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
 .glass {
-  background: hsl(var(--card) / 0.7);
-  backdrop-filter: blur(12px);
+  background: hsl(var(--card) / 0.72);
+  backdrop-filter: blur(14px) saturate(1.4);
 }
+
 .gradient-text {
-  background: linear-gradient(135deg, hsl(var(--primary)), hsl(280 80% 65%));
+  background: linear-gradient(115deg, hsl(var(--primary)), hsl(var(--brand-2)) 55%, hsl(var(--brand-3)));
+  background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  animation: gradient-pan 6s ease infinite;
 }
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 9999px; }
+
+/* Brand gradient surfaces */
+.brand-gradient { background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--brand-2))); }
+.brand-ring { box-shadow: 0 0 0 1px hsl(var(--primary) / 0.2), 0 8px 30px -12px hsl(var(--primary) / 0.45); }
+
+/* Subtle lift on interactive cards */
+.hover-lift { transition: transform .25s cubic-bezier(.2,.7,.3,1), box-shadow .25s ease; }
+.hover-lift:hover { transform: translateY(-3px); box-shadow: 0 16px 40px -20px hsl(var(--primary) / 0.35); }
+
+/* ---- Aurora background (floating brand blobs) ---- */
+.aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.aurora::before, .aurora::after {
+  content: ""; position: absolute; width: 46rem; height: 46rem; border-radius: 9999px;
+  filter: blur(80px); opacity: .5;
+}
+.aurora::before {
+  background: radial-gradient(circle at center, hsl(var(--primary) / .55), transparent 62%);
+  top: -18rem; left: -12rem; animation: float-a 16s ease-in-out infinite;
+}
+.aurora::after {
+  background: radial-gradient(circle at center, hsl(var(--brand-2) / .5), transparent 62%);
+  top: -10rem; right: -14rem; animation: float-b 20s ease-in-out infinite;
+}
+.dark .aurora::before, .dark .aurora::after { opacity: .32; }
+
+@keyframes gradient-pan { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@keyframes float-a { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(4rem,3rem) scale(1.12); } }
+@keyframes float-b { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-3rem,4rem) scale(1.08); } }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / .35); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / .5); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gradient-text, .aurora::before, .aurora::after { animation: none !important; }
+  .hover-lift { transition: none; }
+}
 
 @media print {
-  aside, nav, .no-print { display: none !important; }
+  aside, nav, .no-print, .aurora { display: none !important; }
   header { position: static !important; background: white !important; backdrop-filter: none !important; }
   body, .dark body { background: #fff !important; color: #111 !important; }
   .glass { background: #fff !important; backdrop-filter: none !important; }
