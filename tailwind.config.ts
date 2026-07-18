@@ -25,9 +25,15 @@ const config: Config = {
       fontFamily: { sans: ["var(--font-sans)", "system-ui", "sans-serif"] },
       keyframes: {
         "fade-in": { from: { opacity: "0", transform: "translateY(8px)" }, to: { opacity: "1", transform: "translateY(0)" } },
+        "scale-in": { from: { opacity: "0", transform: "scale(.96)" }, to: { opacity: "1", transform: "scale(1)" } },
+        "float": { "0%,100%": { transform: "translateY(0)" }, "50%": { transform: "translateY(-6px)" } },
         shimmer: { "100%": { transform: "translateX(100%)" } }
       },
-      animation: { "fade-in": "fade-in 0.5s ease-out both" }
+      animation: {
+        "fade-in": "fade-in 0.5s ease-out both",
+        "scale-in": "scale-in 0.35s ease-out both",
+        "float": "float 5s ease-in-out infinite"
+      }
     }
   },
   plugins: [require("tailwindcss-animate")]
