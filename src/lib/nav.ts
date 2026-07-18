@@ -1,6 +1,7 @@
 import {
   LayoutDashboard, MessageSquare, TrendingUp, Wallet, Factory, Boxes,
-  Users, Globe, Brain, FileText, Video, Workflow, Shield, Settings, FileBarChart, CheckCircle2, Upload, Sparkles, Database, Plug, Inbox, Contact, Activity, KanbanSquare, Code2, Bot, CreditCard, BarChart3
+  Users, Globe, Brain, FileText, Video, Workflow, Shield, Settings, FileBarChart, CheckCircle2, Upload, Sparkles, Database, Plug, Inbox, Contact, Activity, KanbanSquare, Code2, Bot, CreditCard, BarChart3,
+  LineChart, Target, ListChecks, Gauge, ShieldAlert, BadgeIndianRupee
 } from "lucide-react";
 
 export const NAV = [
@@ -19,6 +20,12 @@ export const NAV = [
   { href: "/documents", label: "Documents", icon: FileText, group: "Advisory" },
   { href: "/meetings", label: "Meetings", icon: Video, group: "Advisory" },
   { href: "/reports", label: "Reports", icon: FileBarChart, group: "Advisory" },
+  { href: "/forecast", label: "Forecasting", icon: LineChart, group: "Foresight" },
+  { href: "/action-center", label: "Action Center", icon: ListChecks, group: "Foresight" },
+  { href: "/goals", label: "Goals & OKRs", icon: Target, group: "Foresight" },
+  { href: "/risks", label: "Risk Radar", icon: ShieldAlert, group: "Foresight" },
+  { href: "/benchmarks", label: "Benchmarks", icon: Gauge, group: "Foresight" },
+  { href: "/pricing-optimizer", label: "Pricing Optimizer", icon: BadgeIndianRupee, group: "Foresight" },
   { href: "/workflows", label: "Workflows", icon: Workflow, group: "Automation" },
   { href: "/approvals", label: "Approvals", icon: CheckCircle2, group: "Automation" },
   { href: "/import", label: "Import data", icon: Upload, group: "Automation" },
