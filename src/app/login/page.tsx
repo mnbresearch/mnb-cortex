@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Mail, ArrowRight } from "lucide-react";
@@ -38,7 +39,7 @@ export default function Login() {
     <main className="min-h-screen grid place-items-center px-6">
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2 mb-8 justify-center">
-          <div className="h-9 w-9 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold">C</div>
+          <Logo size={38} />
           <span className="font-semibold text-lg">MNB Cortex</span>
         </div>
         <div className="rounded-xl border bg-card p-6">
