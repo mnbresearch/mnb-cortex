@@ -4,7 +4,8 @@ import {
   LineChart, Target, ListChecks, Gauge, ShieldAlert, BadgeIndianRupee,
   Sunrise, Handshake, UserPlus, Receipt, UserMinus,
   Presentation, Megaphone, Swords,
-  Coins, Calculator, Landmark, FileSignature, Truck, ClipboardList
+  Coins, Calculator, Landmark, FileSignature, Truck, ClipboardList,
+  Warehouse, Radio, Crosshair, MonitorPlay, PiggyBank
 } from "lucide-react";
 
 export const NAV = [
@@ -20,6 +21,8 @@ export const NAV = [
   { href: "/customers", label: "Customers", icon: Contact, group: "Intelligence" },
   { href: "/pipeline", label: "Deals Pipeline", icon: KanbanSquare, group: "Intelligence" },
   { href: "/churn", label: "Churn Predictor", icon: UserMinus, group: "Intelligence" },
+  { href: "/reorder", label: "Reorder Optimizer", icon: Warehouse, group: "Intelligence" },
+  { href: "/targets", label: "Sales Targets", icon: Crosshair, group: "Intelligence" },
   { href: "/strategy", label: "Strategy Consultant", icon: Brain, group: "Advisory" },
   { href: "/documents", label: "Documents", icon: FileText, group: "Advisory" },
   { href: "/meetings", label: "Meetings", icon: Video, group: "Advisory" },
@@ -32,10 +35,13 @@ export const NAV = [
   { href: "/competitors", label: "Competitor Intel", icon: Swords, group: "Advisory" },
   { href: "/vendors", label: "Vendor Scorecard", icon: Truck, group: "Advisory" },
   { href: "/sops", label: "SOP Builder", icon: ClipboardList, group: "Advisory" },
+  { href: "/broadcast", label: "WhatsApp Broadcast", icon: Radio, group: "Advisory" },
+  { href: "/boardroom", label: "Board Deck", icon: MonitorPlay, group: "Advisory" },
   { href: "/cashflow", label: "Cash Flow", icon: Coins, group: "Money" },
   { href: "/unit-economics", label: "Unit Economics", icon: Calculator, group: "Money" },
   { href: "/funding", label: "Funding & Loans", icon: Landmark, group: "Money" },
   { href: "/invoice", label: "GST Invoice", icon: FileSignature, group: "Money" },
+  { href: "/costs", label: "Cost Optimizer", icon: PiggyBank, group: "Money" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
   { href: "/forecast", label: "Forecasting", icon: LineChart, group: "Foresight" },
   { href: "/action-center", label: "Action Center", icon: ListChecks, group: "Foresight" },
