@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "An AI Operating System that monitors, predicts, recommends, and executes for your business.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "MNB Cortex", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/icon-192.png", sizes: "192x192", type: "image/png" }], apple: "/apple-touch-icon.png" },
   metadataBase: new URL("https://mnb-cortex.vercel.app"),
   openGraph: { title: "MNB Cortex — The AI COO for SMEs", description: "An AI Operating System that monitors, predicts, recommends and executes for your business.", type: "website", url: "https://mnb-cortex.vercel.app" },
   twitter: { card: "summary_large_image", title: "MNB Cortex — The AI COO for SMEs", description: "Run your company by asking, not by opening spreadsheets." },
