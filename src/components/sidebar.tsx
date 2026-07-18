@@ -3,16 +3,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/logo";
 
 export function Sidebar() {
   const path = usePathname();
   const groups = Array.from(new Set(NAV.map((n) => n.group)));
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r bg-card/40 h-screen sticky top-0">
-      <div className="flex items-center gap-2 px-5 h-16 border-b">
-        <div className="h-8 w-8 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold">C</div>
+      <div className="flex items-center gap-2.5 px-5 h-16 border-b">
+        <Logo size={34} />
         <div>
-          <div className="font-semibold leading-none">MNB Cortex</div>
+          <div className="font-semibold leading-none tracking-tight">MNB Cortex</div>
           <div className="text-[11px] text-muted-foreground mt-0.5">The AI COO for SMEs</div>
         </div>
       </div>
