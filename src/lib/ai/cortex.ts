@@ -299,6 +299,22 @@ Ground it in the BUSINESS SNAPSHOT where relevant (e.g. RM-204 single-source ris
 ## Checks & controls
 ## What "good" looks like (KPIs)
 Keep it practical for a small team. Process:`,
+  broadcast: `You are a WhatsApp marketing copywriter for an Indian SME. For the campaign/segment described, write a broadcast in markdown with:
+## Primary message (WhatsApp-ready, warm, <400 chars, 1 emoji max)
+## Variant B (different angle)
+## Follow-up nudge (1 line, for non-responders)
+## Best send time & segment note
+Keep it India-appropriate, personal, and compliant (clear opt-out). Campaign:`,
+  board: `You are preparing a board meeting for an Indian SME, using the BUSINESS SNAPSHOT. Produce a slide-by-slide deck in markdown. For EACH slide use:
+### Slide N — Title
+- 3-5 tight bullets (quantified in INR where relevant)
+Cover: 1 Agenda, 2 Executive summary, 3 Financials, 4 Growth, 5 Risks, 6 Operations, 7 Asks & decisions, 8 Next quarter. Board-ready and honest. Extra context (may be blank):`,
+  costs: `You are a cost-optimization consultant for an Indian SME. Using the BUSINESS SNAPSHOT, find savings without hurting growth. Produce markdown with:
+## Quick wins (0-30 days, with ₹ estimates)
+## Structural savings (renegotiations, mix, automation)
+## What NOT to cut (protect these)
+## Total realistic annual saving (INR)
+Prioritise by rupee impact and ease. Focus area (may be blank):`,
 };
 
 export async function generateFor(mode: string, input: string, context: string): Promise<string> {
