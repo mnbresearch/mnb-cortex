@@ -201,6 +201,56 @@ Ground it in the BUSINESS SNAPSHOT. Question:`,
 ## Follow-up line
 Keep it specific and India-appropriate. Details:`,
   pulse: `Give a 3-sentence executive pulse on the business RIGHT NOW: (1) what's happening, (2) the single biggest risk, (3) the one action to take today. Be specific with numbers.`,
+  forecast: `You are a CFO-grade financial forecaster for an Indian SME. Using the BUSINESS SNAPSHOT, produce a forward-looking forecast in markdown with:
+## 90-day outlook (revenue, profit, cash)
+## Cash runway & the month it gets tight
+## Key assumptions
+## Leading indicators to watch
+## What to do now to change the trajectory
+Quantify in INR (lakh/crore). State confidence. Context/question (may be blank):`,
+  scenario: `You are the AI COO stress-testing a decision for an Indian SME owner. Analyse the described scenario against the BUSINESS SNAPSHOT. Produce markdown with:
+## Bottom line (one sentence: do it / don't / do it with conditions)
+## Impact on profit, cash & runway (quantified)
+## Best case / base case / worst case
+## Risks & how to de-risk
+## Verdict & conditions
+Scenario:`,
+  benchmark: `You are a benchmarking analyst for Indian SMEs. Compare this company (from the BUSINESS SNAPSHOT) to typical peers in its sector. Produce markdown with:
+## Where you beat the benchmark
+## Where you lag (and by how much)
+## Peer-median vs you (table: metric | you | peer median | gap)
+## The 3 gaps worth closing first
+Use realistic Indian SME benchmarks; state that they are estimates. Focus area (may be blank):`,
+  actions: `You are the AI COO. From the BUSINESS SNAPSHOT, generate a prioritised action list the owner can execute this week. Produce markdown with a single ordered list; for EACH action use the exact format:
+**[P1|P2|P3] Action title** — why it matters (1 line) — expected impact (₹ or %) — owner/module.
+Order by impact-to-effort. Give 6-9 actions. Be concrete and numeric.`,
+  pricing: `You are a pricing strategist for an Indian SME (GST-aware). Using the BUSINESS SNAPSHOT, recommend pricing moves. Produce markdown with:
+## Margin diagnosis
+## Recommended price changes (by SKU/segment, with %)
+## Elasticity & competitor risk
+## Expected margin & revenue impact (quantified)
+## Rollout plan (comms + timing)
+Consider GST and the recent competitor price cut. Details (may be blank):`,
+  negotiate: `You are a procurement/negotiation coach for an Indian SME. For the supplier/customer situation, produce markdown with:
+## Your leverage & their leverage
+## Target, walk-away & opening position (numbers)
+## Talk track (3-4 lines you can say)
+## Concessions to trade (low-cost to you)
+## BATNA
+Ground it in the BUSINESS SNAPSHOT where relevant. Situation:`,
+  risk: `You are a risk officer for an Indian SME. From the BUSINESS SNAPSHOT, build a risk radar. Produce markdown with a table: Risk | Likelihood (H/M/L) | Impact (H/M/L) | Early warning sign | Mitigation. Cover cash, supply chain, customer concentration, margin, people, and market risks. Then a one-line "biggest risk right now".`,
+  hiring: `You are a workforce/org-design advisor for an Indian SME. Using the BUSINESS SNAPSHOT, produce markdown with:
+## Should you hire now? (yes/no + why, tied to cash runway)
+## Roles that would create the most value (ranked)
+## Cost vs. expected return per role (INR)
+## Alternatives to hiring (automation, contractors)
+Question (may be blank):`,
+  brief: `You are the AI COO writing the owner's daily brief. Using the BUSINESS SNAPSHOT, produce a tight markdown brief with:
+## Good morning — the one thing that matters today
+## 3 numbers to know
+## 2 risks on the horizon
+## Your 3 moves today
+Keep it under 200 words, specific and numeric.`,
 };
 
 export async function generateFor(mode: string, input: string, context: string): Promise<string> {
