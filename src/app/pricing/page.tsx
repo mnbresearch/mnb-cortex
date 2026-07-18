@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PricingClient } from "@/components/pricing-client";
+import { Logo } from "@/components/logo";
 
 export const metadata = { title: "Pricing — MNB Cortex" };
 export default function Pricing() {
@@ -7,7 +8,7 @@ export default function Pricing() {
     <main className="min-h-screen">
       <header className="flex items-center justify-between px-6 lg:px-12 h-16 border-b">
         <Link href="/" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold">C</div>
+          <Logo size={32} />
           <span className="font-semibold">MNB Cortex</span>
         </Link>
         <div className="flex items-center gap-4 text-sm">
