@@ -2,7 +2,8 @@ import Link from "next/link";
 import { APP_VERSION } from "@/lib/config";
 export const metadata = { title: "Changelog — MNB Cortex" };
 const releases = [
-  { v: "1.1.0", date: "Latest", items: ["Global AI Copilot on every page", "Owner analytics dashboard", "Public API + webhooks", "Deals pipeline, CRM & lead scoring", "White-label theming, billing & Razorpay", "Installable app with forced-update flow", "Public status page & shareable reports"] },
+  { v: "1.2.0", date: "Latest", items: ["Foresight Suite: 90-day AI forecasting + interactive what-if scenario planner", "AI Action Center — every decision ranked by impact", "Goals & OKR tracker with live progress rings", "Risk Radar, Industry Benchmarks & AI Pricing Optimizer", "Voice input in the AI CEO chat", "8 new CFO-grade AI reasoning modes"] },
+  { v: "1.1.0", date: "Earlier", items: ["Global AI Copilot on every page", "Owner analytics dashboard", "Public API + webhooks", "Deals pipeline, CRM & lead scoring", "White-label theming, billing & Razorpay", "Installable app with forced-update flow", "Public status page & shareable reports"] },
   { v: "1.0.0", date: "Launch", items: ["13 AI modules & streaming AI CEO chat", "Business Health Dashboard + Cortex Score", "AI Reports, Documents, Meetings, Market, Strategy", "Approvals, workflows, activity log", "CSV/Excel/PDF import & export", "Supabase auth + RLS, Groq AI"] },
 ];
 export default function Changelog() {
