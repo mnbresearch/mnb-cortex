@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { APP_VERSION } from "@/lib/config";
+import { Logo } from "@/components/logo";
 export const metadata = { title: "Changelog — MNB Cortex" };
 const releases = [
   { v: "1.6.0", date: "Latest", items: ["Inventory Reorder Optimizer (EOQ + safety stock)", "WhatsApp Broadcast Composer with wa.me links", "Sales Target Planner (annual → monthly, per-rep)", "Board Deck Generator", "Cost Optimizer", "3 new AI reasoning modes (broadcast, board, costs)"] },
@@ -14,7 +15,7 @@ export default function Changelog() {
   return (
     <main className="min-h-screen">
       <header className="flex items-center justify-between px-6 lg:px-12 h-16 border-b">
-        <Link href="/" className="flex items-center gap-2"><div className="h-8 w-8 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold">C</div><span className="font-semibold">MNB Cortex</span></Link>
+        <Link href="/" className="flex items-center gap-2"><Logo size={32} /><span className="font-semibold">MNB Cortex</span></Link>
         <div className="flex gap-4 text-sm"><Link href="/pricing" className="text-muted-foreground hover:text-foreground">Pricing</Link><Link href="/status" className="text-muted-foreground hover:text-foreground">Status</Link></div>
       </header>
       <section className="max-w-2xl mx-auto px-6 py-14">
