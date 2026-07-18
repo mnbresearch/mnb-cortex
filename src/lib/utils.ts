@@ -54,6 +54,7 @@ export function scoreTone(n: number): string {
 }
 
 export const ACCENTS: Record<string, string> = {
-  indigo: "244 75% 59%", violet: "271 76% 53%", emerald: "160 84% 39%",
-  rose: "347 77% 50%", amber: "38 92% 50%", sky: "199 89% 48%",
+  teal: "178 74% 33%", emerald: "158 74% 38%", cyan: "190 85% 40%",
+  indigo: "244 75% 59%", violet: "271 76% 53%", rose: "347 77% 50%",
+  amber: "34 94% 48%", sky: "199 89% 48%",
 };
