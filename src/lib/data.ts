@@ -1,4 +1,5 @@
 import "server-only";
+import { cookies } from "next/headers";
 import { createClient, hasSupabase } from "@/lib/supabase/server";
 import { demoMetrics, demoInsights, demoAlerts, demoContext } from "@/lib/demo";
 import type { HealthMetric, AIInsight, Alert } from "@/types";
@@ -9,9 +10,28 @@ export async function getUserAndOrg() {
     const sb = createClient();
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return { user: null, orgId: null };
-    const { data } = await sb.from("memberships").select("org_id").eq("user_id", user.id).limit(1).single();
-    return { user, orgId: data?.org_id ?? null };
+    const { data } = await sb.from("memberships").select("org_id").eq("user_id", user.id);
+    const ids = ((data as any[]) || []).map((m) => m.org_id);
+    if (!ids.length) return { user, orgId: null };
+    // Respect the workspace the user switched to, when they're still a member of it.
+    const active = cookies().get("cortex_org")?.value;
+    const orgId = active && ids.includes(active) ? active : ids[0];
+    return { user, orgId };
   } catch { return { user: null, orgId: null }; }
+}
+
+/** All workspaces the signed-in user belongs to (for the switcher). */
+export async function getMyOrgs(): Promise<{ id: string; name: string }[]> {
+  const { user } = await getUserAndOrg();
+  if (!user) return [];
+  try {
+    const sb = createClient();
+    const { data } = await sb.from("memberships").select("org_id").eq("user_id", user.id);
+    const ids = ((data as any[]) || []).map((m) => m.org_id);
+    if (!ids.length) return [];
+    const { data: orgs } = await sb.from("organizations").select("id,name").in("id", ids);
+    return ((orgs as any[]) || []).map((o) => ({ id: o.id, name: o.name }));
+  } catch { return []; }
 }
 
 async function currentOrg(): Promise<string | null> {
