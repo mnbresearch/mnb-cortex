@@ -86,8 +86,22 @@ export default async function SuperAdmin() {
                     </>
                   ) : "Create the workspace below, then import real data."}
                 </div>
-                <div className="mt-3 flex gap-2">
+                {b.publicKpis?.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs font-medium text-muted-foreground mb-1.5">Published figures (from the company's own site — not internal accounts)</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {b.publicKpis.map((k) => (
+                        <div key={k.label} className="rounded-lg border p-2">
+                          <div className="text-sm font-bold">{k.value}</div>
+                          <div className="text-[11px] text-muted-foreground leading-tight">{k.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="mt-3 flex flex-wrap items-center gap-3">
                   <a href={b.site} target="_blank" rel="noopener noreferrer" className="text-sm text-primary inline-flex items-center gap-1">Website <ExternalLink className="h-3 w-3" /></a>
+                  {b.app && <a href={b.app} target="_blank" rel="noopener noreferrer" className="text-sm text-primary inline-flex items-center gap-1">App <ExternalLink className="h-3 w-3" /></a>}
                   {b.org && <JoinButton orgId={b.org.id} />}
                 </div>
               </Card>
