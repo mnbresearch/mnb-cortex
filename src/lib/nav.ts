@@ -6,7 +6,8 @@ import {
   Presentation, Megaphone, Swords,
   Coins, Calculator, Landmark, FileSignature, Truck, ClipboardList,
   Warehouse, Radio, Crosshair, MonitorPlay, PiggyBank,
-  Repeat, Briefcase, CalendarClock
+  Repeat, Briefcase, CalendarClock,
+  FileCheck2, GaugeCircle, Scale, Smile
 } from "lucide-react";
 
 export const NAV = [
@@ -34,6 +35,7 @@ export const NAV = [
   { href: "/investor", label: "Investor Update", icon: Presentation, group: "Advisory" },
   { href: "/marketing", label: "Marketing Studio", icon: Megaphone, group: "Advisory" },
   { href: "/competitors", label: "Competitor Intel", icon: Swords, group: "Advisory" },
+  { href: "/proposals", label: "Proposals & Quotes", icon: FileCheck2, group: "Advisory" },
   { href: "/vendors", label: "Vendor Scorecard", icon: Truck, group: "Advisory" },
   { href: "/sops", label: "SOP Builder", icon: ClipboardList, group: "Advisory" },
   { href: "/broadcast", label: "WhatsApp Broadcast", icon: Radio, group: "Advisory" },
@@ -46,6 +48,9 @@ export const NAV = [
   { href: "/cash13", label: "13-Week Cash Flow", icon: CalendarClock, group: "Money" },
   { href: "/saas", label: "SaaS Metrics", icon: Repeat, group: "Money" },
   { href: "/projects", label: "Project Profitability", icon: Briefcase, group: "Money" },
+  { href: "/valuation", label: "Business Valuation", icon: Scale, group: "Money" },
+  { href: "/capacity", label: "Team Capacity", icon: GaugeCircle, group: "Intelligence" },
+  { href: "/nps", label: "NPS & Sentiment", icon: Smile, group: "Intelligence" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
   { href: "/forecast", label: "Forecasting", icon: LineChart, group: "Foresight" },
   { href: "/action-center", label: "Action Center", icon: ListChecks, group: "Foresight" },
