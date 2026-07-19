@@ -9,12 +9,13 @@ import { Shortcuts } from "@/components/shortcuts";
 import { Toaster } from "@/components/toaster";
 import { WhatsNew } from "@/components/whats-new";
 import { getOrgProfile } from "@/lib/data";
+import { isSuperAdmin } from "@/lib/superadmin";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const profile = await getOrgProfile();
+  const [profile, superAdmin] = await Promise.all([getOrgProfile(), isSuperAdmin()]);
   return (
     <div className="flex min-h-screen">
-      <Sidebar />
+      <Sidebar superAdmin={superAdmin} />
       <div className="flex-1 min-w-0">{children}</div>
       <MobileNav />
       <CommandPalette />
