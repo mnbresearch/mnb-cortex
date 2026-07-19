@@ -5,8 +5,9 @@ import { NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/logo";
 import { ShieldAlert } from "lucide-react";
+import { OrgSwitcher } from "@/components/org-switcher";
 
-export function Sidebar({ superAdmin = false }: { superAdmin?: boolean }) {
+export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: { superAdmin?: boolean; orgs?: { id: string; name: string }[]; activeOrgId?: string | null }) {
   const path = usePathname();
   const groups = Array.from(new Set(NAV.map((n) => n.group)));
   return (
@@ -18,6 +19,7 @@ export function Sidebar({ superAdmin = false }: { superAdmin?: boolean }) {
           <div className="text-[11px] text-muted-foreground mt-0.5">The AI COO for SMEs</div>
         </div>
       </div>
+      <OrgSwitcher orgs={orgs} activeId={activeOrgId} />
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
         {groups.map((g) => (
           <div key={g}>
