@@ -25,7 +25,33 @@ function pickProvider(): string {
   return "none";
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** True when at least one AI provider key is configured. */
+export function hasAIKey(): boolean {
+  return Boolean(process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
+}
+
+/**
+ * Runs the model with retry/backoff on transient failures (429 rate-limit, 5xx).
+ * Providers rate-limit under bursty load; without this the app silently returned
+ * an off-topic canned answer, which is worse than an honest "try again".
+ */
 export async function runCortex(messages: Msg[], context: string): Promise<string> {
+  if (!hasAIKey()) return fallback(messages); // genuinely unconfigured — show the setup hint
+  const attempts = 3;
+  for (let i = 0; i < attempts; i++) {
+    const out = await runOnce(messages, context);
+    if (out !== null) return out;
+    if (i < attempts - 1) await sleep(500 * Math.pow(2, i) + Math.random() * 250);
+  }
+  return hasAIKey()
+    ? "The AI engine is busy right now (rate limit). Please try again in a few seconds — your data is safe and nothing was lost."
+    : fallback(messages);
+}
+
+/** One model call. Returns null on a transient/failed call so the caller can retry. */
+async function runOnce(messages: Msg[], context: string): Promise<string | null> {
   const provider = pickProvider();
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
   try {
@@ -40,8 +66,9 @@ export async function runCortex(messages: Msg[], context: string): Promise<strin
           generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
         }),
       });
+      if (!r.ok) return null;
       const j = await r.json();
-      return j?.candidates?.[0]?.content?.parts?.[0]?.text ?? fallback(messages);
+      return j?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
     }
     // ---- Groq (FREE: console.groq.com) — OpenAI-compatible ----
     if (provider === "groq" && process.env.GROQ_API_KEY) {
@@ -49,8 +76,9 @@ export async function runCortex(messages: Msg[], context: string): Promise<strin
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
         body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
       });
+      if (!r.ok) return null; // 429 rate-limit or 5xx → let the caller retry
       const j = await r.json();
-      return j?.choices?.[0]?.message?.content ?? fallback(messages);
+      return j?.choices?.[0]?.message?.content ?? null;
     }
     // ---- OpenAI ----
     if (provider === "openai" && process.env.OPENAI_API_KEY) {
@@ -58,8 +86,9 @@ export async function runCortex(messages: Msg[], context: string): Promise<strin
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
         body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
       });
+      if (!r.ok) return null;
       const j = await r.json();
-      return j?.choices?.[0]?.message?.content ?? fallback(messages);
+      return j?.choices?.[0]?.message?.content ?? null;
     }
     // ---- Anthropic ----
     if (provider === "anthropic" && process.env.ANTHROPIC_API_KEY) {
@@ -67,13 +96,14 @@ export async function runCortex(messages: Msg[], context: string): Promise<strin
         method: "POST", headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022", max_tokens: 1024, system: sys, messages }),
       });
+      if (!r.ok) return null;
       const j = await r.json();
-      return j?.content?.[0]?.text ?? fallback(messages);
+      return j?.content?.[0]?.text ?? null;
     }
-  } catch (e) {
-    return fallback(messages);
+  } catch {
+    return null; // network/transient — retry
   }
-  return fallback(messages);
+  return null;
 }
 
 function fallback(messages: Msg[]): string {
