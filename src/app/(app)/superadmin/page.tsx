@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isSuperAdmin, getAllOrgs, getPortfolioStatus, currentEmail } from "@/lib/superadmin";
-import { provisionBusinesses, grantOrgAccess, joinOrg } from "@/lib/superadmin-actions";
+import { ProvisionButton, JoinButton, GrantAccessForm } from "@/components/superadmin-panel";
 import { ShieldAlert, Building2, Users, Activity, Lock, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -88,16 +88,12 @@ export default async function SuperAdmin() {
                 </div>
                 <div className="mt-3 flex gap-2">
                   <a href={b.site} target="_blank" rel="noopener noreferrer" className="text-sm text-primary inline-flex items-center gap-1">Website <ExternalLink className="h-3 w-3" /></a>
-                  {b.org && (
-                    <form action={joinOrg}><input type="hidden" name="org_id" value={b.org.id} /><Button size="sm" variant="outline">Make me owner</Button></form>
-                  )}
+                  {b.org && <JoinButton orgId={b.org.id} />}
                 </div>
               </Card>
             ))}
           </div>
-          <form action={provisionBusinesses} className="mt-3">
-            <Button><Building2 className="h-4 w-4" /> Create / repair my business workspaces</Button>
-          </form>
+          <ProvisionButton />
           <p className="text-xs text-muted-foreground mt-2">
             This creates the workspaces and profiles only. Real revenue, margin and cash figures must come from your own systems — import them via <Link href="/import" className="text-primary">Import data</Link> or the public API. Nothing is invented.
           </p>
@@ -135,25 +131,7 @@ export default async function SuperAdmin() {
         </Section>
 
         <Section title="Grant access" desc="Provision an admin (or any role) on any organization">
-          <form action={grantOrgAccess} className="flex flex-wrap items-end gap-2">
-            <label className="text-sm">
-              <span className="text-muted-foreground block mb-1">Organization</span>
-              <select name="org_id" className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring min-w-[200px]">
-                {rows.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </label>
-            <label className="text-sm">
-              <span className="text-muted-foreground block mb-1">Email</span>
-              <input name="email" type="email" required placeholder="person@company.com" className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring min-w-[220px]" />
-            </label>
-            <label className="text-sm">
-              <span className="text-muted-foreground block mb-1">Role</span>
-              <select name="role" defaultValue="admin" className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring">
-                {["viewer", "analyst", "manager", "admin", "owner"].map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </label>
-            <Button type="submit">Grant access</Button>
-          </form>
+          <GrantAccessForm orgs={rows.map((r) => ({ id: r.id, name: r.name }))} />
           <p className="text-xs text-muted-foreground mt-2">Creates a pending invite — it activates automatically when that person signs up or next signs in.</p>
         </Section>
       </PageShell>
