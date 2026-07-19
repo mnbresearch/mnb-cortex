@@ -8,14 +8,16 @@ import { Copilot } from "@/components/copilot";
 import { Shortcuts } from "@/components/shortcuts";
 import { Toaster } from "@/components/toaster";
 import { WhatsNew } from "@/components/whats-new";
-import { getOrgProfile } from "@/lib/data";
+import { getOrgProfile, getMyOrgs, getUserAndOrg } from "@/lib/data";
 import { isSuperAdmin } from "@/lib/superadmin";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [profile, superAdmin] = await Promise.all([getOrgProfile(), isSuperAdmin()]);
+  const [profile, superAdmin, orgs, { orgId }] = await Promise.all([
+    getOrgProfile(), isSuperAdmin(), getMyOrgs(), getUserAndOrg(),
+  ]);
   return (
     <div className="flex min-h-screen">
-      <Sidebar superAdmin={superAdmin} />
+      <Sidebar superAdmin={superAdmin} orgs={orgs} activeOrgId={orgId} />
       <div className="flex-1 min-w-0">{children}</div>
       <MobileNav />
       <CommandPalette />
