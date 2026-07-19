@@ -5,7 +5,8 @@ import {
   Sunrise, Handshake, UserPlus, Receipt, UserMinus,
   Presentation, Megaphone, Swords,
   Coins, Calculator, Landmark, FileSignature, Truck, ClipboardList,
-  Warehouse, Radio, Crosshair, MonitorPlay, PiggyBank
+  Warehouse, Radio, Crosshair, MonitorPlay, PiggyBank,
+  Repeat, Briefcase, CalendarClock
 } from "lucide-react";
 
 export const NAV = [
@@ -42,6 +43,9 @@ export const NAV = [
   { href: "/funding", label: "Funding & Loans", icon: Landmark, group: "Money" },
   { href: "/invoice", label: "GST Invoice", icon: FileSignature, group: "Money" },
   { href: "/costs", label: "Cost Optimizer", icon: PiggyBank, group: "Money" },
+  { href: "/cash13", label: "13-Week Cash Flow", icon: CalendarClock, group: "Money" },
+  { href: "/saas", label: "SaaS Metrics", icon: Repeat, group: "Money" },
+  { href: "/projects", label: "Project Profitability", icon: Briefcase, group: "Money" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
   { href: "/forecast", label: "Forecasting", icon: LineChart, group: "Foresight" },
   { href: "/action-center", label: "Action Center", icon: ListChecks, group: "Foresight" },
