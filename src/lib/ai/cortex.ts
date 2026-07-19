@@ -345,6 +345,22 @@ Cover: 1 Agenda, 2 Executive summary, 3 Financials, 4 Growth, 5 Risks, 6 Operati
 ## What NOT to cut (protect these)
 ## Total realistic annual saving (INR)
 Prioritise by rupee impact and ease. Focus area (may be blank):`,
+  proposal: `You are writing a client-ready proposal for an Indian professional-services firm. From the brief, produce a polished markdown proposal with:
+## Understanding of your requirement
+## Proposed scope of work (phased, with deliverables)
+## Timeline (weeks, with milestones)
+## Commercials (itemised, in INR, with payment schedule)
+## Why us
+## Assumptions & exclusions
+## Next steps
+Be specific and confident; never invent client facts not given. Brief:`,
+  valuation: `You are a valuation analyst for an Indian SME. Interpret the valuation inputs and outputs provided. Produce markdown with:
+## What this business is plausibly worth (range, INR)
+## Which method fits best here and why
+## What's driving / dragging the multiple
+## How to increase valuation over 12-24 months (ranked)
+## Caveats a buyer will raise
+Be realistic about Indian SME multiples and state that this is indicative, not a formal valuation. Inputs:`,
 };
 
 export async function generateFor(mode: string, input: string, context: string): Promise<string> {
