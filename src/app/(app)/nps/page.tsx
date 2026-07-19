@@ -1,3 +1,4 @@
+// NPS & customer sentiment module
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
