@@ -11,27 +11,49 @@ export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "mnbgotyou@gmail.com";
 export const SUPER_ADMINS: string[] = (process.env.SUPER_ADMIN_EMAILS || "mridulnanda2004@gmail.com,mnbgotyou@gmail.com")
   .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
 
-/** The businesses in your portfolio, with categorisation. */
+/**
+ * The businesses in your portfolio, with categorisation.
+ * `publicKpis` are figures PUBLISHED on each company's own website — shown as
+ * public/marketing figures, never presented as internal management accounts.
+ */
 export const MY_BUSINESSES = [
   {
     slug: "mnb-research",
     name: "MNB Research",
+    legalName: "MNB Research",
     category: "Consulting & Growth",
     industry: "consulting",
     tagline: "Research-driven strategy, growth & digital transformation",
     services: ["Strategy consulting", "Financial modeling", "Market research", "Web development", "SEO", "AI tools", "Digital marketing"],
     sectorsServed: ["EdTech", "FMCG", "Manufacturing", "AI"],
     site: "https://www.mnbresearch.com",
+    app: "",
+    contact: "contact@mnbresearch.com",
+    publicKpis: [
+      { label: "Businesses impacted", value: "50+", note: "across EdTech, FMCG, Manufacturing, AI" },
+      { label: "Positioning", value: "Growth & consultancy", note: "recognised as India's Best Business Growth & Consultancy Service Provider" },
+    ],
   },
   {
-    slug: "approbot",
-    name: "Approbot",
-    category: "EdTech / AI Product",
+    slug: "abrobot",
+    name: "AbroBot",
+    legalName: "Abrobot Technologies",
+    category: "EdTech / AI SaaS",
     industry: "education",
-    tagline: "AI-powered abroad-education advisory",
-    services: ["AI advisory bot", "Student counselling", "University matching", "Consultant network"],
-    sectorsServed: ["Study abroad", "Student counselling"],
-    site: "https://www.mnbresearch.com",
+    tagline: "India's AI-powered study abroad platform",
+    services: ["AI Counsellor", "SOP Analyser", "ROI Predictor", "Scholarship Finder", "University matching", "Visa & compliance", "Test prep (IELTS/GRE/GMAT/TOEFL)", "Application & admission"],
+    sectorsServed: ["Study abroad", "USA", "Canada", "UK", "Germany", "Australia"],
+    site: "https://www.abrobot.ai",
+    app: "https://app.abrobot.ai",
+    contact: "contact@mnbresearch.com",
+    publicKpis: [
+      { label: "Student data points", value: "25 lakh+", note: "training data behind the AI" },
+      { label: "Consultants trained", value: "4,000+", note: "expert insights" },
+      { label: "Visa success rate", value: "88–92%", note: "across destinations (published)" },
+      { label: "Scholarships facilitated", value: "₹55 Cr+", note: "2025–26 (published)" },
+      { label: "AI tools live", value: "20+", note: "at app.abrobot.ai" },
+      { label: "Press reach", value: "160+ outlets", note: "60M+ reach" },
+    ],
   },
 ] as const;
 
