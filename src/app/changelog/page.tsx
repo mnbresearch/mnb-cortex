@@ -3,7 +3,8 @@ import { APP_VERSION } from "@/lib/config";
 import { Logo } from "@/components/logo";
 export const metadata = { title: "Changelog — MNB Cortex" };
 const releases = [
-  { v: "1.9.0", date: "Latest", items: ["Email Console — send mail from the dashboard, AI-draft, templates", "Live delivery log + sending-domain status from Resend", "Captured leads visible alongside email", "Embeddable live uptime badge at /api/badge"] },
+  { v: "2.0.0", date: "Latest", items: ["Integration marketplace — 27 tools across 7 categories", "AES-256-GCM encryption for all stored API keys", "Credentials verified with the provider before saving", "Per-plan integration gating and quotas", "Admin-only access with row-level security"] },
+  { v: "1.9.0", date: "Earlier", items: ["Email Console — send mail from the dashboard, AI-draft, templates", "Live delivery log + sending-domain status from Resend", "Captured leads visible alongside email", "Embeddable live uptime badge at /api/badge"] },
   { v: "1.8.0", date: "Earlier", items: ["AI Proposal & Quote generator", "Team capacity & utilisation planner", "Business valuation (multiples + DCF)", "NPS & customer sentiment tracker", "2 new AI reasoning modes (proposal, valuation)"] },
   { v: "1.7.0", date: "Earlier", items: ["Workspace switcher — run multiple businesses from one login", "SaaS metrics: MRR, ARR, LTV:CAC, CAC payback, retention projection", "Project & client profitability with effective hourly rate", "13-week rolling cash flow with crunch warning", "Platform Super Admin console"] },
   { v: "1.6.0", date: "Earlier", items: ["Inventory Reorder Optimizer (EOQ + safety stock)", "WhatsApp Broadcast Composer with wa.me links", "Sales Target Planner (annual → monthly, per-rep)", "Board Deck Generator", "Cost Optimizer", "3 new AI reasoning modes (broadcast, board, costs)"] },
