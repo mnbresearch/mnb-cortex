@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/logo";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, Mail } from "lucide-react";
 import { OrgSwitcher } from "@/components/org-switcher";
 
 export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: { superAdmin?: boolean; orgs?: { id: string; name: string }[]; activeOrgId?: string | null }) {
@@ -48,6 +48,12 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
                 path === "/superadmin" ? "brand-gradient text-white font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
               <ShieldAlert className="h-4 w-4" />
               Super Admin
+            </Link>
+            <Link href="/email"
+              className={cn("flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors mt-0.5",
+                path === "/email" ? "brand-gradient text-white font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
+              <Mail className="h-4 w-4" />
+              Email Console
             </Link>
           </div>
         )}
