@@ -20,6 +20,31 @@ export async function getUserAndOrg() {
   } catch { return { user: null, orgId: null }; }
 }
 
+/** Integration state for the current workspace: connections, plan, and permissions. */
+export async function getIntegrationState() {
+  const { encryptionAvailable } = await import("@/lib/crypto");
+  const encryption = encryptionAvailable();
+  const { user, orgId } = await getUserAndOrg();
+  if (!user || !orgId) return { connections: [] as any[], plan: "starter", canManage: false, live: false, encryption };
+  try {
+    const sb = createClient();
+    const [{ data: rows }, { data: org }, { data: mem }] = await Promise.all([
+      sb.from("integrations").select("provider,status,config").eq("org_id", orgId),
+      sb.from("organizations").select("plan").eq("id", orgId).single(),
+      sb.from("memberships").select("role").eq("user_id", user.id).eq("org_id", orgId).single(),
+    ]);
+    const RANK: Record<string, number> = { viewer: 1, analyst: 2, manager: 3, admin: 4, owner: 5 };
+    const canManage = (RANK[(mem as any)?.role] || 0) >= RANK.admin;
+    return {
+      connections: ((rows as any[]) || []).map((r) => ({ provider: r.provider, status: r.status, config: r.config || {} })),
+      plan: ((org as any)?.plan || "starter").toLowerCase(),
+      canManage, live: true, encryption,
+    };
+  } catch {
+    return { connections: [] as any[], plan: "starter", canManage: false, live: false, encryption };
+  }
+}
+
 /** All workspaces the signed-in user belongs to (for the switcher). */
 export async function getMyOrgs(): Promise<{ id: string; name: string }[]> {
   const { user } = await getUserAndOrg();
