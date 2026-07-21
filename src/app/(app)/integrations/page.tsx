@@ -1,53 +1,69 @@
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
+import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { getIntegrations } from "@/lib/data";
-import { connectIntegration, disconnectIntegration } from "@/lib/actions";
-import { Plug, Check, Link2 } from "lucide-react";
+import { IntegrationsManager } from "@/components/integrations-manager";
+import { getIntegrationState } from "@/lib/data";
+import { PLAN_INTEGRATION_LIMIT } from "@/lib/integrations";
+import Link from "next/link";
+import { ShieldCheck, KeyRound } from "lucide-react";
 
 export const dynamic = "force-dynamic";
-const PROVIDERS = [
-  { id: "tally", name: "Tally", desc: "Accounting & finance ledger" },
-  { id: "zoho_books", name: "Zoho Books", desc: "Invoicing & accounting" },
-  { id: "quickbooks", name: "QuickBooks", desc: "Accounting" },
-  { id: "shopify", name: "Shopify", desc: "E-commerce orders" },
-  { id: "google_sheets", name: "Google Sheets", desc: "Import from a shared sheet", url: true },
-  { id: "whatsapp", name: "WhatsApp Business", desc: "Campaigns & reminders" },
-  { id: "salesforce", name: "Salesforce", desc: "CRM" },
-  { id: "gmail", name: "Gmail / Workspace", desc: "Email & calendar" },
-  { id: "slack", name: "Slack", desc: "Alerts & notifications" },
-];
 
 export default async function Integrations() {
-  const { map, live } = await getIntegrations();
+  const { connections, plan, canManage, live, encryption } = await getIntegrationState();
+
   return (
     <>
-      <Topbar title="Integrations" subtitle="Connect your data sources" />
+      <Topbar title="Integrations" subtitle="Connect your tools — securely, on your plan" />
       <PageShell>
-        {!live && <Card className="p-5 bg-warning/10 border-warning/20 text-sm"><a href="/login" className="text-primary underline">Sign in</a> to connect and save integrations to your workspace. You can also import data now via <a href="/import" className="text-primary underline">Import data</a>.</Card>}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {PROVIDERS.map((p) => {
-            const conn = map[p.id];
-            return (
-              <Card key={p.id} className="p-4 flex flex-col gap-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2"><div className="h-9 w-9 rounded-lg bg-secondary grid place-items-center"><Plug className="h-4 w-4 text-muted-foreground" /></div>
-                    <div><div className="text-sm font-medium">{p.name}</div><div className="text-xs text-muted-foreground">{p.desc}</div></div></div>
-                  {conn && <Badge className="bg-success/10 text-success border-success/20"><Check className="h-3 w-3 mr-1" />Connected</Badge>}
+        {!live && (
+          <Card className="p-4 bg-warning/10 border-warning/20 text-sm">
+            <Link href="/login" className="text-primary underline">Sign in</Link> to connect tools to your workspace. You can still import data manually via <Link href="/import" className="text-primary underline">Import data</Link>.
+          </Card>
+        )}
+
+        {live && !encryption && (
+          <Card className="p-4 border-danger/30 bg-danger/5">
+            <div className="text-sm flex items-start gap-2">
+              <KeyRound className="h-4 w-4 text-danger mt-0.5 shrink-0" />
+              <span>
+                <b className="text-danger">Credential encryption is not configured.</b> Add an <code className="font-mono">ENCRYPTION_KEY</code> environment
+                variable (any long random string) in Vercel. Until then, integrations that require a secret key will be refused rather than stored in plaintext.
+              </span>
+            </div>
+          </Card>
+        )}
+
+        <IntegrationsManager plan={plan} connections={connections} canManage={canManage} />
+
+        <Section title="How your credentials are protected" desc="Security model">
+          <div className="text-sm text-muted-foreground space-y-2">
+            <p className="flex items-start gap-2"><ShieldCheck className="h-4 w-4 text-success mt-0.5 shrink-0" /><span><b className="text-foreground">Encrypted at rest.</b> Every secret is encrypted with AES-256-GCM before it reaches the database. The database never sees a plaintext key.</span></p>
+            <p className="flex items-start gap-2"><ShieldCheck className="h-4 w-4 text-success mt-0.5 shrink-0" /><span><b className="text-foreground">Never returned to the browser.</b> After saving, only a masked hint (e.g. <span className="font-mono">sk_••••••a4f2</span>) is shown. Decryption happens server-side, only when calling that provider.</span></p>
+            <p className="flex items-start gap-2"><ShieldCheck className="h-4 w-4 text-success mt-0.5 shrink-0" /><span><b className="text-foreground">Admin-only and workspace-isolated.</b> Only workspace admins and owners can add or remove integrations, and row-level security keeps each workspace's credentials separate.</span></p>
+            <p className="flex items-start gap-2"><ShieldCheck className="h-4 w-4 text-success mt-0.5 shrink-0" /><span><b className="text-foreground">Verified before saving.</b> We call the provider first — bad keys are rejected rather than silently stored.</span></p>
+          </div>
+        </Section>
+
+        <Section title="What each plan includes" desc="Integration allowances by tier">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {(["starter", "growth", "premium", "enterprise"] as const).map((p) => (
+              <Card key={p} className={`p-4 ${plan === p ? "border-primary/40 bg-primary/5" : ""}`}>
+                <div className="font-semibold capitalize">{p}</div>
+                <div className="text-2xl font-bold mt-1">{PLAN_INTEGRATION_LIMIT[p] === 999 ? "Unlimited" : PLAN_INTEGRATION_LIMIT[p]}</div>
+                <div className="text-xs text-muted-foreground">integrations</div>
+                <div className="text-xs text-muted-foreground mt-2">
+                  {p === "starter" && "Slack, Telegram, Sheets, Resend"}
+                  {p === "growth" && "+ Zoho, Tally, Shopify, HubSpot, Stripe, Razorpay, Notion, Airtable"}
+                  {p === "premium" && "+ Salesforce, QuickBooks, Meta & Google Ads, Twilio, Gmail, OpenAI"}
+                  {p === "enterprise" && "+ External Postgres, custom & on-prem connectors"}
                 </div>
-                {live && (conn ? (
-                  <form action={disconnectIntegration}><input type="hidden" name="provider" value={p.id} /><button className="w-full rounded-lg border h-9 text-sm hover:bg-accent">Disconnect</button></form>
-                ) : (
-                  <form action={connectIntegration} className="space-y-2"><input type="hidden" name="provider" value={p.id} />
-                    {p.url && <input name="config" placeholder='{"url":"https://docs.google.com/…"}' className="w-full rounded-lg border bg-background px-2 h-8 text-xs outline-none" />}
-                    <button className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-9 text-sm font-medium hover:opacity-90"><Link2 className="h-3.5 w-3.5" /> Connect</button>
-                  </form>
-                ))}
               </Card>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">Need something not listed? <Link href="/pricing" className="text-primary">Talk to us</Link> — custom connectors are available on Enterprise.</p>
+        </Section>
       </PageShell>
     </>
   );
