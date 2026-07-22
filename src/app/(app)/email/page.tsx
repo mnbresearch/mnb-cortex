@@ -5,8 +5,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmailConsole } from "@/components/email-console";
+import { EmailStudio } from "@/components/email-studio";
 import { isSuperAdmin, currentEmail } from "@/lib/superadmin";
 import { getLeads } from "@/lib/data";
+import { getEmailStudio } from "@/lib/email-campaigns";
 import { Lock, Mail } from "lucide-react";
 import Link from "next/link";
 
@@ -35,6 +37,8 @@ export default async function EmailPage() {
   }
 
   const { rows, live } = await getLeads();
+  const studio = await getEmailStudio();
+  const leadRecipients = rows.map((l: any) => ({ name: l.name, email: l.email, plan: l.plan }));
 
   return (
     <>
@@ -47,7 +51,13 @@ export default async function EmailPage() {
           </div>
         </Card>
 
-        <EmailConsole />
+        <Section title="Campaigns" desc="Pick a template, choose recipients, send a personalised mail-merge and track opens & clicks">
+          <EmailStudio templates={studio.templates} campaigns={studio.campaigns} leads={leadRecipients} />
+        </Section>
+
+        <Section title="Quick single email" desc="Send a one-off message without a campaign">
+          <EmailConsole />
+        </Section>
 
         <Section title="Captured leads" desc={live ? "People who submitted the pricing enquiry form" : "Sign in with a workspace to see stored leads"}>
           {rows.length === 0 ? (
