@@ -1,9 +1,9 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Send, Save, Trash2, Sparkles, Loader2, Users, BarChart3, FileText, Eye, MousePointerClick, Plus, ChevronDown } from "lucide-react";
+import { Send, Save, Trash2, Sparkles, Loader2, Users, BarChart3, FileText, Eye, MousePointerClick, Plus, ChevronDown, Inbox, Webhook, Mail, RefreshCw } from "lucide-react";
 
 type Template = { id: string; name: string; subject: string; body: string; updated_at?: string };
 type Campaign = { id: string; name: string | null; subject: string; created_at: string; total: number; opened: number; clicked: number };
@@ -17,11 +17,11 @@ async function call(op: string, extra: Record<string, any> = {}) {
 }
 
 export function EmailStudio({ templates, campaigns, leads }: { templates: Template[]; campaigns: Campaign[]; leads: Lead[] }) {
-  const [tab, setTab] = useState<"compose" | "templates" | "insights">("compose");
+  const [tab, setTab] = useState<"compose" | "templates" | "insights" | "replies">("compose");
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 rounded-lg border p-1 w-fit">
-        {([["compose", "Compose & Send", Send], ["templates", "Templates", FileText], ["insights", "Insights", BarChart3]] as const).map(([k, label, Icon]) => (
+      <div className="flex flex-wrap gap-1 rounded-lg border p-1 w-fit">
+        {([["compose", "Compose & Send", Send], ["templates", "Templates", FileText], ["insights", "Insights", BarChart3], ["replies", "Replies", Inbox]] as const).map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${tab === k ? "brand-gradient text-white" : "text-muted-foreground hover:bg-accent"}`}>
             <Icon className="h-3.5 w-3.5" /> {label}
@@ -31,6 +31,110 @@ export function EmailStudio({ templates, campaigns, leads }: { templates: Templa
       {tab === "compose" && <Compose templates={templates} leads={leads} />}
       {tab === "templates" && <Templates templates={templates} />}
       {tab === "insights" && <Insights campaigns={campaigns} />}
+      {tab === "replies" && <Replies />}
+    </div>
+  );
+}
+
+/* ---------------- Replies (inbound inbox) ---------------- */
+async function inboundCall(op: string, extra: Record<string, any> = {}) {
+  const r = await fetch("/api/email/inbound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, ...extra }) });
+  return r.json();
+}
+
+function Replies() {
+  const [status, setStatus] = useState<any>(null);
+  const [replies, setReplies] = useState<any[] | null>(null);
+  const [address, setAddress] = useState("");
+  const [simFrom, setSimFrom] = useState("");
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState("");
+
+  async function refresh() {
+    const [s, l] = await Promise.all([inboundCall("status"), inboundCall("list_replies")]);
+    if (s.ok) { setStatus(s); if (!address) setAddress(s.address || ""); }
+    if (l.ok) setReplies(l.replies || []);
+  }
+  useEffect(() => { refresh(); /* eslint-disable-next-line */ }, []);
+
+  async function createWebhook() {
+    setBusy("setup"); setMsg("");
+    const j = await inboundCall("setup");
+    setMsg(j.ok ? "✅ Webhook created and signing secret stored." : `⚠️ ${j.error}`);
+    setBusy(""); refresh();
+  }
+  async function saveAddress() {
+    setBusy("addr"); setMsg("");
+    const j = await inboundCall("set_address", { address });
+    setMsg(j.ok ? "✅ Receiving address saved. New campaigns will set it as reply-to." : `⚠️ ${j.error}`);
+    setBusy(""); refresh();
+  }
+  async function simulate() {
+    if (!simFrom) return;
+    setBusy("sim");
+    const j = await inboundCall("simulate", { from: simFrom });
+    setMsg(j.ok ? `✅ Simulated reply ${j.linked ? "linked to a campaign" : "stored (no matching recipient)"}.` : `⚠️ ${j.error}`);
+    setBusy(""); setSimFrom(""); refresh();
+  }
+  async function markRead(id: string) {
+    await inboundCall("mark_read", { id });
+    setReplies((rs) => (rs || []).map((r) => r.id === id ? { ...r, is_read: true } : r));
+  }
+
+  const unread = (replies || []).filter((r) => !r.is_read).length;
+  const I = "w-full rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring";
+
+  return (
+    <div className="grid lg:grid-cols-3 gap-4">
+      <Card className="p-5 space-y-3 lg:col-span-1">
+        <div className="font-semibold flex items-center gap-2"><Webhook className="h-4 w-4 text-primary" /> Inbound setup</div>
+        <div className="text-sm">
+          <span className="text-muted-foreground">Webhook: </span>
+          {status?.webhookConfigured ? <Badge className="bg-success/10 text-success border-success/20">configured</Badge> : <Badge className="bg-warning/10 text-warning border-warning/20">not set</Badge>}
+        </div>
+        <Button onClick={createWebhook} disabled={busy === "setup"} className="w-full">{busy === "setup" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Webhook className="h-4 w-4" />} Create / refresh webhook</Button>
+        <div className="pt-2">
+          <div className="text-xs text-muted-foreground mb-1">Receiving address (reply-to)</div>
+          <input className={I} placeholder="something@id.resend.app" value={address} onChange={(e) => setAddress(e.target.value)} />
+          <Button variant="outline" size="sm" className="mt-2 w-full" onClick={saveAddress} disabled={busy === "addr"}><Mail className="h-3.5 w-3.5" /> Save address</Button>
+        </div>
+        <div className="rounded-lg border p-3 text-xs text-muted-foreground">
+          Get a free zero-DNS address from Resend (<span className="font-mono">…@id.resend.app</span>), or set up a branded address with one MX record. Then create the webhook above so replies flow into this inbox.
+        </div>
+        <div className="pt-1">
+          <div className="text-xs text-muted-foreground mb-1">Simulate a reply (test)</div>
+          <div className="flex gap-2">
+            <input className={I} placeholder="recipient@company.com" value={simFrom} onChange={(e) => setSimFrom(e.target.value)} />
+            <Button variant="outline" size="sm" onClick={simulate} disabled={busy === "sim"}>Test</Button>
+          </div>
+        </div>
+        {msg && <p className={`text-sm ${msg.startsWith("✅") ? "text-success" : "text-muted-foreground"}`}>{msg}</p>}
+      </Card>
+
+      <Card className="p-5 space-y-3 lg:col-span-2">
+        <div className="flex items-center justify-between">
+          <div className="font-semibold flex items-center gap-2"><Inbox className="h-4 w-4 text-primary" /> Inbox {unread > 0 && <Badge className="bg-primary/10 text-primary border-primary/20">{unread} unread</Badge>}</div>
+          <Button variant="ghost" size="sm" onClick={refresh}><RefreshCw className="h-4 w-4" /> Refresh</Button>
+        </div>
+        {replies === null ? <p className="text-sm text-muted-foreground">Loading…</p>
+          : replies.length === 0 ? <p className="text-sm text-muted-foreground">No replies yet. When a recipient replies to a campaign, it appears here (set up the webhook first).</p>
+          : (
+            <div className="space-y-2">
+              {replies.map((r) => (
+                <div key={r.id} className={`rounded-lg border p-3 ${r.is_read ? "" : "bg-primary/5 border-primary/20"}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{r.from_email} {!r.is_read && <span className="ml-1 inline-block h-2 w-2 rounded-full bg-primary align-middle" />}</div>
+                      <div className="text-xs text-muted-foreground truncate">{r.subject || "(no subject)"} · {r.received_at ? new Date(r.received_at).toLocaleString("en-IN") : ""}{r.verified ? " · ✓ verified" : ""}</div>
+                    </div>
+                    {!r.is_read && <button onClick={() => markRead(r.id)} className="text-xs text-primary shrink-0">Mark read</button>}
+                  </div>
+                  {r.text && <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap line-clamp-4">{r.text}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+      </Card>
     </div>
   );
 }
