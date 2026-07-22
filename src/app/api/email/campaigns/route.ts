@@ -3,8 +3,10 @@ import { createClient, hasSupabase } from "@/lib/supabase/server";
 import { isSuperAdmin } from "@/lib/superadmin";
 import { getUserAndOrg } from "@/lib/data";
 import { sendEmail } from "@/lib/email";
-import { mergeVars, buildHtml, type Recipient } from "@/lib/mailmerge";
+import { type Recipient } from "@/lib/mailmerge";
+import { renderBrandedEmail, mergeTokens, brandFrom } from "@/lib/branded-email";
 import { getCampaignDetail } from "@/lib/email-campaigns";
+import { randomBytes } from "crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,27 +58,31 @@ export async function POST(req: Request) {
 
       const origin = new URL(req.url).origin;
 
-      // Create the campaign record first.
+      // reply_to routes replies to the inbound address (so we can capture them).
+      const { data: addr } = await sb.from("app_settings").select("value").eq("org_id", orgId).eq("key", "inbound_address").maybeSingle();
+      const replyTo = (addr as any)?.value || undefined;
+
       const { data: camp, error: cErr } = await sb.from("email_campaigns")
-        .insert({ org_id: orgId, name, subject, body: tbody, created_by: userId }).select("id").single();
+        .insert({ org_id: orgId, name, subject, body: tbody, template_id: body.templateId || null, total: clean.length, created_by: userId }).select("id").single();
       if (cErr) throw new Error(cErr.message);
       const campaignId = (camp as any).id;
 
       let sent = 0, failed = 0;
       for (const r of clean) {
-        // Insert recipient row first so we have its id for the tracking pixel.
+        const token = randomBytes(16).toString("hex");
         const { data: rec } = await sb.from("campaign_recipients")
-          .insert({ campaign_id: campaignId, org_id: orgId, name: r.name || null, email: r.email, status: "sent" })
+          .insert({ campaign_id: campaignId, org_id: orgId, name: r.name || null, email: r.email, token, status: "pending" })
           .select("id").single();
         const rid = (rec as any)?.id;
-        const personalSubject = mergeVars(subject, r);
-        const html = buildHtml(mergeVars(tbody, r), { origin, recipientId: rid });
-        const res = await sendEmail(r.email, personalSubject, html);
+        const mv = { name: r.name, email: r.email };
+        const personalSubject = mergeTokens(subject, mv);
+        const html = renderBrandedEmail(mergeTokens(tbody, mv), { origin, token, preheader: personalSubject });
+        const res = await sendEmail(r.email, personalSubject, html, { from: brandFrom(), replyTo });
         if (res.sent) { sent++; } else { failed++; }
-        if (rid) await sb.from("campaign_recipients").update({ status: res.sent ? "sent" : "failed" }).eq("id", rid);
+        if (rid) await sb.from("campaign_recipients").update({ status: res.sent ? "sent" : "failed", provider_id: res.providerId || null, error: res.sent ? null : (res.reason || null) }).eq("id", rid);
       }
-      await sb.from("email_campaigns").update({ sent_count: sent }).eq("id", campaignId);
-      return NextResponse.json({ ok: true, campaignId, sent, failed });
+      await sb.from("email_campaigns").update({ sent_count: sent, failed }).eq("id", campaignId);
+      return NextResponse.json({ ok: true, campaignId, total: clean.length, sent, failed });
     }
 
     if (op === "detail") {
