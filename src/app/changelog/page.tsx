@@ -3,7 +3,8 @@ import { APP_VERSION } from "@/lib/config";
 import { Logo } from "@/components/logo";
 export const metadata = { title: "Changelog — MNB Cortex" };
 const releases = [
-  { v: "2.1.0", date: "Latest", items: ["Email campaigns — reusable templates with {{merge}} tokens", "Personalised mail-merge to selected leads (name/email swapped per person)", "Open tracking (pixel) and click tracking (redirect)", "Per-campaign insights: open rate, click rate, per-recipient outcomes", "AI email drafting inside the composer"] },
+  { v: "2.2.0", date: "Latest", items: ["Fully branded email template (header, footer, badges, legal)", "Inbound reply capture with Svix-verified webhooks", "Replies inbox with unread tracking + campaign linking", "Token-based open/click tracking", "One-click webhook setup + reply simulator"] },
+  { v: "2.1.0", date: "Earlier", items: ["Email campaigns — reusable templates with {{merge}} tokens", "Personalised mail-merge to selected leads (name/email swapped per person)", "Open tracking (pixel) and click tracking (redirect)", "Per-campaign insights: open rate, click rate, per-recipient outcomes", "AI email drafting inside the composer"] },
   { v: "2.0.0", date: "Earlier", items: ["Integration marketplace — 27 tools across 7 categories", "AES-256-GCM encryption for all stored API keys", "Credentials verified with the provider before saving", "Per-plan integration gating and quotas", "Admin-only access with row-level security"] },
   { v: "1.9.0", date: "Earlier", items: ["Email Console — send mail from the dashboard, AI-draft, templates", "Live delivery log + sending-domain status from Resend", "Captured leads visible alongside email", "Embeddable live uptime badge at /api/badge"] },
   { v: "1.8.0", date: "Earlier", items: ["AI Proposal & Quote generator", "Team capacity & utilisation planner", "Business valuation (multiples + DCF)", "NPS & customer sentiment tracker", "2 new AI reasoning modes (proposal, valuation)"] },
