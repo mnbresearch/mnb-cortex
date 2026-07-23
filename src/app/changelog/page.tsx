@@ -3,7 +3,8 @@ import { APP_VERSION } from "@/lib/config";
 import { Logo } from "@/components/logo";
 export const metadata = { title: "Changelog — MNB Cortex" };
 const releases = [
-  { v: "2.2.0", date: "Latest", items: ["Fully branded email template (header, footer, badges, legal)", "Inbound reply capture with Svix-verified webhooks", "Replies inbox with unread tracking + campaign linking", "Token-based open/click tracking", "One-click webhook setup + reply simulator"] },
+  { v: "2.3.0", date: "Latest", items: ["KPI Alert rules — get warned when a metric crosses your line", "Action Board — kanban with one-click AI task generation", "Decision Journal with an AI devil's advocate", "New critique reasoning mode", "\"Do not reply\" notice + reply-to on campaign emails"] },
+  { v: "2.2.0", date: "Earlier", items: ["Fully branded email template (header, footer, badges, legal)", "Inbound reply capture with Svix-verified webhooks", "Replies inbox with unread tracking + campaign linking", "Token-based open/click tracking", "One-click webhook setup + reply simulator"] },
   { v: "2.1.0", date: "Earlier", items: ["Email campaigns — reusable templates with {{merge}} tokens", "Personalised mail-merge to selected leads (name/email swapped per person)", "Open tracking (pixel) and click tracking (redirect)", "Per-campaign insights: open rate, click rate, per-recipient outcomes", "AI email drafting inside the composer"] },
   { v: "2.0.0", date: "Earlier", items: ["Integration marketplace — 27 tools across 7 categories", "AES-256-GCM encryption for all stored API keys", "Credentials verified with the provider before saving", "Per-plan integration gating and quotas", "Admin-only access with row-level security"] },
   { v: "1.9.0", date: "Earlier", items: ["Email Console — send mail from the dashboard, AI-draft, templates", "Live delivery log + sending-domain status from Resend", "Captured leads visible alongside email", "Embeddable live uptime badge at /api/badge"] },
