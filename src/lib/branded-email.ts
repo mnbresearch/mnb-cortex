@@ -10,6 +10,7 @@ export const BRAND = {
   COMPANY_NAME: "MNB Research",
   LEGAL_ENTITY: "Abrobot Technologies Private Limited",
   CONTACT_EMAIL: "contact@mnbresearch.com",
+  REPLY_TO: process.env.EMAIL_REPLY_TO || "contact@mnbresearch.com",
   PHONE: "+91 97114 88481",
   WEBSITE: "https://www.mnbresearch.com",
   TAGLINE: "The AI COO for your business",
@@ -19,9 +20,14 @@ export const BRAND = {
   DISCLAIMER: "MNB Cortex is the AI operating system for SMEs. © 2026 Abrobot Technologies Private Limited. All rights reserved.",
 };
 
-/** The RFC-5322 From value: "NyayaAI by MNB Research <hello@updates.mnbresearch.com>". */
+/** The RFC-5322 From value: "MNB Cortex by MNB Research <hello@updates.mnbresearch.com>". */
 export function brandFrom(): string {
   return `${BRAND.SENDER_DISPLAY} <${BRAND.FROM_ADDRESS}>`;
+}
+
+/** Where replies should go (a real, monitored mailbox). */
+export function brandReplyTo(): string {
+  return BRAND.REPLY_TO;
 }
 
 function esc(s: string) {
@@ -75,8 +81,15 @@ ${pre}
         <div style="font-size:13px;color:#d9ece3;margin-top:3px">${esc(BRAND.TAGLINE)}</div>
       </td></tr>
       <!-- Body -->
-      <tr><td style="padding:28px;color:#1a2420;font-size:15px;line-height:1.6">
+      <tr><td style="padding:28px 28px 14px;color:#1a2420;font-size:15px;line-height:1.6">
         ${linked}
+      </td></tr>
+      <!-- Reply notice -->
+      <tr><td style="padding:0 28px 18px">
+        <div style="font-size:12px;color:#5b6b64;background:#f4f6f5;border:1px solid #e6ece9;border-radius:8px;padding:11px 13px;line-height:1.5">
+          Please don't reply to this email — it's sent from an unmonitored address.
+          To reach us, write to <a href="mailto:${BRAND.REPLY_TO}" style="color:${BRAND.COLOR_TO};font-weight:600;text-decoration:none">${esc(BRAND.REPLY_TO)}</a>.
+        </div>
       </td></tr>
       <!-- Footer -->
       <tr><td style="padding:20px 28px 26px;border-top:1px solid #eef1f0">
