@@ -7,7 +7,8 @@ import {
   Coins, Calculator, Landmark, FileSignature, Truck, ClipboardList,
   Warehouse, Radio, Crosshair, MonitorPlay, PiggyBank,
   Repeat, Briefcase, CalendarClock,
-  FileCheck2, GaugeCircle, Scale, Smile
+  FileCheck2, GaugeCircle, Scale, Smile,
+  BellRing, ListTodo, Gavel
 } from "lucide-react";
 
 export const NAV = [
@@ -54,6 +55,9 @@ export const NAV = [
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
   { href: "/forecast", label: "Forecasting", icon: LineChart, group: "Foresight" },
   { href: "/action-center", label: "Action Center", icon: ListChecks, group: "Foresight" },
+  { href: "/alerts", label: "KPI Alerts", icon: BellRing, group: "Foresight" },
+  { href: "/tasks", label: "Action Board", icon: ListTodo, group: "Foresight" },
+  { href: "/decisions", label: "Decision Journal", icon: Gavel, group: "Advisory" },
   { href: "/goals", label: "Goals & OKRs", icon: Target, group: "Foresight" },
   { href: "/risks", label: "Risk Radar", icon: ShieldAlert, group: "Foresight" },
   { href: "/benchmarks", label: "Benchmarks", icon: Gauge, group: "Foresight" },
