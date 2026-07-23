@@ -15,6 +15,19 @@ async function integrationsReady(): Promise<boolean> {
   } catch { return false; }
 }
 
+/** Verifies the email-system migration (campaign token column + replies table). */
+async function emailReady(): Promise<boolean> {
+  const sb = serviceClient();
+  if (!sb) return false;
+  try {
+    const [a, b] = await Promise.all([
+      sb.from("campaign_recipients").select("token").limit(1),
+      sb.from("email_replies").select("id").limit(1),
+    ]);
+    return !a.error && !b.error;
+  } catch { return false; }
+}
+
 export async function GET() {
   const ai = Boolean(process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
   const db = hasSupabase();
@@ -22,6 +35,7 @@ export async function GET() {
   const serviceRole = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
   const encryption = encryptionAvailable();
   const integrations = await integrationsReady();
+  const emailSystem = await emailReady();
 
   return NextResponse.json({
     ok: true,
@@ -34,9 +48,10 @@ export async function GET() {
       { name: "Scheduled Autopilot", status: serviceRole ? "operational" : "degraded" },
       { name: "Credential encryption", status: encryption ? "operational" : "degraded" },
       { name: "Integrations store", status: integrations ? "operational" : "degraded" },
+      { name: "Email campaigns", status: emailSystem ? "operational" : "degraded" },
     ],
     // Booleans only — never the values themselves.
-    config: { serviceRole, encryption, integrationsMigrated: integrations },
+    config: { serviceRole, encryption, integrationsMigrated: integrations, emailMigrated: emailSystem },
     updated: new Date().toISOString(),
   });
 }
