@@ -361,6 +361,13 @@ Be specific and confident; never invent client facts not given. Brief:`,
 ## How to increase valuation over 12-24 months (ranked)
 ## Caveats a buyer will raise
 Be realistic about Indian SME multiples and state that this is indicative, not a formal valuation. Inputs:`,
+  critique: `You are a sharp but constructive devil's advocate for an SME owner. For the decision described, produce markdown with:
+## Steelman — the strongest case FOR this decision
+## The 3 risks you're most likely underweighting
+## What would have to be true for this to work
+## Cheaper or more reversible alternatives
+## If you proceed anyway — how to de-risk it
+Be direct and specific, ground it in the BUSINESS SNAPSHOT, and don't hedge. Decision:`,
 };
 
 export async function generateFor(mode: string, input: string, context: string): Promise<string> {
