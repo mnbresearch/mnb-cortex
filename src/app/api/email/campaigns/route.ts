@@ -4,7 +4,7 @@ import { isSuperAdmin } from "@/lib/superadmin";
 import { getUserAndOrg } from "@/lib/data";
 import { sendEmail } from "@/lib/email";
 import { type Recipient } from "@/lib/mailmerge";
-import { renderBrandedEmail, mergeTokens, brandFrom } from "@/lib/branded-email";
+import { renderBrandedEmail, mergeTokens, brandFrom, brandReplyTo } from "@/lib/branded-email";
 import { getCampaignDetail } from "@/lib/email-campaigns";
 import { randomBytes } from "crypto";
 
@@ -58,9 +58,10 @@ export async function POST(req: Request) {
 
       const origin = new URL(req.url).origin;
 
-      // reply_to routes replies to the inbound address (so we can capture them).
+      // Replies go to a real monitored mailbox (contact@…). If an inbound capture
+      // address was configured, that takes precedence.
       const { data: addr } = await sb.from("app_settings").select("value").eq("org_id", orgId).eq("key", "inbound_address").maybeSingle();
-      const replyTo = (addr as any)?.value || undefined;
+      const replyTo = (addr as any)?.value || brandReplyTo();
 
       const { data: camp, error: cErr } = await sb.from("email_campaigns")
         .insert({ org_id: orgId, name, subject, body: tbody, template_id: body.templateId || null, total: clean.length, created_by: userId }).select("id").single();
