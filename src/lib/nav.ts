@@ -8,7 +8,8 @@ import {
   Warehouse, Radio, Crosshair, MonitorPlay, PiggyBank,
   Repeat, Briefcase, CalendarClock,
   FileCheck2, GaugeCircle, Scale, Smile,
-  BellRing, ListTodo, Gavel
+  BellRing, ListTodo, Gavel,
+  FileSpreadsheet, Percent, BookOpen
 } from "lucide-react";
 
 export const NAV = [
@@ -46,6 +47,8 @@ export const NAV = [
   { href: "/funding", label: "Funding & Loans", icon: Landmark, group: "Money" },
   { href: "/invoice", label: "GST Invoice", icon: FileSignature, group: "Money" },
   { href: "/costs", label: "Cost Optimizer", icon: PiggyBank, group: "Money" },
+  { href: "/pnl", label: "P&L Builder", icon: FileSpreadsheet, group: "Money" },
+  { href: "/discount", label: "Discount Impact", icon: Percent, group: "Money" },
   { href: "/cash13", label: "13-Week Cash Flow", icon: CalendarClock, group: "Money" },
   { href: "/saas", label: "SaaS Metrics", icon: Repeat, group: "Money" },
   { href: "/projects", label: "Project Profitability", icon: Briefcase, group: "Money" },
@@ -58,6 +61,7 @@ export const NAV = [
   { href: "/alerts", label: "KPI Alerts", icon: BellRing, group: "Foresight" },
   { href: "/tasks", label: "Action Board", icon: ListTodo, group: "Foresight" },
   { href: "/decisions", label: "Decision Journal", icon: Gavel, group: "Advisory" },
+  { href: "/playbooks", label: "AI Playbooks", icon: BookOpen, group: "Advisory" },
   { href: "/goals", label: "Goals & OKRs", icon: Target, group: "Foresight" },
   { href: "/risks", label: "Risk Radar", icon: ShieldAlert, group: "Foresight" },
   { href: "/benchmarks", label: "Benchmarks", icon: Gauge, group: "Foresight" },
