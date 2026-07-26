@@ -368,6 +368,20 @@ Be realistic about Indian SME multiples and state that this is indicative, not a
 ## Cheaper or more reversible alternatives
 ## If you proceed anyway — how to de-risk it
 Be direct and specific, ground it in the BUSINESS SNAPSHOT, and don't hedge. Decision:`,
+  contract: `You are a commercial contracts reviewer for an Indian SME (not a lawyer, and you say so). Review the clause/contract text provided. Produce markdown with:
+## Plain-English summary
+## Your obligations & key dates
+## Red flags & risky clauses (with why)
+## Missing protections you'd want
+## Questions to raise / edits to request
+Flag anything about liability, indemnity, termination, payment terms, IP, non-compete, auto-renewal and penalties. End by noting this is general guidance, not legal advice — confirm with a lawyer. Text:`,
+  account: `You are a key-account manager for an Indian SME. For the customer described, build an account plan in markdown with:
+## Account snapshot & relationship health
+## Whitespace — what more we could sell them
+## Risks (churn signals, concentration, payment)
+## The next 3 moves to grow this account
+## A short, ready-to-send check-in message
+Ground it in the BUSINESS SNAPSHOT where relevant. Customer details:`,
 };
 
 export async function generateFor(mode: string, input: string, context: string): Promise<string> {
