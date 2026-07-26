@@ -11,7 +11,7 @@ import {
   BellRing, ListTodo, Gavel,
   FileSpreadsheet, Percent, BookOpen,
   Banknote, CalendarCheck, PieChart, Filter, CircleDollarSign, ScrollText, UserSearch,
-  Gift
+  Gift, Layers, Table2, HandCoins, FlaskConical, ListOrdered
 } from "lucide-react";
 
 export const NAV = [
@@ -27,6 +27,9 @@ export const NAV = [
   { href: "/customers", label: "Customers", icon: Contact, group: "Intelligence" },
   { href: "/accounts", label: "Account Plans", icon: UserSearch, group: "Intelligence" },
   { href: "/funnel", label: "Marketing Funnel", icon: Filter, group: "Intelligence" },
+  { href: "/rfm", label: "Customer Segments", icon: Layers, group: "Intelligence" },
+  { href: "/abc", label: "Inventory ABC", icon: ListOrdered, group: "Intelligence" },
+  { href: "/abtest", label: "A/B Test Stats", icon: FlaskConical, group: "Intelligence" },
   { href: "/pipeline", label: "Deals Pipeline", icon: KanbanSquare, group: "Intelligence" },
   { href: "/churn", label: "Churn Predictor", icon: UserMinus, group: "Intelligence" },
   { href: "/reorder", label: "Reorder Optimizer", icon: Warehouse, group: "Intelligence" },
@@ -56,6 +59,8 @@ export const NAV = [
   { href: "/pnl", label: "P&L Builder", icon: FileSpreadsheet, group: "Money" },
   { href: "/discount", label: "Discount Impact", icon: Percent, group: "Money" },
   { href: "/roi", label: "ROI & Payback", icon: CircleDollarSign, group: "Money" },
+  { href: "/amortization", label: "Loan Schedule", icon: Table2, group: "Money" },
+  { href: "/commission", label: "Sales Commission", icon: HandCoins, group: "Money" },
   { href: "/payroll", label: "Payroll & CTC", icon: Banknote, group: "Money" },
   { href: "/captable", label: "Cap Table", icon: PieChart, group: "Money" },
   { href: "/cash13", label: "13-Week Cash Flow", icon: CalendarClock, group: "Money" },
