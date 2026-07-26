@@ -28,6 +28,14 @@ async function emailReady(): Promise<boolean> {
   } catch { return false; }
 }
 
+/** Verifies the trial-enforcement migration (subscription_status column). */
+async function trialReady(): Promise<boolean> {
+  const sb = serviceClient();
+  if (!sb) return false;
+  try { const { error } = await sb.from("organizations").select("subscription_status").limit(1); return !error; }
+  catch { return false; }
+}
+
 export async function GET() {
   const ai = Boolean(process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
   const db = hasSupabase();
@@ -36,6 +44,7 @@ export async function GET() {
   const encryption = encryptionAvailable();
   const integrations = await integrationsReady();
   const emailSystem = await emailReady();
+  const trial = await trialReady();
 
   return NextResponse.json({
     ok: true,
@@ -49,9 +58,10 @@ export async function GET() {
       { name: "Credential encryption", status: encryption ? "operational" : "degraded" },
       { name: "Integrations store", status: integrations ? "operational" : "degraded" },
       { name: "Email campaigns", status: emailSystem ? "operational" : "degraded" },
+      { name: "Trial enforcement", status: trial ? "operational" : "degraded" },
     ],
     // Booleans only — never the values themselves.
-    config: { serviceRole, encryption, integrationsMigrated: integrations, emailMigrated: emailSystem },
+    config: { serviceRole, encryption, integrationsMigrated: integrations, emailMigrated: emailSystem, trialMigrated: trial },
     updated: new Date().toISOString(),
   });
 }
