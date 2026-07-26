@@ -14,7 +14,8 @@ export async function POST(req: Request) {
   const { orgId } = await getUserAndOrg();
   if (orgId) {
     const sb = createClient();
-    await sb.from("organizations").update({ plan: String(plan || "").toLowerCase() }).eq("id", orgId);
+    // Activate the subscription — this lifts the trial paywall.
+    await sb.from("organizations").update({ plan: String(plan || "").toLowerCase(), subscription_status: "active" }).eq("id", orgId);
     await sb.from("subscriptions").insert({ org_id: orgId, plan, status: "active", provider: "razorpay", amount: (amount || 0) / 100, reference: razorpay_payment_id });
   }
   return NextResponse.json({ ok: true });
