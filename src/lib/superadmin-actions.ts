@@ -32,6 +32,8 @@ export async function provisionBusinesses() {
       if (error) throw new Error(`Could not create ${b.name}: ${error.message}`);
       orgId = (row as any).id;
       created.push(b.name);
+      // Mark my own businesses as paid so they're never trial-gated (no-op if column absent).
+      try { await sb.from("organizations").update({ subscription_status: "active" }).eq("id", orgId); } catch { /* column may not exist yet */ }
     }
     const { data: mem } = await sb.from("memberships").select("id").eq("org_id", orgId).eq("user_id", user.id).maybeSingle();
     if (!mem) await sb.from("memberships").insert({ org_id: orgId, user_id: user.id, role: "owner" });
