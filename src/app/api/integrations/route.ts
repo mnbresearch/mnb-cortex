@@ -44,7 +44,12 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
         return r.ok ? { ok: true, message: "Test message sent to Slack" } : { ok: false, message: `Slack rejected the webhook (${r.status})` };
       }
       case "zoho_books": return j(await fetch(`https://www.zohoapis.in/books/v3/organizations`, { headers: { Authorization: `Zoho-oauthtoken ${c.api_key}` } }), "Connected to Zoho Books");
-      default: return { ok: true, message: "Saved. This provider has no automated test — verify from its dashboard." };
+      case "sendgrid": return j(await fetch("https://api.sendgrid.com/v3/user/profile", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to SendGrid");
+      case "brevo": return j(await fetch("https://api.brevo.com/v3/account", { headers: { "api-key": c.api_key } }), "Connected to Brevo");
+      case "calendly": return j(await fetch("https://api.calendly.com/users/me", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Calendly");
+      case "intercom": return j(await fetch("https://api.intercom.io/me", { headers: { Authorization: `Bearer ${c.api_key}`, Accept: "application/json" } }), "Connected to Intercom");
+      case "typeform": return j(await fetch("https://api.typeform.com/me", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Typeform");
+      default: return { ok: true, message: "Saved securely. This provider has no automated test — verify from its dashboard." };
     }
   } catch (e: any) {
     return { ok: false, message: e?.message || "Could not reach the provider" };
