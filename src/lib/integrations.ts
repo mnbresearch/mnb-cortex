@@ -16,7 +16,7 @@ export type Field = {
 export type Integration = {
   id: string;
   name: string;
-  category: "Accounting & Finance" | "Commerce & Payments" | "CRM & Sales" | "Communication" | "Productivity" | "Marketing & Analytics" | "Data & Automation";
+  category: "Accounting & Finance" | "Commerce & Payments" | "CRM & Sales" | "Communication" | "Productivity" | "Marketing & Analytics" | "Data & Automation" | "Support & Success" | "Social & Content";
   desc: string;
   minPlan: PlanId;
   fields: Field[];
@@ -27,9 +27,9 @@ export type Integration = {
 
 /** How many integrations each plan may connect. */
 export const PLAN_INTEGRATION_LIMIT: Record<PlanId, number> = {
-  starter: 2,
-  growth: 6,
-  premium: 20,
+  starter: 3,
+  growth: 10,
+  premium: 30,
   enterprise: 999,
 };
 
@@ -112,6 +112,61 @@ export const INTEGRATIONS: Integration[] = [
     docs: "https://platform.openai.com/docs/api-reference", fields: [KEY("API key", "sk-…")] },
   { id: "postgres", name: "External Postgres", category: "Data & Automation", desc: "Read from your own database", minPlan: "enterprise",
     fields: [{ key: "connection_string", label: "Connection string", type: "password", placeholder: "postgres://user:pass@host/db", required: true }] },
+
+  // ---- Accounting & Finance (India) ----
+  { id: "odoo", name: "Odoo", category: "Accounting & Finance", desc: "ERP: sales, invoicing, CRM, inventory", minPlan: "growth",
+    docs: "https://www.odoo.com/documentation/master/developer/reference/external_api.html",
+    fields: [{ key: "url", label: "Odoo URL", type: "text", placeholder: "https://mycompany.odoo.com", required: true }, { key: "db", label: "Database name", type: "text", required: true }, { key: "username", label: "Username / email", type: "text", required: true }, KEY("API key / password", "…")] },
+  { id: "vyapar", name: "Vyapar", category: "Accounting & Finance", desc: "Billing & accounting for small business", minPlan: "growth", fields: [KEY("API key")] },
+  { id: "busy", name: "Busy Accounting", category: "Accounting & Finance", desc: "Ledger & GST accounting", minPlan: "premium", fields: [{ key: "endpoint", label: "API endpoint", type: "text", required: true }, KEY("API key")] },
+  { id: "cleartax", name: "ClearTax", category: "Accounting & Finance", desc: "GST filing & reconciliation", minPlan: "premium", fields: [KEY("API key")] },
+
+  // ---- Payments (India) ----
+  { id: "cashfree", name: "Cashfree", category: "Commerce & Payments", desc: "Payments & payouts", minPlan: "growth", fields: [{ key: "app_id", label: "App ID", type: "text", required: true }, { key: "secret_key", label: "Secret key", type: "password", required: true }] },
+  { id: "payu", name: "PayU", category: "Commerce & Payments", desc: "Online payment gateway", minPlan: "premium", fields: [{ key: "merchant_key", label: "Merchant key", type: "text", required: true }, { key: "salt", label: "Salt", type: "password", required: true }] },
+  { id: "instamojo", name: "Instamojo", category: "Commerce & Payments", desc: "Payments & payment links", minPlan: "growth", fields: [KEY("API key"), { key: "auth_token", label: "Auth token", type: "password", required: true }] },
+  { id: "phonepe", name: "PhonePe", category: "Commerce & Payments", desc: "UPI & payment gateway", minPlan: "premium", fields: [{ key: "merchant_id", label: "Merchant ID", type: "text", required: true }, { key: "salt_key", label: "Salt key", type: "password", required: true }] },
+
+  // ---- Communication ----
+  { id: "msg91", name: "MSG91", category: "Communication", desc: "SMS & OTP (India)", minPlan: "starter", fields: [{ key: "authkey", label: "Auth key", type: "password", required: true }, { key: "sender_id", label: "Sender ID", type: "text" }] },
+  { id: "gupshup", name: "Gupshup", category: "Communication", desc: "WhatsApp & SMS messaging", minPlan: "growth", fields: [KEY("API key")] },
+  { id: "interakt", name: "Interakt", category: "Communication", desc: "WhatsApp Business engagement", minPlan: "growth", fields: [KEY("API key")] },
+  { id: "plivo", name: "Plivo", category: "Communication", desc: "Voice & SMS", minPlan: "premium", fields: [{ key: "auth_id", label: "Auth ID", type: "text", required: true }, { key: "auth_token", label: "Auth token", type: "password", required: true }] },
+  { id: "sendgrid", name: "SendGrid", category: "Communication", desc: "Transactional & marketing email", minPlan: "growth", testable: true, docs: "https://docs.sendgrid.com/api-reference", fields: [KEY("API key", "SG.…")] },
+  { id: "brevo", name: "Brevo", category: "Communication", desc: "Email, SMS & automation", minPlan: "growth", testable: true, docs: "https://developers.brevo.com/", fields: [KEY("API key", "xkeysib-…")] },
+  { id: "mailchimp", name: "Mailchimp", category: "Marketing & Analytics", desc: "Email marketing & audiences", minPlan: "growth", fields: [KEY("API key"), { key: "server_prefix", label: "Server prefix", type: "text", placeholder: "us21", required: true }] },
+
+  // ---- Support & Success ----
+  { id: "freshdesk", name: "Freshdesk", category: "Support & Success", desc: "Customer support tickets", minPlan: "growth", fields: [{ key: "domain", label: "Domain", type: "text", placeholder: "company.freshdesk.com", required: true }, KEY("API key")] },
+  { id: "zoho_desk", name: "Zoho Desk", category: "Support & Success", desc: "Helpdesk & tickets", minPlan: "premium", fields: [KEY("OAuth token"), { key: "org_id", label: "Org ID", type: "text", required: true }] },
+  { id: "intercom", name: "Intercom", category: "Support & Success", desc: "Customer messaging & support", minPlan: "premium", testable: true, docs: "https://developers.intercom.com/", fields: [KEY("Access token")] },
+  { id: "crisp", name: "Crisp", category: "Support & Success", desc: "Live chat & inbox", minPlan: "premium", fields: [{ key: "identifier", label: "Identifier", type: "text", required: true }, { key: "key", label: "Key", type: "password", required: true }] },
+
+  // ---- Productivity ----
+  { id: "calendly", name: "Calendly", category: "Productivity", desc: "Scheduling & bookings", minPlan: "growth", testable: true, docs: "https://developer.calendly.com/", fields: [KEY("Personal access token")] },
+  { id: "typeform", name: "Typeform", category: "Productivity", desc: "Forms & survey responses", minPlan: "growth", fields: [KEY("Personal access token")] },
+  { id: "dropbox", name: "Dropbox", category: "Productivity", desc: "File storage & sharing", minPlan: "premium", fields: [KEY("Access token")] },
+  { id: "google_drive", name: "Google Drive", category: "Productivity", desc: "Documents & files", minPlan: "premium", fields: [KEY("OAuth token")] },
+  { id: "microsoft365", name: "Microsoft 365", category: "Productivity", desc: "Outlook, Teams & OneDrive", minPlan: "premium", fields: [KEY("OAuth token")] },
+
+  // ---- Marketing & Analytics ----
+  { id: "mixpanel", name: "Mixpanel", category: "Marketing & Analytics", desc: "Product analytics & funnels", minPlan: "premium", fields: [{ key: "project_token", label: "Project token", type: "text", required: true }, { key: "api_secret", label: "API secret", type: "password", required: true }] },
+  { id: "amplitude", name: "Amplitude", category: "Marketing & Analytics", desc: "Behavioural analytics", minPlan: "premium", fields: [KEY("API key"), { key: "secret_key", label: "Secret key", type: "password", required: true }] },
+  { id: "search_console", name: "Google Search Console", category: "Marketing & Analytics", desc: "Search traffic & keywords", minPlan: "premium", fields: [KEY("Service account JSON"), { key: "site_url", label: "Site URL", type: "text", required: true }] },
+
+  // ---- Social & Content ----
+  { id: "linkedin", name: "LinkedIn", category: "Social & Content", desc: "Company page posts & analytics", minPlan: "premium", fields: [KEY("Access token")] },
+  { id: "instagram", name: "Instagram", category: "Social & Content", desc: "Content & engagement (Graph API)", minPlan: "premium", fields: [KEY("Access token")] },
+  { id: "youtube", name: "YouTube", category: "Social & Content", desc: "Channel & video analytics", minPlan: "premium", fields: [KEY("API key")] },
+  { id: "x_twitter", name: "X (Twitter)", category: "Social & Content", desc: "Posts & analytics", minPlan: "premium", fields: [KEY("Bearer token")] },
+
+  // ---- Automation ----
+  { id: "make", name: "Make (Integromat)", category: "Data & Automation", desc: "Visual automation flows", minPlan: "growth", fields: [{ key: "webhook_url", label: "Webhook URL", type: "password", required: true }] },
+  { id: "n8n", name: "n8n", category: "Data & Automation", desc: "Open-source workflow automation", minPlan: "growth", fields: [{ key: "webhook_url", label: "Webhook URL", type: "password", required: true }] },
+
+  // ---- Catch-all: store a key for ANY tool ----
+  { id: "custom", name: "Custom API key", category: "Data & Automation", desc: "Securely store a key for any other tool", minPlan: "starter",
+    fields: [{ key: "service_name", label: "Service name", type: "text", placeholder: "e.g. My internal API", required: true }, KEY("API key", "any key or token"), { key: "base_url", label: "Base URL (optional)", type: "text", placeholder: "https://api.example.com" }] },
 ];
 
 export const CATEGORIES = Array.from(new Set(INTEGRATIONS.map((i) => i.category)));
