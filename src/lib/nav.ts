@@ -11,7 +11,8 @@ import {
   BellRing, ListTodo, Gavel,
   FileSpreadsheet, Percent, BookOpen,
   Banknote, CalendarCheck, PieChart, Filter, CircleDollarSign, ScrollText, UserSearch,
-  Gift, Layers, Table2, HandCoins, FlaskConical, ListOrdered
+  Gift, Layers, Table2, HandCoins, FlaskConical, ListOrdered,
+  Sigma, Building2, IndianRupee, ArrowLeftRight, Divide
 } from "lucide-react";
 
 export const NAV = [
@@ -67,6 +68,11 @@ export const NAV = [
   { href: "/saas", label: "SaaS Metrics", icon: Repeat, group: "Money" },
   { href: "/projects", label: "Project Profitability", icon: Briefcase, group: "Money" },
   { href: "/valuation", label: "Business Valuation", icon: Scale, group: "Money" },
+  { href: "/ratios", label: "Financial Ratios", icon: Sigma, group: "Money" },
+  { href: "/tax", label: "Income Tax", icon: IndianRupee, group: "Money" },
+  { href: "/depreciation", label: "Depreciation", icon: Building2, group: "Money" },
+  { href: "/gst-calc", label: "GST Calculator", icon: Divide, group: "Money" },
+  { href: "/currency", label: "Currency", icon: ArrowLeftRight, group: "Money" },
   { href: "/capacity", label: "Team Capacity", icon: GaugeCircle, group: "Intelligence" },
   { href: "/nps", label: "NPS & Sentiment", icon: Smile, group: "Intelligence" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
