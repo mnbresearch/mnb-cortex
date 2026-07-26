@@ -4,8 +4,9 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getUsage, getReportLinks } from "@/lib/data";
+import { getBillingStatus } from "@/lib/billing";
 import { PLANS } from "@/lib/config";
-import { Check, Zap } from "lucide-react";
+import { Check, Zap, Clock, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { UpgradeButton } from "@/components/upgrade-button";
 import { createReportLink, revokeReportLink } from "@/lib/actions";
@@ -17,18 +18,40 @@ const LABEL: Record<string, string> = { sales_orders: "Sales orders", invoices: 
 export default async function Billing() {
   const { counts, live } = await getUsage();
   const links = await getReportLinks();
+  const billing = await getBillingStatus();
+  const planName = billing.plan.charAt(0).toUpperCase() + billing.plan.slice(1);
+  const badge = billing.status === "active"
+    ? { cls: "bg-success/10 text-success border-success/20", text: "Active" }
+    : billing.status === "expired"
+    ? { cls: "bg-danger/10 text-danger border-danger/20", text: "Trial ended" }
+    : { cls: "bg-warning/10 text-warning border-warning/20", text: `Trial · ${billing.daysLeft} ${billing.daysLeft === 1 ? "day" : "days"} left` };
   return (
     <>
       <Topbar title="Billing & Plan" subtitle="Manage your subscription" />
       <PageShell>
-        <Card className="p-5 flex flex-wrap items-center justify-between gap-3">
+        <Card className={`p-5 flex flex-wrap items-center justify-between gap-3 ${billing.status === "expired" ? "border-danger/30 bg-danger/5" : ""}`}>
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary/15 p-2.5"><Zap className="h-6 w-6 text-primary" /></div>
-            <div><div className="flex items-center gap-2"><span className="font-semibold">Growth plan</span><Badge className="bg-success/10 text-success border-success/20">14-day trial</Badge></div>
-              <div className="text-sm text-muted-foreground">₹7,999/mo · renews after trial · all 13 modules</div></div>
+            <div className="rounded-lg bg-primary/15 p-2.5">
+              {billing.status === "active" ? <Zap className="h-6 w-6 text-primary" /> : billing.status === "expired" ? <AlertTriangle className="h-6 w-6 text-danger" /> : <Clock className="h-6 w-6 text-warning" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2"><span className="font-semibold">{planName} plan</span><Badge className={badge.cls}>{badge.text}</Badge></div>
+              <div className="text-sm text-muted-foreground">
+                {billing.status === "active" ? "Subscription active · thank you!"
+                  : billing.status === "expired" ? "Your free trial has ended — choose a plan to continue."
+                  : billing.trialEndsAt ? `Free trial ends ${new Date(billing.trialEndsAt).toLocaleDateString("en-IN")} · full access until then`
+                  : "14-day free trial · full access"}
+              </div>
+            </div>
           </div>
           <UpgradeButton plan="Premium" />
         </Card>
+
+        {billing.status !== "active" && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            Your 14-day free trial gives you the complete platform. After it ends, an active plan is required to keep using MNB Cortex — your data stays safe and is restored the moment you subscribe.
+          </Card>
+        )}
 
         {live && (
           <Section title="Usage this month">
