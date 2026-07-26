@@ -9,7 +9,8 @@ import {
   Repeat, Briefcase, CalendarClock,
   FileCheck2, GaugeCircle, Scale, Smile,
   BellRing, ListTodo, Gavel,
-  FileSpreadsheet, Percent, BookOpen
+  FileSpreadsheet, Percent, BookOpen,
+  Banknote, CalendarCheck, PieChart, Filter, CircleDollarSign, ScrollText, UserSearch
 } from "lucide-react";
 
 export const NAV = [
@@ -23,6 +24,8 @@ export const NAV = [
   { href: "/hr", label: "HR", icon: Users, group: "Intelligence" },
   { href: "/market", label: "Market", icon: Globe, group: "Intelligence" },
   { href: "/customers", label: "Customers", icon: Contact, group: "Intelligence" },
+  { href: "/accounts", label: "Account Plans", icon: UserSearch, group: "Intelligence" },
+  { href: "/funnel", label: "Marketing Funnel", icon: Filter, group: "Intelligence" },
   { href: "/pipeline", label: "Deals Pipeline", icon: KanbanSquare, group: "Intelligence" },
   { href: "/churn", label: "Churn Predictor", icon: UserMinus, group: "Intelligence" },
   { href: "/reorder", label: "Reorder Optimizer", icon: Warehouse, group: "Intelligence" },
@@ -34,6 +37,8 @@ export const NAV = [
   { href: "/negotiate", label: "Negotiation Coach", icon: Handshake, group: "Advisory" },
   { href: "/hiring", label: "Hiring Advisor", icon: UserPlus, group: "Advisory" },
   { href: "/gst", label: "GST & Compliance", icon: Receipt, group: "Advisory" },
+  { href: "/compliance", label: "Compliance Calendar", icon: CalendarCheck, group: "Advisory" },
+  { href: "/contracts", label: "Contract Review", icon: ScrollText, group: "Advisory" },
   { href: "/investor", label: "Investor Update", icon: Presentation, group: "Advisory" },
   { href: "/marketing", label: "Marketing Studio", icon: Megaphone, group: "Advisory" },
   { href: "/competitors", label: "Competitor Intel", icon: Swords, group: "Advisory" },
@@ -49,6 +54,9 @@ export const NAV = [
   { href: "/costs", label: "Cost Optimizer", icon: PiggyBank, group: "Money" },
   { href: "/pnl", label: "P&L Builder", icon: FileSpreadsheet, group: "Money" },
   { href: "/discount", label: "Discount Impact", icon: Percent, group: "Money" },
+  { href: "/roi", label: "ROI & Payback", icon: CircleDollarSign, group: "Money" },
+  { href: "/payroll", label: "Payroll & CTC", icon: Banknote, group: "Money" },
+  { href: "/captable", label: "Cap Table", icon: PieChart, group: "Money" },
   { href: "/cash13", label: "13-Week Cash Flow", icon: CalendarClock, group: "Money" },
   { href: "/saas", label: "SaaS Metrics", icon: Repeat, group: "Money" },
   { href: "/projects", label: "Project Profitability", icon: Briefcase, group: "Money" },
