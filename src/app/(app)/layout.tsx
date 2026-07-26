@@ -10,10 +10,12 @@ import { Toaster } from "@/components/toaster";
 import { WhatsNew } from "@/components/whats-new";
 import { getOrgProfile, getMyOrgs, getUserAndOrg } from "@/lib/data";
 import { isSuperAdmin } from "@/lib/superadmin";
+import { getBillingStatus } from "@/lib/billing";
+import { TrialGuard } from "@/components/trial-guard";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [profile, superAdmin, orgs, { orgId }] = await Promise.all([
-    getOrgProfile(), isSuperAdmin(), getMyOrgs(), getUserAndOrg(),
+  const [profile, superAdmin, orgs, { orgId }, billing] = await Promise.all([
+    getOrgProfile(), isSuperAdmin(), getMyOrgs(), getUserAndOrg(), getBillingStatus(),
   ]);
   return (
     <div className="flex min-h-screen">
@@ -28,6 +30,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Shortcuts />
       <Toaster />
       <WhatsNew />
+      {/* Super-admins operate the platform and are never gated. */}
+      {!superAdmin && <TrialGuard status={billing.status} daysLeft={billing.daysLeft} locked={billing.locked} />}
     </div>
   );
 }
