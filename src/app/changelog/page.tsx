@@ -3,7 +3,8 @@ import { APP_VERSION } from "@/lib/config";
 import { Logo } from "@/components/logo";
 export const metadata = { title: "Changelog — MNB Cortex" };
 const releases = [
-  { v: "2.4.0", date: "Latest", items: ["P&L Builder — live income statement with all three margins", "Discount Impact — the real volume a price cut needs", "AI Playbooks — one-click turnaround, growth & cost plans", "Save any playbook to your workspace"] },
+  { v: "2.5.0", date: "Latest", items: ["Payroll & CTC → take-home calculator (India)", "Compliance calendar of statutory due dates", "Cap-table & dilution simulator", "Marketing funnel + ROI/payback calculators", "AI contract review & customer account plans", "2 new AI reasoning modes (contract, account)"] },
+  { v: "2.4.0", date: "Earlier", items: ["P&L Builder — live income statement with all three margins", "Discount Impact — the real volume a price cut needs", "AI Playbooks — one-click turnaround, growth & cost plans", "Save any playbook to your workspace"] },
   { v: "2.3.0", date: "Earlier", items: ["KPI Alert rules — get warned when a metric crosses your line", "Action Board — kanban with one-click AI task generation", "Decision Journal with an AI devil's advocate", "New critique reasoning mode", "\"Do not reply\" notice + reply-to on campaign emails"] },
   { v: "2.2.0", date: "Earlier", items: ["Fully branded email template (header, footer, badges, legal)", "Inbound reply capture with Svix-verified webhooks", "Replies inbox with unread tracking + campaign linking", "Token-based open/click tracking", "One-click webhook setup + reply simulator"] },
   { v: "2.1.0", date: "Earlier", items: ["Email campaigns — reusable templates with {{merge}} tokens", "Personalised mail-merge to selected leads (name/email swapped per person)", "Open tracking (pixel) and click tracking (redirect)", "Per-campaign insights: open rate, click rate, per-recipient outcomes", "AI email drafting inside the composer"] },
