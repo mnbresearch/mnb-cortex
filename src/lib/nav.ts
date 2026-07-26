@@ -10,7 +10,8 @@ import {
   FileCheck2, GaugeCircle, Scale, Smile,
   BellRing, ListTodo, Gavel,
   FileSpreadsheet, Percent, BookOpen,
-  Banknote, CalendarCheck, PieChart, Filter, CircleDollarSign, ScrollText, UserSearch
+  Banknote, CalendarCheck, PieChart, Filter, CircleDollarSign, ScrollText, UserSearch,
+  Gift
 } from "lucide-react";
 
 export const NAV = [
@@ -84,6 +85,7 @@ export const NAV = [
   { href: "/developers", label: "Developers · API", icon: Code2, group: "Automation" },
   { href: "/autopilot", label: "AI Autopilot", icon: Bot, group: "Automation" },
   { href: "/billing", label: "Billing & Plan", icon: CreditCard, group: "Automation" },
+  { href: "/referrals", label: "Refer & Earn", icon: Gift, group: "Automation" },
   { href: "/admin", label: "Admin & Access", icon: Shield, group: "Automation" },
   { href: "/settings", label: "Settings", icon: Settings, group: "Automation" },
   { href: "/pricing", label: "Pricing & plans", icon: Sparkles, group: "Automation" },
