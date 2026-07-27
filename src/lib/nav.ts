@@ -14,7 +14,8 @@ import {
   Gift, Layers, Table2, HandCoins, FlaskConical, ListOrdered,
   Sigma, Building2, IndianRupee, ArrowLeftRight, Divide,
   Sprout, Anchor, Tag, Equal, ClipboardCheck,
-  Flame, Hourglass, Stamp, GitCompare, Gem
+  Flame, Hourglass, Stamp, GitCompare, Gem,
+  ReceiptText, PackageSearch, Blocks, ShieldCheck, Timer
 } from "lucide-react";
 
 export const NAV = [
@@ -32,6 +33,7 @@ export const NAV = [
   { href: "/funnel", label: "Marketing Funnel", icon: Filter, group: "Intelligence" },
   { href: "/rfm", label: "Customer Segments", icon: Layers, group: "Intelligence" },
   { href: "/ltv", label: "Lifetime Value", icon: Gem, group: "Intelligence" },
+  { href: "/inventory-turns", label: "Inventory Turnover", icon: PackageSearch, group: "Intelligence" },
   { href: "/abc", label: "Inventory ABC", icon: ListOrdered, group: "Intelligence" },
   { href: "/abtest", label: "A/B Test Stats", icon: FlaskConical, group: "Intelligence" },
   { href: "/pipeline", label: "Deals Pipeline", icon: KanbanSquare, group: "Intelligence" },
@@ -85,6 +87,10 @@ export const NAV = [
   { href: "/receivables", label: "Receivables & DSO", icon: Hourglass, group: "Money" },
   { href: "/tds", label: "TDS Calculator", icon: Stamp, group: "Money" },
   { href: "/buyvslease", label: "Buy vs Lease", icon: GitCompare, group: "Money" },
+  { href: "/payables", label: "Payables & DPO", icon: ReceiptText, group: "Money" },
+  { href: "/itc", label: "GST ITC Set-off", icon: Blocks, group: "Money" },
+  { href: "/dscr", label: "DSCR & Loan Fit", icon: ShieldCheck, group: "Money" },
+  { href: "/rate-card", label: "Billable Rate", icon: Timer, group: "Money" },
   { href: "/capacity", label: "Team Capacity", icon: GaugeCircle, group: "Intelligence" },
   { href: "/nps", label: "NPS & Sentiment", icon: Smile, group: "Intelligence" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
