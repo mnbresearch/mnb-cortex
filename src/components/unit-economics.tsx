@@ -57,6 +57,23 @@ export function UnitEconomics() {
         </b>
         <span className="text-muted-foreground"> — sales can fall this much before you hit break-even.</span>
       </div>
+
+      <div>
+        <div className="text-sm font-medium mb-2">Profit sensitivity to volume</div>
+        <div className="grid grid-cols-5 gap-2">
+          {[-20, -10, 0, 10, 20].map((d) => {
+            const vol = Math.round(volume * (1 + d / 100));
+            const profit = vol * m.contribution - fixed;
+            return (
+              <div key={d} className={`rounded-lg border p-2 text-center ${d === 0 ? "border-primary/40 bg-primary/5" : ""}`}>
+                <div className="text-xs text-muted-foreground">{d > 0 ? "+" : ""}{d}%</div>
+                <div className={`text-sm font-semibold tabular-nums ${profit >= 0 ? "text-success" : "text-danger"}`}>{inr(profit)}</div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">How monthly profit swings if unit volume moves — the middle column is your current plan.</p>
+      </div>
     </Card>
   );
 }
