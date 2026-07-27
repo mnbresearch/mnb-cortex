@@ -12,7 +12,8 @@ import {
   FileSpreadsheet, Percent, BookOpen,
   Banknote, CalendarCheck, PieChart, Filter, CircleDollarSign, ScrollText, UserSearch,
   Gift, Layers, Table2, HandCoins, FlaskConical, ListOrdered,
-  Sigma, Building2, IndianRupee, ArrowLeftRight, Divide
+  Sigma, Building2, IndianRupee, ArrowLeftRight, Divide,
+  Sprout, Anchor, Tag, Equal, ClipboardCheck
 } from "lucide-react";
 
 export const NAV = [
@@ -48,6 +49,7 @@ export const NAV = [
   { href: "/marketing", label: "Marketing Studio", icon: Megaphone, group: "Advisory" },
   { href: "/competitors", label: "Competitor Intel", icon: Swords, group: "Advisory" },
   { href: "/proposals", label: "Proposals & Quotes", icon: FileCheck2, group: "Advisory" },
+  { href: "/quote", label: "Quotation Builder", icon: ClipboardCheck, group: "Advisory" },
   { href: "/vendors", label: "Vendor Scorecard", icon: Truck, group: "Advisory" },
   { href: "/sops", label: "SOP Builder", icon: ClipboardList, group: "Advisory" },
   { href: "/broadcast", label: "WhatsApp Broadcast", icon: Radio, group: "Advisory" },
@@ -73,6 +75,10 @@ export const NAV = [
   { href: "/depreciation", label: "Depreciation", icon: Building2, group: "Money" },
   { href: "/gst-calc", label: "GST Calculator", icon: Divide, group: "Money" },
   { href: "/currency", label: "Currency", icon: ArrowLeftRight, group: "Money" },
+  { href: "/markup", label: "Markup & Margin", icon: Tag, group: "Money" },
+  { href: "/breakeven", label: "Break-even Mix", icon: Equal, group: "Money" },
+  { href: "/sip", label: "Investment Growth", icon: Sprout, group: "Money" },
+  { href: "/debt", label: "Debt Payoff", icon: Anchor, group: "Money" },
   { href: "/capacity", label: "Team Capacity", icon: GaugeCircle, group: "Intelligence" },
   { href: "/nps", label: "NPS & Sentiment", icon: Smile, group: "Intelligence" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
