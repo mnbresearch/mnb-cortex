@@ -1,4 +1,4 @@
-export const APP_VERSION = "3.4.0";
+export const APP_VERSION = "3.5.0";
 export const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "919711488481";
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "mnbgotyou@gmail.com";
 
@@ -61,6 +61,34 @@ export type Plan = {
   id: string; name: string; monthly: number; annual: number; tagline: string;
   highlight?: boolean; cta: string; features: string[];
 };
+
+// ---- AI credit metering ----------------------------------------------------
+// What each AI action costs, in credits. Heavier generations cost more.
+export const CREDIT_COSTS: Record<string, number> = {
+  chat: 1, pulse: 1, ask: 1,
+  document: 5, meeting: 4, market: 5, strategy: 6,
+  report: 10, forecast: 8, board: 10, investor: 6,
+  marketing: 5, competitor: 5, negotiate: 4, hiring: 4,
+  contract: 6, account: 5, critique: 3, playbook: 6,
+  proposal: 6, valuation: 6, broadcast: 3, sop: 4, costs: 4, loan: 3, vendor: 3,
+};
+export const DEFAULT_CREDIT_COST = 2;
+export function creditCost(mode: string): number {
+  return CREDIT_COSTS[String(mode || "").toLowerCase()] ?? DEFAULT_CREDIT_COST;
+}
+
+// Monthly included allowance per plan. -1 means unlimited.
+export const PLAN_CREDITS: Record<string, number> = {
+  starter: 500, growth: 3000, premium: 15000, enterprise: -1,
+};
+
+// Buyable top-up packs (one-time). Price in INR.
+export type CreditPack = { id: string; label: string; credits: number; price: number; per: string };
+export const CREDIT_PACKS: CreditPack[] = [
+  { id: "pack_1k", label: "Starter top-up", credits: 1000, price: 999, per: "₹1.00 / credit" },
+  { id: "pack_5k", label: "Growth top-up", credits: 5000, price: 3999, per: "₹0.80 / credit" },
+  { id: "pack_20k", label: "Scale top-up", credits: 20000, price: 12999, per: "₹0.65 / credit" },
+];
 
 export const PLANS: Plan[] = [
   { id: "starter", name: "Starter", monthly: 2999, annual: 28790, tagline: "For small teams getting started with AI.",
