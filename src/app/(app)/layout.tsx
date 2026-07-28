@@ -8,6 +8,7 @@ import { Copilot } from "@/components/copilot";
 import { Shortcuts } from "@/components/shortcuts";
 import { Toaster } from "@/components/toaster";
 import { WhatsNew } from "@/components/whats-new";
+import { CreditBanner } from "@/components/credit-banner";
 import { getOrgProfile, getMyOrgs, getUserAndOrg } from "@/lib/data";
 import { isSuperAdmin } from "@/lib/superadmin";
 import { getBillingStatus } from "@/lib/billing";
@@ -32,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <WhatsNew />
       {/* Super-admins operate the platform and are never gated. */}
       {!superAdmin && <TrialGuard status={billing.status} daysLeft={billing.daysLeft} locked={billing.locked} />}
+      {!superAdmin && <CreditBanner />}
     </div>
   );
 }
