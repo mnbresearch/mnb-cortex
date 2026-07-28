@@ -15,7 +15,8 @@ import {
   Sigma, Building2, IndianRupee, ArrowLeftRight, Divide,
   Sprout, Anchor, Tag, Equal, ClipboardCheck,
   Flame, Hourglass, Stamp, GitCompare, Gem,
-  ReceiptText, PackageSearch, Blocks, ShieldCheck, Timer
+  ReceiptText, PackageSearch, Blocks, ShieldCheck, Timer,
+  Fuel
 } from "lucide-react";
 
 export const NAV = [
@@ -114,6 +115,7 @@ export const NAV = [
   { href: "/developers", label: "Developers · API", icon: Code2, group: "Automation" },
   { href: "/autopilot", label: "AI Autopilot", icon: Bot, group: "Automation" },
   { href: "/billing", label: "Billing & Plan", icon: CreditCard, group: "Automation" },
+  { href: "/usage", label: "Usage & Credits", icon: Fuel, group: "Automation" },
   { href: "/referrals", label: "Refer & Earn", icon: Gift, group: "Automation" },
   { href: "/admin", label: "Admin & Access", icon: Shield, group: "Automation" },
   { href: "/settings", label: "Settings", icon: Settings, group: "Automation" },
