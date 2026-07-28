@@ -1,14 +1,14 @@
 import Link from "next/link";
 import {
   ArrowRight, Eye, TrendingUp, Brain, Zap, CheckCircle2, Sparkles, ShieldCheck,
-  Wallet, Users, Scale, Mail, Workflow, Plug, Star, Lock, Rocket
+  Wallet, Users, Scale, Mail, Workflow, Plug, Star, Lock, Rocket, BrainCircuit
 } from "lucide-react";
 import { RoiCalculator } from "@/components/roi-calculator";
 import { Logo } from "@/components/logo";
 import { Reveal, CountUp, RotatingWord } from "@/components/landing-extras";
 
 const STATS = [
-  { to: 75, suffix: "+", label: "modules & tools" },
+  { to: 100, suffix: "+", label: "modules & tools" },
   { to: 31, suffix: "", label: "AI reasoning modes" },
   { to: 62, suffix: "", label: "integrations" },
   { to: 24, suffix: "/7", label: "live monitoring" },
@@ -18,13 +18,15 @@ const PILLARS = [
   { i: Eye, t: "Monitors", d: "Reads sales, finance, inventory, production & HR in real time." },
   { i: TrendingUp, t: "Predicts", d: "Forecasts stockouts, churn and cash crunches before they hit." },
   { i: Brain, t: "Recommends", d: "McKinsey-grade advice, grounded in your live numbers." },
+  { i: BrainCircuit, t: "Remembers", d: "A permanent memory of your business that sharpens every answer over time." },
   { i: Zap, t: "Executes", d: "Drafts POs, invoices, reminders, emails and reports for you." },
 ];
 
 const CATEGORIES = [
-  { icon: Wallet, name: "Finance & Money", items: ["Business Health Dashboard", "P&L Builder", "13-Week Cash Flow", "Working Capital", "Unit Economics", "Funding & EMI", "ROI & Payback", "Discount Impact", "GST Invoicing", "Payroll & CTC", "Cap Table & Dilution", "Cost Optimizer"] },
+  { icon: BrainCircuit, name: "Cortex Memory", items: ["Long-term business memory", "Grounds every AI answer", "Knowledge graph of people & customers", "Living company profile", "Extract memories from any text", "Teach Cortex from your data", "Export your memory anytime"] },
+  { icon: Wallet, name: "Finance & Money", items: ["Business Health Dashboard", "P&L Builder", "13-Week Cash Flow", "Cash Runway & Burn", "Cash Conversion Cycle", "Receivables & Payables", "Unit Economics", "Funding, EMI & DSCR", "Net Worth & Balance Sheet", "GST Invoicing, ITC & TDS", "Payroll, CTC & Appraisals", "Financial Ratios & Depreciation"] },
   { icon: Brain, name: "Strategy & Advisory", items: ["AI CEO Chat", "Strategy Consultant", "Forecasting & Scenarios", "Business Valuation", "AI Playbooks", "Decision Journal", "Board Deck Generator", "Investor Updates", "Benchmarks", "Risk Radar"] },
-  { icon: TrendingUp, name: "Sales & Growth", items: ["Deals Pipeline", "AI Lead Scoring", "Sales Targets", "Marketing Funnel", "Churn Predictor", "NPS & Sentiment", "Account Plans", "Pricing Optimizer", "Competitor Intel", "Marketing Studio"] },
+  { icon: TrendingUp, name: "Sales & Growth", items: ["Deals Pipeline", "AI Lead Scoring", "Sales Targets", "Marketing Funnel", "Ad Budget & ROAS", "Churn Predictor", "Customer LTV & RFM", "Pricing Optimizer", "Competitor Intel", "Marketing Studio"] },
   { icon: Users, name: "People & Operations", items: ["HR Analytics", "Hiring Advisor", "Team Capacity", "Reorder Optimizer", "Vendor Scorecard", "SOP Builder", "Workflows", "Approvals", "Action Board", "KPI Alerts"] },
   { icon: Scale, name: "Legal & Compliance", items: ["GST & Compliance", "Compliance Calendar", "Contract Review", "Document Intelligence"] },
   { icon: Mail, name: "Communications", items: ["Email Campaigns + tracking", "WhatsApp Broadcast", "Daily CEO Brief", "Meeting Assistant", "Negotiation Coach"] },
@@ -105,8 +107,8 @@ export default function Home() {
       {/* How it works */}
       <section className="px-6 lg:px-12 pb-16 max-w-5xl mx-auto">
         <Reveal><h2 className="text-2xl lg:text-3xl font-bold text-center mb-2">It doesn't just report. It runs the loop.</h2>
-        <p className="text-center text-muted-foreground mb-10">Monitor → Predict → Recommend → Execute, continuously.</p></Reveal>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <p className="text-center text-muted-foreground mb-10">Monitor → Predict → Recommend → Remember → Execute, continuously.</p></Reveal>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {PILLARS.map((x, i) => (
             <Reveal key={x.t} delay={i * 90}>
               <div className="hover-lift rounded-xl border p-5 bg-card h-full">
@@ -126,7 +128,7 @@ export default function Home() {
             <div className="text-center mb-10">
               <span className="inline-flex items-center gap-1.5 text-xs font-medium rounded-full border bg-card px-3 py-1 text-primary mb-3"><Sparkles className="h-3.5 w-3.5" /> Everything inside</span>
               <h2 className="text-2xl lg:text-3xl font-bold">One login. Your whole company.</h2>
-              <p className="text-muted-foreground mt-2 max-w-2xl mx-auto">75+ tools across finance, strategy, sales, people, legal and operations — each one AI-native, each one built for Indian SMEs.</p>
+              <p className="text-muted-foreground mt-2 max-w-2xl mx-auto">100+ tools across memory, finance, strategy, sales, people, legal and operations — each one AI-native, grounded in a permanent memory of your business, and built for Indian SMEs.</p>
             </div>
           </Reveal>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
