@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isSuperAdmin, getAllOrgs, getPortfolioStatus, currentEmail } from "@/lib/superadmin";
-import { ProvisionButton, JoinButton, GrantAccessForm } from "@/components/superadmin-panel";
+import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager } from "@/components/superadmin-panel";
 import { ShieldAlert, Building2, Users, Activity, Lock, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -142,6 +142,24 @@ export default async function SuperAdmin() {
               </table>
             </div>
           )}
+        </Section>
+
+        <Section title="Manage customers" desc="Change any workspace's plan, subscription status, credits, or trial — takes effect immediately">
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No organizations to manage yet.</p>
+          ) : (
+            <div className="grid lg:grid-cols-2 gap-3">
+              {rows.map((r) => (
+                <OrgManager key={r.id} org={{
+                  id: r.id, name: r.name, plan: r.plan, subscription_status: r.subscription_status,
+                  credits: r.credits, trial_ends_at: r.trial_ends_at, members: r.members,
+                }} />
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-2">
+            Setting status to <b>suspended</b>, <b>cancelled</b>, or <b>expired</b> locks that customer out behind the paywall; <b>active</b> restores full access. Your own portfolio workspaces are never gated.
+          </p>
         </Section>
 
         <Section title="Grant access" desc="Provision an admin (or any role) on any organization">
