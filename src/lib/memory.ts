@@ -252,6 +252,48 @@ export async function getProfile(orgId: string) {
   catch { return null; }
 }
 
+/** Teach Cortex from the workspace's existing data: customers, team, KPIs, insights. */
+export async function ingestBusinessData(orgId: string, author?: string | null) {
+  const svc = serviceClient(); if (!svc || !orgId) return { memories: 0, entities: 0 };
+  let entities = 0;
+  const lines: string[] = [];
+  const pick = (o: any, keys: string[]) => { for (const k of keys) if (o?.[k]) return String(o[k]); return ""; };
+
+  try {
+    const { data } = await svc.from("customers").select("*").eq("org_id", orgId).limit(120);
+    for (const c of ((data as any[]) || [])) {
+      const name = pick(c, ["name", "customer_name", "company", "title"]); if (!name) continue;
+      await upsertEntity(orgId, name, "customer", pick(c, ["segment", "notes"]) || undefined).catch(() => {}); entities++;
+      const bits = [pick(c, ["city", "location"]), pick(c, ["segment"]) && `segment ${pick(c, ["segment"])}`, pick(c, ["status"]), pick(c, ["notes"])].filter(Boolean);
+      lines.push(`Customer ${name}${bits.length ? " — " + bits.join(", ") : ""}`);
+    }
+  } catch {}
+  try {
+    const { data } = await svc.from("employees").select("*").eq("org_id", orgId).limit(120);
+    for (const e of ((data as any[]) || [])) {
+      const name = pick(e, ["name", "full_name"]); if (!name) continue;
+      await upsertEntity(orgId, name, "person", pick(e, ["role", "title"]) || undefined).catch(() => {}); entities++;
+      const bits = [pick(e, ["role", "title"]), pick(e, ["department", "dept"])].filter(Boolean);
+      lines.push(`Team member ${name}${bits.length ? " — " + bits.join(", ") : ""}`);
+    }
+  } catch {}
+  try {
+    const { data } = await svc.from("health_metrics").select("label,value,unit,status").eq("org_id", orgId).limit(40);
+    for (const m of ((data as any[]) || [])) lines.push(`KPI ${m.label}: ${m.value}${m.unit ? " " + m.unit : ""}${m.status ? ` (${m.status})` : ""}`);
+  } catch {}
+  try {
+    const { data } = await svc.from("ai_insights").select("title,detail").eq("org_id", orgId).limit(20);
+    for (const i of ((data as any[]) || [])) lines.push(`Insight — ${i.title}: ${i.detail}`);
+  } catch {}
+
+  let memories = 0;
+  if (lines.length) {
+    const res = await extractMemories(orgId, lines.join("\n"), author ?? null);
+    memories = res.count;
+  }
+  return { memories, entities };
+}
+
 /** Cluster memories into themes (qualitative analysis). */
 export async function clusterThemes(orgId: string) {
   if (!orgId) return [];
