@@ -152,7 +152,7 @@ export default async function SuperAdmin() {
               {rows.map((r) => (
                 <OrgManager key={r.id} org={{
                   id: r.id, name: r.name, plan: r.plan, subscription_status: r.subscription_status,
-                  credits: r.credits, trial_ends_at: r.trial_ends_at, members: r.members,
+                  credits: r.credits, credits_allowance: r.credits_allowance, trial_ends_at: r.trial_ends_at, members: r.members,
                 }} />
               ))}
             </div>
