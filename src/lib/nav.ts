@@ -16,7 +16,8 @@ import {
   Sprout, Anchor, Tag, Equal, ClipboardCheck,
   Flame, Hourglass, Stamp, GitCompare, Gem,
   ReceiptText, PackageSearch, Blocks, ShieldCheck, Timer,
-  Fuel, BrainCircuit, Vault, RotateCw
+  Fuel, BrainCircuit, Vault, RotateCw,
+  Award, AlarmClock, Radar
 } from "lucide-react";
 
 export const NAV = [
@@ -33,6 +34,7 @@ export const NAV = [
   { href: "/customers", label: "Customers", icon: Contact, group: "Intelligence" },
   { href: "/accounts", label: "Account Plans", icon: UserSearch, group: "Intelligence" },
   { href: "/funnel", label: "Marketing Funnel", icon: Filter, group: "Intelligence" },
+  { href: "/adbudget", label: "Ad Budget & ROAS", icon: Radar, group: "Intelligence" },
   { href: "/rfm", label: "Customer Segments", icon: Layers, group: "Intelligence" },
   { href: "/ltv", label: "Lifetime Value", icon: Gem, group: "Intelligence" },
   { href: "/inventory-turns", label: "Inventory Turnover", icon: PackageSearch, group: "Intelligence" },
@@ -71,6 +73,8 @@ export const NAV = [
   { href: "/amortization", label: "Loan Schedule", icon: Table2, group: "Money" },
   { href: "/commission", label: "Sales Commission", icon: HandCoins, group: "Money" },
   { href: "/payroll", label: "Payroll & CTC", icon: Banknote, group: "Money" },
+  { href: "/appraisal", label: "Appraisal & Hikes", icon: Award, group: "Money" },
+  { href: "/gst-latefee", label: "GST Late Fee", icon: AlarmClock, group: "Money" },
   { href: "/captable", label: "Cap Table", icon: PieChart, group: "Money" },
   { href: "/cash13", label: "13-Week Cash Flow", icon: CalendarClock, group: "Money" },
   { href: "/saas", label: "SaaS Metrics", icon: Repeat, group: "Money" },
