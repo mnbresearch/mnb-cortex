@@ -20,6 +20,7 @@ export async function currentEmail(): Promise<string | null> {
 export type OrgRow = {
   id: string; name: string; industry: string | null; plan: string | null;
   currency: string | null; created_at: string; members: number; metrics: number; alerts: number;
+  subscription_status: string | null; trial_ends_at: string | null; credits: number;
 };
 
 /**
@@ -42,6 +43,8 @@ export async function getAllOrgs(): Promise<{ rows: OrgRow[]; live: boolean; rea
       rows.push({
         id: o.id, name: o.name, industry: o.industry, plan: o.plan, currency: o.currency,
         created_at: o.created_at, members: members || 0, metrics: metrics || 0, alerts: alerts || 0,
+        subscription_status: o.subscription_status ?? null, trial_ends_at: o.trial_ends_at ?? null,
+        credits: Number(o.credits ?? 0),
       });
     }
     return { rows, live: true };
