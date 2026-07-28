@@ -52,6 +52,67 @@ export async function grantOrgAccess(org_id: string, email: string, role: string
   return { ok: true };
 }
 
+const VALID_PLANS = ["starter", "growth", "premium", "enterprise"];
+const VALID_STATUS = ["trialing", "active", "expired", "suspended", "cancelled"];
+
+/**
+ * Super-admin management of any customer workspace: change plan, subscription
+ * status, credit balance, and trial length. All changes bypass RLS via the
+ * service role and are gated by assertSuper(). Credits are handled separately
+ * so the tool still works before the `credits` column migration is applied.
+ */
+export async function manageOrg(org_id: string, patch: {
+  plan?: string;
+  subscription_status?: string;
+  creditsDelta?: number;
+  creditsSet?: number;
+  extendTrialDays?: number;
+}) {
+  await assertSuper();
+  const sb = serviceClient();
+  if (!sb) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set.");
+  if (!org_id) throw new Error("Organization is required.");
+
+  const updates: Record<string, any> = {};
+  if (patch.plan) {
+    if (!VALID_PLANS.includes(patch.plan)) throw new Error(`Unknown plan: ${patch.plan}`);
+    updates.plan = patch.plan;
+  }
+  if (patch.subscription_status) {
+    if (!VALID_STATUS.includes(patch.subscription_status)) throw new Error(`Unknown status: ${patch.subscription_status}`);
+    updates.subscription_status = patch.subscription_status;
+  }
+  if (typeof patch.extendTrialDays === "number" && patch.extendTrialDays !== 0) {
+    const { data } = await sb.from("organizations").select("trial_ends_at").eq("id", org_id).maybeSingle();
+    const cur = (data as any)?.trial_ends_at ? new Date((data as any).trial_ends_at).getTime() : Date.now();
+    const base = Math.max(cur, Date.now()); // extend from now if already expired
+    updates.trial_ends_at = new Date(base + patch.extendTrialDays * 86_400_000).toISOString();
+  }
+
+  // Credits — column may not exist yet; degrade gracefully.
+  let newCredits: number | undefined;
+  let creditsWarning: string | undefined;
+  if (typeof patch.creditsSet === "number" || typeof patch.creditsDelta === "number") {
+    try {
+      const { data, error } = await sb.from("organizations").select("credits").eq("id", org_id).single();
+      if (error) throw error;
+      const cur = Number((data as any)?.credits ?? 0);
+      newCredits = typeof patch.creditsSet === "number" ? patch.creditsSet : cur + (patch.creditsDelta || 0);
+      if (newCredits < 0) newCredits = 0;
+      updates.credits = newCredits;
+    } catch {
+      creditsWarning = "The `credits` column doesn't exist yet — run the migration to manage credits.";
+      newCredits = undefined;
+    }
+  }
+
+  if (Object.keys(updates).length) {
+    const { error } = await sb.from("organizations").update(updates).eq("id", org_id);
+    if (error) throw new Error(error.message);
+  }
+  return { ok: true, credits: newCredits, creditsWarning };
+}
+
 /** Make the super-admin an owner of any workspace so they can view it. */
 export async function joinOrg(org_id: string) {
   await assertSuper();
