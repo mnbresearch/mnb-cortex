@@ -22,6 +22,7 @@ export async function POST(req: Request) {
       subscription_status: body.subscription_status ? String(body.subscription_status) : undefined,
       creditsDelta: num(body.creditsDelta),
       creditsSet: num(body.creditsSet),
+      creditsAllowance: num(body.creditsAllowance),
       extendTrialDays: num(body.extendTrialDays),
     }));
     return NextResponse.json({ ok: false, error: "Unknown operation" }, { status: 400 });
