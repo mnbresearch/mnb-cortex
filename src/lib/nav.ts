@@ -16,7 +16,7 @@ import {
   Sprout, Anchor, Tag, Equal, ClipboardCheck,
   Flame, Hourglass, Stamp, GitCompare, Gem,
   ReceiptText, PackageSearch, Blocks, ShieldCheck, Timer,
-  Fuel, BrainCircuit
+  Fuel, BrainCircuit, Vault, RotateCw
 } from "lucide-react";
 
 export const NAV = [
@@ -93,6 +93,8 @@ export const NAV = [
   { href: "/itc", label: "GST ITC Set-off", icon: Blocks, group: "Money" },
   { href: "/dscr", label: "DSCR & Loan Fit", icon: ShieldCheck, group: "Money" },
   { href: "/rate-card", label: "Billable Rate", icon: Timer, group: "Money" },
+  { href: "/ccc", label: "Cash Conversion Cycle", icon: RotateCw, group: "Money" },
+  { href: "/networth", label: "Net Worth & Balance", icon: Vault, group: "Money" },
   { href: "/capacity", label: "Team Capacity", icon: GaugeCircle, group: "Intelligence" },
   { href: "/nps", label: "NPS & Sentiment", icon: Smile, group: "Intelligence" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
