@@ -56,9 +56,11 @@ create table if not exists memory_entities (
   mention_count int not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (org_id, lower(name))
+  unique (org_id, name)
 );
 create index if not exists memory_entities_org_idx on memory_entities(org_id, type);
+-- Case-insensitive dedup safety net (expression indexes must be separate from constraints).
+create unique index if not exists memory_entities_ci_idx on memory_entities(org_id, lower(name));
 
 -- 3) LINKS — knowledge-graph edges between entities.
 create table if not exists memory_links (
@@ -68,7 +70,7 @@ create table if not exists memory_links (
   to_name text not null,
   relation text not null default 'related',
   created_at timestamptz not null default now(),
-  unique (org_id, lower(from_name), lower(to_name), relation)
+  unique (org_id, from_name, to_name, relation)
 );
 create index if not exists memory_links_org_idx on memory_links(org_id);
 
