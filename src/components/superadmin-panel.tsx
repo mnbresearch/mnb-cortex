@@ -97,7 +97,7 @@ export function GrantAccessForm({ orgs }: { orgs: Org[] }) {
 
 type ManagedOrg = {
   id: string; name: string; plan: string | null; subscription_status: string | null;
-  credits: number; trial_ends_at: string | null; members: number;
+  credits: number; credits_allowance: number | null; trial_ends_at: string | null; members: number;
 };
 
 const statusTone: Record<string, string> = {
@@ -110,6 +110,7 @@ export function OrgManager({ org }: { org: ManagedOrg }) {
   const [status, setStatus] = useState(org.subscription_status || "trialing");
   const [credits, setCredits] = useState(org.credits || 0);
   const [amount, setAmount] = useState(1000);
+  const [allowance, setAllowance] = useState(org.credits_allowance ?? 0);
   const [busy, setBusy] = useState<string>("");
   const [msg, setMsg] = useState("");
 
@@ -168,6 +169,15 @@ export function OrgManager({ org }: { org: ManagedOrg }) {
           {busy === "t14" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />} +14d trial
         </Button>
         <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("t30", { extendTrialDays: 30 })}>+30d</Button>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-sm"><span className="text-muted-foreground block mb-1">Monthly allowance override</span>
+          <input className={I + " w-32"} type="number" value={allowance} onChange={(e) => setAllowance(Number(e.target.value))} /></label>
+        <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("allow", { creditsAllowance: allowance })}>
+          {busy === "allow" ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Set allowance
+        </Button>
+        <span className="text-xs text-muted-foreground">0 = plan default · -1 = unlimited</span>
       </div>
 
       <div className="flex items-center gap-3">
