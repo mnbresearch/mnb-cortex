@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Sparkles, Pin, Archive, WandSparkles, Loader2, Brain, Tag, GraduationCap } from "lucide-react";
+import { Search, Plus, Sparkles, Pin, Archive, WandSparkles, Loader2, Brain, Tag, GraduationCap, Download } from "lucide-react";
 
 type Memory = {
   id: string; kind: string; title: string | null; content: string; entities: string[];
@@ -90,6 +90,22 @@ export function MemoryConsole({ initialMemories, entities: initialEntities, prof
     if (j.ok) { await reload(); setMsg(`Learned ${j.memories} memories and ${j.entities} entities from your data.`); }
     else setMsg(j.error || "Could not read your data.");
   }
+  async function exportMemory() {
+    setBusy("export");
+    const j = await api("/api/memory/export");
+    setBusy("");
+    const stamp = new Date().toISOString().slice(0, 10);
+    const dl = (name: string, text: string, type: string) => {
+      const url = URL.createObjectURL(new Blob([text], { type }));
+      const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
+    };
+    dl(`cortex-memory-${stamp}.json`, JSON.stringify(j, null, 2), "application/json");
+    const md = [`# Cortex Memory export — ${stamp}`, ``, j.profile ? `## Company profile\n\n${j.profile}\n` : "",
+      `## Memories (${(j.memories || []).length})`, ...(j.memories || []).map((m: Memory) => `- **[${m.kind}]** ${m.title ? m.title + ": " : ""}${m.content}`),
+      ``, `## Entities (${(j.entities || []).length})`, ...(j.entities || []).map((e: any) => `- ${e.name} (${e.type}) · ${e.mention_count} mentions`)].join("\n");
+    dl(`cortex-memory-${stamp}.md`, md, "text/markdown");
+    setMsg("Exported memory as JSON + Markdown.");
+  }
 
   const I = "rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
@@ -105,9 +121,14 @@ export function MemoryConsole({ initialMemories, entities: initialEntities, prof
         </div>
         <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
           <div className="text-xs text-muted-foreground">New here? Let Cortex read your existing customers, team & KPIs and remember them.</div>
-          <Button size="sm" variant="outline" onClick={teach} disabled={busy === "teach"}>
-            {busy === "teach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <GraduationCap className="h-4 w-4" />} Teach Cortex from my data
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={exportMemory} disabled={busy === "export"}>
+              {busy === "export" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export
+            </Button>
+            <Button size="sm" variant="outline" onClick={teach} disabled={busy === "teach"}>
+              {busy === "teach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <GraduationCap className="h-4 w-4" />} Teach Cortex from my data
+            </Button>
+          </div>
         </div>
       </Card>
 
