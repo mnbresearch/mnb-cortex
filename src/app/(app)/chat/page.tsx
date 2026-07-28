@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Topbar } from "@/components/topbar";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Send, User, Mic } from "lucide-react";
+import { Sparkles, Send, User, Mic, BrainCircuit, Check } from "lucide-react";
 import type { ChatMessage } from "@/types";
 
 const SUGGESTIONS = [
@@ -20,7 +20,14 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [lang, setLang] = useState("English");
+  const [saved, setSaved] = useState<Record<number, boolean>>({});
   const endRef = useRef<HTMLDivElement>(null);
+
+  async function remember(i: number, content: string) {
+    if (saved[i] || !content.trim()) return;
+    setSaved((s) => ({ ...s, [i]: true }));
+    await fetch("/api/memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, kind: "insight", source: "chat" }) }).catch(() => {});
+  }
   const started = useRef(false);
   const recogRef = useRef<any>(null);
 
@@ -111,8 +118,16 @@ export default function Chat() {
                 {m.role === "assistant" && !m.content && loading ? (
                   <div className="rounded-2xl border px-4 py-3 text-sm text-muted-foreground">Thinking through your numbers…</div>
                 ) : (
-                  <div className={`rounded-2xl px-4 py-3 text-sm max-w-[80%] whitespace-pre-wrap leading-relaxed ${m.role === "user" ? "bg-secondary" : "bg-card border"}`}
-                    dangerouslySetInnerHTML={{ __html: md(m.content) }} />
+                  <div className="max-w-[80%]">
+                    <div className={`rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${m.role === "user" ? "bg-secondary" : "bg-card border"}`}
+                      dangerouslySetInnerHTML={{ __html: md(m.content) }} />
+                    {m.role === "assistant" && m.content && !loading && (
+                      <button onClick={() => remember(i, m.content)} disabled={saved[i]}
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
+                        {saved[i] ? <><Check className="h-3 w-3" /> Remembered</> : <><BrainCircuit className="h-3 w-3" /> Remember this</>}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
