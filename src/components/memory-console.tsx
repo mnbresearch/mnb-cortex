@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Sparkles, Pin, Archive, WandSparkles, Loader2, Brain, Tag } from "lucide-react";
+import { Search, Plus, Sparkles, Pin, Archive, WandSparkles, Loader2, Brain, Tag, GraduationCap } from "lucide-react";
 
 type Memory = {
   id: string; kind: string; title: string | null; content: string; entities: string[];
@@ -83,6 +83,13 @@ export function MemoryConsole({ initialMemories, entities: initialEntities, prof
     setThemes(j.themes || []);
     if (!(j.themes || []).length) setMsg(j.error || "Not enough memories to cluster yet.");
   }
+  async function teach() {
+    setBusy("teach"); setMsg("");
+    const j = await api("/api/memory/ingest", { method: "POST" });
+    setBusy("");
+    if (j.ok) { await reload(); setMsg(`Learned ${j.memories} memories and ${j.entities} entities from your data.`); }
+    else setMsg(j.error || "Could not read your data.");
+  }
 
   const I = "rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
@@ -95,6 +102,12 @@ export function MemoryConsole({ initialMemories, entities: initialEntities, prof
             onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} />
           <Button size="sm" onClick={search} disabled={busy === "search"}>{busy === "search" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Recall"}</Button>
           <Button size="sm" variant="outline" onClick={() => { setQ(""); reload(); }}>All</Button>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
+          <div className="text-xs text-muted-foreground">New here? Let Cortex read your existing customers, team & KPIs and remember them.</div>
+          <Button size="sm" variant="outline" onClick={teach} disabled={busy === "teach"}>
+            {busy === "teach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <GraduationCap className="h-4 w-4" />} Teach Cortex from my data
+          </Button>
         </div>
       </Card>
 
