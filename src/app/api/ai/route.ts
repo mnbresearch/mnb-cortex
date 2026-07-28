@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { generateFor } from "@/lib/ai/cortex";
-import { getBusinessContext } from "@/lib/data";
+import { getBusinessContext, getUserAndOrg } from "@/lib/data";
 import { chargeForMode } from "@/lib/credits";
+import { recallContext } from "@/lib/memory";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
@@ -16,7 +17,10 @@ export async function POST(req: Request) {
       }, { status: 402 });
     }
     const context = await getBusinessContext();
-    const text = await generateFor(m, String(input || ""), context);
+    const { orgId } = await getUserAndOrg();
+    const mem = await recallContext(orgId, String(input || m), 8);
+    const fullContext = mem ? `${context}\n\n${mem}` : context;
+    const text = await generateFor(m, String(input || ""), fullContext);
     return NextResponse.json({ text, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
     return NextResponse.json({ text: "Could not run the AI — check the API key.", error: e?.message }, { status: 200 });
