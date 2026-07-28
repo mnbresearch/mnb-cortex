@@ -54,8 +54,11 @@ export async function getBillingStatus(): Promise<BillingStatus> {
 
   const now = Date.now();
   const daysLeft = trialEnd ? Math.max(0, Math.ceil((trialEnd - now) / DAY)) : TRIAL_DAYS;
-  const status: BillingStatus["status"] = subStatus === "active" ? "active" : (trialEnd && now > trialEnd ? "expired" : "trialing");
-  const locked = enforceable && status === "expired";
+  // A super-admin can hard-block a customer regardless of trial timing.
+  const blocked = subStatus === "suspended" || subStatus === "cancelled";
+  let status: BillingStatus["status"] = subStatus === "active" ? "active" : (trialEnd && now > trialEnd ? "expired" : "trialing");
+  if (blocked) status = "expired";
+  const locked = enforceable && (blocked || status === "expired");
 
   return { known: true, enforceable, status, daysLeft, trialEndsAt: trialEnd ? new Date(trialEnd).toISOString() : null, plan, locked };
 }
