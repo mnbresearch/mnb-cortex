@@ -1,4 +1,4 @@
-export const APP_VERSION = "5.1.0";
+export const APP_VERSION = "5.2.0";
 export const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "919711488481";
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "mnbgotyou@gmail.com";
 
@@ -71,6 +71,12 @@ export const CREDIT_COSTS: Record<string, number> = {
   marketing: 5, competitor: 5, negotiate: 4, hiring: 4,
   contract: 6, account: 5, critique: 3, playbook: 6,
   proposal: 6, valuation: 6, broadcast: 3, sop: 4, costs: 4, loan: 3, vendor: 3,
+  agent_image: 15, agent_video: 40,
+};
+
+// Weekly image-generation caps by state. Trial = a small taste; paid tiers get more.
+export const IMAGE_WEEKLY: Record<string, number> = {
+  trial: 5, starter: 40, growth: 150, premium: 600, enterprise: -1,
 };
 export const DEFAULT_CREDIT_COST = 2;
 export function creditCost(mode: string): number {
