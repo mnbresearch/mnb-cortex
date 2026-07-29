@@ -25,13 +25,15 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
   const [revise, setRevise] = useState("");
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
+  const [upgrade, setUpgrade] = useState(false);
+  const [quota, setQuota] = useState<{ left: number; limit: number; active: boolean; plan: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [biz, setBiz] = useState("");
   const [goals, setGoals] = useState("");
   const [buildMsg, setBuildMsg] = useState("");
 
-  useEffect(() => { api("/api/agents").then((j) => setCustom(j.custom || [])); }, []);
+  useEffect(() => { api("/api/agents").then((j) => { setCustom(j.custom || []); setQuota(j.imageQuota || null); }); }, []);
   const agents = useMemo(() => industry === "custom" ? custom : agentsForIndustry(industry), [industry, custom]);
 
   function open(a: Agent) {
@@ -46,13 +48,14 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
 
   async function run(reviseNote?: string) {
     if (!sel) return;
-    setBusy("run"); setMsg("");
+    setBusy("run"); setMsg(""); setUpgrade(false);
     const j = await api("/api/agents/run", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agentId: sel.id, inputs, reviseNote, prior: reviseNote ? output : undefined, version, image: imgIn || undefined }) });
     setBusy("");
     if (j.needsProvider) { setMsg(j.message); return; }
+    if (j.limited) { setMsg(j.message); setUpgrade(true); return; }
     if (!j.ok) { setMsg(j.error || "Run failed."); return; }
-    if (j.images) { setImages(j.images); setVersion(j.version); setRevise(""); return; }
+    if (j.images) { setImages(j.images); setVersion(j.version); setRevise(""); if (j.quota) setQuota((q) => q ? { ...q, left: j.quota.left, limit: j.quota.limit } : q); return; }
     setOutput(j.output); setVersion(j.version); setRevise("");
   }
 
@@ -115,10 +118,18 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
                   </div>
                 </div>
               )}
+              {isImage && quota && quota.limit >= 0 && (
+                <div className="text-xs text-muted-foreground">{quota.active ? `${quota.plan} plan` : "Free trial"} · {quota.left} of {quota.limit} image generations left this week</div>
+              )}
               <Button onClick={() => run()} disabled={busy === "run"}>{busy === "run" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {output || images.length ? "Run again" : isImage ? "Generate" : "Run agent"}</Button>
             </div>
           )}
-          {msg && <p className="text-sm text-muted-foreground mt-3">{msg}</p>}
+          {msg && (
+            <div className="mt-3 text-sm text-muted-foreground">
+              {msg}
+              {upgrade && <a href="/pricing" className="ml-2 inline-flex items-center font-medium text-primary underline underline-offset-2">See plans →</a>}
+            </div>
+          )}
         </Card>
 
         {images.length > 0 && (
