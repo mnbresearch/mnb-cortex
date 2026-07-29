@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { INDUSTRIES, agentsForIndustry, type Agent } from "@/lib/agents/catalog";
-import { Sparkles, Play, Download, Copy, Check, Loader2, RefreshCw, Lock, ChevronLeft, WandSparkles, Image as ImageIcon, Video } from "lucide-react";
+import { Sparkles, Play, Download, Copy, Check, Loader2, RefreshCw, Lock, ChevronLeft, WandSparkles, Image as ImageIcon, Video, Upload } from "lucide-react";
 
 const kindBadge: Record<string, { label: string; cls: string }> = {
   reasoning: { label: "Text", cls: "bg-primary/10 text-primary" },
@@ -18,35 +18,41 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
   const [custom, setCustom] = useState<Agent[]>([]);
   const [sel, setSel] = useState<Agent | null>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [imgIn, setImgIn] = useState<string>("");
   const [output, setOutput] = useState("");
+  const [images, setImages] = useState<string[]>([]);
   const [version, setVersion] = useState(0);
   const [revise, setRevise] = useState("");
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
   const [copied, setCopied] = useState(false);
-  // build-your-own
+  const fileRef = useRef<HTMLInputElement>(null);
   const [biz, setBiz] = useState("");
   const [goals, setGoals] = useState("");
   const [buildMsg, setBuildMsg] = useState("");
 
   useEffect(() => { api("/api/agents").then((j) => setCustom(j.custom || [])); }, []);
-
   const agents = useMemo(() => industry === "custom" ? custom : agentsForIndustry(industry), [industry, custom]);
 
   function open(a: Agent) {
-    setSel(a); setOutput(""); setVersion(0); setRevise(""); setMsg("");
+    setSel(a); setOutput(""); setImages([]); setImgIn(""); setVersion(0); setRevise(""); setMsg("");
     const seed: Record<string, string> = {}; a.inputs.forEach((i) => (seed[i.key] = ""));
     setInputs(seed);
+  }
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return;
+    const r = new FileReader(); r.onload = () => setImgIn(String(r.result)); r.readAsDataURL(f);
   }
 
   async function run(reviseNote?: string) {
     if (!sel) return;
     setBusy("run"); setMsg("");
     const j = await api("/api/agents/run", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentId: sel.id, inputs, reviseNote, prior: reviseNote ? output : undefined, version }) });
+      body: JSON.stringify({ agentId: sel.id, inputs, reviseNote, prior: reviseNote ? output : undefined, version, image: imgIn || undefined }) });
     setBusy("");
     if (j.needsProvider) { setMsg(j.message); return; }
     if (!j.ok) { setMsg(j.error || "Run failed."); return; }
+    if (j.images) { setImages(j.images); setVersion(j.version); setRevise(""); return; }
     setOutput(j.output); setVersion(j.version); setRevise("");
   }
 
@@ -55,7 +61,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     setBusy("build"); setBuildMsg("");
     const j = await api("/api/agents/build", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ business: biz, goals }) });
     setBusy("");
-    if (j.ok) { const r = await api("/api/agents"); setCustom(r.custom || []); setBuildMsg(`Cortex built ${j.count} agents for you — see the Custom tab.`); setBiz(""); setGoals(""); }
+    if (j.ok) { const r = await api("/api/agents"); setCustom(r.custom || []); setBuildMsg(`Cortex built ${j.count} agents for you — see them below.`); setBiz(""); setGoals(""); }
     else setBuildMsg(j.error || "Could not build agents.");
   }
 
@@ -64,17 +70,14 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     const html = `<html><head><title>${sel.name}</title><style>body{font-family:system-ui,Arial,sans-serif;color:#111;padding:40px;max-width:760px;margin:auto;line-height:1.6}h1{color:#1f4a3b;font-size:20px}pre{white-space:pre-wrap;font-family:inherit;font-size:14px}</style></head><body><h1>${sel.name}</h1><div style="color:#666;font-size:12px;margin-bottom:16px">MNB Cortex · Agent output · ${new Date().toLocaleString("en-IN")}</div><pre>${output.replace(/</g, "&lt;")}</pre><script>window.onload=()=>window.print()</script></body></html>`;
     const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); }
   }
-  function exportMd() {
-    if (!sel) return;
-    const md = `# ${sel.name}\n\n${output}`;
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([md], { type: "text/markdown" }));
-    a.download = `${sel.id.replace(/\./g, "-")}.md`; a.click();
-  }
+  function exportMd() { if (!sel) return; const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([`# ${sel.name}\n\n${output}`], { type: "text/markdown" })); a.download = `${sel.id.replace(/\./g, "-")}.md`; a.click(); }
+  function dlImg(src: string, i: number) { const a = document.createElement("a"); a.href = src; a.download = `${sel?.id.replace(/\./g, "-")}-${i + 1}.png`; a.click(); }
   function copy() { navigator.clipboard?.writeText(output); setCopied(true); setTimeout(() => setCopied(false), 1500); }
 
-  // ---- Detail view ----
   if (sel) {
     const badge = kindBadge[sel.kind];
+    const isVideo = sel.kind === "video";
+    const isImage = sel.kind === "image";
     return (
       <div className="space-y-4">
         <button onClick={() => setSel(null)} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><ChevronLeft className="h-4 w-4" /> All agents</button>
@@ -85,10 +88,10 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">{sel.desc}</p>
 
-          {sel.kind !== "reasoning" ? (
+          {isVideo ? (
             <div className="mt-4 rounded-lg border border-warning/30 bg-warning/5 p-4 text-sm flex items-start gap-2">
               <Lock className="h-4 w-4 text-warning mt-0.5 shrink-0" />
-              <span>This {sel.kind === "video" ? "video" : "image"} agent needs a generation provider connected. The workflow — inputs, approve/revise, export — is fully built and runs the moment an {sel.kind === "video" ? "video" : "image"} model + budget is added.</span>
+              <span>Video generation has no free provider yet. The workflow — inputs, revise, export — is fully built and runs the moment a video model is connected.</span>
             </div>
           ) : (
             <div className="mt-4 space-y-3">
@@ -102,11 +105,42 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
                   )}
                 </label>
               ))}
-              <Button onClick={() => run()} disabled={busy === "run"}>{busy === "run" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {output ? "Run again" : "Run agent"}</Button>
+              {isImage && (
+                <div>
+                  <span className="text-sm text-muted-foreground">Reference image (sketch or photo — optional)</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
+                    <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4" /> {imgIn ? "Change image" : "Upload image"}</Button>
+                    {imgIn && <img src={imgIn} alt="input" className="h-12 w-12 rounded object-cover border" />}
+                  </div>
+                </div>
+              )}
+              <Button onClick={() => run()} disabled={busy === "run"}>{busy === "run" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {output || images.length ? "Run again" : isImage ? "Generate" : "Run agent"}</Button>
             </div>
           )}
           {msg && <p className="text-sm text-muted-foreground mt-3">{msg}</p>}
         </Card>
+
+        {images.length > 0 && (
+          <Card className="p-5 space-y-3">
+            <div className="font-semibold">Generated <span className="text-xs text-muted-foreground">· v{version}</span></div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {images.map((src, i) => (
+                <div key={i} className="space-y-2">
+                  <img src={src} alt={`result ${i + 1}`} className="rounded-lg border w-full" />
+                  <Button size="sm" variant="outline" onClick={() => dlImg(src, i)}><Download className="h-4 w-4" /> PNG</Button>
+                </div>
+              ))}
+            </div>
+            <div className="border-t pt-3">
+              <div className="text-sm font-medium mb-1">Revise the image</div>
+              <div className="flex gap-2">
+                <input className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. warmer gold, cleaner background" value={revise} onChange={(e) => setRevise(e.target.value)} />
+                <Button variant="outline" disabled={busy === "run" || !revise.trim()} onClick={() => run(revise)}><RefreshCw className="h-4 w-4" /> Revise</Button>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {output && (
           <Card className="p-5 space-y-3">
@@ -132,7 +166,6 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     );
   }
 
-  // ---- Catalog view ----
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-1.5">
