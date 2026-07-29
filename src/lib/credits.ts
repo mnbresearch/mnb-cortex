@@ -2,9 +2,10 @@ import "server-only";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
 import { isSuperAdmin } from "@/lib/superadmin";
-import { PLAN_CREDITS, creditCost } from "@/lib/config";
+import { PLAN_CREDITS, creditCost, IMAGE_WEEKLY } from "@/lib/config";
 
 const RESET_DAYS = 30;
+const WEEK_MS = 7 * 86_400_000;
 
 export type CreditState = {
   known: boolean;        // signed-in workspace?
@@ -111,6 +112,52 @@ export async function grantCredits(orgId: string, amount: number, reason: string
   });
   if (error) throw new Error(error.message);
   return Number(data);
+}
+
+export type ImageGate = { allowed: boolean; used: number; limit: number; plan: string; active: boolean; reason?: string };
+
+/**
+ * Premium gate for image generation. Trial workspaces get a small weekly taste,
+ * then must buy. Suspended/expired are blocked. Fails CLOSED on any doubt so the
+ * paid image model can't be abused by free users.
+ */
+export async function imageGenGate(): Promise<ImageGate> {
+  const { user, orgId } = await getUserAndOrg();
+  if (!user || !orgId) return { allowed: false, used: 0, limit: 0, plan: "none", active: false, reason: "Sign in to a workspace to use image agents." };
+  const superAdmin = await isSuperAdmin();
+  const svc = serviceClient();
+  if (!svc) return { allowed: false, used: 0, limit: 0, plan: "none", active: false, reason: "Image generation is temporarily unavailable." };
+  try {
+    const { data: org, error } = await svc.from("organizations").select("plan, subscription_status").eq("id", orgId).single();
+    if (error) throw error;
+    const plan = String((org as any)?.plan || "growth").toLowerCase();
+    const status = String((org as any)?.subscription_status || "trialing");
+    if (superAdmin || plan === "enterprise") return { allowed: true, used: 0, limit: -1, plan, active: true };
+    if (["suspended", "cancelled", "expired"].includes(status)) {
+      return { allowed: false, used: 0, limit: 0, plan, active: false, reason: "Your plan is inactive. Reactivate a paid plan to use image agents." };
+    }
+    const active = status === "active";
+    const limit = active ? (IMAGE_WEEKLY[plan] ?? IMAGE_WEEKLY.starter) : IMAGE_WEEKLY.trial;
+    if (limit < 0) return { allowed: true, used: 0, limit: -1, plan, active };
+
+    const since = new Date(Date.now() - WEEK_MS).toISOString();
+    const { count, error: cErr } = await svc.from("credit_ledger")
+      .select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("reason", "ai:agent_image").gte("created_at", since);
+    if (cErr) throw cErr;
+    const used = count || 0;
+    if (used >= limit) {
+      return {
+        allowed: false, used, limit, plan, active,
+        reason: active
+          ? `You've used all ${limit} image generations on your ${plan} plan this week. Upgrade for a higher limit.`
+          : `You've used your ${limit} free image generations for this week. Buy a plan to keep generating — free access is limited on purpose.`,
+      };
+    }
+    return { allowed: true, used, limit, plan, active };
+  } catch {
+    // Fail closed — never let the paid image model run when we can't verify entitlement.
+    return { allowed: false, used: 0, limit: 0, plan: "unknown", active: false, reason: "Couldn't verify your image quota. Please try again shortly." };
+  }
 }
 
 /** Recent credit events for a workspace (usage history). */
