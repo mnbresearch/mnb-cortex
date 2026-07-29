@@ -24,6 +24,7 @@ export const NAV = [
   { href: "/dashboard", label: "Business Health", icon: LayoutDashboard, group: "Overview" },
   { href: "/chat", label: "AI CEO Chat", icon: MessageSquare, group: "Overview" },
   { href: "/memory", label: "Cortex Memory", icon: BrainCircuit, group: "Overview" },
+  { href: "/agents", label: "AI Agents", icon: Bot, group: "Overview" },
   { href: "/analytics", label: "Analytics", icon: BarChart3, group: "Overview" },
   { href: "/sales", label: "Sales", icon: TrendingUp, group: "Intelligence" },
   { href: "/finance", label: "Finance", icon: Wallet, group: "Intelligence" },
