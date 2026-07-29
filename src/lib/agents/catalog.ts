@@ -33,6 +33,16 @@ export const INDUSTRIES: Industry[] = [
   { id: "logistics", name: "Logistics & Transport", emoji: "🚚", blurb: "Quotes, SLAs & notices." },
   { id: "agri", name: "Agriculture", emoji: "🌾", blurb: "Advisory, listings & buyer outreach." },
   { id: "services", name: "Professional Services", emoji: "💼", blurb: "Proposals, engagement & updates." },
+  { id: "pharmacy", name: "Pharmacy & Wellness", emoji: "💊", blurb: "OTC info, store promos & comms." },
+  { id: "electronics", name: "Electronics & Appliances", emoji: "📱", blurb: "Listings, specs & comparisons." },
+  { id: "furniture", name: "Furniture & Decor", emoji: "🛋️", blurb: "Catalogues, room styling & offers." },
+  { id: "grocery", name: "Grocery & Kirana", emoji: "🥫", blurb: "Offers, combos & WhatsApp orders." },
+  { id: "events", name: "Events & Wedding", emoji: "🎉", blurb: "Packages, proposals & planning." },
+  { id: "photography", name: "Photography & Studio", emoji: "📷", blurb: "Packages, galleries & enquiries." },
+  { id: "petcare", name: "Pet Care", emoji: "🐾", blurb: "Services, products & reminders." },
+  { id: "interior", name: "Interior Design", emoji: "🎨", blurb: "Moodboards, proposals & pitches." },
+  { id: "printing", name: "Printing & Signage", emoji: "🖨️", blurb: "Quotes, product lists & artwork briefs." },
+  { id: "footwear", name: "Footwear", emoji: "👟", blurb: "Listings, sizing & campaigns." },
   { id: "generic", name: "Any Business", emoji: "✨", blurb: "Works for every business type." },
 ];
 
@@ -155,6 +165,29 @@ const SPECIAL: Record<string, Agent[]> = {
       [{ key: "brief", label: "Client brief / scope", type: "textarea" }, { key: "price", label: "Pricing approach", type: "text" }],
       `Write a professional client proposal from this brief: {{brief}}. Pricing: {{price}}. Include understanding, scope, deliverables, timeline, pricing and terms.`),
   ],
+  electronics: [
+    A("electronics", "compare", "Spec Comparison", "Compare two products for a customer.",
+      [{ key: "a", label: "Product A + specs", type: "textarea" }, { key: "b", label: "Product B + specs", type: "textarea" }],
+      `Compare these two electronics products for a shopper. Give a specs table, who each is best for, and a clear recommendation. A: {{a}} | B: {{b}}.`),
+    A("electronics", "warranty", "Warranty & Care Explainer", "Explain warranty and care in plain language.",
+      [{ key: "product", label: "Product + warranty terms", type: "textarea" }],
+      `Write a plain-language warranty and care guide for: {{product}}. Cover what's covered, what isn't, care tips, and how to claim.`),
+  ],
+  events: [
+    A("events", "plan", "Event Plan & Package", "Draft an event plan and a client package.",
+      [{ key: "event", label: "Event type, guests, budget", type: "textarea" }],
+      `Plan an event from: {{event}}. Output a timeline, vendor checklist, a 3-tier package offer (with inclusions and price bands), and a short client-facing pitch.`),
+  ],
+  interior: [
+    A("interior", "moodboard", "Moodboard Brief", "Turn a client brief into a design direction.",
+      [{ key: "space", label: "Space, style, budget", type: "textarea" }],
+      `Create an interior design direction from: {{space}}. Output a concept statement, palette (colours + materials), key furniture/decor list, and a room-by-room plan.`),
+  ],
+  pharmacy: [
+    A("pharmacy", "promo", "Store Promo & Offer", "Draft a pharmacy/wellness store promotion.",
+      [{ key: "focus", label: "Offer focus (health check, wellness range…)", type: "text" }],
+      `Write a compliant pharmacy/wellness store promotion for: {{focus}}. Include a headline, offer, 3 social captions and a WhatsApp message. Do NOT give medical advice or make health claims — keep it about the store, service and products only.`),
+  ],
 };
 
 // Visual & video agents — real definitions that activate when a generation provider is connected.
@@ -168,7 +201,7 @@ function visualAgents(ind: Industry): Agent[] {
     v("ugcvideo", "UGC Video Maker", "Turn a product into a short UGC video ad.", [{ key: "brief", label: "Ad concept / script", type: "textarea" }], "video"),
   ];
   // Visual-heavy industries get the full set; others get photo cleanup only.
-  const heavy = ["jewellery", "fashion", "restaurant", "realestate", "retail", "beauty", "automotive"];
+  const heavy = ["jewellery", "fashion", "restaurant", "realestate", "retail", "beauty", "automotive", "electronics", "furniture", "footwear", "events", "interior", "photography", "grocery"];
   return heavy.includes(ind.id) ? base : base.filter((a) => a.id.endsWith(".cleanup") || a.id.endsWith(".enhance"));
 }
 
