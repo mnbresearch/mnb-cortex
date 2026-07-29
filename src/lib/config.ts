@@ -1,4 +1,4 @@
-export const APP_VERSION = "5.2.0";
+export const APP_VERSION = "5.3.0";
 export const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "919711488481";
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "mnbgotyou@gmail.com";
 
@@ -87,6 +87,10 @@ export function creditCost(mode: string): number {
 export const PLAN_CREDITS: Record<string, number> = {
   starter: 500, growth: 3000, premium: 15000, enterprise: -1,
 };
+
+// One-time credits for a free-trial workspace — a small taste, granted once (not monthly).
+// Enough to try text agents + a couple of images, not enough for daily use.
+export const TRIAL_CREDITS = 150;
 
 // Buyable top-up packs (one-time). Price in INR.
 export type CreditPack = { id: string; label: string; credits: number; price: number; per: string };
