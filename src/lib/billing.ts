@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
 
-const TRIAL_DAYS = 14;
+const TRIAL_DAYS = 3;
 const DAY = 86_400_000;
 
 export type BillingStatus = {
