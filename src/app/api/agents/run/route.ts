@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserAndOrg } from "@/lib/data";
 import { resolveAgent, fillPrompt, runReasoning, saveRun } from "@/lib/agents/runtime";
 import { recallContext } from "@/lib/memory";
-import { chargeForMode } from "@/lib/credits";
+import { chargeForMode, imageGenGate } from "@/lib/credits";
 import { hasImageProvider, generateImages } from "@/lib/ai/image";
 
 export const runtime = "nodejs";
@@ -32,12 +32,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, needsProvider: true, message: `“${agent.name}” is a video agent. The workflow is built; connect a video-generation provider (paid) to enable it.` }, { status: 200 });
   }
 
-  // ---- Image agents ----
+  // ---- Image agents (premium, gated) ----
   if (agent.kind === "image") {
     if (!hasImageProvider()) {
-      return NextResponse.json({ ok: false, needsProvider: true, message: `“${agent.name}” needs an image model. Add a free Google GEMINI_API_KEY (aistudio.google.com) to Vercel and this agent generates instantly.` }, { status: 200 });
+      return NextResponse.json({ ok: false, needsProvider: true, message: `“${agent.name}” needs an image model. Add a Google GEMINI_API_KEY (aistudio.google.com) to enable image agents.` }, { status: 200 });
     }
-    const gate = await chargeForMode("report");
+    // Premium access gate: plan + weekly quota. Fails closed.
+    const ig = await imageGenGate();
+    if (!ig.allowed) {
+      return NextResponse.json({ ok: false, limited: true, message: ig.reason, used: ig.used, limit: ig.limit, plan: ig.plan }, { status: 200 });
+    }
+    const gate = await chargeForMode("agent_image");
     if (!gate.ok) return NextResponse.json({ ok: false, outOfCredits: true, error: `Out of AI credits (balance ${gate.balance}).` }, { status: 402 });
     const prompt = imagePrompt(agent.name, agent.id, inputs, Boolean(b.image)) + (b.reviseNote ? ` Revision: ${b.reviseNote}.` : "");
     const { images, note } = await generateImages(prompt, b.image ? String(b.image) : undefined);
@@ -46,7 +51,8 @@ export async function POST(req: Request) {
     }
     const version = Number(b.version || 0) + 1;
     if (orgId) await saveRun(orgId, user?.id ?? null, agent, inputs, "[image generated]", version);
-    return NextResponse.json({ ok: true, images, version, agent: { id: agent.id, name: agent.name } });
+    const left = ig.limit < 0 ? -1 : Math.max(0, ig.limit - ig.used - 1);
+    return NextResponse.json({ ok: true, images, version, quota: { limit: ig.limit, left }, agent: { id: agent.id, name: agent.name } });
   }
 
   // ---- Reasoning agents ----
