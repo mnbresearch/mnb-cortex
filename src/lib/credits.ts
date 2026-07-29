@@ -2,7 +2,7 @@ import "server-only";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
 import { isSuperAdmin } from "@/lib/superadmin";
-import { PLAN_CREDITS, creditCost, IMAGE_WEEKLY } from "@/lib/config";
+import { PLAN_CREDITS, creditCost, IMAGE_WEEKLY, TRIAL_CREDITS } from "@/lib/config";
 
 const RESET_DAYS = 30;
 const WEEK_MS = 7 * 86_400_000;
@@ -19,9 +19,11 @@ export type CreditState = {
 
 export type ChargeResult = { ok: boolean; enforced: boolean; cost: number; balance: number };
 
-function planAllowance(plan: string, override?: number | null): number {
-  // 0 / null → use the plan default; -1 → unlimited; any positive → explicit override.
+function planAllowance(plan: string, status: string, override?: number | null): number {
+  // Explicit super-admin override wins (0 = ignore, -1 = unlimited, +n = fixed).
   if (typeof override === "number" && override !== 0) return override;
+  // Trialing / non-active workspaces get a small ONE-TIME taste, not the plan's monthly allowance.
+  if (status !== "active") return TRIAL_CREDITS;
   return PLAN_CREDITS[plan] ?? 500;
 }
 
@@ -35,10 +37,11 @@ export async function getCreditState(): Promise<CreditState> {
   const sb = createClient();
   try {
     const { data, error } = await sb.from("organizations")
-      .select("plan, credits, credits_allowance, credits_reset_at").eq("id", orgId).single();
+      .select("plan, credits, credits_allowance, credits_reset_at, subscription_status").eq("id", orgId).single();
     if (error) throw error;
     const plan = String((data as any).plan || "growth").toLowerCase();
-    const allowance = planAllowance(plan, (data as any).credits_allowance);
+    const status = String((data as any).subscription_status || "trialing");
+    const allowance = planAllowance(plan, status, (data as any).credits_allowance);
     const unlimited = superAdmin || plan === "enterprise" || allowance < 0;
     let balance = Number((data as any).credits ?? 0);
     let resetAt: string | null = (data as any).credits_reset_at ?? null;
@@ -79,10 +82,11 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
 
   try {
     const superAdmin = await isSuperAdmin();
-    const { data: org, error } = await svc.from("organizations").select("plan, credits_allowance").eq("id", orgId).single();
+    const { data: org, error } = await svc.from("organizations").select("plan, credits_allowance, subscription_status").eq("id", orgId).single();
     if (error) return { ok: true, enforced: false, cost, balance: 0 };
     const plan = String((org as any)?.plan || "growth").toLowerCase();
-    const allowance = planAllowance(plan, (org as any)?.credits_allowance);
+    const status = String((org as any)?.subscription_status || "trialing");
+    const allowance = planAllowance(plan, status, (org as any)?.credits_allowance);
     if (superAdmin || plan === "enterprise" || allowance < 0) return { ok: true, enforced: false, cost, balance: -1 };
 
     if (allowance > 0) { try { await svc.rpc("sync_allowance", { p_org: orgId, p_amount: allowance, p_days: RESET_DAYS }); } catch {} }
