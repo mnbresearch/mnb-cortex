@@ -18,7 +18,8 @@ import {
   ReceiptText, PackageSearch, Blocks, ShieldCheck, Timer,
   Fuel, BrainCircuit, Vault, RotateCw,
   Award, AlarmClock, Radar,
-  HeartHandshake, Umbrella, CalendarDays, Repeat2, House
+  HeartHandshake, Umbrella, CalendarDays, Repeat2, House,
+  Network
 } from "lucide-react";
 
 export const NAV = [
@@ -26,6 +27,7 @@ export const NAV = [
   { href: "/chat", label: "AI CEO Chat", icon: MessageSquare, group: "Overview" },
   { href: "/memory", label: "Cortex Memory", icon: BrainCircuit, group: "Overview" },
   { href: "/agents", label: "AI Agents", icon: Bot, group: "Overview" },
+  { href: "/workforce", label: "Cortex Workforce", icon: Network, group: "Overview" },
   { href: "/analytics", label: "Analytics", icon: BarChart3, group: "Overview" },
   { href: "/sales", label: "Sales", icon: TrendingUp, group: "Intelligence" },
   { href: "/finance", label: "Finance", icon: Wallet, group: "Intelligence" },
