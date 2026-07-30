@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { INDUSTRIES, agentsForIndustry, type Agent } from "@/lib/agents/catalog";
+import { INDUSTRIES, DEPARTMENTS, agentsForIndustry, findAgent, type Agent } from "@/lib/agents/catalog";
 import { Sparkles, Play, Download, Copy, Check, Loader2, RefreshCw, Lock, ChevronLeft, WandSparkles, Image as ImageIcon, Video, Upload } from "lucide-react";
 
 const kindBadge: Record<string, { label: string; cls: string }> = {
@@ -33,7 +33,15 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
   const [goals, setGoals] = useState("");
   const [buildMsg, setBuildMsg] = useState("");
 
-  useEffect(() => { api("/api/agents").then((j) => { setCustom(j.custom || []); setQuota(j.imageQuota || null); }); }, []);
+  useEffect(() => {
+    api("/api/agents").then((j) => { setCustom(j.custom || []); setQuota(j.imageQuota || null); });
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const tab = p.get("tab"); if (tab) setIndustry(tab);
+      const runId = p.get("run"); if (runId) { const a = findAgent(runId); if (a) open(a); }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const agents = useMemo(() => industry === "custom" ? custom : agentsForIndustry(industry), [industry, custom]);
 
   function open(a: Agent) {
@@ -188,6 +196,14 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
         <button onClick={() => setIndustry("custom")} className={`text-sm rounded-full border px-3 py-1.5 ${industry === "custom" ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent"}`}>
           <span className="mr-1">🛠️</span>Custom ({custom.length})
         </button>
+      </div>
+      <div className="flex flex-wrap gap-1.5 items-center">
+        <span className="text-xs text-muted-foreground mr-1">By department:</span>
+        {DEPARTMENTS.map((d) => (
+          <button key={d.id} onClick={() => setIndustry(d.id)} className={`text-sm rounded-full border px-3 py-1.5 ${industry === d.id ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent"}`}>
+            <span className="mr-1">{d.emoji}</span>{d.name}
+          </button>
+        ))}
       </div>
 
       {industry === "custom" && (
