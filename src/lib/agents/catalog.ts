@@ -205,14 +205,112 @@ function visualAgents(ind: Industry): Agent[] {
   return heavy.includes(ind.id) ? base : base.filter((a) => a.id.endsWith(".cleanup") || a.id.endsWith(".enhance"));
 }
 
-export const AGENTS: Agent[] = INDUSTRIES.flatMap((ind) => [
-  ...commonAgents(ind),
-  ...(SPECIAL[ind.id] || []),
-  ...visualAgents(ind),
-]);
+/* ============================ THE 7-DEPARTMENT WORKFORCE ============================ */
+// A complete AI org chart: every business runs on these seven functions. Each agent is
+// industry-agnostic and runs today, grounded in your Cortex Memory (second brain).
+
+export type Department = { id: string; name: string; emoji: string; blurb: string };
+export const DEPARTMENTS: Department[] = [
+  { id: "d_sales", name: "Sales", emoji: "📈", blurb: "Find and win new customers." },
+  { id: "d_deals", name: "Deals", emoji: "🤝", blurb: "Move opportunities to closed-won." },
+  { id: "d_marketing", name: "Marketing", emoji: "📣", blurb: "Create demand across every channel." },
+  { id: "d_operations", name: "Operations", emoji: "⚙️", blurb: "Deliver and run the business." },
+  { id: "d_intel", name: "Intelligence", emoji: "🔭", blurb: "Know your market and rivals." },
+  { id: "d_customer", name: "Customer", emoji: "💬", blurb: "Support and retain customers." },
+  { id: "d_back", name: "Back Office", emoji: "🧾", blurb: "Finance, admin and compliance." },
+];
+
+// Compact spec: [id, name, desc, inputs, prompt]
+type DSpec = [string, string, string, AgentInput[], string];
+const t = (key: string, label: string, type: AgentInput["type"] = "text"): AgentInput => ({ key, label, type });
+
+const DEPT_SPECS: Record<string, DSpec[]> = {
+  d_sales: [
+    ["outbound", "Outbound Writer", "Personalised cold email from live signals.", [t("prospect", "Prospect / company + signal", "textarea"), t("offer", "What you offer")], "Write a concise, personalised cold outbound email to {{prospect}} offering {{offer}}. Open with a specific signal, one clear value line, a soft CTA. No fluff. Give 2 subject lines."],
+    ["leadsource", "Lead Sourcing Brief", "Where and how to find your next 50 leads.", [t("icp", "Ideal customer", "textarea")], "For this ICP: {{icp}} — list where to find them (channels, communities, search filters), 5 example search queries, and a qualification checklist."],
+    ["coldcall", "Cold-Call Script", "A natural call script with branches.", [t("offer", "Offer + audience", "textarea")], "Write a cold-call script for {{offer}}: opener, permission line, value, 3 discovery questions, objection branches, and a booking close."],
+    ["linkedin", "LinkedIn DM Sequence", "A 4-touch connection + DM sequence.", [t("target", "Who you're targeting"), t("offer", "Offer")], "Write a 4-message LinkedIn sequence to {{target}} for {{offer}}: connection note + 3 follow-ups, friendly, no hard pitch until message 3."],
+    ["icp", "ICP Definition", "Sharpen your ideal customer profile.", [t("business", "Your business / product", "textarea")], "From this business: {{business}} — define 2 sharp ICPs (firmographics, pains, triggers, where they hang out) and disqualifiers."],
+    ["objection", "Objection Handling", "Rebuttals for your top objections.", [t("objections", "Objections you hear", "textarea")], "For these sales objections: {{objections}} — give an empathetic reframe and a concise rebuttal for each, plus one proof point to use."],
+    ["followup", "Follow-up Sequence", "A polite multi-touch follow-up.", [t("context", "Deal context", "textarea")], "Write a 4-step follow-up sequence for this stalled deal: {{context}}. Vary the angle each time; last one is a graceful break-up."],
+    ["discovery", "Discovery Questions", "Great questions for a discovery call.", [t("offer", "What you sell")], "Give 12 sharp discovery-call questions for selling {{offer}}, grouped by: current state, pain, impact, decision process."],
+    ["pitch", "Elevator Pitch", "A crisp 30-second pitch.", [t("business", "Business + who it's for", "textarea")], "Write 3 versions of a 30-second elevator pitch for {{business}} — one punchy, one outcome-led, one story-led."],
+    ["referral", "Referral Ask", "A message that earns referrals.", [t("context", "Client + result", "textarea")], "Write a warm referral-ask message given this happy-client context: {{context}}. Make it easy to say yes and to forward."],
+  ],
+  d_deals: [
+    ["proposal", "Proposal Writer", "A branded proposal from your discovery.", [t("brief", "Scope + discovery notes", "textarea"), t("price", "Pricing")], "Write a client proposal from: {{brief}}. Pricing: {{price}}. Sections: understanding, scope, phased deliverables, timeline, pricing, terms."],
+    ["meetingrecap", "Meeting Recap", "Recap + action items from notes.", [t("notes", "Call notes / transcript", "textarea")], "Turn these call notes into a crisp recap: {{notes}} — summary, decisions, action items (owner + due), and the agreed next step."],
+    ["negotiation", "Negotiation Plan", "Your plan for the negotiation.", [t("context", "Deal + sticking points", "textarea")], "Build a negotiation plan for: {{context}} — your BATNA, likely their asks, trade variables (not just price), 3 concession options, and target/walk-away."],
+    ["contractsummary", "Contract Summary", "Plain-English summary of a contract.", [t("contract", "Paste key clauses", "textarea")], "Summarise this contract in plain English: {{contract}} — obligations, term, payment, termination, liability, and any red flags. Not legal advice."],
+    ["closeplan", "Mutual Close Plan", "A step-by-step path to signature.", [t("deal", "Deal context", "textarea")], "Create a mutual close plan for: {{deal}} — milestones, owners, dates from now to signed, and what could derail it."],
+    ["winloss", "Win/Loss Analysis", "Learn from a closed deal.", [t("deal", "What happened", "textarea")], "Do a win/loss analysis of: {{deal}} — why it went the way it did, what to repeat, what to change, and one process fix."],
+    ["upsell", "Upsell Suggestor", "Spot the next sale to a client.", [t("client", "Client + what they bought", "textarea")], "For this client: {{client}} — suggest 3 upsell/cross-sell moves with the trigger, pitch line, and rough value for each."],
+    ["quote", "Quotation Draft", "A clean text quotation.", [t("items", "Items + prices", "textarea")], "Draft a professional quotation from: {{items}} — line items, subtotal, GST 18%, total, validity 15 days, and payment terms."],
+  ],
+  d_marketing: [
+    ["content", "Content Engine", "A full blog post from a topic.", [t("topic", "Topic + angle", "textarea")], "Write a 700-word blog post on: {{topic}} — SEO title, intro hook, subheads, practical body, and a CTA. Indian SME audience."],
+    ["carousel", "Carousel Copy", "A 7-slide social carousel.", [t("idea", "Idea / message")], "Write a 7-slide Instagram/LinkedIn carousel on: {{idea}} — hook slide, 5 value slides, CTA slide, plus caption and 5 hashtags."],
+    ["seo", "SEO Brief", "A brief to rank for a keyword.", [t("keyword", "Target keyword")], "Create an SEO content brief for '{{keyword}}': search intent, title options, H2 outline, entities to cover, internal-link ideas, and word count."],
+    ["newsletter", "Email Newsletter", "A value-first newsletter issue.", [t("topic", "This issue's theme")], "Write an email newsletter issue on {{topic}}: subject line, 250-word body with one insight and one tip, and a soft CTA."],
+    ["adcopy", "Ad Copy Pack", "Ads for Meta/Google.", [t("product", "Product + audience", "textarea")], "Write an ad pack for {{product}}: 3 Meta primary texts + headlines, 3 Google RSA headlines + 2 descriptions, angled differently."],
+    ["calendar", "Content Calendar", "A 2-week posting plan.", [t("focus", "Focus / campaign")], "Build a 2-week content calendar for {{focus}}: per day — platform, format, hook, caption seed. Mix education, proof, offer."],
+    ["landing", "Landing Page Copy", "Conversion copy for a page.", [t("offer", "Offer + audience", "textarea")], "Write landing-page copy for {{offer}}: hero headline + subhead, 3 benefit blocks, social proof placeholder, FAQ (5), and CTA."],
+    ["videoscript", "Short Video Script", "A 30–45s reel/short script.", [t("idea", "Idea / message")], "Write a 30–45s short-video script for: {{idea}} — hook (first 2s), beats with on-screen text, and CTA. Casual, mobile-first."],
+    ["pressrelease", "Press Release", "A newsworthy release.", [t("news", "The announcement", "textarea")], "Write a press release for: {{news}} — headline, dateline, 3 tight paragraphs, a quote, and boilerplate."],
+  ],
+  d_operations: [
+    ["onboarding", "Client Onboarding Plan", "A smooth first-30-days plan.", [t("service", "What you deliver", "textarea")], "Create a client onboarding plan for {{service}}: welcome steps, info to collect, kickoff agenda, 30-day milestones, and touchpoints."],
+    ["sop", "SOP Writer", "A clean standard operating procedure.", [t("process", "Process to document", "textarea")], "Write an SOP for: {{process}} — purpose, scope, tools, numbered steps, quality checks, and common mistakes."],
+    ["status", "Status Update", "A clear stakeholder update.", [t("notes", "What's happened", "textarea")], "Write a status update from: {{notes}} — done, in progress, blockers, next, and one-line risk. Confident and concise."],
+    ["projectplan", "Project Plan", "A phased plan with milestones.", [t("goal", "Project goal + constraints", "textarea")], "Build a project plan for: {{goal}} — phases, key tasks, owners, dependencies, and milestone dates."],
+    ["checklist", "Process Checklist", "A do-not-miss checklist.", [t("task", "Task / event")], "Create a thorough checklist for: {{task}} — grouped by before / during / after, with the easy-to-forget items flagged."],
+    ["handoff", "Handoff Doc", "A clean handover document.", [t("context", "What's being handed off", "textarea")], "Write a handoff doc for: {{context}} — current state, access/tools, open items, contacts, and gotchas."],
+    ["agenda", "Meeting Agenda", "A tight, timeboxed agenda.", [t("purpose", "Meeting purpose + attendees", "textarea")], "Write a timeboxed meeting agenda for: {{purpose}} — objective, topics with minutes, pre-reads, and decisions to make."],
+  ],
+  d_intel: [
+    ["dossier", "Prospect Dossier", "A one-pass research dossier.", [t("target", "Company / person", "textarea")], "Build a prospect dossier on: {{target}} — what they do, likely priorities, buying triggers, people to know, and a tailored opening line. Note where you'd verify facts."],
+    ["competitor", "Competitor Watch", "A weekly competitor brief.", [t("competitor", "Competitor + what to track", "textarea")], "Write a competitor brief on: {{competitor}} — positioning, likely recent moves, strengths/gaps, and how to counter. Flag assumptions to verify."],
+    ["marketsizing", "Market Sizing", "A TAM/SAM/SOM estimate.", [t("market", "Market + geography", "textarea")], "Estimate the market size for: {{market}} — TAM/SAM/SOM with the assumptions and a bottom-up sanity check. Be explicit about guesses."],
+    ["swot", "SWOT Analysis", "A sharp SWOT.", [t("business", "Business / situation", "textarea")], "Do a SWOT for: {{business}} — 3–4 crisp points each, then the single most important move it implies."],
+    ["trends", "Trend Brief", "What's changing in a space.", [t("space", "Industry / topic")], "Write a trend brief on {{space}}: 5 shifts, why each matters for an SME, and one action per trend."],
+    ["pricingintel", "Pricing Intelligence", "How to position your price.", [t("context", "Your offer + rivals", "textarea")], "Analyse pricing for: {{context}} — likely competitor price bands, your positioning options (premium/parity/penetration), and a recommended structure."],
+  ],
+  d_customer: [
+    ["triage", "Support Triage", "Sort and draft replies to tickets.", [t("tickets", "Paste tickets", "textarea")], "Triage these support messages: {{tickets}} — for each: category, urgency, and a ready-to-send empathetic reply."],
+    ["faq", "FAQ Engine", "A customer FAQ from a topic.", [t("topic", "Area / product")], "Write a 10-question customer FAQ about {{topic}} — concise, friendly, accurate answers."],
+    ["churnsave", "Churn Save Message", "Win back an at-risk customer.", [t("context", "Why they're leaving", "textarea")], "Write a churn-save message for: {{context}} — acknowledge, address the real reason, offer a concrete next step, no begging."],
+    ["welcome", "Customer Welcome", "A warm onboarding email.", [t("product", "What they signed up for")], "Write a warm customer welcome/onboarding email for {{product}}: what to do first, a quick win, and where to get help."],
+    ["reviewreply", "Review Reply", "On-brand replies to reviews.", [t("reviews", "Paste reviews", "textarea")], "Write professional public replies to: {{reviews}} — thank praise, address concerns, offer a next step. Match tone."],
+    ["npsfollow", "NPS Follow-up", "Follow up on NPS scores.", [t("context", "Score + comment", "textarea")], "Write NPS follow-up messages for: {{context}} — a promoter ask (referral/review) and a detractor recovery note."],
+  ],
+  d_back: [
+    ["invoicereminder", "Invoice Reminder", "A firm, friendly payment nudge.", [t("context", "Invoice + how overdue", "textarea")], "Write a payment-reminder message for: {{context}} — polite, clear amount and due date, easy pay step; escalate tone with age."],
+    ["reconcile", "Reconciliation Checklist", "Month-end close checklist.", [t("scope", "What to reconcile")], "Write a month-end reconciliation checklist for: {{scope}} — accounts to match, documents to gather, and common mismatches to check."],
+    ["expense", "Expense Policy", "A simple expense policy.", [t("company", "Company context", "textarea")], "Draft a simple expense & reimbursement policy for: {{company}} — categories, limits, approval flow, receipts, and timelines."],
+    ["vendoremail", "Vendor Email", "Negotiate or chase a vendor.", [t("context", "Vendor + goal", "textarea")], "Write a professional vendor email for: {{context}} — clear ask, reasonable justification, and a specific next step."],
+    ["policydoc", "Policy Document", "Any internal policy, cleanly written.", [t("topic", "Policy topic + rules", "textarea")], "Write an internal policy document on: {{topic}} — purpose, scope, the rules clearly numbered, exceptions, and effective date."],
+    ["reportsummary", "Report Summary", "Exec summary of a report.", [t("report", "Paste report / numbers", "textarea")], "Write an executive summary of: {{report}} — the story in 5 lines, 3 key numbers, and the one decision it points to."],
+  ],
+};
+
+const DEPT_AGENTS: Agent[] = Object.entries(DEPT_SPECS).flatMap(([dept, specs]) =>
+  specs.map(([id, name, desc, inputs, prompt]) => A(dept, id, name, desc, inputs, prompt))
+);
+
+export const AGENTS: Agent[] = [
+  ...INDUSTRIES.flatMap((ind) => [
+    ...commonAgents(ind),
+    ...(SPECIAL[ind.id] || []),
+    ...visualAgents(ind),
+  ]),
+  ...DEPT_AGENTS,
+];
 
 export function agentsForIndustry(industry: string): Agent[] {
   return AGENTS.filter((a) => a.industry === industry);
+}
+export function agentsForDepartment(dept: string): Agent[] {
+  return AGENTS.filter((a) => a.industry === dept);
 }
 export function findAgent(id: string): Agent | undefined {
   return AGENTS.find((a) => a.id === id);
