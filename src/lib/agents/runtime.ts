@@ -43,6 +43,15 @@ export async function saveRun(orgId: string, userId: string | null, agent: Resol
   } catch { return null; }
 }
 
+/** Distinct agent ids this workspace has run at least once (for workforce progress). */
+export async function activatedAgentIds(orgId: string): Promise<string[]> {
+  const svc = serviceClient(); if (!svc || !orgId) return [];
+  try {
+    const { data } = await svc.from("agent_runs").select("agent_id").eq("org_id", orgId).limit(2000);
+    return Array.from(new Set(((data as any[]) || []).map((r) => r.agent_id).filter(Boolean)));
+  } catch { return []; }
+}
+
 export async function listRuns(orgId: string, limit = 30) {
   const svc = serviceClient(); if (!svc || !orgId) return [];
   try {
