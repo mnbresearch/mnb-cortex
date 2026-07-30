@@ -341,8 +341,39 @@ const DEPT_SPECS_MORE: Record<string, DSpec[]> = {
   ],
 };
 
+const DEPT_SPECS_3: Record<string, DSpec[]> = {
+  d_sales: [
+    ["accountlist", "Ideal Account List", "Build a target account list.", [t("icp", "ICP + market", "textarea")], "From this ICP: {{icp}} — produce a target account list framework: 15 example companies to pursue, why each fits, and the best entry contact role."],
+    ["voicemail", "Voicemail Script", "A voicemail that gets callbacks.", [t("offer", "Offer + who")], "Write two 20-second sales voicemail scripts for {{offer}} — curiosity-led, with a clear reason to call back."],
+  ],
+  d_deals: [
+    ["paymentterms", "Payment Terms Proposal", "Structure the payment terms.", [t("deal", "Deal size + risk", "textarea")], "Propose payment terms for: {{deal}} — 2-3 structures (upfront/milestone/retainer) with pros/cons and your recommended default."],
+    ["thankyou", "Post-close Thank You", "A memorable close note.", [t("deal", "What they bought", "textarea")], "Write a warm post-close thank-you message for: {{deal}} — set expectations for next steps and make them feel great about the decision."],
+  ],
+  d_marketing: [
+    ["hooks", "10 Hooks", "Ten scroll-stopping hooks.", [t("topic", "Topic / product")], "Write 10 scroll-stopping hooks for content about {{topic}} — mix curiosity, contrarian, and outcome angles."],
+    ["repurpose", "Repurpose Content", "One asset into many.", [t("asset", "Source content", "textarea")], "Repurpose this content into a LinkedIn post, an X thread, an Instagram caption, and an email — keep the core idea, fit each format: {{asset}}"],
+  ],
+  d_operations: [
+    ["kpidef", "KPI Definitions", "Define the metrics that matter.", [t("area", "Function / goal")], "Define the 6 KPIs that matter most for: {{area}} — exact formula, target range, and how often to review each."],
+    ["escalation", "Escalation Matrix", "Who handles what, when.", [t("context", "Team + issue types", "textarea")], "Build an escalation matrix for: {{context}} — severity levels, who owns each, response times, and when to escalate up."],
+  ],
+  d_intel: [
+    ["pricingteardown", "Pricing Page Teardown", "Analyse a rival's pricing page.", [t("context", "Competitor + their tiers", "textarea")], "Tear down this competitor pricing: {{context}} — their strategy, anchors, gaps you can exploit, and a positioning move."],
+    ["quickread", "Quick Market Read", "A fast take on an opportunity.", [t("idea", "Opportunity / idea", "textarea")], "Give a fast market read on: {{idea}} — demand signals, who already serves it, the wedge, and a go/no-go lean with the reason."],
+  ],
+  d_customer: [
+    ["complaint", "Complaint Resolver", "Defuse an upset customer.", [t("context", "The complaint", "textarea")], "Write a resolution reply to this complaint: {{context}} — acknowledge, take responsibility where fair, offer a concrete fix, and rebuild trust."],
+    ["loyalty", "Loyalty Program Idea", "Design a simple loyalty play.", [t("business", "Business + customers", "textarea")], "Design a simple loyalty/referral program for: {{business}} — mechanic, reward, how to launch it over WhatsApp/email, and a success metric."],
+  ],
+  d_back: [
+    ["cashflownote", "Cash Flow Note", "A plain-English cash update.", [t("numbers", "Inflows/outflows", "textarea")], "Write a plain-English cash-flow note from: {{numbers}} — position, what's coming, any crunch, and the one action to take."],
+    ["compliancereminder", "Compliance Reminder", "Draft a due-date reminder.", [t("item", "Filing / due date")], "Write an internal compliance reminder for: {{item}} — what's due, by when, who owns it, and what happens if it's missed."],
+  ],
+};
+
 const _mergedDeptSpecs: Record<string, DSpec[]> = {};
-for (const src of [DEPT_SPECS, DEPT_SPECS_MORE]) {
+for (const src of [DEPT_SPECS, DEPT_SPECS_MORE, DEPT_SPECS_3]) {
   for (const [dept, specs] of Object.entries(src)) _mergedDeptSpecs[dept] = [...(_mergedDeptSpecs[dept] || []), ...specs];
 }
 const DEPT_AGENTS: Agent[] = Object.entries(_mergedDeptSpecs).flatMap(([dept, specs]) =>
