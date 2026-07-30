@@ -23,7 +23,7 @@ const PILLARS = [
 ];
 
 const CATEGORIES = [
-  { icon: Rocket, name: "AI Agents (new)", items: ["90+ agents across 16 industries", "Jewellery: sketch → merchandising brief", "Stone-plot layout & collection planner", "Catalogue, ad-script & email agents", "Run → approve → revise → export", "Cortex builds custom agents for you", "3D/image/video agents ready to activate"] },
+  { icon: Rocket, name: "Cortex Workforce (new)", items: ["A complete AI org chart — 7 departments", "250+ runnable agents (Sales → Back Office)", "Industry packs incl. jewellery sketch → spec", "Every agent plugs into your second brain", "Audit engine marks a deploy-first roadmap", "Cortex builds custom agents for you", "Image agents generate via your Gemini key"] },
   { icon: BrainCircuit, name: "Cortex Memory", items: ["Long-term business memory", "Grounds every AI answer", "Knowledge graph of people & customers", "Living company profile", "Extract memories from any text", "Teach Cortex from your data", "Export your memory anytime"] },
   { icon: Wallet, name: "Finance & Money", items: ["Business Health Dashboard", "P&L Builder", "13-Week Cash Flow", "Cash Runway & Burn", "Cash Conversion Cycle", "Receivables & Payables", "Unit Economics", "Funding, EMI & DSCR", "Net Worth & Balance Sheet", "GST Invoicing, ITC & TDS", "Payroll, CTC & Appraisals", "Financial Ratios & Depreciation"] },
   { icon: Brain, name: "Strategy & Advisory", items: ["AI CEO Chat", "Strategy Consultant", "Forecasting & Scenarios", "Business Valuation", "AI Playbooks", "Decision Journal", "Board Deck Generator", "Investor Updates", "Benchmarks", "Risk Radar"] },
