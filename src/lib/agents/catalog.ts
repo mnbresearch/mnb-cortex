@@ -293,7 +293,59 @@ const DEPT_SPECS: Record<string, DSpec[]> = {
   ],
 };
 
-const DEPT_AGENTS: Agent[] = Object.entries(DEPT_SPECS).flatMap(([dept, specs]) =>
+// Second wave of department agents — deeper coverage per function.
+const DEPT_SPECS_MORE: Record<string, DSpec[]> = {
+  d_sales: [
+    ["winback", "Win-back Campaign", "Re-open a lapsed prospect.", [t("context", "Who + why they went cold", "textarea")], "Write a 3-message win-back sequence for this lapsed prospect: {{context}}. New angle, no guilt, one reason to re-engage now."],
+    ["casestudyask", "Case Study Request", "Ask a happy client to be a case study.", [t("client", "Client + result", "textarea")], "Write a friendly note asking this client to be a case study: {{client}}. Make it low-effort and flattering; offer to do the writing."],
+    ["demoscript", "Demo Script", "A tight product-demo flow.", [t("product", "Product + audience", "textarea")], "Write a demo script for {{product}}: pre-frame, the 3 'wow' moments to show in order, questions to ask mid-demo, and the close."],
+    ["battlecard", "Sales Battlecard", "Beat a specific competitor in deals.", [t("competitor", "Competitor + your product", "textarea")], "Create a sales battlecard vs {{competitor}}: where you win, their traps, landmine questions to plant, and a one-line reframe."],
+    ["territory", "Territory Plan", "A plan to work a segment/region.", [t("segment", "Segment / region + goal", "textarea")], "Write a territory plan for: {{segment}} — top account tiers, outreach cadence, channels, and a weekly activity target."],
+  ],
+  d_deals: [
+    ["roicase", "ROI Justification", "A business case that unlocks budget.", [t("deal", "Their situation + your price", "textarea")], "Build an ROI justification for: {{deal}} — the cost of doing nothing, expected gains, payback period, and a CFO-ready one-liner."],
+    ["redline", "Redline Notes", "Suggested edits to their contract.", [t("clauses", "Paste clauses", "textarea")], "Review these contract clauses from the buyer's paper: {{clauses}} — flag risky terms, suggest redlines, and rank by importance. Not legal advice."],
+    ["stakeholdermap", "Stakeholder Map", "Map the buying committee.", [t("deal", "Org + people you know", "textarea")], "Map the buying committee for: {{deal}} — likely roles (champion, economic buyer, blockers), what each cares about, and how to reach the ones you're missing."],
+    ["renewal", "Renewal Pitch", "Secure and expand a renewal.", [t("account", "Account + usage/results", "textarea")], "Write a renewal pitch for: {{account}} — value delivered, a light expansion offer, and a confident ask with a deadline."],
+  ],
+  d_marketing: [
+    ["webinar", "Webinar Outline", "A webinar that converts.", [t("topic", "Topic + audience")], "Outline a 40-minute webinar on {{topic}}: title, promise, 4 sections, the soft-pitch section, and 3 promo hooks."],
+    ["casestudy", "Case Study Writer", "A results-driven case study.", [t("story", "Client, problem, result", "textarea")], "Write a case study from: {{story}} — challenge, approach, results with numbers, and a pull-quote. Skimmable."],
+    ["brandvoice", "Brand Voice Guide", "Codify how the brand sounds.", [t("about", "Brand + vibe", "textarea")], "Create a brand voice guide from: {{about}} — 3 voice principles, do/don't words, and 2 before/after rewrites."],
+    ["coldseq", "Cold Email Sequence", "A 4-email cold sequence.", [t("offer", "Offer + audience", "textarea")], "Write a 4-email cold sequence for {{offer}} — different angle each email, short, with subject lines and a breakup last."],
+    ["whatsapp", "WhatsApp Broadcast", "A compliant promo broadcast.", [t("promo", "What you're promoting")], "Write a WhatsApp broadcast for {{promo}}: a tight hook, the offer, one CTA, and a shorter follow-up nudge. Friendly, not spammy."],
+  ],
+  d_operations: [
+    ["runbook", "Incident Runbook", "What to do when things break.", [t("scenario", "Failure scenario", "textarea")], "Write an incident runbook for: {{scenario}} — detection, immediate steps, who to call, comms template, and post-mortem prompts."],
+    ["vendorcompare", "Vendor Comparison", "Pick between suppliers.", [t("options", "Options + criteria", "textarea")], "Compare these vendors: {{options}} — a scored table on the criteria, pros/cons, and a recommendation with the trade-off stated."],
+    ["capacity", "Capacity Plan", "Match workload to people.", [t("context", "Team + workload", "textarea")], "Build a capacity plan from: {{context}} — utilization per person, where you're over/under, and hiring or reallocation moves."],
+    ["retro", "Retrospective", "Turn a project into lessons.", [t("project", "What happened", "textarea")], "Run a retrospective on: {{project}} — what went well, what didn't, root causes, and 3 concrete changes with owners."],
+  ],
+  d_intel: [
+    ["persona", "Buyer Persona", "A rich buyer persona.", [t("audience", "Who you sell to", "textarea")], "Build a buyer persona for: {{audience}} — goals, pains, a day in their life, objections, and where they learn. Keep it usable."],
+    ["newsdigest", "Industry News Digest", "A weekly market digest.", [t("space", "Industry / beat")], "Write a weekly news digest for {{space}}: 5 developments, why each matters, and one action. Note that live figures should be verified."],
+    ["riskscan", "Risk Scan", "Surface the business's key risks.", [t("business", "Business context", "textarea")], "Do a risk scan for: {{business}} — top 6 risks (financial, ops, market, people), likelihood/impact, and a mitigation for each."],
+    ["survey", "Survey Designer", "A survey that gets real answers.", [t("goal", "What you want to learn")], "Design a customer survey to learn: {{goal}} — 10 unbiased questions (mix of scale + open), and how to analyse the results."],
+  ],
+  d_customer: [
+    ["macros", "Support Macros", "Reusable canned replies.", [t("topics", "Common issues", "textarea")], "Write support macros (canned replies) for these common issues: {{topics}} — warm, clear, with placeholders for specifics."],
+    ["onboardseq", "Customer Onboarding Sequence", "A 5-email onboarding flow.", [t("product", "Product + first win")], "Write a 5-email customer onboarding sequence for {{product}} — each email drives one action toward the first win."],
+    ["csat", "CSAT Survey", "A short satisfaction survey.", [t("touchpoint", "Touchpoint")], "Design a CSAT survey for {{touchpoint}}: the core score question, 2 follow-ups, and how to route detractors vs promoters."],
+    ["helparticle", "Help Article", "A clear how-to article.", [t("topic", "What to explain", "textarea")], "Write a help-centre article on: {{topic}} — short intro, numbered steps, screenshots-placeholder notes, and a troubleshooting section."],
+  ],
+  d_back: [
+    ["collections", "Collections Sequence", "Escalating payment chase.", [t("context", "Invoice + age", "textarea")], "Write a 3-step collections sequence for: {{context}} — friendly reminder, firm follow-up, and a final notice. Keep the relationship intact."],
+    ["budgetmemo", "Budget Memo", "Propose or defend a budget.", [t("context", "What + why + numbers", "textarea")], "Write a budget memo for: {{context}} — the ask, the rationale, expected return, and what happens if it's not funded."],
+    ["auditprep", "Audit Prep Checklist", "Get ready for an audit.", [t("scope", "Audit scope")], "Write an audit-prep checklist for: {{scope}} — documents to gather, reconciliations to complete, and common findings to pre-empt."],
+    ["boardfin", "Board Finance Note", "A crisp finance update for the board.", [t("numbers", "Key figures + context", "textarea")], "Write a board-ready finance note from: {{numbers}} — the headline, 3 KPIs with commentary, cash position, and the one ask or decision."],
+  ],
+};
+
+const _mergedDeptSpecs: Record<string, DSpec[]> = {};
+for (const src of [DEPT_SPECS, DEPT_SPECS_MORE]) {
+  for (const [dept, specs] of Object.entries(src)) _mergedDeptSpecs[dept] = [...(_mergedDeptSpecs[dept] || []), ...specs];
+}
+const DEPT_AGENTS: Agent[] = Object.entries(_mergedDeptSpecs).flatMap(([dept, specs]) =>
   specs.map(([id, name, desc, inputs, prompt]) => A(dept, id, name, desc, inputs, prompt))
 );
 
