@@ -372,8 +372,39 @@ const DEPT_SPECS_3: Record<string, DSpec[]> = {
   ],
 };
 
+const DEPT_SPECS_4: Record<string, DSpec[]> = {
+  d_sales: [
+    ["engage", "Prospect Engagement", "Warm a prospect before you pitch.", [t("prospect", "Prospect + recent post/news", "textarea")], "Suggest 3 genuine ways to engage this prospect before pitching: {{prospect}} — a thoughtful comment, a useful share, and a soft opener."],
+    ["gifting", "Gifting Note", "A note to accompany a client gift.", [t("context", "Occasion + relationship", "textarea")], "Write a short, warm gifting note for: {{context}} — personal, not salesy, memorable."],
+  ],
+  d_deals: [
+    ["lostdebrief", "Lost Deal Debrief", "Turn a loss into intel.", [t("deal", "What happened", "textarea")], "Debrief this lost deal: {{deal}} — the real reason, what signals you missed, and a re-engagement trigger to set for later."],
+    ["champkit", "Champion Enablement Kit", "Arm your internal champion.", [t("deal", "Champion + their org", "textarea")], "Build a champion enablement kit for: {{deal}} — a one-pager they can forward, answers to the CFO's likely questions, and a suggested internal email."],
+  ],
+  d_marketing: [
+    ["subjectlab", "Subject Line Lab", "Ten tested subject lines.", [t("email", "Email topic / offer")], "Write 10 email subject lines for: {{email}} — mix curiosity, benefit, urgency and personal; note which 3 to A/B test first."],
+    ["testimonial", "Testimonial Polish", "Turn raw praise into a clean quote.", [t("raw", "Raw customer words", "textarea")], "Polish this raw customer praise into 2 crisp, believable testimonial quotes (keep their voice): {{raw}}"],
+  ],
+  d_operations: [
+    ["emponboard", "Employee Onboarding", "A first-week plan for a new hire.", [t("role", "Role + team", "textarea")], "Create a first-week onboarding plan for a new {{role}} — accounts/tools to set up, intro meetings, a starter task, and 30-day expectations."],
+    ["notestasks", "Notes → Tasks", "Extract action items from messy notes.", [t("notes", "Raw notes", "textarea")], "Extract a clean task list from these notes: {{notes}} — each with owner and due-by if implied, plus a one-line summary at the top."],
+  ],
+  d_intel: [
+    ["reviewmining", "Review Mining", "Find themes in customer reviews.", [t("reviews", "Paste reviews", "textarea")], "Mine these reviews for insight: {{reviews}} — top praise themes, top complaints, feature requests, and 2 actions to take."],
+    ["keywordideas", "Keyword Ideas", "SEO/ad keyword clusters.", [t("topic", "Product / topic")], "Generate keyword ideas for {{topic}} — 4 intent clusters (informational, commercial, branded, long-tail) with 6 keywords each."],
+  ],
+  d_customer: [
+    ["apology", "Service Apology", "A sincere recovery message.", [t("issue", "What went wrong", "textarea")], "Write a sincere service-recovery message for: {{issue}} — own it, explain briefly, make it right, and prevent it recurring."],
+    ["upgradenudge", "Upgrade Nudge", "Nudge a customer to a higher plan.", [t("context", "Usage + plan", "textarea")], "Write a helpful upgrade nudge for: {{context}} — tie it to a limit they're hitting and the value of the next tier, not pressure."],
+  ],
+  d_back: [
+    ["reimburse", "Reimbursement Note", "Approve/clarify an expense claim.", [t("claim", "Claim details", "textarea")], "Write a clear reimbursement response for: {{claim}} — approve, request missing info, or decline with policy reference, professionally."],
+    ["invoicedraft", "Invoice Draft", "A clean invoice in text.", [t("details", "Client, items, amounts", "textarea")], "Draft an invoice from: {{details}} — invoice number placeholder, line items, subtotal, GST 18%, total, due date, and payment details."],
+  ],
+};
+
 const _mergedDeptSpecs: Record<string, DSpec[]> = {};
-for (const src of [DEPT_SPECS, DEPT_SPECS_MORE, DEPT_SPECS_3]) {
+for (const src of [DEPT_SPECS, DEPT_SPECS_MORE, DEPT_SPECS_3, DEPT_SPECS_4]) {
   for (const [dept, specs] of Object.entries(src)) _mergedDeptSpecs[dept] = [...(_mergedDeptSpecs[dept] || []), ...specs];
 }
 const DEPT_AGENTS: Agent[] = Object.entries(_mergedDeptSpecs).flatMap(([dept, specs]) =>
