@@ -17,7 +17,8 @@ import {
   Flame, Hourglass, Stamp, GitCompare, Gem,
   ReceiptText, PackageSearch, Blocks, ShieldCheck, Timer,
   Fuel, BrainCircuit, Vault, RotateCw,
-  Award, AlarmClock, Radar
+  Award, AlarmClock, Radar,
+  HeartHandshake, Umbrella, CalendarDays, Repeat2, House
 } from "lucide-react";
 
 export const NAV = [
@@ -76,6 +77,11 @@ export const NAV = [
   { href: "/payroll", label: "Payroll & CTC", icon: Banknote, group: "Money" },
   { href: "/appraisal", label: "Appraisal & Hikes", icon: Award, group: "Money" },
   { href: "/gst-latefee", label: "GST Late Fee", icon: AlarmClock, group: "Money" },
+  { href: "/gratuity", label: "Gratuity", icon: HeartHandshake, group: "Money" },
+  { href: "/epf", label: "EPF & ESI", icon: Umbrella, group: "Money" },
+  { href: "/advance-tax", label: "Advance Tax", icon: CalendarDays, group: "Money" },
+  { href: "/prepay", label: "Prepay vs Invest", icon: Repeat2, group: "Money" },
+  { href: "/rentvsbuy", label: "Rent vs Buy", icon: House, group: "Money" },
   { href: "/captable", label: "Cap Table", icon: PieChart, group: "Money" },
   { href: "/cash13", label: "13-Week Cash Flow", icon: CalendarClock, group: "Money" },
   { href: "/saas", label: "SaaS Metrics", icon: Repeat, group: "Money" },
