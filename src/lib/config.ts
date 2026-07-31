@@ -1,4 +1,4 @@
-export const APP_VERSION = "6.4.0";
+export const APP_VERSION = "6.5.0";
 export const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "919711488481";
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "mnbgotyou@gmail.com";
 
@@ -76,7 +76,7 @@ export const CREDIT_COSTS: Record<string, number> = {
 
 // Weekly image-generation caps by state. Trial = a small taste; paid tiers get more.
 export const IMAGE_WEEKLY: Record<string, number> = {
-  trial: 5, starter: 40, growth: 150, premium: 600, enterprise: -1,
+  trial: 5, solo: 15, starter: 45, growth: 150, premium: 600, business: 2500, enterprise: -1,
 };
 export const DEFAULT_CREDIT_COST = 2;
 export function creditCost(mode: string): number {
@@ -85,7 +85,7 @@ export function creditCost(mode: string): number {
 
 // Monthly included allowance per plan. -1 means unlimited.
 export const PLAN_CREDITS: Record<string, number> = {
-  starter: 500, growth: 3000, premium: 15000, enterprise: -1,
+  solo: 300, starter: 900, growth: 4000, premium: 15000, business: 45000, enterprise: -1,
 };
 
 // One-time credits for a free-trial workspace — a small taste, granted once (not monthly).
@@ -101,16 +101,22 @@ export const CREDIT_PACKS: CreditPack[] = [
 ];
 
 export const PLANS: Plan[] = [
-  { id: "starter", name: "Starter", monthly: 2999, annual: 28790, tagline: "For small teams getting started with AI.",
-    cta: "Start free trial",
-    features: ["1 business workspace", "Up to 2 users", "Business Health Dashboard", "AI CEO Chat (Groq)", "Sales & Finance modules", "CSV import & CSV/Excel export", "Email support"] },
-  { id: "growth", name: "Growth", monthly: 7999, annual: 76790, tagline: "For growing SMEs that want the full AI COO.",
-    cta: "Start free trial",
-    features: ["Everything in Starter", "Up to 10 users", "All 13 modules", "AI actions (POs, invoices, reminders)", "Workflow automation + approvals", "Document & Meeting Intelligence", "Market & Strategy AI", "Priority email + chat support"] },
-  { id: "premium", name: "Premium", monthly: 19999, annual: 191990, tagline: "For scaling companies that run on AI.", highlight: true,
-    cta: "Talk to sales",
-    features: ["Everything in Growth", "Up to 25 users", "Priority AI (faster + higher limits)", "Real email/WhatsApp reminders", "Custom dashboards & reports", "PDF/MIS auto-reports", "Dedicated onboarding", "SLA-backed support"] },
-  { id: "enterprise", name: "Enterprise", monthly: 0, annual: 0, tagline: "For groups, PE funds & family offices.",
+  { id: "solo", name: "Solo", monthly: 799, annual: 7670, tagline: "For a solo founder or freelancer trying AI.",
+    cta: "Choose Solo",
+    features: ["1 workspace · 1 user", "300 AI credits / month", "Business Health Dashboard", "AI CEO Chat + Cortex Memory", "50+ business calculators", "15 image generations / week", "Email support"] },
+  { id: "starter", name: "Starter", monthly: 2499, annual: 23990, tagline: "For small teams getting started with AI.",
+    cta: "Choose Starter",
+    features: ["1 workspace · up to 3 users", "900 AI credits / month", "All calculators + AI agents", "Sales, Finance & HR modules", "CSV / Excel import & export", "45 image generations / week", "Email support"] },
+  { id: "growth", name: "Growth", monthly: 6999, annual: 67190, tagline: "The full AI COO for growing SMEs.", highlight: true,
+    cta: "Choose Growth",
+    features: ["Up to 10 users", "4,000 AI credits / month", "All 7 agent departments + 26 industries", "Workflow automation + approvals", "Document & Meeting Intelligence", "150 image generations / week", "Priority email + chat support"] },
+  { id: "premium", name: "Premium", monthly: 17999, annual: 172790, tagline: "For scaling companies that run on AI.",
+    cta: "Choose Premium",
+    features: ["Up to 25 users", "15,000 AI credits / month", "Priority AI (faster, higher limits)", "Real email / WhatsApp automations", "Custom dashboards & auto-reports", "600 image generations / week", "Dedicated onboarding + SLA"] },
+  { id: "business", name: "Business", monthly: 39999, annual: 383990, tagline: "For multi-brand groups & agencies.",
+    cta: "Choose Business",
+    features: ["Up to 75 users · multi-workspace", "45,000 AI credits / month", "White-label & custom branding", "Public API + webhooks", "2,500 image generations / week", "Priority support + success manager"] },
+  { id: "enterprise", name: "Enterprise", monthly: 0, annual: 0, tagline: "For large groups, PE funds & family offices.",
     cta: "Contact us",
-    features: ["Everything in Premium", "Unlimited users & workspaces", "SSO / SAML", "Custom integrations (Tally, ERP, Shopify)", "On-prem / private cloud option", "Dedicated success manager", "Custom SLA & security review"] },
+    features: ["Unlimited users & workspaces", "Unlimited AI credits & images", "SSO / SAML", "Custom integrations (Tally, ERP, Shopify)", "On-prem / private cloud option", "Custom SLA & security review"] },
 ];
