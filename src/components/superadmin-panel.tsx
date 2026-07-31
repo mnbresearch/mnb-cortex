@@ -5,7 +5,7 @@ import { Building2, Check, Loader2, Coins, CalendarPlus, Save } from "lucide-rea
 
 type Org = { id: string; name: string };
 
-const PLAN_OPTS = ["starter", "growth", "premium", "enterprise"];
+const PLAN_OPTS = ["solo", "starter", "growth", "premium", "business", "enterprise"];
 const STATUS_OPTS = ["trialing", "active", "expired", "suspended", "cancelled"];
 
 async function call(op: string, extra: Record<string, any> = {}) {
