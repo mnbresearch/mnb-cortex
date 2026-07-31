@@ -52,7 +52,7 @@ export async function grantOrgAccess(org_id: string, email: string, role: string
   return { ok: true };
 }
 
-const VALID_PLANS = ["starter", "growth", "premium", "enterprise"];
+const VALID_PLANS = ["solo", "starter", "growth", "premium", "business", "enterprise"];
 const VALID_STATUS = ["trialing", "active", "expired", "suspended", "cancelled"];
 
 /**
