@@ -38,7 +38,7 @@ export function PricingClient() {
         <span className={annual ? "font-medium" : "text-muted-foreground"}>Annual <span className="text-success text-xs">(save ~20%)</span></span>
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">
         {PLANS.map((p) => (
           <div key={p.id} className={`rounded-2xl border p-5 flex flex-col ${p.highlight ? "border-primary ring-1 ring-primary bg-primary/5" : "bg-card"}`}>
             {p.highlight && <div className="text-xs font-semibold text-primary mb-2 flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> Most popular</div>}
