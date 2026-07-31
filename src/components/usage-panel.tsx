@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Coins, Loader2, Check } from "lucide-react";
+import { payCashfree } from "@/lib/pay/checkout-client";
 
 type Pack = { id: string; label: string; credits: number; price: number; per: string };
 
@@ -25,6 +26,11 @@ export function UsagePanel({ packs }: { packs: Pack[] }) {
 
   async function buy(pack: Pack) {
     setBusy(pack.id); setMsg("");
+    // Primary: Cashfree.
+    const cf = await payCashfree({ kind: "credits", packId: pack.id });
+    if (cf.ok) { setDone(true); setMsg(`Added ${pack.credits.toLocaleString("en-IN")} credits. New balance ${cf.balance?.toLocaleString("en-IN")}.`); setBusy(""); setTimeout(() => location.reload(), 1400); return; }
+    if (!cf.needsConfig) { setMsg(cf.error || "Payment could not be completed."); setBusy(""); return; }
+    // Fallback: Razorpay.
     try {
       const r = await fetch("/api/credits/topup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ packId: pack.id }) });
       const j = await r.json();
