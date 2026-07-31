@@ -18,8 +18,8 @@ export default function Pricing() {
       </header>
       <section className="px-6 lg:px-12 py-16 text-center">
         <span className="inline-block text-xs font-medium rounded-full border px-3 py-1 text-muted-foreground mb-5">Pricing</span>
-        <h1 className="text-4xl lg:text-5xl font-semibold tracking-tight">Run your company on AI — from ₹2,999/mo</h1>
-        <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">One AI COO that watches your business, predicts problems, and executes. Start free for 14 days. No card required.</p>
+        <h1 className="text-4xl lg:text-5xl font-semibold tracking-tight">Run your company on AI — from ₹799/mo</h1>
+        <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">One AI COO with 300+ agents, memory and automation. Start with a free 3-day trial — no card required.</p>
       </section>
       <section className="px-6 lg:px-12 pb-24"><PricingClient /></section>
     </main>
