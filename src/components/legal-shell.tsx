@@ -48,12 +48,12 @@ export function LegalFooter() {
 }
 
 /** Small building blocks so each policy reads cleanly without a markdown pipeline. */
-export function H2({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-xl font-semibold mt-10 mb-3 scroll-mt-20">{children}</h2>;
+export function H2({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <h2 className={`text-xl font-semibold mt-10 mb-3 scroll-mt-20 ${className}`}>{children}</h2>;
 }
-export function P({ children }: { children: React.ReactNode }) {
-  return <p className="text-[15px] leading-7 text-foreground/90 mb-4">{children}</p>;
+export function P({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <p className={`text-[15px] leading-7 text-foreground/90 mb-4 ${className}`}>{children}</p>;
 }
-export function UL({ children }: { children: React.ReactNode }) {
-  return <ul className="list-disc pl-6 space-y-1.5 text-[15px] leading-7 text-foreground/90 mb-4">{children}</ul>;
+export function UL({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <ul className={`list-disc pl-6 space-y-1.5 text-[15px] leading-7 text-foreground/90 mb-4 ${className}`}>{children}</ul>;
 }
