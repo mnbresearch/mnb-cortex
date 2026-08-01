@@ -227,6 +227,10 @@ export default function Home() {
         <Link href="/status" className="hover:text-foreground">System status</Link>
         <Link href="/changelog" className="hover:text-foreground">Changelog</Link>
         <Link href="/help" className="hover:text-foreground">Help</Link>
+        <Link href="/terms" className="hover:text-foreground">Terms</Link>
+        <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
+        <Link href="/refund" className="hover:text-foreground">Refund Policy</Link>
+        <Link href="/contact" className="hover:text-foreground">Contact</Link>
         <Link href="/login" className="hover:text-foreground">Sign in</Link>
         <span>© 2026 MNB Cortex · a brand of Abrobot Technologies Pvt Ltd</span>
       </footer>
