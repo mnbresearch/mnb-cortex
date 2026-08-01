@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PricingClient } from "@/components/pricing-client";
 import { Logo } from "@/components/logo";
+import { LegalFooter } from "@/components/legal-shell";
 
 export const metadata = { title: "Pricing — MNB Cortex" };
 export default function Pricing() {
@@ -21,7 +22,14 @@ export default function Pricing() {
         <h1 className="text-4xl lg:text-5xl font-semibold tracking-tight">Run your company on AI — from ₹799/mo</h1>
         <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">One AI COO with 300+ agents, memory and automation. Start with a free 3-day trial — no card required.</p>
       </section>
-      <section className="px-6 lg:px-12 pb-24"><PricingClient /></section>
+      <section className="px-6 lg:px-12 pb-16"><PricingClient /></section>
+      <section className="px-6 lg:px-12 pb-16 text-center text-sm text-muted-foreground">
+        Payments are processed securely via Cashfree. By subscribing you agree to our{" "}
+        <Link href="/terms" className="text-primary underline">Terms</Link>,{" "}
+        <Link href="/privacy" className="text-primary underline">Privacy Policy</Link> and{" "}
+        <Link href="/refund" className="text-primary underline">Refund Policy</Link>.
+      </section>
+      <LegalFooter />
     </main>
   );
 }
