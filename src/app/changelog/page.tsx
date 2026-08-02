@@ -3,7 +3,8 @@ import { APP_VERSION } from "@/lib/config";
 import { Logo } from "@/components/logo";
 export const metadata = { title: "Changelog — MNB Cortex" };
 const releases = [
-  { v: "6.6.0", date: "Latest", items: ["Legal pages live — Terms & Conditions, Privacy Policy, Refund & Cancellation Policy, and Contact", "Required for Cashfree activation; linked from the landing and pricing footers", "Pricing page now shows the secure-payments + policy notice at checkout"] },
+  { v: "6.7.0", date: "Latest", items: ["All-new editorial website — a bold, agency-grade redesign", "Kinetic headlines, smooth scroll, custom cursor & big hover-reveal capability list", "Redesigned landing, pricing and all legal/contact pages with a shared header & footer", "Respects reduced-motion; fully responsive with a full-screen mobile menu"] },
+  { v: "6.6.0", date: "Earlier", items: ["Legal pages live — Terms & Conditions, Privacy Policy, Refund & Cancellation Policy, and Contact", "Required for Cashfree activation; linked from the landing and pricing footers", "Pricing page now shows the secure-payments + policy notice at checkout"] },
   { v: "6.5.0", date: "Earlier", items: ["Cashfree Payments — accept live payments for plans and credit top-ups", "6 pricing tiers with real monthly & annual prices (Solo ₹799 → Business ₹39,999 → Enterprise)", "Per-plan monthly credits and weekly image limits", "Razorpay kept as an automatic fallback"] },
   { v: "6.4.0", date: "Earlier", items: ["Workforce wheel now has pinch-to-zoom and smooth animated zoom/fit", "Tap a department to glide-focus into its branch; tap again to open it", "14 more department agents — 300+ agents in total"] },
   { v: "6.3.0", date: "Earlier", items: ["Interactive Workforce wheel — pan, zoom & tap the whole AI org chart", "Second brain at the centre; departments branch out; tap any node to run that agent", "Activated agents light up on the map", "14 more department agents — the workforce keeps deepening"] },
