@@ -1,50 +1,32 @@
-import Link from "next/link";
-import { Logo } from "@/components/logo";
+import { PublicHeader, PublicFooter } from "@/components/public-chrome";
+import { Kinetic } from "@/components/loco";
 
 /** Shared chrome for public legal pages (terms, privacy, refund, contact). */
 export function LegalShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <main className="min-h-screen">
-      <header className="flex items-center justify-between px-6 lg:px-12 h-16 border-b">
-        <Link href="/" className="flex items-center gap-2">
-          <Logo size={32} />
-          <span className="font-semibold">MNB Cortex</span>
-        </Link>
-        <div className="flex items-center gap-4 text-sm">
-          <Link href="/pricing" className="text-muted-foreground hover:text-foreground">Pricing</Link>
-          <Link href="/login" className="rounded-lg bg-primary text-primary-foreground px-4 py-2 font-medium">Sign in</Link>
-        </div>
-      </header>
+    <main className="min-h-screen overflow-x-hidden">
+      <PublicHeader />
 
-      <section className="px-6 lg:px-12 py-12 border-b bg-secondary/30">
+      <section className="px-5 lg:px-10 pt-32 lg:pt-40 pb-12 border-b">
         <div className="max-w-3xl mx-auto">
-          <span className="inline-block text-xs font-medium rounded-full border px-3 py-1 text-muted-foreground mb-4">Legal</span>
-          <h1 className="text-3xl lg:text-4xl font-semibold tracking-tight">{title}</h1>
-          {subtitle && <p className="mt-3 text-muted-foreground">{subtitle}</p>}
+          <div className="eyebrow mb-5">Legal</div>
+          <Kinetic as="h1" text={title} className="font-display display-3 tracking-tightest" stagger={45} />
+          {subtitle && <p className="mt-4 text-muted-foreground">{subtitle}</p>}
         </div>
       </section>
 
-      <section className="px-6 lg:px-12 py-12">
+      <section className="px-5 lg:px-10 py-14">
         <article className="max-w-3xl mx-auto prose-legal">{children}</article>
       </section>
 
-      <LegalFooter />
+      <PublicFooter />
     </main>
   );
 }
 
+/** Kept for backward-compatibility; renders the shared editorial footer. */
 export function LegalFooter() {
-  return (
-    <footer className="px-6 lg:px-12 py-8 border-t text-sm text-muted-foreground flex flex-wrap gap-4 justify-center">
-      <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
-      <Link href="/terms" className="hover:text-foreground">Terms</Link>
-      <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
-      <Link href="/refund" className="hover:text-foreground">Refund Policy</Link>
-      <Link href="/contact" className="hover:text-foreground">Contact</Link>
-      <Link href="/status" className="hover:text-foreground">Status</Link>
-      <span>© 2026 MNB Cortex · a brand of Abrobot Technologies Pvt Ltd</span>
-    </footer>
-  );
+  return <PublicFooter />;
 }
 
 /** Small building blocks so each policy reads cleanly without a markdown pipeline. */
