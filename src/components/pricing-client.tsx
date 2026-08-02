@@ -45,12 +45,12 @@ export function PricingClient() {
             <h3 className="text-lg font-semibold">{p.name}</h3>
             <p className="text-sm text-muted-foreground mt-1 min-h-[40px]">{p.tagline}</p>
             <div className="mt-4 mb-4">
-              {p.monthly === 0 ? <div className="text-2xl font-bold">Custom</div> : (
-                <div><span className="text-3xl font-bold">{inr(annual ? Math.round(p.annual / 12) : p.monthly)}</span><span className="text-sm text-muted-foreground">/mo</span>
+              {p.monthly === 0 ? <div className="font-display text-4xl tracking-tightest">Custom</div> : (
+                <div><span className="font-display text-4xl tracking-tightest">{inr(annual ? Math.round(p.annual / 12) : p.monthly)}</span><span className="text-sm text-muted-foreground">/mo</span>
                   {annual && <div className="text-xs text-muted-foreground">{inr(p.annual)} billed yearly</div>}</div>
               )}
             </div>
-            <button onClick={() => openForm(p.name)} className={`w-full rounded-lg h-10 text-sm font-medium ${p.highlight ? "bg-primary text-primary-foreground" : "border hover:bg-accent"}`}>{p.cta}</button>
+            <button onClick={() => openForm(p.name)} className={`w-full rounded-full h-11 text-sm font-medium transition-colors ${p.highlight ? "btn-ink" : "border hover:bg-accent"}`}>{p.cta}</button>
             <ul className="mt-5 space-y-2 text-sm">
               {p.features.map((f) => <li key={f} className="flex gap-2"><Check className="h-4 w-4 text-success shrink-0 mt-0.5" /><span>{f}</span></li>)}
             </ul>
