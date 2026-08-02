@@ -122,9 +122,66 @@ body {
 ::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / .35); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / .5); }
 
+/* ============================================================
+   Editorial "Loco" public-site system
+   Big kinetic type · generous whitespace · teal accent
+   ============================================================ */
+.font-display { font-family: var(--font-sans); letter-spacing: -0.035em; font-weight: 800; line-height: 0.92; }
+.display-1 { font-size: clamp(2.9rem, 10vw, 9rem); }
+.display-2 { font-size: clamp(2.2rem, 6.2vw, 5.25rem); }
+.display-3 { font-size: clamp(1.7rem, 4vw, 3.1rem); }
+.tracking-tightest { letter-spacing: -0.04em; }
+.eyebrow { font-size: .72rem; letter-spacing: .2em; text-transform: uppercase; color: hsl(var(--muted-foreground)); font-weight: 600; }
+
+/* Kinetic word reveal — text visible by default (SSR/no-JS safe); only masks once armed */
+.kin { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .04em; }
+.kin > span { display: inline-block; transform: translateY(0); }
+.kin-armed .kin > span { transform: translateY(110%); transition: transform 1s cubic-bezier(.19,1,.22,1); }
+.kin-armed .kin.in > span { transform: translateY(0); }
+
+/* Big hover-reveal capability rows (Locomotive "featured work" feel) */
+.reveal-row { position: relative; border-top: 1px solid hsl(var(--border)); overflow: hidden; }
+.reveal-row:last-child { border-bottom: 1px solid hsl(var(--border)); }
+.reveal-row .fill { position: absolute; inset: 0; background: hsl(var(--foreground)); transform: scaleY(0); transform-origin: bottom center; transition: transform .55s cubic-bezier(.19,1,.22,1); z-index: 0; }
+.reveal-row:hover .fill { transform: scaleY(1); transform-origin: top center; }
+.reveal-row .row-inner { position: relative; z-index: 1; transition: color .4s ease, padding .5s cubic-bezier(.19,1,.22,1); }
+.reveal-row:hover .row-inner { color: hsl(var(--background)); padding-left: 1.5rem; }
+.reveal-row .row-arrow { opacity: 0; transform: translateX(-14px) rotate(-45deg); transition: all .45s cubic-bezier(.19,1,.22,1); }
+.reveal-row:hover .row-arrow { opacity: 1; transform: translateX(0) rotate(0); }
+.reveal-row .row-meta { transition: color .4s ease; }
+.reveal-row:hover .row-meta { color: hsl(var(--background) / .65); }
+
+/* Trailing custom cursor ring (enhancement; native cursor stays visible) */
+.loco-cursor { position: fixed; top: 0; left: 0; width: 34px; height: 34px; border-radius: 9999px;
+  border: 1px solid hsl(var(--primary) / .6); pointer-events: none; z-index: 9999;
+  transform: translate(-50%, -50%); transition: width .28s ease, height .28s ease, background .28s ease, opacity .3s ease; opacity: 0; }
+.loco-cursor.on { opacity: 1; }
+.loco-cursor.big { width: 74px; height: 74px; background: hsl(var(--primary) / .12); }
+
+/* Animated underline sweep for nav/inline links */
+.link-sweep { position: relative; }
+.link-sweep::after { content: ""; position: absolute; left: 0; bottom: -3px; height: 1px; width: 100%;
+  background: currentColor; transform: scaleX(0); transform-origin: right; transition: transform .45s cubic-bezier(.19,1,.22,1); }
+.link-sweep:hover::after { transform: scaleX(1); transform-origin: left; }
+
+/* Editorial pill button */
+.btn-ink { background: hsl(var(--foreground)); color: hsl(var(--background)); transition: transform .3s cubic-bezier(.19,1,.22,1), opacity .3s; }
+.btn-ink:hover { transform: translateY(-2px); opacity: .92; }
+
+.marquee-rev { animation: marquee-rev 34s linear infinite; }
+@keyframes marquee-rev { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+.marquee-slow { animation-duration: 44s; }
+
+/* Fine hairline divider */
+.rule { height: 1px; background: hsl(var(--border)); }
+
+@media (hover: none) { .loco-cursor { display: none !important; } }
+
 @media (prefers-reduced-motion: reduce) {
-  .gradient-text, .aurora::before, .aurora::after, .marquee, .animate-float { animation: none !important; }
+  .gradient-text, .aurora::before, .aurora::after, .marquee, .marquee-rev, .animate-float { animation: none !important; }
   .hover-lift { transition: none; }
+  .kin-armed .kin > span { transform: translateY(0) !important; transition: none !important; }
+  .loco-cursor { display: none !important; }
 }
 
 @media print {
