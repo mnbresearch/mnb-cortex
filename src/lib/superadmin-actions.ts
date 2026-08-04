@@ -2,6 +2,8 @@ import "server-only";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { isSuperAdmin } from "@/lib/superadmin";
 import { MY_BUSINESSES } from "@/lib/config";
+import { sendEmail } from "@/lib/email";
+import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
 
 // Plain server helpers (NOT server actions) — called from /api/superadmin.
 
@@ -135,4 +137,70 @@ export async function joinOrg(org_id: string) {
   const { data: mem } = await sb.from("memberships").select("id").eq("org_id", org_id).eq("user_id", user.id).maybeSingle();
   if (!mem) await sb.from("memberships").insert({ org_id, user_id: user.id, role: "owner" });
   return { ok: true };
+}
+
+/**
+ * One-click customer onboarding: creates a workspace, sets its plan + status +
+ * starting credits, adds a pre-signup owner invite so the person owns it the
+ * moment they sign up, and emails them an activation link. No auth user is
+ * created directly — the customer signs themselves up, which is the safe path.
+ */
+export async function provisionCustomer(input: {
+  email: string; name?: string; company?: string; plan?: string; credits?: number; industry?: string;
+}) {
+  await assertSuper();
+  const sb = serviceClient();
+  if (!sb) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set.");
+
+  const email = (input.email || "").toLowerCase().trim();
+  if (!email || !email.includes("@")) throw new Error("A valid email is required.");
+  const plan = VALID_PLANS.includes(input.plan || "") ? (input.plan as string) : "growth";
+  const orgName = (input.company || "").trim()
+    || ((input.name || "").trim() ? `${(input.name as string).trim()} — Workspace` : `${email.split("@")[0]} — Workspace`);
+
+  // 1) Create the workspace (same insert shape proven in provisionBusinesses).
+  const { data: org, error: orgErr } = await sb.from("organizations")
+    .insert({ name: orgName, industry: input.industry || "general", currency: "INR", plan, accent: "teal" })
+    .select("id").single();
+  if (orgErr) throw new Error(`Could not create workspace: ${orgErr.message}`);
+  const orgId = (org as any).id as string;
+
+  // 2) Plan + active status + starting credits, via the ledger-aware manageOrg.
+  const credits = typeof input.credits === "number" && input.credits > 0 ? Math.round(input.credits) : 0;
+  let creditsWarning: string | undefined;
+  try {
+    const res = await manageOrg(orgId, { plan, subscription_status: "active", ...(credits ? { creditsSet: credits } : {}) });
+    creditsWarning = (res as any)?.creditsWarning;
+  } catch (e: any) {
+    // Non-fatal: the workspace exists; surface the reason so the operator can retry credits.
+    creditsWarning = e?.message || "Could not set plan/credits automatically.";
+  }
+
+  // 3) Pre-signup owner invite so they join automatically on sign-up.
+  try { await sb.from("invites").insert({ org_id: orgId, email, role: "owner", status: "pending" }); } catch { /* ignore duplicate */ }
+
+  // 4) Email the customer their activation link.
+  const appUrl = (process.env.APP_URL || "https://cortex.mnbresearch.com").replace(/\/$/, "");
+  const first = (input.name || "").trim().split(" ")[0] || "there";
+  const body = `Hi ${first},
+
+Great news — your MNB Cortex workspace is ready.
+
+Plan: ${plan.charAt(0).toUpperCase() + plan.slice(1)}${credits ? `
+Starting AI credits: ${credits.toLocaleString("en-IN")}` : ""}
+
+To activate it, sign in using THIS email address (${email}):
+${appUrl}/login
+
+You'll land straight in your workspace — it's already set up and ready.
+
+Welcome aboard,
+Team MNB Cortex · MNB Research`;
+  let emailed = false;
+  try {
+    const res = await sendEmail(email, "Your MNB Cortex workspace is ready", renderBrandedEmail(body, { preheader: "Activate your MNB Cortex workspace" }), { from: brandFrom(), replyTo: brandReplyTo() });
+    emailed = res.sent;
+  } catch { /* email is best-effort */ }
+
+  return { ok: true, org_id: orgId, orgName, plan, credits, emailed, creditsWarning };
 }
