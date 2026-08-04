@@ -6,10 +6,10 @@ import { Logo } from "@/components/logo";
 import { Magnetic } from "@/components/loco";
 
 const NAV = [
-  { href: "/#capabilities", label: "Capabilities" },
+  { href: "/features", label: "Features" },
+  { href: "/industries", label: "Industries" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/changelog", label: "Changelog" },
-  { href: "/contact", label: "Contact" },
+  { href: "/health-check", label: "Health check" },
 ];
 
 export function PublicHeader() {
@@ -70,8 +70,8 @@ export function PublicHeader() {
 
 export function PublicFooter() {
   const cols = [
-    { h: "Product", links: [["Capabilities", "/#capabilities"], ["Pricing", "/pricing"], ["Changelog", "/changelog"], ["Live demo", "/dashboard"], ["Sign in", "/login"]] },
-    { h: "Company", links: [["Contact", "/contact"], ["Status", "/status"], ["Help", "/help"], ["MNB Research", "https://www.mnbresearch.com"]] },
+    { h: "Product", links: [["Features", "/features"], ["Industries", "/industries"], ["Pricing", "/pricing"], ["Free health check", "/health-check"], ["Changelog", "/changelog"], ["Live demo", "/dashboard"]] },
+    { h: "Company", links: [["Contact", "/contact"], ["Status", "/status"], ["Help", "/help"], ["Sign in", "/login"], ["MNB Research", "https://www.mnbresearch.com"]] },
     { h: "Legal", links: [["Terms", "/terms"], ["Privacy", "/privacy"], ["Refund Policy", "/refund"]] },
   ];
   return (
