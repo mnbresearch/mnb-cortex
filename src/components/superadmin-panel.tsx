@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Building2, Check, Loader2, Coins, CalendarPlus, Save } from "lucide-react";
+import { Building2, Check, Loader2, Coins, CalendarPlus, Save, UserPlus } from "lucide-react";
 
 type Org = { id: string; name: string };
 
@@ -104,6 +104,64 @@ const statusTone: Record<string, string> = {
   active: "text-success", trialing: "text-primary",
   expired: "text-danger", suspended: "text-danger", cancelled: "text-muted-foreground",
 };
+
+const INPUT = "rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring";
+
+/** One-click: create a customer's workspace, set plan + credits, invite & email them. */
+export function ProvisionCustomerForm() {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
+  const [plan, setPlan] = useState("growth");
+  const [credits, setCredits] = useState("4000");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<any>(null);
+
+  async function go(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email) return;
+    setBusy(true); setRes(null);
+    const j = await call("provisionCustomer", { email: email.trim(), name: name.trim(), company: company.trim(), plan, credits: Number(credits) || 0 });
+    setBusy(false); setRes(j);
+    if (j.ok) setTimeout(() => location.reload(), 2500);
+  }
+
+  return (
+    <form onSubmit={go} className="grid sm:grid-cols-2 gap-3 max-w-2xl">
+      <input required type="email" placeholder="Customer email" value={email} onChange={(e) => setEmail(e.target.value)} className={`${INPUT} sm:col-span-2`} />
+      <input placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} className={INPUT} />
+      <input placeholder="Company / workspace name (optional)" value={company} onChange={(e) => setCompany(e.target.value)} className={INPUT} />
+      <label className="text-sm">
+        <span className="text-xs text-muted-foreground">Plan</span>
+        <select value={plan} onChange={(e) => setPlan(e.target.value)} className={`${INPUT} w-full mt-1`}>
+          {PLAN_OPTS.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </label>
+      <label className="text-sm">
+        <span className="text-xs text-muted-foreground">Starting credits</span>
+        <input type="number" min={0} value={credits} onChange={(e) => setCredits(e.target.value)} className={`${INPUT} w-full mt-1`} />
+      </label>
+      <div className="sm:col-span-2">
+        <Button disabled={busy}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+          {busy ? "Provisioning…" : "Provision & invite customer"}
+        </Button>
+      </div>
+      {res && (
+        <div className={`sm:col-span-2 text-sm rounded-lg border p-3 ${res.ok ? "border-success/30 bg-success/5" : "border-danger/30 bg-danger/5"}`}>
+          {res.ok ? (
+            <>
+              Created <b>{res.orgName}</b> on the <b>{res.plan}</b> plan{res.credits ? <> with <b>{Number(res.credits).toLocaleString("en-IN")}</b> credits</> : null}.{" "}
+              {res.emailed ? "Activation email sent." : "Workspace ready — email not sent (check email config)."}
+              {res.creditsWarning ? <> Note: {res.creditsWarning}</> : null}
+              <div className="mt-1 text-muted-foreground">They own it automatically when they sign up with that email. Reloading…</div>
+            </>
+          ) : (res.error || "Failed")}
+        </div>
+      )}
+    </form>
+  );
+}
 
 export function OrgManager({ org }: { org: ManagedOrg }) {
   const [plan, setPlan] = useState(org.plan || "growth");
