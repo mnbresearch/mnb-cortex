@@ -70,8 +70,8 @@ export function PublicHeader() {
 
 export function PublicFooter() {
   const cols = [
-    { h: "Product", links: [["Features", "/features"], ["Industries", "/industries"], ["Pricing", "/pricing"], ["Free health check", "/health-check"], ["Changelog", "/changelog"], ["Live demo", "/dashboard"]] },
-    { h: "Company", links: [["Contact", "/contact"], ["Status", "/status"], ["Help", "/help"], ["Sign in", "/login"], ["MNB Research", "https://www.mnbresearch.com"]] },
+    { h: "Product", links: [["Features", "/features"], ["Industries", "/industries"], ["Compare", "/compare"], ["Pricing", "/pricing"], ["Free health check", "/health-check"], ["Live demo", "/dashboard"]] },
+    { h: "Company", links: [["Resources", "/resources"], ["Contact", "/contact"], ["Changelog", "/changelog"], ["Status", "/status"], ["Help", "/help"], ["MNB Research", "https://www.mnbresearch.com"]] },
     { h: "Legal", links: [["Terms", "/terms"], ["Privacy", "/privacy"], ["Refund Policy", "/refund"]] },
   ];
   return (
