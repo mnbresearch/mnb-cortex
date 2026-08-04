@@ -1,4 +1,4 @@
-export const APP_VERSION = "6.7.0";
+export const APP_VERSION = "6.9.0";
 export const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "919711488481";
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "mnbgotyou@gmail.com";
 
@@ -59,8 +59,26 @@ export const MY_BUSINESSES = [
 
 export type Plan = {
   id: string; name: string; monthly: number; annual: number; tagline: string;
+  usdMonthly?: number; usdAnnual?: number;
   highlight?: boolean; cta: string; features: string[];
 };
+
+// Display currencies for the marketing pricing page. Cashfree settles in INR;
+// USD is shown for international prospects (who are routed to "Talk to sales").
+export type CurrencyCode = "INR" | "USD";
+export const CURRENCIES: Record<CurrencyCode, { symbol: string; label: string; locale: string }> = {
+  INR: { symbol: "₹", label: "INR", locale: "en-IN" },
+  USD: { symbol: "$", label: "USD", locale: "en-US" },
+};
+export function formatMoney(amount: number, cur: CurrencyCode): string {
+  return CURRENCIES[cur].symbol + amount.toLocaleString(CURRENCIES[cur].locale);
+}
+/** Price for a plan in the chosen currency + billing cycle. Returns null for "custom". */
+export function planPrice(p: Plan, cur: CurrencyCode, annual: boolean): number | null {
+  if (p.monthly === 0 && (p.usdMonthly ?? 0) === 0) return null; // enterprise / custom
+  if (cur === "USD") return annual ? (p.usdAnnual ?? 0) : (p.usdMonthly ?? 0);
+  return annual ? p.annual : p.monthly;
+}
 
 // ---- AI credit metering ----------------------------------------------------
 // What each AI action costs, in credits. Heavier generations cost more.
@@ -101,19 +119,19 @@ export const CREDIT_PACKS: CreditPack[] = [
 ];
 
 export const PLANS: Plan[] = [
-  { id: "solo", name: "Solo", monthly: 799, annual: 7670, tagline: "For a solo founder or freelancer trying AI.",
+  { id: "solo", name: "Solo", monthly: 799, annual: 7670, usdMonthly: 12, usdAnnual: 115, tagline: "For a solo founder or freelancer trying AI.",
     cta: "Choose Solo",
     features: ["1 workspace · 1 user", "300 AI credits / month", "Business Health Dashboard", "AI CEO Chat + Cortex Memory", "50+ business calculators", "15 image generations / week", "Email support"] },
-  { id: "starter", name: "Starter", monthly: 2499, annual: 23990, tagline: "For small teams getting started with AI.",
+  { id: "starter", name: "Starter", monthly: 2499, annual: 23990, usdMonthly: 29, usdAnnual: 279, tagline: "For small teams getting started with AI.",
     cta: "Choose Starter",
     features: ["1 workspace · up to 3 users", "900 AI credits / month", "All calculators + AI agents", "Sales, Finance & HR modules", "CSV / Excel import & export", "45 image generations / week", "Email support"] },
-  { id: "growth", name: "Growth", monthly: 6999, annual: 67190, tagline: "The full AI COO for growing SMEs.", highlight: true,
+  { id: "growth", name: "Growth", monthly: 6999, annual: 67190, usdMonthly: 85, usdAnnual: 815, tagline: "The full AI COO for growing SMEs.", highlight: true,
     cta: "Choose Growth",
     features: ["Up to 10 users", "4,000 AI credits / month", "All 7 agent departments + 26 industries", "Workflow automation + approvals", "Document & Meeting Intelligence", "150 image generations / week", "Priority email + chat support"] },
-  { id: "premium", name: "Premium", monthly: 17999, annual: 172790, tagline: "For scaling companies that run on AI.",
+  { id: "premium", name: "Premium", monthly: 17999, annual: 172790, usdMonthly: 219, usdAnnual: 2099, tagline: "For scaling companies that run on AI.",
     cta: "Choose Premium",
     features: ["Up to 25 users", "15,000 AI credits / month", "Priority AI (faster, higher limits)", "Real email / WhatsApp automations", "Custom dashboards & auto-reports", "600 image generations / week", "Dedicated onboarding + SLA"] },
-  { id: "business", name: "Business", monthly: 39999, annual: 383990, tagline: "For multi-brand groups & agencies.",
+  { id: "business", name: "Business", monthly: 39999, annual: 383990, usdMonthly: 489, usdAnnual: 4699, tagline: "For multi-brand groups & agencies.",
     cta: "Choose Business",
     features: ["Up to 75 users · multi-workspace", "45,000 AI credits / month", "White-label & custom branding", "Public API + webhooks", "2,500 image generations / week", "Priority support + success manager"] },
   { id: "enterprise", name: "Enterprise", monthly: 0, annual: 0, tagline: "For large groups, PE funds & family offices.",
