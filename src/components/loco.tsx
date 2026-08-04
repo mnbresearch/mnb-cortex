@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const prefersReduced = () =>
   typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -127,6 +127,30 @@ export function Marquee({ items, reverse = false, className = "" }: { items: str
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Accessible FAQ accordion. */
+export function Faq({ items }: { items: { q: string; a: string }[] }) {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <div className="divide-y border-y">
+      {items.map((it, i) => (
+        <div key={i}>
+          <button
+            onClick={() => setOpen(open === i ? null : i)}
+            className="w-full flex items-center justify-between gap-4 py-6 text-left"
+            aria-expanded={open === i}
+          >
+            <span className="font-display text-xl lg:text-2xl tracking-tightest">{it.q}</span>
+            <span className={`shrink-0 h-8 w-8 grid place-items-center rounded-full border transition-transform ${open === i ? "rotate-45" : ""}`}>+</span>
+          </button>
+          <div className="overflow-hidden transition-all duration-300" style={{ maxHeight: open === i ? 400 : 0, opacity: open === i ? 1 : 0 }}>
+            <p className="pb-6 text-muted-foreground max-w-2xl">{it.a}</p>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
