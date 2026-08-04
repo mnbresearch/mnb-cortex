@@ -2,8 +2,18 @@ import Link from "next/link";
 import { ArrowUpRight, ArrowRight } from "lucide-react";
 import { RoiCalculator } from "@/components/roi-calculator";
 import { Reveal, CountUp, RotatingWord } from "@/components/landing-extras";
-import { SmoothScroll, Cursor, Kinetic, SectionLabel, Marquee, Magnetic } from "@/components/loco";
+import { SmoothScroll, Cursor, Kinetic, SectionLabel, Marquee, Magnetic, Faq } from "@/components/loco";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
+import { ProductPreview } from "@/components/product-preview";
+import { AskCortexDemo } from "@/components/demo";
+
+const FAQS = [
+  { q: "How is this different from an ERP or CRM?", a: "ERPs and CRMs store data. MNB Cortex reads across all of it, diagnoses problems, predicts what's coming, recommends actions, and executes the busywork — like a COO, not a filing cabinet." },
+  { q: "Is my data safe?", a: "Yes. Every workspace is isolated with Postgres row-level security, traffic is encrypted with TLS, sensitive keys use AES-256-GCM, and you can export or delete your data anytime." },
+  { q: "Do I need to be technical?", a: "No. You ask questions in plain language (English or Hinglish), load a demo dataset or connect your tools, and Cortex does the analysis and drafting for you." },
+  { q: "Which businesses is it built for?", a: "Indian SMEs — manufacturers, D2C and retail brands, services and agencies, and founders who want a COO-grade brain without a COO-grade salary." },
+  { q: "How does billing work?", a: "Start with a free 3-day trial (no card). Then pick a plan from ₹799/mo, billed securely via Cashfree. Prices are shown in INR and USD; international customers are onboarded by our team." },
+];
 
 const STATS = [
   { to: 100, suffix: "+", label: "modules & tools" },
@@ -97,8 +107,9 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-10 text-sm text-muted-foreground">
-            Works as an <RotatingWord words={["AI COO.", "AI CFO.", "AI strategist.", "AI analyst."]} />
+          <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            <span>Works as an <RotatingWord words={["AI COO.", "AI CFO.", "AI strategist.", "AI analyst."]} /></span>
+            <Link href="/health-check" className="inline-flex items-center gap-1.5 text-foreground font-medium link-sweep">Take the free 60-second health check <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
 
           <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-2 text-xs text-muted-foreground">
@@ -106,6 +117,14 @@ export default function Home() {
             <span>◆ DPIIT-recognised startup</span>
             <span>◇ 10,000+ businesses served</span>
           </div>
+        </div>
+      </section>
+
+      {/* ---------- LIVE DEMO + PRODUCT PREVIEW ---------- */}
+      <section className="px-5 lg:px-10 pb-16 -mt-4">
+        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-5 items-stretch">
+          <Reveal><AskCortexDemo /></Reveal>
+          <Reveal delay={120}><ProductPreview /></Reveal>
         </div>
       </section>
 
@@ -149,7 +168,10 @@ export default function Home() {
               <SectionLabel n="02">Capabilities</SectionLabel>
               <h2 className="font-display display-2 tracking-tightest mt-5 max-w-2xl">One login.<br />Your whole company.</h2>
             </div>
-            <p className="text-muted-foreground max-w-sm">100+ AI-native tools across ten domains — each grounded in a permanent memory of your business, built for Indian SMEs.</p>
+            <div className="max-w-sm">
+              <p className="text-muted-foreground">100+ AI-native tools across ten domains — each grounded in a permanent memory of your business, built for Indian SMEs.</p>
+              <Link href="/features" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium link-sweep">See the full feature list <ArrowUpRight className="h-4 w-4" /></Link>
+            </div>
           </div>
 
           <div>
@@ -236,6 +258,15 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="06">The math</SectionLabel>
           <div className="mt-8"><Reveal><RoiCalculator /></Reveal></div>
+        </div>
+      </section>
+
+      {/* ---------- FAQ ---------- */}
+      <section className="px-5 lg:px-10 py-24 border-t">
+        <div className="max-w-3xl mx-auto">
+          <SectionLabel n="08">Questions</SectionLabel>
+          <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">Good to know.</h2>
+          <Faq items={FAQS} />
         </div>
       </section>
 
