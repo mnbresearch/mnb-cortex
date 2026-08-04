@@ -146,6 +146,24 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ---------- PROOF ---------- */}
+      <section className="px-5 lg:px-10 pb-8">
+        <div className="max-w-7xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border border rounded-2xl overflow-hidden">
+          {[
+            { k: "Built by", v: "MNB Research", d: "India's business growth & consultancy specialists" },
+            { k: "Featured on", v: "Shark Tank India", d: "and 160+ press outlets, 60M+ reach" },
+            { k: "Recognised", v: "DPIIT startup", d: "Government of India recognised" },
+            { k: "From the makers of", v: "AbroBot", d: "India's AI study-abroad platform" },
+          ].map((p) => (
+            <div key={p.v} className="bg-card p-6">
+              <div className="eyebrow">{p.k}</div>
+              <div className="font-display text-2xl tracking-tightest mt-2">{p.v}</div>
+              <p className="text-xs text-muted-foreground mt-1.5">{p.d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* ---------- STATS ---------- */}
       <section className="px-5 lg:px-10 pb-24">
         <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4">
