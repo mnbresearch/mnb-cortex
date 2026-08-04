@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isSuperAdmin, getAllOrgs, getPortfolioStatus, currentEmail } from "@/lib/superadmin";
-import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager } from "@/components/superadmin-panel";
+import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager, ProvisionCustomerForm } from "@/components/superadmin-panel";
 import { ShieldAlert, Building2, Users, Activity, Lock, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -142,6 +142,13 @@ export default async function SuperAdmin() {
               </table>
             </div>
           )}
+        </Section>
+
+        <Section title="Onboard a customer" desc="One click: create their workspace, set plan + credits, and email them an activation link">
+          <ProvisionCustomerForm />
+          <p className="text-xs text-muted-foreground mt-2">
+            Creates the workspace on the chosen plan with starting credits, adds a pending owner invite for their email, and emails them a sign-in link. They own it the moment they sign up with that email — no password handling on your side. Then it appears under “Manage customers” below.
+          </p>
         </Section>
 
         <Section title="Manage customers" desc="Change any workspace's plan, subscription status, credits, or trial — takes effect immediately">
