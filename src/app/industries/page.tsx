@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { SmoothScroll, Cursor, Kinetic, SectionLabel, Reveal } from "@/components/loco";
+import { SmoothScroll, Cursor, Kinetic, SectionLabel } from "@/components/loco";
+import { Reveal } from "@/components/landing-extras";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
 
 export const metadata = {
