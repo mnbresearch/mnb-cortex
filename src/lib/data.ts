@@ -72,12 +72,15 @@ export async function getOrgProfile() {
   return data ? { ...data, userEmail: user?.email } : null;
 }
 
+// Demo data is shown ONLY to logged-out visitors on the public /dashboard preview
+// (no org). A real, signed-in workspace always shows its OWN data — or an honest
+// empty state — never invented numbers.
 export async function getMetrics(): Promise<HealthMetric[]> {
   const org = await currentOrg();
   if (!org) return demoMetrics;
   const sb = createClient();
   const { data } = await sb.from("health_metrics").select("*").eq("org_id", org);
-  return data?.length ? (data as any) : demoMetrics;
+  return (data as any) || [];
 }
 
 export async function getInsights(module?: string): Promise<AIInsight[]> {
@@ -87,8 +90,7 @@ export async function getInsights(module?: string): Promise<AIInsight[]> {
   let q = sb.from("ai_insights").select("*").eq("org_id", org);
   if (module) q = q.eq("module", module);
   const { data } = await q;
-  if (data?.length) return data as any;
-  return module ? demoInsights.filter((i) => i.module === module) : demoInsights;
+  return (data as any) || [];
 }
 
 export async function getAlerts(): Promise<Alert[]> {
@@ -96,7 +98,7 @@ export async function getAlerts(): Promise<Alert[]> {
   if (!org) return demoAlerts;
   const sb = createClient();
   const { data } = await sb.from("alerts").select("*").eq("org_id", org).order("created_at", { ascending: false });
-  return data?.length ? (data as any) : demoAlerts;
+  return (data as any) || [];
 }
 
 // ---- entity fetchers (return real rows when logged in; [] otherwise) ----
@@ -115,7 +117,15 @@ export const getPurchaseOrders = () => fetchRows("purchase_orders", "created_at"
 
 export async function getBusinessContext(): Promise<string> {
   const m = await getMetrics();
-  if (!m.length) return demoContext;
+  if (!m.length) {
+    const org = await currentOrg();
+    // Logged-out public demo (no org) still uses the demo snapshot; a real, empty
+    // workspace must NOT get invented numbers — tell the AI to ask for real data.
+    if (!org) return demoContext;
+    return `NO BUSINESS DATA HAS BEEN CONNECTED TO THIS WORKSPACE YET.
+Do NOT invent, assume, or state any figures. You have no revenue, cash, inventory or customer numbers for this business.
+When answering: say plainly that you don't have their numbers yet, then tell them the fastest ways to give you real data — upload a bank statement (Bank Statement Intelligence), a GST return (GST Return Reader), or import a CSV/Excel. Keep it to 2–3 helpful sentences.`;
+  }
   const lines = m.map((x) => `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + x.unit} (${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, status ${x.status})`);
   const ins = await getInsights();
   const insLines = ins.map((i) => `- [${i.severity}] ${i.title}: ${i.detail}`);
