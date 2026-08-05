@@ -20,5 +20,21 @@ export async function GET(req: Request) {
     await sb.from("activity").insert({ org_id: o.id, type: "ai", message: "Autopilot ran the daily business analysis" });
     ran++;
   }
-  return NextResponse.json({ ok: true, ran });
+
+  // Weekly product-update email piggybacks on this daily cron — no extra Vercel
+  // cron needed. Fires only on Mondays (IST) and only when explicitly enabled via
+  // WEEKLY_UPDATE_ENABLED=1. sendWeeklyUpdate() is itself idempotent per version,
+  // so a re-run the same week is a no-op.
+  let weekly: any = null;
+  try {
+    if (process.env.WEEKLY_UPDATE_ENABLED === "1") {
+      const istDay = new Date(Date.now() + 5.5 * 3600 * 1000).getUTCDay(); // 0=Sun … 1=Mon
+      if (istDay === 1) {
+        const { sendWeeklyUpdate } = await import("@/lib/weekly-update");
+        weekly = await sendWeeklyUpdate({});
+      }
+    }
+  } catch (e: any) { weekly = { error: e?.message }; }
+
+  return NextResponse.json({ ok: true, ran, weekly });
 }
