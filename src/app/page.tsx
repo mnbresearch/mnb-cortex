@@ -82,18 +82,18 @@ export default function Home() {
         <div className="relative z-10 max-w-7xl mx-auto">
           <div className="eyebrow flex items-center gap-3">
             <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-            The AI Operating System for Indian SMEs — by MNB Research
+            The AI operating brain for your business — by MNB Research
           </div>
           <Kinetic
             as="h1"
-            text={"Your business,\nrun by an AI COO."}
+            text={"Your business now has\na brain of its own."}
             className="font-display display-1 tracking-tightest mt-6"
           />
           <div className="mt-6 grid lg:grid-cols-[1.3fr_1fr] gap-8 items-end">
             <p className="text-lg lg:text-xl text-muted-foreground max-w-2xl">
-              Not another dashboard. MNB Cortex reads all your data, spots problems early, predicts what&rsquo;s coming,
-              tells you exactly what to do — and does the busywork. Ask{" "}
-              <span className="text-foreground font-medium">&ldquo;How is my business?&rdquo;</span> and get a real answer.
+              One AI brain across your whole company. It reads all your data, <span className="text-foreground font-medium">remembers every decision</span>,
+              predicts what&rsquo;s coming, tells you exactly what to do — and does the busywork. Ask{" "}
+              <span className="text-foreground font-medium">&ldquo;How is my business?&rdquo;</span> and it already knows.
             </p>
             <div className="flex flex-wrap items-center gap-3 lg:justify-end">
               <Magnetic>
@@ -108,7 +108,7 @@ export default function Home() {
           </div>
 
           <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            <span>Works as an <RotatingWord words={["AI COO.", "AI CFO.", "AI strategist.", "AI analyst."]} /></span>
+            <span>One brain, working as your <RotatingWord words={["AI COO.", "AI CFO.", "AI CMO.", "AI analyst."]} /></span>
             <Link href="/health-check" className="inline-flex items-center gap-1.5 text-foreground font-medium link-sweep">Take the free 60-second health check <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
 
@@ -139,8 +139,8 @@ export default function Home() {
           <SectionLabel n="01">What it is</SectionLabel>
           <Reveal>
             <p className="font-display display-3 tracking-tightest mt-8 max-w-5xl leading-[1.15]">
-              Dashboards store numbers. Chatbots make small talk. <span className="text-primary">MNB Cortex acts.</span> It&rsquo;s a
-              full AI operating system that runs the loop — monitor, predict, recommend, remember, execute — across your entire company.
+              Dashboards store numbers. Chatbots forget you. <span className="text-primary">MNB Cortex remembers — and acts.</span> One operating
+              brain that monitors, predicts, recommends and executes across your whole company — and gets sharper every week you use it.
             </p>
           </Reveal>
         </div>
