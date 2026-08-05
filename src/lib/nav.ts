@@ -33,6 +33,7 @@ export const NAV = [
   { href: "/analytics", label: "Analytics", icon: BarChart3, group: "Overview" },
   { href: "/sales", label: "Sales", icon: TrendingUp, group: "Intelligence" },
   { href: "/finance", label: "Finance", icon: Wallet, group: "Intelligence" },
+  { href: "/bank", label: "Bank Statement", icon: Landmark, group: "Intelligence" },
   { href: "/production", label: "Production", icon: Factory, group: "Intelligence" },
   { href: "/inventory", label: "Inventory", icon: Boxes, group: "Intelligence" },
   { href: "/hr", label: "HR", icon: Users, group: "Intelligence" },
