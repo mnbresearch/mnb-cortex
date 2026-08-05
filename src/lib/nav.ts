@@ -19,12 +19,13 @@ import {
   Fuel, BrainCircuit, Vault, RotateCw,
   Award, AlarmClock, Radar,
   HeartHandshake, Umbrella, CalendarDays, Repeat2, House,
-  Network
+  Network, Telescope
 } from "lucide-react";
 
 export const NAV = [
   { href: "/dashboard", label: "Business Health", icon: LayoutDashboard, group: "Overview" },
   { href: "/chat", label: "AI CEO Chat", icon: MessageSquare, group: "Overview" },
+  { href: "/deepdive", label: "Cortex Deep Dive", icon: Telescope, group: "Overview" },
   { href: "/memory", label: "Cortex Memory", icon: BrainCircuit, group: "Overview" },
   { href: "/agents", label: "AI Agents", icon: Bot, group: "Overview" },
   { href: "/workforce", label: "Cortex Workforce", icon: Network, group: "Overview" },
@@ -36,6 +37,7 @@ export const NAV = [
   { href: "/inventory", label: "Inventory", icon: Boxes, group: "Intelligence" },
   { href: "/hr", label: "HR", icon: Users, group: "Intelligence" },
   { href: "/market", label: "Market", icon: Globe, group: "Intelligence" },
+  { href: "/visibility", label: "AI Visibility", icon: Radar, group: "Intelligence" },
   { href: "/customers", label: "Customers", icon: Contact, group: "Intelligence" },
   { href: "/accounts", label: "Account Plans", icon: UserSearch, group: "Intelligence" },
   { href: "/funnel", label: "Marketing Funnel", icon: Filter, group: "Intelligence" },
