@@ -80,8 +80,8 @@ export function PublicFooter() {
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-10 items-end">
             <div>
-              <p className="eyebrow text-background/50">Run your company by asking</p>
-              <h2 className="font-display display-2 tracking-tightest mt-4">Let&rsquo;s put your <span className="text-primary">AI COO</span> to work.</h2>
+              <p className="eyebrow text-background/50">Give your business a brain</p>
+              <h2 className="font-display display-2 tracking-tightest mt-4">Put your <span className="text-primary">operating brain</span> to work.</h2>
             </div>
             <div className="lg:justify-self-end">
               <Link href="/login" className="inline-flex items-center gap-2 rounded-full bg-background text-foreground px-7 h-14 text-base font-medium hover:opacity-90 transition-opacity" data-cursor>
@@ -95,7 +95,7 @@ export function PublicFooter() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
             <div>
               <div className="flex items-center gap-2.5"><Logo size={30} /><span className="font-semibold">MNB Cortex</span></div>
-              <p className="mt-4 text-sm text-background/60 max-w-xs">The AI Operating System for Indian SMEs. A brand of Abrobot Technologies Pvt Ltd, Delhi.</p>
+              <p className="mt-4 text-sm text-background/60 max-w-xs">The AI operating brain for your business. A brand of Abrobot Technologies Pvt Ltd, Delhi.</p>
               <a href="https://wa.me/919711488480" className="mt-4 inline-block text-sm link-sweep text-background/80">wa.me / +91 97114 88480</a>
             </div>
             {cols.map((c) => (
