@@ -1,4 +1,4 @@
-export const APP_VERSION = "6.11.0";
+export const APP_VERSION = "6.13.0";
 export const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "919711488481";
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "mnbgotyou@gmail.com";
 
@@ -89,6 +89,7 @@ export const CREDIT_COSTS: Record<string, number> = {
   marketing: 5, competitor: 5, negotiate: 4, hiring: 4,
   contract: 6, account: 5, critique: 3, playbook: 6,
   proposal: 6, valuation: 6, broadcast: 3, sop: 4, costs: 4, loan: 3, vendor: 3,
+  deepdive: 12, visibility: 10,
   agent_image: 15, agent_video: 40,
 };
 
