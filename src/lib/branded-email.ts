@@ -17,7 +17,7 @@ export const BRAND = {
   BADGES: ["Shark Tank India Featured", "DPIIT-Recognised Startup", "10,000+ Businesses Served"],
   COLOR_FROM: "#1f4a3b",
   COLOR_TO: "#2f6b54",
-  DISCLAIMER: "MNB Cortex is the AI operating system for SMEs. © 2026 Abrobot Technologies Private Limited. All rights reserved.",
+  DISCLAIMER: "MNB Cortex is the AI operating brain for your business. © 2026 Abrobot Technologies Private Limited. All rights reserved.",
 };
 
 /** The RFC-5322 From value: "MNB Cortex by MNB Research <hello@updates.mnbresearch.com>". */
