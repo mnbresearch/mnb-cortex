@@ -1,0 +1,28 @@
+import { NextResponse } from "next/server";
+import { analyzeBankStatement } from "@/lib/ai/bankstatement";
+import { chargeForMode } from "@/lib/credits";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+export async function POST(req: Request) {
+  try {
+    const { text } = await req.json().catch(() => ({}));
+    const t = String(text || "").trim();
+    if (t.length < 40) return NextResponse.json({ ok: false, error: "Upload or paste a bank statement (CSV or PDF text)." }, { status: 200 });
+
+    const gate = await chargeForMode("bankstatement");
+    if (!gate.ok) {
+      return NextResponse.json({ ok: false, outOfCredits: true, cost: gate.cost, balance: gate.balance,
+        error: `You're out of AI credits. Analysing a statement costs ${gate.cost} credits (balance ${gate.balance}). Top up under Usage & Credits.` }, { status: 402 });
+    }
+
+    const analysis = await analyzeBankStatement(t);
+    if (!analysis) return NextResponse.json({ ok: false, error: "Couldn't read that statement — try a clearer CSV export, or paste the transaction rows." }, { status: 200 });
+
+    return NextResponse.json({ ok: true, analysis, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message || "Analysis failed — check the AI key." }, { status: 200 });
+  }
+}
