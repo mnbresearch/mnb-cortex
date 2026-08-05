@@ -9,7 +9,7 @@ const NAV = [
   { href: "/features", label: "Features" },
   { href: "/industries", label: "Industries" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/health-check", label: "Health check" },
+  { href: "/ai-visibility", label: "AI Visibility" },
 ];
 
 export function PublicHeader() {
@@ -70,7 +70,7 @@ export function PublicHeader() {
 
 export function PublicFooter() {
   const cols = [
-    { h: "Product", links: [["Features", "/features"], ["Industries", "/industries"], ["Compare", "/compare"], ["Pricing", "/pricing"], ["Free health check", "/health-check"], ["Live demo", "/dashboard"]] },
+    { h: "Product", links: [["Features", "/features"], ["Industries", "/industries"], ["Compare", "/compare"], ["Pricing", "/pricing"], ["AI Visibility check", "/ai-visibility"], ["Free health check", "/health-check"]] },
     { h: "Company", links: [["Resources", "/resources"], ["Contact", "/contact"], ["Changelog", "/changelog"], ["Status", "/status"], ["Help", "/help"], ["MNB Research", "https://www.mnbresearch.com"]] },
     { h: "Legal", links: [["Terms", "/terms"], ["Privacy", "/privacy"], ["Refund Policy", "/refund"]] },
   ];
