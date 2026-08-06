@@ -12,6 +12,7 @@ import { SmoothScroll, Cursor, Kinetic, SectionLabel, Marquee, Magnetic, Faq } f
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
 import { ProductPreview } from "@/components/product-preview";
 import { AskCortexDemo } from "@/components/demo";
+import { IndustryPicker } from "@/components/industry-picker";
 
 const FAQS = [
   { q: "How is this different from an ERP or CRM?", a: "ERPs and CRMs store data. MNB Cortex reads across all of it, diagnoses problems, predicts what's coming, recommends actions, and executes the busywork — like a COO, not a filing cabinet." },
@@ -228,6 +229,13 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Industry-specific: pick your industry → your pains + the tools that fix them */}
+          <div className="mt-16">
+            <h3 className="font-display text-2xl lg:text-4xl tracking-tightest max-w-2xl">Now see it for <span className="text-primary">your</span> industry.</h3>
+            <p className="mt-3 text-muted-foreground max-w-2xl">Cortex speaks your business — not generic dashboards. Pick yours and see the exact problems it watches and the tools it uses to fix them.</p>
+            <div className="mt-8"><IndustryPicker /></div>
           </div>
         </div>
       </section>
