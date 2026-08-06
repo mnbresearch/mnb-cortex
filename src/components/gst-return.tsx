@@ -2,15 +2,22 @@
 import { useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Receipt, Upload, Loader2, BrainCircuit, Check, AlertTriangle } from "lucide-react";
+import { Receipt, Upload, Loader2, BrainCircuit, Check, AlertTriangle, CheckCircle2, Circle, ListChecks } from "lucide-react";
 
+type GstCheck = { label: string; ok: boolean };
+type GstSignal = { label: string; tone: "good" | "warn" | "bad" | "info"; detail: string };
 type Analysis = {
   period: string; gstin: string | null; taxableTurnover: number;
   igst: number; cgst: number; sgst: number; cess: number; totalTax: number;
-  itcAvailable: number; netPayable: number; insights: string[]; summaryMd: string;
+  itcAvailable: number; netPayable: number;
+  effectiveRatePct: number | null; itcUtilPct: number | null; itcCarryForward: number;
+  composition: { igst: number; cgst: number; sgst: number; cess: number };
+  checklist: GstCheck[]; signals: GstSignal[];
+  insights: string[]; summaryMd: string;
 };
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+const toneDot: Record<string, string> = { good: "bg-success", warn: "bg-warning", bad: "bg-danger", info: "bg-primary" };
 
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -70,6 +77,8 @@ export function GstReturnPanel() {
     { l: "Total output tax", v: inr(a.totalTax) },
     { l: "ITC available", v: inr(a.itcAvailable) },
     { l: "Net GST payable", v: inr(a.netPayable), hl: true },
+    { l: "Effective rate", v: a.effectiveRatePct != null ? `${a.effectiveRatePct}%` : "—" },
+    { l: "ITC utilisation", v: a.itcUtilPct != null ? `${a.itcUtilPct}%` : "—" },
   ] : [];
 
   return (
@@ -96,7 +105,7 @@ export function GstReturnPanel() {
 
       {a && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {cards.map((c) => (
               <Card key={c.l} className={`p-4 ${c.hl ? "border-primary/40 bg-primary/5" : ""}`}>
                 <div className="text-xs text-muted-foreground">{c.l}</div>
@@ -104,15 +113,55 @@ export function GstReturnPanel() {
               </Card>
             ))}
           </div>
+
           <Card className="p-5">
             <h3 className="font-semibold mb-3 text-sm">Tax breakdown · {a.period}{a.gstin ? ` · ${a.gstin}` : ""}</h3>
-            <div className="grid sm:grid-cols-3 gap-3 text-sm">
-              <div className="rounded-lg border p-3"><div className="text-muted-foreground text-xs">IGST</div><div className="font-medium">{inr(a.igst)}</div></div>
-              <div className="rounded-lg border p-3"><div className="text-muted-foreground text-xs">CGST</div><div className="font-medium">{inr(a.cgst)}</div></div>
-              <div className="rounded-lg border p-3"><div className="text-muted-foreground text-xs">SGST</div><div className="font-medium">{inr(a.sgst)}</div></div>
+            <div className="grid sm:grid-cols-4 gap-3 text-sm">
+              <div className="rounded-lg border p-3"><div className="text-muted-foreground text-xs">IGST · {a.composition.igst}%</div><div className="font-medium">{inr(a.igst)}</div></div>
+              <div className="rounded-lg border p-3"><div className="text-muted-foreground text-xs">CGST · {a.composition.cgst}%</div><div className="font-medium">{inr(a.cgst)}</div></div>
+              <div className="rounded-lg border p-3"><div className="text-muted-foreground text-xs">SGST · {a.composition.sgst}%</div><div className="font-medium">{inr(a.sgst)}</div></div>
+              <div className="rounded-lg border p-3"><div className="text-muted-foreground text-xs">Cess · {a.composition.cess}%</div><div className="font-medium">{inr(a.cess)}</div></div>
             </div>
-            {a.insights.length > 0 && <ul className="mt-4 space-y-1.5 text-sm text-muted-foreground list-disc pl-5">{a.insights.map((s, i) => <li key={i}>{s}</li>)}</ul>}
+            {/* composition bar */}
+            {a.totalTax > 0 && (
+              <div className="mt-4 h-2.5 w-full rounded-full overflow-hidden flex">
+                <div className="h-full bg-primary" style={{ width: `${a.composition.igst}%` }} title={`IGST ${a.composition.igst}%`} />
+                <div className="h-full bg-success" style={{ width: `${a.composition.cgst}%` }} title={`CGST ${a.composition.cgst}%`} />
+                <div className="h-full bg-warning" style={{ width: `${a.composition.sgst}%` }} title={`SGST ${a.composition.sgst}%`} />
+                <div className="h-full bg-muted-foreground" style={{ width: `${a.composition.cess}%` }} title={`Cess ${a.composition.cess}%`} />
+              </div>
+            )}
+            {a.itcCarryForward > 0 && <p className="mt-3 text-xs text-muted-foreground">Unused ITC carried forward: <b>{inr(a.itcCarryForward)}</b></p>}
           </Card>
+
+          <div className="grid md:grid-cols-2 gap-3">
+            {/* Filing readiness */}
+            <Card className="p-5">
+              <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm"><ListChecks className="h-4 w-4 text-primary" /> Filing-readiness check</h3>
+              <div className="space-y-2">
+                {a.checklist.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    {c.ok ? <CheckCircle2 className="h-4 w-4 text-success shrink-0" /> : <Circle className="h-4 w-4 text-muted-foreground shrink-0" />}
+                    <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            {/* Signals */}
+            <Card className="p-5">
+              <h3 className="font-semibold mb-3 text-sm">What Cortex sees</h3>
+              <div className="space-y-2">
+                {a.signals.map((s, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm">
+                    <span className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${toneDot[s.tone] || "bg-primary"}`} />
+                    <span><b>{s.label}.</b> <span className="text-muted-foreground">{s.detail}</span></span>
+                  </div>
+                ))}
+                {a.insights.map((s, i) => <div key={`i${i}`} className="flex items-start gap-2 text-sm"><span className="h-2 w-2 rounded-full mt-1.5 shrink-0 bg-primary/40" /><span className="text-muted-foreground">{s}</span></div>)}
+              </div>
+            </Card>
+          </div>
+
           <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border bg-primary/5 p-4">
             <div className="text-sm"><b>Ground your workspace.</b> Save these figures to Cortex Memory so your AI answers use your real tax numbers.</div>
             <Button onClick={save} disabled={saved === "saving"}>
