@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { ArrowUpRight, ArrowRight } from "lucide-react";
+import {
+  ArrowUpRight, ArrowRight, LayoutDashboard, Landmark, ReceiptText, CalendarClock, Database, Gauge,
+  MessageSquare, Telescope, LineChart, Brain, FileBarChart, Calculator,
+  Megaphone, Sparkles, Bot, Workflow, Radio, Cpu,
+  Radar, KanbanSquare, UserMinus, BadgeIndianRupee, Target, Gem,
+  BrainCircuit, Receipt, Banknote, ScrollText, Plug, ShieldCheck,
+} from "lucide-react";
 import { RoiCalculator } from "@/components/roi-calculator";
 import { Reveal, CountUp, RotatingWord } from "@/components/landing-extras";
 import { SmoothScroll, Cursor, Kinetic, SectionLabel, Marquee, Magnetic, Faq } from "@/components/loco";
@@ -16,14 +22,83 @@ const FAQS = [
 ];
 
 const STATS = [
-  { to: 100, suffix: "+", label: "modules & tools" },
+  { to: 130, suffix: "+", label: "modules & tools" },
   { to: 300, suffix: "+", label: "runnable AI agents" },
   { to: 62, suffix: "", label: "integrations" },
   { to: 24, suffix: "/7", label: "live monitoring" },
 ];
 
+// Problem-specific: the day-to-day reality of running an SME, and how Cortex changes it.
+const OLD_NEW = [
+  { old: "You find out about a cash crunch when the bank balance drops.", now: "Cortex forecasts the crunch weeks ahead and tells you exactly what to fix." },
+  { old: "Your numbers live in Tally, spreadsheets, WhatsApp and your head.", now: "One brain reads all of it and answers in plain language — instantly." },
+  { old: "You react to stockouts, overdue invoices and churn after they cost you.", now: "It predicts them early and drafts the PO, the reminder or the save-play." },
+  { old: "Consultants are slow and pricey; ChatGPT doesn't know your business.", now: "A COO-grade brain that knows your real numbers, on tap, 24/7." },
+  { old: "You're too busy running the business to actually analyse it.", now: "Autopilot watches your data daily and briefs you every morning." },
+  { old: "Nobody finds you when buyers ask ChatGPT for a recommendation.", now: "AI Visibility gets your business named by ChatGPT, Gemini & Perplexity." },
+];
+
+// The whole platform, grouped by the job it does for you.
+const FEATURES: { label: string; items: { icon: any; name: string; d: string }[] }[] = [
+  {
+    label: "Understand your business",
+    items: [
+      { icon: LayoutDashboard, name: "Business Health Dashboard", d: "Every KPI on one page, with a live Cortex Score." },
+      { icon: Landmark, name: "Bank Statement Intelligence", d: "Upload a statement → real cashflow, trends, recurring spend, runway." },
+      { icon: ReceiptText, name: "GST Return Reader", d: "Turnover, tax split, ITC utilisation & net payable in seconds." },
+      { icon: CalendarClock, name: "13-week Cash Flow", d: "Rolling runway with an out-of-cash early warning." },
+      { icon: Database, name: "Import & Data Explorer", d: "CSV, Excel or Google Sheets — then query it all." },
+      { icon: Gauge, name: "Benchmarks & Risk Radar", d: "See where you stand and what threatens you." },
+    ],
+  },
+  {
+    label: "Think & decide",
+    items: [
+      { icon: MessageSquare, name: "AI CEO Chat", d: "Ask anything in English or Hinglish, grounded in your data." },
+      { icon: Telescope, name: "Cortex Deep Dive", d: "Diagnose → decide → draft the first action, in three passes." },
+      { icon: LineChart, name: "Forecasting & Scenarios", d: "90-day forecast with interactive what-ifs." },
+      { icon: Brain, name: "Strategy Consultant", d: "SWOT, growth levers and a prioritised plan." },
+      { icon: FileBarChart, name: "Executive Reports", d: "Board-ready reviews, exportable to PDF." },
+      { icon: Calculator, name: "130+ Business Calculators", d: "Margins, GST, payroll, valuation, ratios & more." },
+    ],
+  },
+  {
+    label: "Act & automate",
+    items: [
+      { icon: Megaphone, name: "AI Outreach", d: "Drafts reminders & follow-ups; you approve, it sends." },
+      { icon: Sparkles, name: "Marketing Studio", d: "Full campaign kits — copy, posts and emails in one click." },
+      { icon: Bot, name: "300+ AI Agents", d: "A 7-department AI workforce across 26 industries." },
+      { icon: Workflow, name: "Workflows & Approvals", d: "Automate the busywork with a human in the loop." },
+      { icon: Radio, name: "WhatsApp Broadcast", d: "Personalised broadcasts, ready to send." },
+      { icon: Cpu, name: "AI Autopilot", d: "Runs a daily analysis and briefs you each morning." },
+    ],
+  },
+  {
+    label: "Grow & get found",
+    items: [
+      { icon: Radar, name: "AI Visibility (AEO)", d: "See if ChatGPT & Gemini recommend you — and fix it." },
+      { icon: KanbanSquare, name: "Pipeline + Lead Scoring", d: "An AI-ranked pipeline that tells you who to chase." },
+      { icon: UserMinus, name: "Churn Predictor", d: "Spot at-risk customers before they leave." },
+      { icon: BadgeIndianRupee, name: "Pricing Optimizer", d: "Find the price your market will bear." },
+      { icon: Target, name: "Sales Targets & Funnel", d: "Plan targets and fix the leaky funnel." },
+      { icon: Gem, name: "LTV & Segments", d: "Know your best customers and their lifetime value." },
+    ],
+  },
+  {
+    label: "Remember & run the back office",
+    items: [
+      { icon: BrainCircuit, name: "Cortex Memory", d: "A permanent second brain that sharpens every answer." },
+      { icon: Receipt, name: "GST & Compliance", d: "Filing calendar, ITC set-off and GST invoicing." },
+      { icon: Banknote, name: "Payroll & CTC", d: "Take-home, EPF/ESI, gratuity and appraisals." },
+      { icon: ScrollText, name: "Contract Review", d: "AI reads a contract and flags the real risks." },
+      { icon: Plug, name: "62 Integrations + API", d: "Tally, Zoho, Razorpay, Shopify and more." },
+      { icon: ShieldCheck, name: "Security & RLS", d: "Row-level isolation, encryption, export anytime." },
+    ],
+  },
+];
+
 const CAPS = [
-  { n: "01", name: "Cortex Workforce", blurb: "A 7-department AI org chart — 250+ runnable agents." },
+  { n: "01", name: "Cortex Workforce", blurb: "A 7-department AI org chart — 300+ runnable agents." },
   { n: "02", name: "Cortex Memory", blurb: "A permanent second brain that grounds every answer." },
   { n: "03", name: "Finance & Money", blurb: "Dashboards, cash flow, GST, payroll, ratios." },
   { n: "04", name: "Strategy & Advisory", blurb: "AI CEO chat, forecasts, board decks, playbooks." },
@@ -56,6 +131,7 @@ const COMPARE: [string, string, string, string, string][] = [
   ["Predicts outcomes", "y", "n", "n", "n"],
   ["Recommends actions", "y", "n", "n", "~"],
   ["Executes tasks for you", "y", "n", "n", "n"],
+  ["Remembers your business", "y", "~", "~", "n"],
   ["Plain-language answers", "y", "n", "n", "y"],
 ];
 
@@ -91,9 +167,9 @@ export default function Home() {
           />
           <div className="mt-6 grid lg:grid-cols-[1.3fr_1fr] gap-8 items-end">
             <p className="text-lg lg:text-xl text-muted-foreground max-w-2xl">
-              One AI brain across your whole company. It reads all your data, <span className="text-foreground font-medium">remembers every decision</span>,
-              predicts what&rsquo;s coming, tells you exactly what to do — and does the busywork. Ask{" "}
-              <span className="text-foreground font-medium">&ldquo;How is my business?&rdquo;</span> and it already knows.
+              Your numbers are scattered across Tally, spreadsheets and WhatsApp — and the things that matter, you spot too late.
+              MNB Cortex is <span className="text-foreground font-medium">one AI brain</span> that reads all of it, remembers every decision,
+              predicts what&rsquo;s coming and does the busywork. Ask <span className="text-foreground font-medium">&ldquo;How is my business?&rdquo;</span> and it already knows.
             </p>
             <div className="flex flex-wrap items-center gap-3 lg:justify-end">
               <Magnetic>
@@ -133,10 +209,33 @@ export default function Home() {
         <Marquee items={["Tally", "Zoho", "Odoo", "Razorpay", "Stripe", "Shopify", "HubSpot", "Salesforce", "WhatsApp", "Slack", "SendGrid", "QuickBooks", "Google Sheets", "Cashfree", "Freshdesk", "Calendly"]} />
       </section>
 
-      {/* ---------- STATEMENT ---------- */}
-      <section className="px-5 lg:px-10 py-24 lg:py-36">
+      {/* ---------- THE PROBLEM ---------- */}
+      <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="01">What it is</SectionLabel>
+          <SectionLabel n="01">The problem</SectionLabel>
+          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Running an SME shouldn&rsquo;t mean flying blind.</h2>
+          <p className="mt-4 text-muted-foreground max-w-2xl">You&rsquo;re the CEO, CFO, head of sales and firefighter — all at once. Cortex takes the analysis and the busywork off your plate.</p>
+          <div className="mt-12 grid md:grid-cols-2 gap-px bg-border border rounded-2xl overflow-hidden">
+            {OLD_NEW.map((r, i) => (
+              <div key={i} className="contents">
+                <div className="bg-card p-6 flex gap-3">
+                  <span className="text-danger mt-0.5 shrink-0" aria-hidden>✕</span>
+                  <div><div className="eyebrow">Today</div><p className="mt-1 text-sm lg:text-base">{r.old}</p></div>
+                </div>
+                <div className="bg-primary/[0.04] p-6 flex gap-3">
+                  <span className="text-primary mt-0.5 shrink-0" aria-hidden>✓</span>
+                  <div><div className="eyebrow text-primary">With Cortex</div><p className="mt-1 text-sm lg:text-base">{r.now}</p></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- STATEMENT ---------- */}
+      <section className="px-5 lg:px-10 pb-24 lg:pb-32 border-t pt-24 lg:pt-32">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="02">What it is</SectionLabel>
           <Reveal>
             <p className="font-display display-3 tracking-tightest mt-8 max-w-5xl leading-[1.15]">
               Dashboards store numbers. Chatbots forget you. <span className="text-primary">MNB Cortex remembers — and acts.</span> One operating
@@ -178,16 +277,50 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ---------- EVERYTHING YOU GET (full feature showcase) ---------- */}
+      <section id="features" className="px-5 lg:px-10 py-24 border-t">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="03">Everything you get</SectionLabel>
+          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Not one AI trick.<br />An operating system for your business.</h2>
+          <p className="mt-4 text-muted-foreground max-w-2xl">130+ tools, 300+ agents and a permanent memory — organised into the jobs you actually need done. Here&rsquo;s the whole thing.</p>
+
+          <div className="mt-14 space-y-14">
+            {FEATURES.map((g) => (
+              <div key={g.label}>
+                <h3 className="font-display text-xl lg:text-2xl tracking-tightest mb-5 flex items-center gap-3"><span className="h-px w-8 bg-primary" />{g.label}</h3>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden">
+                  {g.items.map((f) => {
+                    const Icon = f.icon;
+                    return (
+                      <div key={f.name} className="bg-card p-6 hover:bg-accent/40 transition-colors">
+                        <div className="h-10 w-10 rounded-xl bg-primary/10 grid place-items-center"><Icon className="h-5 w-5 text-primary" /></div>
+                        <div className="mt-3 font-semibold">{f.name}</div>
+                        <p className="text-sm text-muted-foreground mt-1.5">{f.d}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-10 flex flex-wrap gap-4">
+            <Link href="/features" className="inline-flex items-center gap-1.5 text-sm font-medium link-sweep">See the full feature list <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/login" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary link-sweep">Try it free <ArrowUpRight className="h-4 w-4" /></Link>
+          </div>
+        </div>
+      </section>
+
       {/* ---------- CAPABILITIES (hover-reveal list) ---------- */}
       <section id="capabilities" className="px-5 lg:px-10 py-20 border-t">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-wrap items-end justify-between gap-6 mb-12">
             <div>
-              <SectionLabel n="02">Capabilities</SectionLabel>
+              <SectionLabel n="04">Ten domains, one login</SectionLabel>
               <h2 className="font-display display-2 tracking-tightest mt-5 max-w-2xl">One login.<br />Your whole company.</h2>
             </div>
             <div className="max-w-sm">
-              <p className="text-muted-foreground">100+ AI-native tools across ten domains — each grounded in a permanent memory of your business, built for Indian SMEs.</p>
+              <p className="text-muted-foreground">Every domain is grounded in a permanent memory of your business, and built for Indian SMEs.</p>
               <Link href="/features" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium link-sweep">See the full feature list <ArrowUpRight className="h-4 w-4" /></Link>
             </div>
           </div>
@@ -211,7 +344,7 @@ export default function Home() {
       {/* ---------- THE LOOP ---------- */}
       <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="03">How it works</SectionLabel>
+          <SectionLabel n="05">How it works</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 mb-14 max-w-3xl">It doesn&rsquo;t just report. It runs the loop.</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-px bg-border rounded-2xl overflow-hidden border">
             {LOOP.map((x, i) => (
@@ -230,7 +363,7 @@ export default function Home() {
       {/* ---------- AUDIENCE ---------- */}
       <section className="px-5 lg:px-10 pb-24">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="04">Who it&rsquo;s for</SectionLabel>
+          <SectionLabel n="06">Who it&rsquo;s for</SectionLabel>
           <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border border rounded-2xl overflow-hidden">
             {AUDIENCE.map((a) => (
               <div key={a.t} className="bg-card p-7 hover:bg-accent/40 transition-colors">
@@ -245,7 +378,7 @@ export default function Home() {
       {/* ---------- COMPARISON ---------- */}
       <section className="px-5 lg:px-10 py-24 border-t">
         <div className="max-w-5xl mx-auto">
-          <SectionLabel n="05">Why not an ERP, CRM or ChatGPT?</SectionLabel>
+          <SectionLabel n="07">Why not an ERP, CRM or ChatGPT?</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-10 max-w-2xl">Those store or chat. Cortex acts on your data.</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
@@ -262,7 +395,7 @@ export default function Home() {
                 {COMPARE.map((r) => (
                   <tr key={r[0]} className="border-b border-border/60">
                     <td className="py-4 pr-3 font-medium">{r[0]}</td>
-                    {r.slice(1).map((c, j) => <td key={j} className="py-4 px-3 text-center text-lg">{mark(c)}</td>)}
+                    {r.slice(1).map((cell, j) => <td key={j} className="py-4 px-3 text-center text-lg">{mark(cell)}</td>)}
                   </tr>
                 ))}
               </tbody>
@@ -274,24 +407,15 @@ export default function Home() {
       {/* ---------- ROI ---------- */}
       <section className="px-5 lg:px-10 py-24">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="06">The math</SectionLabel>
+          <SectionLabel n="08">The math</SectionLabel>
           <div className="mt-8"><Reveal><RoiCalculator /></Reveal></div>
-        </div>
-      </section>
-
-      {/* ---------- FAQ ---------- */}
-      <section className="px-5 lg:px-10 py-24 border-t">
-        <div className="max-w-3xl mx-auto">
-          <SectionLabel n="08">Questions</SectionLabel>
-          <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">Good to know.</h2>
-          <Faq items={FAQS} />
         </div>
       </section>
 
       {/* ---------- TESTIMONIALS ---------- */}
       <section className="px-5 lg:px-10 py-24 border-t">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="07">In the field</SectionLabel>
+          <SectionLabel n="09">In the field</SectionLabel>
           <div className="mt-12 grid md:grid-cols-3 gap-10">
             {TESTI.map((t, i) => (
               <Reveal key={i} delay={i * 90}>
@@ -301,6 +425,33 @@ export default function Home() {
                 </figure>
               </Reveal>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- FAQ ---------- */}
+      <section className="px-5 lg:px-10 py-24 border-t">
+        <div className="max-w-3xl mx-auto">
+          <SectionLabel n="10">Questions</SectionLabel>
+          <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">Good to know.</h2>
+          <Faq items={FAQS} />
+        </div>
+      </section>
+
+      {/* ---------- FINAL CTA ---------- */}
+      <section className="px-5 lg:px-10 py-28 border-t text-center">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="font-display display-2 tracking-tightest">Give your business a brain.</h2>
+          <p className="mt-5 text-muted-foreground text-lg">Start free in under a minute — no card. Load a demo dataset or connect your own, and ask Cortex how your business is really doing.</p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Magnetic>
+              <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>
+                Start free — 3-day trial <ArrowUpRight className="h-4 w-4" />
+              </Link>
+            </Magnetic>
+            <Link href="/pricing" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">
+              See pricing <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
         </div>
       </section>
