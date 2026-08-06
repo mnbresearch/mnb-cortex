@@ -25,6 +25,7 @@ import {
 export const NAV = [
   { href: "/dashboard", label: "Business Health", icon: LayoutDashboard, group: "Overview" },
   { href: "/chat", label: "AI CEO Chat", icon: MessageSquare, group: "Overview" },
+  { href: "/tools", label: "AI Tools", icon: Blocks, group: "Overview" },
   { href: "/deepdive", label: "Cortex Deep Dive", icon: Telescope, group: "Overview" },
   { href: "/act", label: "AI Outreach", icon: Megaphone, group: "Overview" },
   { href: "/memory", label: "Cortex Memory", icon: BrainCircuit, group: "Overview" },
