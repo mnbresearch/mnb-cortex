@@ -1,34 +1,14 @@
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Check, X } from "lucide-react";
 import { SmoothScroll, Cursor, Kinetic, SectionLabel } from "@/components/loco";
 import { Reveal } from "@/components/landing-extras";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
+import { INDUSTRIES } from "@/lib/industries";
 
 export const metadata = {
   title: "Industries — MNB Cortex",
-  description: "How MNB Cortex works for manufacturers, D2C & retail, services & agencies, jewellery, distribution and clinics.",
+  description: "MNB Cortex is tuned for 25+ industries — manufacturing, retail & D2C, services, jewellery, distribution, clinics, restaurants, salons, logistics, real estate and more. See your specific problems and the exact tools that solve them.",
 };
-
-const INDUSTRIES: { n: string; name: string; pains: string[]; fixes: string[] }[] = [
-  { n: "01", name: "Manufacturing",
-    pains: ["Stock-outs and dead inventory", "Thin, unclear margins per SKU", "Receivables stretched by big buyers"],
-    fixes: ["Reorder Optimizer with safety stock", "Per-product unit economics & pricing", "Receivables aging with a chase-first list", "13-week cash flow to survive long cycles"] },
-  { n: "02", name: "D2C & Retail",
-    pains: ["Rising CAC, unclear payback", "Discounts eating the margin", "Which SKUs actually make money?"],
-    fixes: ["Marketing funnel + ROAS allocator", "Discount impact & pricing optimizer", "Customer LTV, RFM & churn prediction", "Inventory ABC and reorder planning"] },
-  { n: "03", name: "Services & Agencies",
-    pains: ["Projects that quietly lose money", "Over- or under-booked teams", "Slow, generic proposals"],
-    fixes: ["Project & client profitability", "Team capacity & utilisation planner", "AI proposal & quote generator", "Billable-rate and pipeline tools"] },
-  { n: "04", name: "Jewellery",
-    pains: ["Costing a design by hand", "Metal + stone price volatility", "Turning a sketch into a spec"],
-    fixes: ["Sketch → merchandising spec agent", "Stone-plot layout & collection planner", "Live costing with metal/stone inputs", "Making-charge & margin calculators"] },
-  { n: "05", name: "Distribution & Wholesale",
-    pains: ["Hundreds of SKUs, tight margins", "Credit risk across many dealers", "Cash locked in the cycle"],
-    fixes: ["Payables & DPO with early-pay discounts", "DSCR & credit exposure by account", "Cash conversion cycle simulator", "Vendor scorecards & GST ITC set-off"] },
-  { n: "06", name: "Clinics & Healthcare",
-    pains: ["Fragmented revenue and no-shows", "Compliance & statutory deadlines", "No single view of the practice"],
-    fixes: ["Business health dashboard", "Compliance calendar & GST helper", "Daily brief + KPI alerts", "Payroll, CTC and appraisal tools"] },
-];
 
 export default function Industries() {
   return (
@@ -39,51 +19,94 @@ export default function Industries() {
 
       <section className="px-5 lg:px-10 pt-32 lg:pt-40 pb-14">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="00">Industries</SectionLabel>
-          <Kinetic as="h1" text={"Built for how you\nactually run it."} className="font-display display-1 tracking-tightest mt-6" />
+          <div className="eyebrow">Industries</div>
+          <Kinetic as="h1" text={"Tuned for how your\nindustry actually runs."} className="font-display display-1 tracking-tightest mt-5" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            MNB Cortex isn&rsquo;t generic AI. It speaks the language of your business — with tools and agents tuned to the way your industry makes money.
+            Cortex isn&rsquo;t a generic dashboard. It knows the specific problems of {INDUSTRIES.length}+ industries — and comes with the exact tools to solve them,
+            grounded in a permanent memory of your business.
           </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Start free — 3-day trial <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/features" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">See all features <ArrowUpRight className="h-4 w-4" /></Link>
+          </div>
         </div>
       </section>
 
-      <section className="px-5 lg:px-10 pb-16 border-t">
-        <div className="max-w-7xl mx-auto pt-16 space-y-16">
-          {INDUSTRIES.map((ind) => (
-            <Reveal key={ind.n}>
-              <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-8 lg:gap-12">
-                <div>
-                  <div className="flex items-baseline gap-4">
-                    <span className="text-sm tabular-nums text-muted-foreground">{ind.n}</span>
-                    <h2 className="font-display text-3xl lg:text-5xl tracking-tightest">{ind.name}</h2>
-                  </div>
-                  <div className="mt-5 lg:pl-8">
-                    <div className="eyebrow mb-2">The pain</div>
-                    <ul className="space-y-1.5 text-muted-foreground text-sm">
-                      {ind.pains.map((p) => <li key={p}>— {p}</li>)}
-                    </ul>
-                  </div>
-                </div>
-                <div className="lg:pt-1">
-                  <div className="eyebrow mb-3">How Cortex fixes it</div>
-                  <div className="grid sm:grid-cols-2 gap-2.5">
-                    {ind.fixes.map((f) => (
-                      <div key={f} className="rounded-xl border bg-card px-4 py-3 text-sm hover:border-primary/40 hover:bg-accent/40 transition-colors">{f}</div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </Reveal>
-          ))}
+      {/* Quick index */}
+      <section className="px-5 lg:px-10 pb-10">
+        <div className="max-w-7xl mx-auto flex flex-wrap gap-2">
+          {INDUSTRIES.map((i) => {
+            const I = i.icon;
+            return (
+              <a key={i.slug} href={`#${i.slug}`} className="inline-flex items-center gap-1.5 rounded-full border px-3 h-9 text-sm hover:bg-accent hover:border-primary/40 transition-colors">
+                <I className="h-3.5 w-3.5 text-primary" /> {i.name}
+              </a>
+            );
+          })}
         </div>
       </section>
 
+      {/* Industry sections */}
+      <section className="px-5 lg:px-10 pb-16">
+        <div className="max-w-7xl mx-auto space-y-5">
+          {INDUSTRIES.map((ind, idx) => {
+            const Icon = ind.icon;
+            return (
+              <Reveal key={ind.slug} delay={(idx % 3) * 60}>
+                <div id={ind.slug} className="scroll-mt-24 rounded-2xl border overflow-hidden">
+                  <div className="p-6 lg:p-7 bg-card border-b flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-primary/10 grid place-items-center shrink-0"><Icon className="h-6 w-6 text-primary" /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-3 flex-wrap">
+                        <span className="row-meta text-sm tabular-nums text-muted-foreground">{String(idx + 1).padStart(2, "0")}</span>
+                        <h2 className="font-display text-2xl lg:text-3xl tracking-tightest">{ind.name}</h2>
+                      </div>
+                      <p className="text-muted-foreground mt-1">{ind.tagline}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-px bg-border">
+                    <div className="bg-card p-6 lg:p-7">
+                      <div className="eyebrow">The problems</div>
+                      <ul className="mt-4 space-y-3">
+                        {ind.pains.map((p) => (
+                          <li key={p} className="flex items-start gap-3 text-sm lg:text-base">
+                            <span className="h-5 w-5 rounded-full bg-danger/10 grid place-items-center shrink-0 mt-0.5"><X className="h-3 w-3 text-danger" /></span>{p}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="bg-primary/[0.04] p-6 lg:p-7">
+                      <div className="eyebrow text-primary">The Cortex tools</div>
+                      <ul className="mt-4 space-y-3">
+                        {ind.fixes.map((f) => (
+                          <li key={f.tool} className="flex items-start gap-3 text-sm lg:text-base">
+                            <span className="h-5 w-5 rounded-full bg-primary/15 grid place-items-center shrink-0 mt-0.5"><Check className="h-3 w-3 text-primary" /></span>{f.tool}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="bg-card p-6 lg:p-7 border-t flex flex-wrap items-center justify-between gap-4">
+                    <p className="text-sm lg:text-base max-w-xl"><span className="text-primary font-medium">Outcome:</span> {ind.outcome}</p>
+                    <Link href="/login" className="inline-flex items-center gap-1.5 text-sm font-medium link-sweep shrink-0">Start free <ArrowUpRight className="h-4 w-4" /></Link>
+                  </div>
+                </div>
+              </Reveal>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Not listed */}
       <section className="px-5 lg:px-10 py-20 border-t">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-end justify-between gap-6">
-          <h2 className="font-display display-3 tracking-tightest max-w-xl">Don&rsquo;t see yours? Cortex adapts to any business.</h2>
-          <div className="flex gap-3">
-            <Link href="/health-check" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">Free health check</Link>
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="font-display display-3 tracking-tightest">Don&rsquo;t see yours?</h2>
+          <p className="mt-4 text-muted-foreground">Cortex adapts to any business — and even builds custom AI agents for your exact workflow. If you run it, Cortex can run the numbers.</p>
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
             <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Start free <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/contact" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">Talk to us <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
         </div>
       </section>
