@@ -389,3 +389,80 @@ export async function generateFor(mode: string, input: string, context: string):
   const user = mode === "pulse" ? p : `${p}\n\n${input}`;
   return runCortex([{ role: "user", content: user }], context);
 }
+
+// ---- Cortex Deep Dive: a chained, multi-pass analysis (agentic) --------------
+export type DeepDiveSection = { key: string; title: string; body: string };
+
+const FOCUS_LABELS: Record<string, string> = {
+  finance: "cash, margin and overall financial health",
+  sales: "sales, pipeline and revenue growth",
+  pricing: "pricing and margin optimisation",
+  marketing: "marketing, demand generation and ROAS",
+  inventory: "inventory, stock levels and procurement",
+  receivables: "receivables, collections and DSO",
+  payables: "payables, suppliers and working capital",
+  costs: "cost structure and where to cut without hurting growth",
+  customers: "customers, retention and churn",
+  people: "team, hiring, productivity and retention",
+  operations: "operations, production and delivery",
+  product: "product mix, portfolio and what to push or drop",
+  growth: "expansion into new markets, channels or segments",
+  competition: "competitive positioning and threats",
+  risk: "risks, exposure and what could go wrong",
+  capital: "fundraising, debt and investor readiness",
+  compliance: "GST, statutory obligations and compliance",
+  exports: "export potential and international opportunity",
+  efficiency: "automation, process and operational efficiency",
+  strategy: "overall strategy and where to grow next",
+};
+
+/**
+ * Runs a 3-pass reasoning chain (diagnose → decide → execute), each pass grounded
+ * in the same business snapshot + memory and building on the previous pass's output.
+ * This is deliberately "deeper" than a single-shot mode: the model reasons over its
+ * own conclusions before recommending and drafting the first action.
+ */
+export async function runDeepDive(focus: string, question: string, context: string): Promise<DeepDiveSection[]> {
+  const label = FOCUS_LABELS[focus] || FOCUS_LABELS.finance;
+  const topic = question.trim() ? question.trim() : label;
+  const sections: DeepDiveSection[] = [];
+
+  // Pass 1 — Diagnose
+  const diagnosis = await runCortex([{ role: "user", content:
+`Run a deep diagnostic on ${topic}. Use ONLY the business snapshot; quantify in INR (lakh/crore). Markdown, no preamble:
+## What's happening
+2–4 sharp, quantified observations.
+## Why it's happening
+The root causes, ranked, and mechanical (which SKU, cost, customer or process). Keep it tight.` }], context);
+  sections.push({ key: "diagnosis", title: "Situation & root cause", body: diagnosis });
+
+  // Pass 2 — Decide (reasons over the diagnosis)
+  const options = await runCortex([{ role: "user", content:
+`This is your diagnosis of ${topic}:
+
+${diagnosis}
+
+Now make the call. Markdown:
+## Options
+Exactly three options. For each: the upside, the risk, and the rough INR impact.
+## Recommendation
+Pick ONE and justify it in two lines.` }], context);
+  sections.push({ key: "options", title: "Options & recommendation", body: options });
+
+  // Pass 3 — Execute (reasons over diagnosis + recommendation)
+  const plan = await runCortex([{ role: "user", content:
+`Diagnosis and recommendation for ${topic}:
+
+${diagnosis}
+
+${options}
+
+Turn the recommendation into execution. Markdown:
+## 30-day plan
+A week-by-week plan. For each week: the action, the owner, and the metric that proves it worked.
+## First action, drafted
+Write the single highest-impact artifact to start now — an email, WhatsApp message, or purchase order — fully written and ready to send or approve.` }], context);
+  sections.push({ key: "plan", title: "30-day plan & first action", body: plan });
+
+  return sections;
+}
