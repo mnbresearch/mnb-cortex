@@ -2,19 +2,29 @@
 import { useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Landmark, Upload, Loader2, ArrowDownLeft, ArrowUpRight, Wallet, BrainCircuit, Check, AlertTriangle } from "lucide-react";
+import { Landmark, Upload, Loader2, ArrowDownLeft, ArrowUpRight, Wallet, BrainCircuit, Check, AlertTriangle, Repeat, BarChart3, Activity, Users } from "lucide-react";
 
 type Cat = { category: string; outflow: number; share: number };
+type MonthPoint = { key: string; label: string; inflow: number; outflow: number; net: number };
+type Recurring = { desc: string; count: number; total: number; avg: number; category: string };
+type Party = { name: string; total: number; count: number };
+type Signal = { label: string; tone: "good" | "warn" | "bad" | "info"; detail: string };
 type Analysis = {
   currency: string; period: string; count: number; inflow: number; outflow: number; net: number;
   opening: number | null; closing: number | null;
-  byCategory: Cat[];
+  avgTxn: number; netMarginPct: number | null; topCategoryShare: number;
+  burnPerMonth: number | null; runwayMonths: number | null;
+  byCategory: Cat[]; monthly: MonthPoint[]; recurring: Recurring[];
+  counterpartiesOut: Party[]; counterpartiesIn: Party[];
   topExpenses: { desc: string; amount: number; date: string; category: string }[];
   topInflows: { desc: string; amount: number; date: string }[];
+  signals: Signal[]; health: { score: number; label: string };
   insights: string[]; summaryMd: string; transactions: number;
 };
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+const toneDot: Record<string, string> = { good: "bg-success", warn: "bg-warning", bad: "bg-danger", info: "bg-primary" };
+const healthColor = (s: number) => (s >= 75 ? "text-success" : s >= 55 ? "text-primary" : s >= 35 ? "text-warning" : "text-danger");
 
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -80,6 +90,8 @@ export function BankStatementPanel() {
     } catch { setSaved("idle"); }
   }
 
+  const mMax = a && a.monthly.length ? Math.max(1, ...a.monthly.map((m) => Math.max(m.inflow, m.outflow))) : 1;
+
   return (
     <div className="space-y-4">
       <Card className="p-4 space-y-3">
@@ -110,6 +122,55 @@ export function BankStatementPanel() {
             <Card className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Wallet className="h-4 w-4 text-primary" /> Net cash flow</div><div className={`text-2xl font-bold mt-1 ${a.net >= 0 ? "text-success" : "text-danger"}`}>{a.net >= 0 ? "+" : "−"}{inr(Math.abs(a.net))}</div></Card>
           </div>
 
+          {/* Cashflow health + signals */}
+          <Card className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-2xl bg-primary/10 grid place-items-center"><Activity className="h-6 w-6 text-primary" /></div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Cashflow health · {a.period}</div>
+                  <div className={`text-2xl font-bold ${healthColor(a.health.score)}`}>{a.health.label} <span className="text-base font-medium text-muted-foreground">· {a.health.score}/100</span></div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div><div className="text-muted-foreground text-xs">Net margin</div><div className="font-semibold">{a.netMarginPct != null ? `${a.netMarginPct}%` : "—"}</div></div>
+                <div><div className="text-muted-foreground text-xs">Avg txn</div><div className="font-semibold">{inr(a.avgTxn)}</div></div>
+                <div><div className="text-muted-foreground text-xs">Runway</div><div className="font-semibold">{a.runwayMonths != null ? `${a.runwayMonths} mo` : "—"}</div></div>
+              </div>
+            </div>
+            {a.signals.length > 0 && (
+              <div className="mt-4 grid sm:grid-cols-2 gap-2">
+                {a.signals.map((s, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm rounded-lg border p-2.5">
+                    <span className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${toneDot[s.tone] || "bg-primary"}`} />
+                    <span><b>{s.label}.</b> <span className="text-muted-foreground">{s.detail}</span></span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Monthly trend */}
+          {a.monthly.length > 1 && (
+            <Card className="p-5">
+              <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm"><BarChart3 className="h-4 w-4 text-primary" /> Month by month</h3>
+              <div className="space-y-3">
+                {a.monthly.map((m) => (
+                  <div key={m.key}>
+                    <div className="flex justify-between text-xs mb-1"><span className="font-medium">{m.label}</span><span className="text-muted-foreground">net {m.net >= 0 ? "+" : "−"}{inr(Math.abs(m.net))}</span></div>
+                    <div className="flex gap-1 items-center">
+                      <div className="h-2.5 rounded-full bg-success/80" style={{ width: `${Math.max(2, (m.inflow / mMax) * 100)}%` }} title={`In ${inr(m.inflow)}`} />
+                    </div>
+                    <div className="flex gap-1 items-center mt-1">
+                      <div className="h-2.5 rounded-full bg-danger/80" style={{ width: `${Math.max(2, (m.outflow / mMax) * 100)}%` }} title={`Out ${inr(m.outflow)}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex gap-4 text-xs text-muted-foreground"><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success/80" /> Money in</span><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-danger/80" /> Money out</span></div>
+            </Card>
+          )}
+
           {a.byCategory.length > 0 && (
             <Card className="p-5">
               <h3 className="font-semibold mb-3">Where the money went · {a.period}</h3>
@@ -118,6 +179,21 @@ export function BankStatementPanel() {
                   <div key={c.category}>
                     <div className="flex justify-between text-sm mb-1"><span>{c.category}</span><span className="text-muted-foreground">{inr(c.outflow)} · {c.share}%</span></div>
                     <div className="h-2 rounded-full bg-secondary overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${c.share}%` }} /></div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Recurring payments */}
+          {a.recurring.length > 0 && (
+            <Card className="p-5">
+              <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm"><Repeat className="h-4 w-4 text-primary" /> Recurring payments &amp; subscriptions</h3>
+              <div className="divide-y">
+                {a.recurring.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 py-2 text-sm">
+                    <span className="truncate">{r.desc}<span className="text-muted-foreground text-xs"> · {r.category} · ×{r.count}</span></span>
+                    <span className="font-medium shrink-0">{inr(r.total)}</span>
                   </div>
                 ))}
               </div>
@@ -147,6 +223,28 @@ export function BankStatementPanel() {
               </div>
             </Card>
           </div>
+
+          {/* Top counterparties */}
+          {(a.counterpartiesOut.length > 0 || a.counterpartiesIn.length > 0) && (
+            <div className="grid md:grid-cols-2 gap-3">
+              <Card className="p-5">
+                <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm"><Users className="h-4 w-4 text-danger" /> Top payees</h3>
+                <div className="space-y-2">
+                  {a.counterpartiesOut.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm gap-2"><span className="truncate">{p.name}<span className="text-muted-foreground text-xs"> · ×{p.count}</span></span><span className="font-medium shrink-0">{inr(p.total)}</span></div>
+                  ))}
+                </div>
+              </Card>
+              <Card className="p-5">
+                <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm"><Users className="h-4 w-4 text-success" /> Top payers</h3>
+                <div className="space-y-2">
+                  {a.counterpartiesIn.length ? a.counterpartiesIn.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm gap-2"><span className="truncate">{p.name}<span className="text-muted-foreground text-xs"> · ×{p.count}</span></span><span className="font-medium shrink-0">{inr(p.total)}</span></div>
+                  )) : <p className="text-sm text-muted-foreground">No credits detected.</p>}
+                </div>
+              </Card>
+            </div>
+          )}
 
           {a.insights.length > 0 && (
             <Card className="p-5">
