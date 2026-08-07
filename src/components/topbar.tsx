@@ -31,7 +31,7 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
         <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           <Sun className="h-4 w-4 dark:hidden" /><Moon className="hidden h-4 w-4 dark:block" />
         </Button>
-        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-purple-500" />
+        <div className="h-8 w-8 rounded-full brand-gradient ring-2 ring-background shadow-sm" />
       </div>
     </header>
   );
