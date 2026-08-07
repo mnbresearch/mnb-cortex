@@ -23,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen">
       <Sidebar superAdmin={superAdmin} orgs={orgs} activeOrgId={orgId} />
-      <div className="flex-1 min-w-0">{children}</div>
+      <div className="flex-1 min-w-0 app-canvas">{children}</div>
       <MobileNav />
       <CommandPalette />
       <PWA />
