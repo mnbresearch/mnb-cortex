@@ -46,11 +46,16 @@ export async function createOrder(opts: {
   } catch (e: any) { return { ok: false, error: e?.message || "Cashfree error." }; }
 }
 
-export async function getOrder(orderId: string): Promise<{ paid: boolean; amount: number; note: string }> {
-  if (!hasCashfree() || !orderId) return { paid: false, amount: 0, note: "" };
+export async function getOrder(orderId: string): Promise<{ paid: boolean; amount: number; note: string; customerId: string }> {
+  if (!hasCashfree() || !orderId) return { paid: false, amount: 0, note: "", customerId: "" };
   try {
     const r = await fetch(base() + "/orders/" + encodeURIComponent(orderId), { headers: headers() });
     const j = await r.json();
-    return { paid: j?.order_status === "PAID", amount: Number(j?.order_amount || 0), note: String(j?.order_note || "") };
-  } catch { return { paid: false, amount: 0, note: "" }; }
+    return {
+      paid: j?.order_status === "PAID",
+      amount: Number(j?.order_amount || 0),
+      note: String(j?.order_note || ""),
+      customerId: String(j?.customer_details?.customer_id || ""),
+    };
+  } catch { return { paid: false, amount: 0, note: "", customerId: "" }; }
 }
