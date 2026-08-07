@@ -81,6 +81,36 @@ body {
 
 /* Brand gradient surfaces */
 .brand-gradient { background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--brand-2))); }
+
+/* ---- In-app polish (v6.25) ---- */
+/* A calm, layered canvas behind the app content — replaces the flat near-white. */
+.app-canvas {
+  background:
+    radial-gradient(1100px 520px at 100% -8%, hsl(var(--primary) / 0.06), transparent 58%),
+    radial-gradient(820px 460px at -6% 4%, hsl(var(--brand-3) / 0.05), transparent 55%),
+    hsl(var(--background));
+}
+/* Sidebar surface with a hint of brand + depth. */
+.sidebar-surface {
+  background: linear-gradient(180deg, hsl(var(--card) / 0.9), hsl(var(--card) / 0.55));
+  backdrop-filter: blur(8px);
+}
+/* Premium nav item: soft tint + left accent bar instead of a heavy fill. */
+.nav-item { position: relative; transition: background-color .18s ease, color .18s ease; }
+.nav-item::before {
+  content: ""; position: absolute; left: 0; top: 50%; height: 0; width: 3px; border-radius: 0 3px 3px 0;
+  background: hsl(var(--primary)); transform: translateY(-50%); transition: height .2s ease;
+}
+.nav-item.is-active { background: hsl(var(--primary) / 0.10); color: hsl(var(--primary)); font-weight: 600; }
+.nav-item.is-active::before { height: 60%; }
+.nav-item:not(.is-active):hover { background: hsl(var(--accent) / 0.6); }
+/* Soft elevated card shadow used app-wide. */
+.card-elevated {
+  box-shadow: 0 1px 2px -1px hsl(200 24% 12% / 0.06), 0 12px 34px -20px hsl(200 24% 12% / 0.22);
+}
+/* Gentle per-card entrance used by grids. */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.rise-in { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
 .brand-ring { box-shadow: 0 0 0 1px hsl(var(--primary) / 0.2), 0 8px 30px -12px hsl(var(--primary) / 0.45); }
 
 /* Subtle lift on interactive cards */
