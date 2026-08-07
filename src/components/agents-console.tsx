@@ -2,8 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { INDUSTRIES, DEPARTMENTS, agentsForIndustry, findAgent, type Agent } from "@/lib/agents/catalog";
-import { Sparkles, Play, Download, Copy, Check, Loader2, RefreshCw, Lock, ChevronLeft, WandSparkles, Image as ImageIcon, Video, Upload } from "lucide-react";
+import { INDUSTRIES, DEPARTMENTS, agentsForIndustry, agentsForDepartment, findAgent, type Agent } from "@/lib/agents/catalog";
+import { Sparkles, Play, Download, Copy, Check, Loader2, RefreshCw, Lock, ChevronLeft, WandSparkles, Image as ImageIcon, Video, Upload, ArrowRight } from "lucide-react";
 
 const kindBadge: Record<string, { label: string; cls: string }> = {
   reasoning: { label: "Text", cls: "bg-primary/10 text-primary" },
@@ -11,10 +11,12 @@ const kindBadge: Record<string, { label: string; cls: string }> = {
   video: { label: "Video", cls: "bg-danger/10 text-danger" },
 };
 
+type Cat = { kind: "dept" | "industry" | "custom"; id: string; name: string; emoji: string; blurb?: string };
+
 async function api(url: string, opts?: RequestInit) { const r = await fetch(url, opts); return r.json().catch(() => ({})); }
 
 export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) {
-  const [industry, setIndustry] = useState(initialIndustry || "jewellery");
+  const [cat, setCat] = useState<Cat | null>(null);
   const [custom, setCustom] = useState<Agent[]>([]);
   const [sel, setSel] = useState<Agent | null>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -37,12 +39,24 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     api("/api/agents").then((j) => { setCustom(j.custom || []); setQuota(j.imageQuota || null); });
     try {
       const p = new URLSearchParams(window.location.search);
-      const tab = p.get("tab"); if (tab) setIndustry(tab);
+      const tab = p.get("tab");
+      if (tab) {
+        const d = DEPARTMENTS.find((x) => x.id === tab);
+        const ind = INDUSTRIES.find((x) => x.id === tab);
+        if (d) setCat({ kind: "dept", id: d.id, name: d.name, emoji: d.emoji, blurb: d.blurb });
+        else if (ind) setCat({ kind: "industry", id: ind.id, name: ind.name, emoji: ind.emoji, blurb: ind.blurb });
+      }
       const runId = p.get("run"); if (runId) { const a = findAgent(runId); if (a) open(a); }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const agents = useMemo(() => industry === "custom" ? custom : agentsForIndustry(industry), [industry, custom]);
+
+  const agents = useMemo(() => {
+    if (!cat) return [] as Agent[];
+    if (cat.kind === "custom") return custom;
+    if (cat.kind === "dept") return agentsForDepartment(cat.id);
+    return agentsForIndustry(cat.id);
+  }, [cat, custom]);
 
   function open(a: Agent) {
     setSel(a); setOutput(""); setImages([]); setImgIn(""); setVersion(0); setRevise(""); setMsg("");
@@ -85,13 +99,14 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
   function dlImg(src: string, i: number) { const a = document.createElement("a"); a.href = src; a.download = `${sel?.id.replace(/\./g, "-")}-${i + 1}.png`; a.click(); }
   function copy() { navigator.clipboard?.writeText(output); setCopied(true); setTimeout(() => setCopied(false), 1500); }
 
+  // ---------- RUNNER (an agent is open) ----------
   if (sel) {
     const badge = kindBadge[sel.kind];
     const isVideo = sel.kind === "video";
     const isImage = sel.kind === "image";
     return (
       <div className="space-y-4">
-        <button onClick={() => setSel(null)} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><ChevronLeft className="h-4 w-4" /> All agents</button>
+        <button onClick={() => setSel(null)} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><ChevronLeft className="h-4 w-4" /> Back to agents</button>
         <Card className="p-5">
           <div className="flex items-center gap-2">
             <h2 className="font-semibold text-lg">{sel.name}</h2>
@@ -185,59 +200,108 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-1.5">
-        {INDUSTRIES.map((ind) => (
-          <button key={ind.id} onClick={() => setIndustry(ind.id)} className={`text-sm rounded-full border px-3 py-1.5 ${industry === ind.id ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent"}`}>
-            <span className="mr-1">{ind.emoji}</span>{ind.name}
-          </button>
-        ))}
-        <button onClick={() => setIndustry("custom")} className={`text-sm rounded-full border px-3 py-1.5 ${industry === "custom" ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent"}`}>
-          <span className="mr-1">🛠️</span>Custom ({custom.length})
-        </button>
-      </div>
-      <div className="flex flex-wrap gap-1.5 items-center">
-        <span className="text-xs text-muted-foreground mr-1">By department:</span>
-        {DEPARTMENTS.map((d) => (
-          <button key={d.id} onClick={() => setIndustry(d.id)} className={`text-sm rounded-full border px-3 py-1.5 ${industry === d.id ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent"}`}>
-            <span className="mr-1">{d.emoji}</span>{d.name}
-          </button>
-        ))}
-      </div>
-
-      {industry === "custom" && (
-        <Card className="p-5 space-y-3 border-primary/30 bg-primary/5">
-          <div className="flex items-center gap-2 font-semibold"><WandSparkles className="h-4 w-4 text-primary" /> Let Cortex build agents for you</div>
-          <div className="grid sm:grid-cols-2 gap-2">
-            <input className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Your business (e.g. artisan soap brand)" value={biz} onChange={(e) => setBiz(e.target.value)} />
-            <input className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Goals (e.g. more online orders)" value={goals} onChange={(e) => setGoals(e.target.value)} />
+  // ---------- CATEGORY LIST (a category is chosen) ----------
+  if (cat) {
+    return (
+      <div className="space-y-4">
+        <button onClick={() => setCat(null)} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><ChevronLeft className="h-4 w-4" /> All categories</button>
+        <div className="flex items-center gap-3">
+          <span className="h-11 w-11 rounded-xl bg-primary/10 grid place-items-center text-2xl">{cat.emoji}</span>
+          <div>
+            <h2 className="font-semibold text-lg leading-tight">{cat.name}</h2>
+            <p className="text-xs text-muted-foreground">{agents.length} agent{agents.length === 1 ? "" : "s"}{cat.blurb ? ` · ${cat.blurb}` : ""}</p>
           </div>
-          <Button size="sm" onClick={build} disabled={busy === "build"}>{busy === "build" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Build my agents</Button>
-          {buildMsg && <p className="text-sm text-muted-foreground">{buildMsg}</p>}
-        </Card>
-      )}
+        </div>
 
-      {agents.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">{industry === "custom" ? "No custom agents yet — build some above." : "No agents here yet."}</Card>
-      ) : (
+        {cat.kind === "custom" && (
+          <Card className="p-5 space-y-3 border-primary/30 bg-primary/5">
+            <div className="flex items-center gap-2 font-semibold"><WandSparkles className="h-4 w-4 text-primary" /> Let Cortex build agents for you</div>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <input className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Your business (e.g. artisan soap brand)" value={biz} onChange={(e) => setBiz(e.target.value)} />
+              <input className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Goals (e.g. more online orders)" value={goals} onChange={(e) => setGoals(e.target.value)} />
+            </div>
+            <Button size="sm" onClick={build} disabled={busy === "build"}>{busy === "build" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Build my agents</Button>
+            {buildMsg && <p className="text-sm text-muted-foreground">{buildMsg}</p>}
+          </Card>
+        )}
+
+        {agents.length === 0 ? (
+          <Card className="p-8 text-center text-sm text-muted-foreground">{cat.kind === "custom" ? "No custom agents yet — build some above." : "No agents here yet."}</Card>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {agents.map((a, i) => {
+              const badge = kindBadge[a.kind];
+              const Icon = a.kind === "video" ? Video : a.kind === "image" ? ImageIcon : Sparkles;
+              return (
+                <button key={a.id} onClick={() => open(a)} style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}
+                  className="rise-in text-left rounded-xl border bg-card p-4 card-elevated hover:border-primary/40 transition-all group">
+                  <div className="flex items-center justify-between">
+                    <span className="h-9 w-9 rounded-lg bg-primary/10 grid place-items-center"><Icon className="h-4 w-4 text-primary" /></span>
+                    <span className={`text-[11px] rounded px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
+                  </div>
+                  <div className="font-medium mt-2.5 flex items-center gap-1">{a.name}<ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" /></div>
+                  <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ---------- HOME (category-first: "what do you want to do?") ----------
+  return (
+    <div className="space-y-9">
+      <div>
+        <h2 className="font-display text-xl lg:text-2xl tracking-tight">What do you want to do?</h2>
+        <p className="text-sm text-muted-foreground mt-1">Pick a team to see the agents that do that job — or jump straight to your industry.</p>
+      </div>
+
+      <div>
+        <div className="eyebrow mb-3">By team</div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {agents.map((a) => {
-            const badge = kindBadge[a.kind];
-            const Icon = a.kind === "video" ? Video : a.kind === "image" ? ImageIcon : Sparkles;
+          {DEPARTMENTS.map((d, i) => {
+            const n = agentsForDepartment(d.id).length;
             return (
-              <button key={a.id} onClick={() => open(a)} className="text-left rounded-xl border p-4 hover:border-primary/40 hover:bg-accent/40 transition-colors">
+              <button key={d.id} onClick={() => setCat({ kind: "dept", id: d.id, name: d.name, emoji: d.emoji, blurb: d.blurb })}
+                style={{ animationDelay: `${i * 30}ms` }}
+                className="rise-in text-left rounded-xl border bg-card p-5 card-elevated hover:border-primary/40 transition-all group">
                 <div className="flex items-center justify-between">
-                  <Icon className="h-5 w-5 text-primary" />
-                  <span className={`text-[11px] rounded px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
+                  <span className="h-11 w-11 rounded-xl bg-primary/10 grid place-items-center text-2xl">{d.emoji}</span>
+                  <span className="text-xs text-muted-foreground">{n} agents</span>
                 </div>
-                <div className="font-medium mt-2">{a.name}</div>
-                <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.desc}</div>
+                <div className="font-semibold mt-3 flex items-center gap-1">{d.name}<ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" /></div>
+                <div className="text-sm text-muted-foreground mt-0.5">{d.blurb}</div>
               </button>
             );
           })}
+          <button onClick={() => setCat({ kind: "custom", id: "custom", name: "Custom agents", emoji: "🛠️", blurb: "Built for your exact business" })}
+            style={{ animationDelay: `${DEPARTMENTS.length * 30}ms` }}
+            className="rise-in text-left rounded-xl border border-dashed border-primary/40 p-5 bg-primary/[0.04] hover:bg-primary/10 transition-all">
+            <div className="flex items-center justify-between">
+              <span className="h-11 w-11 rounded-xl bg-primary/10 grid place-items-center text-2xl">🛠️</span>
+              <span className="text-xs text-primary">{custom.length} built</span>
+            </div>
+            <div className="font-semibold mt-3">Build your own</div>
+            <div className="text-sm text-muted-foreground mt-0.5">Cortex invents agents for your exact business.</div>
+          </button>
         </div>
-      )}
+      </div>
+
+      <div>
+        <div className="eyebrow mb-3">By your industry</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+          {INDUSTRIES.map((ind, i) => (
+            <button key={ind.id} onClick={() => setCat({ kind: "industry", id: ind.id, name: ind.name, emoji: ind.emoji, blurb: ind.blurb })}
+              style={{ animationDelay: `${Math.min(i, 16) * 18}ms` }}
+              className="rise-in text-left rounded-lg border bg-card p-3 hover:border-primary/40 hover:bg-accent/40 transition-all flex items-center gap-2.5">
+              <span className="text-xl shrink-0">{ind.emoji}</span>
+              <span className="text-sm font-medium leading-tight">{ind.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
