@@ -11,7 +11,7 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
   const path = usePathname();
   const groups = Array.from(new Set(NAV.map((n) => n.group)));
   return (
-    <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r bg-card/40 h-screen sticky top-0">
+    <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r sidebar-surface h-screen sticky top-0">
       <div className="flex items-center gap-2.5 px-5 h-16 border-b">
         <Logo size={34} />
         <div>
@@ -30,9 +30,8 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
                 const Icon = n.icon;
                 return (
                   <Link key={n.href} href={n.href}
-                    className={cn("flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors",
-                      active ? "bg-primary text-primary-foreground font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
-                    <Icon className="h-4 w-4" />
+                    className={cn("nav-item flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-muted-foreground hover:text-foreground", active && "is-active")}>
+                    <Icon className="h-4 w-4 shrink-0" />
                     {n.label}
                   </Link>
                 );
