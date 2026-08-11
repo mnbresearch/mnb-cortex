@@ -25,16 +25,23 @@ export async function GET(req: Request) {
   // cron needed. Fires only on Mondays (IST) and only when explicitly enabled via
   // WEEKLY_UPDATE_ENABLED=1. sendWeeklyUpdate() is itself idempotent per version,
   // so a re-run the same week is a no-op.
+  const istDay = new Date(Date.now() + 5.5 * 3600 * 1000).getUTCDay(); // 0=Sun … 1=Mon
   let weekly: any = null;
   try {
-    if (process.env.WEEKLY_UPDATE_ENABLED === "1") {
-      const istDay = new Date(Date.now() + 5.5 * 3600 * 1000).getUTCDay(); // 0=Sun … 1=Mon
-      if (istDay === 1) {
-        const { sendWeeklyUpdate } = await import("@/lib/weekly-update");
-        weekly = await sendWeeklyUpdate({});
-      }
+    if (process.env.WEEKLY_UPDATE_ENABLED === "1" && istDay === 1) {
+      const { sendWeeklyUpdate } = await import("@/lib/weekly-update");
+      weekly = await sendWeeklyUpdate({});
     }
   } catch (e: any) { weekly = { error: e?.message }; }
 
-  return NextResponse.json({ ok: true, ran, weekly });
+  // Per-workspace "plan for the week" email — also piggybacks the daily cron.
+  let plan: any = null;
+  try {
+    if (process.env.WEEKLY_PLAN_ENABLED === "1" && istDay === 1) {
+      const { sendWeeklyPlans } = await import("@/lib/plan-email");
+      plan = await sendWeeklyPlans({});
+    }
+  } catch (e: any) { plan = { error: e?.message }; }
+
+  return NextResponse.json({ ok: true, ran, weekly, plan });
 }
