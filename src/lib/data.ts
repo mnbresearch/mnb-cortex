@@ -1,7 +1,8 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { createClient, hasSupabase } from "@/lib/supabase/server";
+import { createClient, hasSupabase, serviceClient } from "@/lib/supabase/server";
 import { demoMetrics, demoInsights, demoAlerts, demoContext } from "@/lib/demo";
+import { SUPER_ADMINS } from "@/lib/config";
 import type { HealthMetric, AIInsight, Alert } from "@/types";
 
 export async function getUserAndOrg() {
@@ -179,10 +180,21 @@ export async function getMembers() {
 }
 
 export async function getLeads() {
-  const { orgId } = await getUserAndOrg();
+  const { user, orgId } = await getUserAndOrg();
   if (!orgId) return { rows: [] as any[], live: false };
+  const isSuper = SUPER_ADMINS.includes(String(user?.email || "").toLowerCase());
+  // Platform owner (super-admin) sees every pricing inquiry, including public
+  // ones with no org, via the service role. Regular customers only ever see
+  // leads scoped to their own workspace — never another tenant's.
+  if (isSuper) {
+    const svc = serviceClient();
+    if (svc) {
+      const { data } = await svc.from("leads").select("*").order("created_at", { ascending: false }).limit(300);
+      return { rows: (data as any[]) || [], live: true };
+    }
+  }
   const sb = createClient();
-  const { data } = await sb.from("leads").select("*").order("created_at", { ascending: false }).limit(200);
+  const { data } = await sb.from("leads").select("*").eq("org_id", orgId).order("created_at", { ascending: false }).limit(200);
   return { rows: (data as any[]) || [], live: true };
 }
 
