@@ -3,12 +3,12 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 import { Sparkles, Lock, Check, X } from "lucide-react";
+import { PLANS as ALL_PLANS } from "@/lib/config";
 
-const PLANS = [
-  { name: "Starter", price: "₹2,999", note: "small teams" },
-  { name: "Growth", price: "₹7,999", note: "the full AI COO", highlight: true },
-  { name: "Premium", price: "₹19,999", note: "scaling companies" },
-];
+// Real prices, straight from the pricing source of truth.
+const PLANS = ALL_PLANS
+  .filter((p) => ["starter", "growth", "premium"].includes(p.id))
+  .map((p) => ({ name: p.name, price: "₹" + p.monthly.toLocaleString("en-IN"), note: p.tagline, highlight: p.id === "growth" }));
 
 // Pages that must stay reachable so a locked user can actually pay.
 const ALLOW = ["/billing", "/settings", "/pricing"];
@@ -23,7 +23,7 @@ export function TrialGuard({ status, daysLeft, locked }: { status: string; daysL
       <div className="fixed inset-0 z-[100] grid place-items-center bg-background/80 backdrop-blur-sm p-4">
         <div className="w-full max-w-lg rounded-2xl border bg-card p-6 text-center shadow-2xl glow-ring">
           <div className="h-12 w-12 rounded-full bg-primary/10 grid place-items-center mx-auto"><Lock className="h-6 w-6 text-primary" /></div>
-          <h2 className="mt-3 text-xl font-bold">Your 14-day free trial has ended</h2>
+          <h2 className="mt-3 text-xl font-bold">Your free trial has ended</h2>
           <p className="text-sm text-muted-foreground mt-1">Choose a plan to keep using MNB Cortex. Your data is safe and waiting.</p>
           <div className="grid sm:grid-cols-3 gap-2 mt-5">
             {PLANS.map((p) => (
