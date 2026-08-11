@@ -1,6 +1,7 @@
 "use server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, serviceClient } from "@/lib/supabase/server";
 import { getUserAndOrg, getBusinessContext } from "@/lib/data";
+import { SUPER_ADMINS } from "@/lib/config";
 import { generateFor } from "@/lib/ai/cortex";
 import { sendEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
@@ -262,8 +263,16 @@ export async function disconnectIntegration(fd: FormData) {
   revalidatePath("/integrations");
 }
 export async function deleteLead(fd: FormData) {
-  await requireOrg(); const sb = createClient();
-  const { error } = await sb.from("leads").delete().eq("id", str(fd.get("id")));
+  const { user, orgId } = await getUserAndOrg();
+  if (!orgId) throw new Error("Sign in to use this feature.");
+  const id = str(fd.get("id"));
+  const isSuper = SUPER_ADMINS.includes(String(user?.email || "").toLowerCase());
+  if (isSuper) {
+    const svc = serviceClient();
+    if (svc) { const { error } = await svc.from("leads").delete().eq("id", id); if (error) throw new Error(error.message); revalidatePath("/leads"); return; }
+  }
+  const sb = createClient();
+  const { error } = await sb.from("leads").delete().eq("id", id).eq("org_id", orgId);
   if (error) throw new Error(error.message);
   revalidatePath("/leads");
 }
