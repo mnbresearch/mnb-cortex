@@ -23,34 +23,56 @@ export async function ensureWorkspace(opts?: { name?: string; industry?: string 
   const svc = serviceClient();
   if (!svc) return { ok: false, error: "Service role not configured." };
 
-  // Already in a workspace? Nothing to do.
-  const { data: mems } = await svc.from("memberships").select("org_id").eq("user_id", user.id).limit(1);
-  if (mems && mems.length) return { ok: true, orgId: (mems[0] as any).org_id, created: false };
-
   const meta: any = user.user_metadata || {};
-  const name = String(opts?.name || meta.company || meta.full_name || (user.email || "").split("@")[0] || "My workspace").slice(0, 80);
+  const wantName = String(opts?.name || meta.company || "").slice(0, 80).trim();
 
-  const { data: org, error } = await svc.from("organizations")
-    .insert({ name, industry: opts?.industry || meta.industry || null, currency: "INR", plan: "growth", accent: "teal" })
-    .select("id").single();
-  if (error || !org) return { ok: false, error: error?.message || "Could not create your workspace." };
-  const orgId = (org as any).id as string;
+  // A DB signup trigger may already have created a workspace. Reuse it if so;
+  // otherwise create one. Either way we then ensure it's fully provisioned.
+  const { data: mems } = await svc.from("memberships").select("org_id").eq("user_id", user.id).limit(1);
+  let orgId = (mems && mems.length) ? String((mems[0] as any).org_id) : "";
+  let created = false;
 
-  await svc.from("memberships").insert({ org_id: orgId, user_id: user.id, role: "owner" });
+  if (!orgId) {
+    const name = wantName || meta.full_name || (user.email || "").split("@")[0] || "My workspace";
+    const { data: org, error } = await svc.from("organizations")
+      .insert({ name, industry: opts?.industry || meta.industry || null, currency: "INR", plan: "growth", accent: "teal" })
+      .select("id").single();
+    if (error || !org) return { ok: false, error: error?.message || "Could not create your workspace." };
+    orgId = String((org as any).id);
+    created = true;
+    await svc.from("memberships").insert({ org_id: orgId, user_id: user.id, role: "owner" });
+  }
 
-  // Trial window + status (migration-safe — columns may not exist on older DBs).
+  // Rename a generic trigger-created workspace to the name the user actually typed.
+  if (wantName) {
+    try {
+      const { data: o } = await svc.from("organizations").select("name").eq("id", orgId).single();
+      const cur = String((o as any)?.name || "");
+      if (/^my (company|workspace|business)$/i.test(cur) && wantName.toLowerCase() !== cur.toLowerCase()) {
+        await svc.from("organizations").update({ name: wantName }).eq("id", orgId);
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Ensure a trial window + status if not already set (migration-safe).
   try {
-    await svc.from("organizations").update({
-      subscription_status: "trialing",
-      trial_ends_at: new Date(Date.now() + TRIAL_DAYS * 86_400_000).toISOString(),
-    }).eq("id", orgId);
+    const { data: o } = await svc.from("organizations").select("trial_ends_at, subscription_status").eq("id", orgId).single();
+    if (!(o as any)?.trial_ends_at) {
+      await svc.from("organizations").update({
+        subscription_status: (o as any)?.subscription_status || "trialing",
+        trial_ends_at: new Date(Date.now() + TRIAL_DAYS * 86_400_000).toISOString(),
+      }).eq("id", orgId);
+    }
   } catch { /* ignore */ }
 
   // Profile row (best-effort).
   try { await svc.from("profiles").upsert({ id: user.id, full_name: meta.full_name || null }); } catch { /* ignore */ }
 
-  // One-time trial credits.
-  try { await grantCredits(orgId, TRIAL_CREDITS, "trial_grant", user.id); } catch { /* ignore */ }
+  // One-time trial credits — granted exactly once (guarded by the ledger reason).
+  try {
+    const { data: prior } = await svc.from("credit_ledger").select("id").eq("org_id", orgId).eq("reason", "trial_grant").limit(1);
+    if (!prior || !prior.length) await grantCredits(orgId, TRIAL_CREDITS, "trial_grant", user.id);
+  } catch { /* ignore */ }
 
-  return { ok: true, orgId, created: true };
+  return { ok: true, orgId, created };
 }
