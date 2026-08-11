@@ -13,6 +13,7 @@ import { Landmark, ReceiptText, Upload as UploadIcon } from "lucide-react";
 import { AlertTriangle, Sparkles } from "lucide-react";
 import { PrintButton, ExportButton } from "@/components/export-button";
 import { AIPulse } from "@/components/ai-panel";
+import { NextBestActions } from "@/components/next-best-actions";
 import { CortexScore } from "@/components/cortex-score";
 import { InstallCTA } from "@/components/install-cta";
 import Link from "next/link";
@@ -31,7 +32,7 @@ export default async function Dashboard() {
 
   return (
     <>
-      <Topbar title="Business Health" subtitle="One page. Everything that matters." />
+      <Topbar title="Business Health" subtitle="Your AI COO — I watch your numbers and tell you what to do next." />
       <PageShell>
         <div className="flex justify-end gap-2 no-print">
           <ExportButton rows={metrics} filename="business-health.csv" columns={["label","value","unit","delta_pct","status"]} />
@@ -66,6 +67,9 @@ export default async function Dashboard() {
             </div>
           </div>
         </Card>
+
+        {/* Guided command layer: turns 130+ tools into the few that matter now. */}
+        <NextBestActions />
 
         {hasMetrics && <Card className="p-5"><CortexScore metrics={metrics} /></Card>}
 
