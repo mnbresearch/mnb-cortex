@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { runDeepDive } from "@/lib/ai/cortex";
 import { getBusinessContext, getUserAndOrg } from "@/lib/data";
-import { chargeForMode } from "@/lib/credits";
+import { chargeForMode, refundForMode } from "@/lib/credits";
 import { recallContext } from "@/lib/memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
+  let charged = false;
   try {
     const { focus, question } = await req.json().catch(() => ({}));
     const f = String(focus || "finance").toLowerCase();
@@ -20,6 +22,7 @@ export async function POST(req: Request) {
         error: `You're out of AI credits. A Deep Dive costs ${gate.cost} credits and your balance is ${gate.balance}. Top up under Usage & Credits.`,
       }, { status: 402 });
     }
+    charged = gate.enforced;
 
     const context = await getBusinessContext();
     let full = context;
@@ -30,8 +33,13 @@ export async function POST(req: Request) {
     } catch { /* memory optional */ }
 
     const sections = await runDeepDive(f, q, full);
+    if (!sections || !sections.length) {
+      if (charged) await refundForMode("deepdive");   // nothing generated → don't bill
+      return NextResponse.json({ ok: false, error: "Deep Dive couldn't generate anything — please try again in a moment." }, { status: 200 });
+    }
     return NextResponse.json({ ok: true, focus: f, question: q, sections, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
+    if (charged) { try { await refundForMode("deepdive"); } catch { /* ignore */ } }
     return NextResponse.json({ ok: false, error: e?.message || "Deep Dive failed — check the AI key." }, { status: 200 });
   }
 }
