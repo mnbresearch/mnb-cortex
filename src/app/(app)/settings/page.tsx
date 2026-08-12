@@ -6,6 +6,7 @@ import { Field, ActionForm } from "@/components/forms";
 import { getOrgProfile, getUserAndOrg } from "@/lib/data";
 import { updateOrgProfile, seedDemoData, signOut } from "@/lib/actions";
 import { APP_VERSION } from "@/lib/config";
+import { INDUSTRIES as AGENT_INDUSTRIES } from "@/lib/agents/catalog";
 import { BackupButton } from "@/components/backup-button";
 import { Database, LogOut, Building2 } from "lucide-react";
 
@@ -36,7 +37,7 @@ export default async function Settings() {
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">Industry
                   <select className={inp} name="industry" defaultValue={profile?.industry || "manufacturing"}>
-                    {["manufacturing","trading","distribution","education","retail","d2c"].map((o)=> <option key={o} value={o}>{o}</option>)}
+                    {AGENT_INDUSTRIES.map((o) => <option key={o.id} value={o.id}>{o.emoji} {o.name}</option>)}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">Annual revenue (Cr)
