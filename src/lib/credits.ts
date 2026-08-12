@@ -107,6 +107,19 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
   }
 }
 
+/**
+ * Give back the credits for a mode when the AI run produced nothing usable.
+ * Only call this after chargeForMode() actually enforced a charge — it grants the
+ * cost straight back to the current workspace so a failed run is never billed.
+ */
+export async function refundForMode(mode: string): Promise<void> {
+  const cost = creditCost(mode);
+  if (cost <= 0) return;
+  const { user, orgId } = await getUserAndOrg();
+  if (!orgId) return;
+  try { await grantCredits(orgId, cost, "refund:" + String(mode || "").toLowerCase(), user?.id); } catch { /* best effort */ }
+}
+
 /** Add credits to a workspace via the audited RPC (used by top-up + super-admin). */
 export async function grantCredits(orgId: string, amount: number, reason: string, userId?: string | null): Promise<number> {
   const svc = serviceClient();
