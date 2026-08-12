@@ -3,6 +3,7 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Card } from "@/components/ui/card";
 import { WorkforceMap } from "@/components/workforce-map";
+import { WorkforceGraph } from "@/components/workforce-graph";
 import { getUserAndOrg } from "@/lib/data";
 import { getProfile } from "@/lib/memory";
 import { agentCount, DEPARTMENTS, agentsForDepartment } from "@/lib/agents/catalog";
@@ -24,7 +25,13 @@ export default async function Workforce() {
           <span>Every business runs on the same {DEPARTMENTS.length} functions. Cortex maps working AI agents to each — {agentCount()}+ in all, every one plugged into your second brain. Pick a team to see and run its agents.</span>
         </Card>
 
-        {/* Clean, category-first departments — no zoom, no clutter. */}
+        {/* The living map — every agent connected to the central brain; activated ones light up. */}
+        <div>
+          <div className="eyebrow mb-3">The living workforce map</div>
+          <WorkforceGraph />
+        </div>
+
+        {/* Clean, category-first departments — the fast way to find and run agents. */}
         <div>
           <div className="eyebrow mb-3">Your teams</div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
