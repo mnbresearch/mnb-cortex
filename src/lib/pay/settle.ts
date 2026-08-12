@@ -4,6 +4,24 @@ import { serviceClient } from "@/lib/supabase/server";
 import { grantCredits } from "@/lib/credits";
 import { PLANS, CREDIT_PACKS } from "@/lib/config";
 
+/**
+ * Idempotently claim a payment in the `payments` ledger (order_id is the PK).
+ * Returns true only for the FIRST caller — so a retried/duplicated payment
+ * verification (e.g. the Razorpay fallback) grants exactly once. If the ledger
+ * isn't available, returns true so activation still happens (fail-open).
+ */
+export async function claimPaymentOnce(orderId: string, orgId: string, kind: string, ref: string, amount: number, provider = "razorpay"): Promise<boolean> {
+  const svc = serviceClient();
+  if (!svc || !orderId) return true;
+  try {
+    const { data } = await svc.from("payments").upsert(
+      { order_id: orderId, org_id: orgId, kind, ref, amount, status: "paid", provider },
+      { onConflict: "order_id", ignoreDuplicates: true },
+    ).select("order_id");
+    return Array.isArray(data) && data.length > 0;
+  } catch { return true; }
+}
+
 export type SettleResult = {
   ok: boolean;
   pending?: boolean;
