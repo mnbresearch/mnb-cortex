@@ -349,3 +349,42 @@ export const INDUSTRIES: Industry[] = [
 export function getIndustry(slug: string): Industry | undefined {
   return INDUSTRIES.find((i) => i.slug === slug);
 }
+
+// Maps a workspace's stored industry (agent-catalog ids or older values) to the
+// canonical industry so the app can tailor itself to it.
+const INDUSTRY_ALIAS: Record<string, string> = {
+  manufacturing: "manufacturing",
+  retail: "retail-d2c", d2c: "retail-d2c", "retail-d2c": "retail-d2c", ecommerce: "retail-d2c",
+  services: "services", agency: "services",
+  "professional-services": "professional-services", consulting: "professional-services",
+  jewellery: "jewellery", jewelry: "jewellery",
+  fashion: "fashion", apparel: "fashion",
+  restaurant: "restaurant", food: "restaurant", fnb: "restaurant",
+  realestate: "real-estate", "real-estate": "real-estate", property: "real-estate",
+  beauty: "beauty-salon", salon: "beauty-salon", "beauty-salon": "beauty-salon",
+  automotive: "automotive", auto: "automotive",
+  healthcare: "clinic", clinic: "clinic", health: "clinic",
+  education: "education", coaching: "education", edtech: "education",
+  fitness: "fitness", gym: "fitness",
+  travel: "travel", hospitality: "travel", hotel: "travel",
+  logistics: "logistics", transport: "logistics",
+  agri: "agriculture", agriculture: "agriculture", farming: "agriculture",
+  pharmacy: "pharmacy", wellness: "pharmacy",
+  electronics: "electronics", appliances: "electronics",
+  furniture: "furniture", decor: "furniture",
+  grocery: "grocery", kirana: "grocery",
+  events: "events", wedding: "events",
+  photography: "photography", studio: "photography",
+  petcare: "petcare", pet: "petcare",
+  interior: "interior",
+  printing: "printing", signage: "printing",
+  footwear: "footwear", shoes: "footwear",
+  distribution: "distribution", trading: "distribution", wholesale: "distribution",
+};
+
+export function resolveIndustry(value?: string | null): Industry | undefined {
+  const k = String(value || "").toLowerCase().trim();
+  if (!k) return undefined;
+  const slug = INDUSTRY_ALIAS[k] || k;
+  return INDUSTRIES.find((i) => i.slug === slug);
+}
