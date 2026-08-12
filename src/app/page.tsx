@@ -142,6 +142,13 @@ const TESTI = [
   { q: "Feels like having a COO I can actually afford.", n: "D2C founder" },
 ];
 
+const MOATS = [
+  { n: "01", name: "A memory that compounds", claim: "Every workspace builds its own permanent brain — decisions, numbers, context, preferences — that gets sharper every single day. A rival starting today starts from zero for each customer; your Cortex only deepens. The data moat is private, per-customer, and grows on its own." },
+  { n: "02", name: "One brain, not 130 point tools", claim: "Finance, sales, ops and 300+ agents all reason over the same memory and your live data, so the whole company thinks together. You can bolt a chatbot onto a dashboard — you can't retrofit a unified operating brain." },
+  { n: "03", name: "It acts, not just answers", claim: "Cortex reads your real bank statements and GST returns, drafts the reminder, PO or plan, and — with one approval — sends it. Advice is a commodity. A system that closes the loop across every function is not." },
+  { n: "04", name: "Vertical depth × the AI-search era", claim: "Tuned to 25 Indian industries and built to get you recommended by ChatGPT, Gemini and Perplexity. Generic tools can't match the depth, and latecomers can't catch a head start that compounds." },
+];
+
 const mark = (v: string) =>
   v === "y" ? <span className="text-primary">●</span> : v === "~" ? <span className="text-warning">◐</span> : <span className="text-muted-foreground/40">○</span>;
 
@@ -250,6 +257,24 @@ export default function Home() {
               brain that monitors, predicts, recommends and executes across your whole company — and gets sharper every week you use it.
             </p>
           </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- THE MOAT ---------- */}
+      <section className="px-5 lg:px-10 py-24 lg:py-32 border-t">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="◆">The moat</SectionLabel>
+          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Anyone can wrap an AI. <span className="text-primary">This can&rsquo;t be copied.</span></h2>
+          <p className="mt-4 text-muted-foreground max-w-2xl">The advantage compounds with every day you use it — and can&rsquo;t be bolted on after the fact.</p>
+          <div className="mt-12 grid md:grid-cols-2 gap-px bg-border border rounded-2xl overflow-hidden">
+            {MOATS.map((m) => (
+              <div key={m.n} className="bg-card p-7 lg:p-8 hover:bg-accent/30 transition-colors">
+                <div className="font-display text-4xl tracking-tightest text-primary">{m.n}</div>
+                <div className="mt-3 font-semibold text-lg">{m.name}</div>
+                <p className="mt-2 text-sm text-muted-foreground leading-6">{m.claim}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
