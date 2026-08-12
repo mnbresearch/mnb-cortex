@@ -39,8 +39,10 @@ export function NextBestActions() {
         ) : items.length === 0 ? (
           <p className="text-sm text-muted-foreground py-2">Add your data and Cortex will tell you exactly what to do next.</p>
         ) : (
-          items.map((p, i) => (
-            <Link key={i} href={p.href} style={{ animationDelay: `${i * 40}ms` }}
+          items.map((p, i) => {
+            const href = p.href === "/act" ? `/act?brief=${encodeURIComponent(`${p.title} — ${p.why}`)}` : p.href;
+            return (
+            <Link key={i} href={href} style={{ animationDelay: `${i * 40}ms` }}
               className="rise-in group flex items-start gap-3 rounded-xl border p-3 hover:border-primary/40 hover:bg-accent/40 transition-all">
               <span className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${dot[p.urgency] || "bg-primary"}`} />
               <div className="flex-1 min-w-0">
@@ -52,7 +54,7 @@ export function NextBestActions() {
                 <div className="text-xs text-primary mt-1 inline-flex items-center gap-1 font-medium">{p.tool} <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" /></div>
               </div>
             </Link>
-          ))
+          ); })
         )}
       </div>
     </Card>
