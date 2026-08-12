@@ -15,6 +15,8 @@ import { PrintButton, ExportButton } from "@/components/export-button";
 import { AIPulse } from "@/components/ai-panel";
 import { NextBestActions } from "@/components/next-best-actions";
 import { IndustryPlaybook } from "@/components/industry-playbook";
+import { IndustryPrompt } from "@/components/industry-prompt";
+import { resolveIndustry } from "@/lib/industries";
 import { CortexScore } from "@/components/cortex-score";
 import { InstallCTA } from "@/components/install-cta";
 import Link from "next/link";
@@ -72,7 +74,9 @@ export default async function Dashboard() {
         {/* Guided command layer: turns 130+ tools into the few that matter now. */}
         <NextBestActions />
 
-        {isReal && <IndustryPlaybook industry={(profile as any)?.industry} />}
+        {isReal && (resolveIndustry((profile as any)?.industry)
+          ? <IndustryPlaybook industry={(profile as any)?.industry} />
+          : <IndustryPrompt />)}
 
         {hasMetrics && <Card className="p-5"><CortexScore metrics={metrics} /></Card>}
 
