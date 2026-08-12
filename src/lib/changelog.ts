@@ -5,7 +5,8 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "6.37.0", date: "Latest", items: ["Tailored from minute one — new workspaces get a friendly ‘What does your business do?’ prompt on the dashboard; pick your industry and Cortex instantly personalises your playbook, tools and agents", "Once set, the prompt becomes your industry playbook automatically"] },
+  { v: "6.38.0", date: "Latest", items: ["New Investors page — a public /investors page (linked in the footer) with the positioning, the moat, why-now, business model and team, plus a downloadable one-page PDF"] },
+  { v: "6.37.0", date: "Earlier", items: ["Tailored from minute one — new workspaces get a friendly ‘What does your business do?’ prompt on the dashboard; pick your industry and Cortex instantly personalises your playbook, tools and agents", "Once set, the prompt becomes your industry playbook automatically"] },
   { v: "6.36.0", date: "Earlier", items: ["Smarter default workspace — if you belong to more than one workspace, Cortex now lands you in your real (paid or named) one instead of an empty default, so provisioned and invited customers see the right data straight away"] },
   { v: "6.35.0", date: "Earlier", items: ["New ‘The moat’ section on the homepage — spelling out the defensible advantages competitors can’t copy: a memory that compounds per customer, one operating brain (not 130 point tools), a system that acts (not just advises), and deep vertical + AI-search tuning"] },
   { v: "6.34.0", date: "Earlier", items: ["Your workspace now knows its industry — pick from 25 industries in Settings and Cortex tailors itself to you", "The dashboard shows a ‘Built for [your industry]’ playbook that maps your real problems to the exact tools that solve them", "AI Agents open straight to your industry automatically — no more scrolling to find your pack"] },
