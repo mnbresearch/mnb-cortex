@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzeGst } from "@/lib/ai/gst";
-import { chargeForMode } from "@/lib/credits";
+import { chargeForMode, refundForMode } from "@/lib/credits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,10 @@ export async function POST(req: Request) {
       error: `You're out of AI credits. Reading a GST return costs ${gate.cost} credits (balance ${gate.balance}).` }, { status: 402 });
 
     const analysis = await analyzeGst(t);
-    if (!analysis) return NextResponse.json({ ok: false, error: "Couldn't read that return — try a clearer export or paste the summary rows." }, { status: 200 });
+    if (!analysis) {
+      if (gate.enforced) await refundForMode("gst");
+      return NextResponse.json({ ok: false, error: "Couldn't read that return — try a clearer export or paste the summary rows." }, { status: 200 });
+    }
     return NextResponse.json({ ok: true, analysis, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || "Analysis failed — check the AI key." }, { status: 200 });
