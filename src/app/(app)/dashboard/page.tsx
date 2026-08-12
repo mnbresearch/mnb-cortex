@@ -7,13 +7,14 @@ import { TrendChart } from "@/components/charts/trend-chart";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, statusBg } from "@/lib/utils";
-import { getMetrics, getInsights, getAlerts, getFinanceSeries, getUserAndOrg } from "@/lib/data";
+import { getMetrics, getInsights, getAlerts, getFinanceSeries, getUserAndOrg, getOrgProfile } from "@/lib/data";
 import { demoRevenueSeries } from "@/lib/demo";
 import { Landmark, ReceiptText, Upload as UploadIcon } from "lucide-react";
 import { AlertTriangle, Sparkles } from "lucide-react";
 import { PrintButton, ExportButton } from "@/components/export-button";
 import { AIPulse } from "@/components/ai-panel";
 import { NextBestActions } from "@/components/next-best-actions";
+import { IndustryPlaybook } from "@/components/industry-playbook";
 import { CortexScore } from "@/components/cortex-score";
 import { InstallCTA } from "@/components/install-cta";
 import Link from "next/link";
@@ -22,7 +23,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
   const { orgId } = await getUserAndOrg();
-  const [metrics, insights, alerts, fin] = await Promise.all([getMetrics(), getInsights(), getAlerts(), getFinanceSeries()]);
+  const [metrics, insights, alerts, fin, profile] = await Promise.all([getMetrics(), getInsights(), getAlerts(), getFinanceSeries(), getOrgProfile()]);
   const isReal = Boolean(orgId);                 // signed-in workspace vs public demo preview
   const hasMetrics = metrics.length > 0;
   const chartData = fin.live && fin.series ? fin.series : (isReal ? [] : demoRevenueSeries);
@@ -70,6 +71,8 @@ export default async function Dashboard() {
 
         {/* Guided command layer: turns 130+ tools into the few that matter now. */}
         <NextBestActions />
+
+        {isReal && <IndustryPlaybook industry={(profile as any)?.industry} />}
 
         {hasMetrics && <Card className="p-5"><CortexScore metrics={metrics} /></Card>}
 
