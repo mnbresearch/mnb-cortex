@@ -14,10 +14,26 @@ export async function getUserAndOrg() {
     const { data } = await sb.from("memberships").select("org_id").eq("user_id", user.id);
     const ids = ((data as any[]) || []).map((m) => m.org_id);
     if (!ids.length) return { user, orgId: null };
-    // Respect the workspace the user switched to, when they're still a member of it.
+
+    // Respect an explicit workspace switch (cookie), when still a member.
     const active = cookies().get("cortex_org")?.value;
-    const orgId = active && ids.includes(active) ? active : ids[0];
-    return { user, orgId };
+    if (active && ids.includes(active)) return { user, orgId: active };
+    if (ids.length === 1) return { user, orgId: ids[0] };
+
+    // Multiple workspaces with no explicit choice: land in the most meaningful one
+    // so a provisioned/invited customer sees their real (paid/named) workspace, not
+    // the empty "My Company" a signup trigger may have created.
+    try {
+      const { data: orgs } = await sb.from("organizations").select("id, name, subscription_status, created_at").in("id", ids);
+      const list = (orgs as any[]) || [];
+      const paid = list.find((o) => String(o.subscription_status || "") === "active");
+      if (paid) return { user, orgId: paid.id };
+      const named = list
+        .filter((o) => !/^my (company|workspace|business)$/i.test(String(o.name || "")))
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0];
+      if (named) return { user, orgId: named.id };
+    } catch { /* RLS or missing columns — fall through to first */ }
+    return { user, orgId: ids[0] };
   } catch { return { user: null, orgId: null }; }
 }
 
