@@ -7,20 +7,20 @@
    Teal → Emerald brand: growth, money, trust (not generic AI purple)
    ============================================================ */
 :root {
-  --background: 180 33% 99%;
-  --foreground: 200 24% 12%;
+  --background: 210 22% 99%;
+  --foreground: 215 28% 14%;
   --card: 0 0% 100%;
-  --card-foreground: 200 24% 12%;
+  --card-foreground: 215 28% 14%;
   --primary: 178 74% 33%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 180 24% 96%;
-  --secondary-foreground: 200 24% 12%;
-  --muted: 185 20% 96%;
-  --muted-foreground: 200 10% 42%;
-  --accent: 176 55% 93%;
+  --secondary: 214 20% 96%;
+  --secondary-foreground: 215 28% 14%;
+  --muted: 214 20% 96%;
+  --muted-foreground: 215 16% 46%;
+  --accent: 174 44% 94%;
   --accent-foreground: 178 78% 26%;
-  --border: 186 22% 90%;
-  --input: 186 22% 90%;
+  --border: 214 20% 91%;
+  --input: 214 20% 91%;
   --ring: 178 74% 33%;
   --success: 150 68% 38%;
   --success-foreground: 0 0% 100%;
@@ -34,21 +34,21 @@
   --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui;
 }
 .dark {
-  --background: 195 44% 6%;
-  --foreground: 180 22% 95%;
-  --card: 197 34% 9%;
-  --card-foreground: 180 22% 95%;
-  --primary: 172 68% 44%;
-  --primary-foreground: 197 60% 6%;
-  --secondary: 197 26% 14%;
-  --secondary-foreground: 180 22% 95%;
-  --muted: 197 24% 14%;
-  --muted-foreground: 190 12% 62%;
-  --accent: 183 48% 17%;
-  --accent-foreground: 172 72% 72%;
-  --border: 197 22% 17%;
-  --input: 197 22% 17%;
-  --ring: 172 68% 44%;
+  --background: 220 24% 6%;
+  --foreground: 210 20% 96%;
+  --card: 220 20% 10%;
+  --card-foreground: 210 20% 96%;
+  --primary: 172 70% 46%;
+  --primary-foreground: 220 40% 8%;
+  --secondary: 218 18% 15%;
+  --secondary-foreground: 210 20% 96%;
+  --muted: 218 18% 15%;
+  --muted-foreground: 215 16% 64%;
+  --accent: 195 35% 17%;
+  --accent-foreground: 172 72% 74%;
+  --border: 218 16% 18%;
+  --input: 218 16% 18%;
+  --ring: 172 70% 46%;
   --success: 150 62% 46%;
   --warning: 36 92% 56%;
   --danger: 356 74% 62%;
