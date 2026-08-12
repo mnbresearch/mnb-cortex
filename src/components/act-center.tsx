@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, Send, Check, AlertTriangle, MessageCircle, Wand2 } from "lucide-react";
@@ -27,6 +27,16 @@ export function ActCenter() {
   const [confirm, setConfirm] = useState(false);
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState("");
+
+  // Deep-link prefill: a plan/priority card can open this pre-filled with a brief.
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const k = p.get("kind"); const b = p.get("brief");
+      if (k && KINDS.some((x) => x.id === k)) setKind(k);
+      if (b) setBrief(b);
+    } catch {}
+  }, []);
 
   async function draft() {
     setDrafting(true); setErr(""); setSent(false); setConfirm(false);
