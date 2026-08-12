@@ -36,6 +36,18 @@ export default async function SuperAdmin() {
   const [{ rows, live, reason }, portfolio] = await Promise.all([getAllOrgs(), getPortfolioStatus()]);
   const totalMembers = rows.reduce((s, r) => s + r.members, 0);
 
+  // ---- Adoption ----
+  const now = Date.now(); const DAY = 86_400_000;
+  const ctime = (r: typeof rows[number]) => (r.created_at ? new Date(r.created_at).getTime() : 0);
+  const newWeek = rows.filter((r) => ctime(r) > now - 7 * DAY).length;
+  const newMonth = rows.filter((r) => ctime(r) > now - 30 * DAY).length;
+  const activated = rows.filter((r) => r.metrics > 0).length;
+  const paid = rows.filter((r) => String(r.subscription_status || "") === "active").length;
+  const trialing = rows.length - paid;
+  const recent = rows.slice(0, 10);
+  const fmtDate = (s: string) => { try { return new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" }); } catch { return "—"; } };
+  const statusText = (r: typeof rows[number]) => String(r.subscription_status || "trialing");
+
   return (
     <>
       <Topbar title="Super Admin" subtitle="Platform-wide control — every organization" />
@@ -59,8 +71,51 @@ export default async function SuperAdmin() {
         <div className="grid sm:grid-cols-3 gap-3">
           <Card className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Building2 className="h-4 w-4 text-primary" /> Organizations</div><div className="text-2xl font-bold mt-1">{rows.length}</div></Card>
           <Card className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Users className="h-4 w-4 text-primary" /> Total members</div><div className="text-2xl font-bold mt-1">{totalMembers}</div></Card>
-          <Card className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Activity className="h-4 w-4 text-primary" /> Orgs with live data</div><div className="text-2xl font-bold mt-1">{rows.filter((r) => r.metrics > 0).length}</div></Card>
+          <Card className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Activity className="h-4 w-4 text-primary" /> Orgs with live data</div><div className="text-2xl font-bold mt-1">{activated}</div></Card>
         </div>
+
+        <Section title="Adoption" desc="Signups, activation and plan mix across the platform">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              { l: "New this week", v: newWeek },
+              { l: "New this month", v: newMonth },
+              { l: "Activated (has data)", v: activated },
+              { l: "Paid", v: paid },
+              { l: "Trialing", v: trialing },
+            ].map((s) => (
+              <Card key={s.l} className="p-4"><div className="text-xs text-muted-foreground">{s.l}</div><div className="text-2xl font-bold mt-1">{s.v}</div></Card>
+            ))}
+          </div>
+          <Card className="mt-3 overflow-hidden p-0">
+            <div className="p-4 pb-2 text-sm font-semibold">Recent signups</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b text-left text-muted-foreground">
+                  <th className="py-2 px-4 font-normal">Workspace</th>
+                  <th className="py-2 px-3 font-normal">Plan</th>
+                  <th className="py-2 px-3 font-normal">Status</th>
+                  <th className="py-2 px-3 font-normal">Members</th>
+                  <th className="py-2 px-3 font-normal">Data</th>
+                  <th className="py-2 px-3 font-normal">Joined</th>
+                </tr></thead>
+                <tbody>
+                  {recent.length === 0 ? (
+                    <tr><td colSpan={6} className="py-4 px-4 text-muted-foreground">No workspaces yet.</td></tr>
+                  ) : recent.map((r) => (
+                    <tr key={r.id} className="border-b border-border/60">
+                      <td className="py-2 px-4 font-medium">{r.name}</td>
+                      <td className="py-2 px-3">{r.plan || "—"}</td>
+                      <td className="py-2 px-3"><Badge className={statusText(r) === "active" ? "bg-success/10 text-success border-success/20" : statusText(r) === "trialing" ? "bg-warning/10 text-warning border-warning/20" : "border-border text-muted-foreground"}>{statusText(r)}</Badge></td>
+                      <td className="py-2 px-3">{r.members}</td>
+                      <td className="py-2 px-3">{r.metrics > 0 ? <span className="text-success">Yes</span> : <span className="text-muted-foreground">—</span>}</td>
+                      <td className="py-2 px-3 text-muted-foreground">{fmtDate(r.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </Section>
 
         <Section title="My portfolio" desc="Your own businesses, tracked as separate workspaces">
           <div className="grid sm:grid-cols-2 gap-3">
