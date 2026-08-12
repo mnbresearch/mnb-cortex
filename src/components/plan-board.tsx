@@ -68,6 +68,7 @@ export function PlanBoard() {
         <div className="space-y-2.5">
           {items.map((p, i) => {
             const isDone = !!done[p.title];
+            const href = p.href === "/act" ? `/act?brief=${encodeURIComponent(`${p.title} — ${p.why}`)}` : p.href;
             return (
               <Card key={i} style={{ animationDelay: `${i * 40}ms` }} className={`rise-in p-4 ${isDone ? "opacity-60" : ""}`}>
                 <div className="flex items-start gap-3">
@@ -82,7 +83,7 @@ export function PlanBoard() {
                       <span className="text-[10px] uppercase tracking-wide rounded-full border px-1.5 py-0.5 text-muted-foreground">{uLabel[p.urgency] || "This week"}</span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">{p.why}</p>
-                    <Link href={p.href} className="mt-2 inline-flex items-center gap-1.5 rounded-lg brand-gradient text-white px-3 h-8 text-xs font-medium">Open {p.tool} <ArrowRight className="h-3.5 w-3.5" /></Link>
+                    <Link href={href} className="mt-2 inline-flex items-center gap-1.5 rounded-lg brand-gradient text-white px-3 h-8 text-xs font-medium">Open {p.tool} <ArrowRight className="h-3.5 w-3.5" /></Link>
                   </div>
                 </div>
               </Card>
