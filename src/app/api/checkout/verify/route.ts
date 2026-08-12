@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
+import { claimPaymentOnce } from "@/lib/pay/settle";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
@@ -13,10 +14,12 @@ export async function POST(req: Request) {
   if (expected !== razorpay_signature) return NextResponse.json({ ok: false, error: "signature mismatch" });
   const { orgId } = await getUserAndOrg();
   if (orgId) {
+    // Idempotent: a retried verify can't insert a duplicate subscription row.
+    const isNew = await claimPaymentOnce(`rzp:${razorpay_payment_id}`, orgId, "plan", String(plan || ""), (amount || 0) / 100);
     const sb = createClient();
-    // Activate the subscription — this lifts the trial paywall.
+    // Activating the plan is naturally idempotent (lifts the trial paywall).
     await sb.from("organizations").update({ plan: String(plan || "").toLowerCase(), subscription_status: "active" }).eq("id", orgId);
-    await sb.from("subscriptions").insert({ org_id: orgId, plan, status: "active", provider: "razorpay", amount: (amount || 0) / 100, reference: razorpay_payment_id });
+    if (isNew) await sb.from("subscriptions").insert({ org_id: orgId, plan, status: "active", provider: "razorpay", amount: (amount || 0) / 100, reference: razorpay_payment_id });
   }
   return NextResponse.json({ ok: true });
 }
