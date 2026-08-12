@@ -7,18 +7,6 @@ import { payCashfree } from "@/lib/pay/checkout-client";
 
 type Pack = { id: string; label: string; credits: number; price: number; per: string };
 
-declare global { interface Window { Razorpay?: any } }
-
-function loadRazorpay(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
-    const s = document.createElement("script");
-    s.src = "https://checkout.razorpay.com/v1/checkout.js";
-    s.onload = () => resolve(true); s.onerror = () => resolve(false);
-    document.body.appendChild(s);
-  });
-}
-
 export function UsagePanel({ packs }: { packs: Pack[] }) {
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
@@ -26,34 +14,10 @@ export function UsagePanel({ packs }: { packs: Pack[] }) {
 
   async function buy(pack: Pack) {
     setBusy(pack.id); setMsg("");
-    // Primary: Cashfree.
     const cf = await payCashfree({ kind: "credits", packId: pack.id });
-    if (cf.ok) { setDone(true); setMsg(`Added ${pack.credits.toLocaleString("en-IN")} credits. New balance ${cf.balance?.toLocaleString("en-IN")}.`); setBusy(""); setTimeout(() => location.reload(), 1400); return; }
-    if (!cf.needsConfig) { setMsg(cf.error || "Payment could not be completed."); setBusy(""); return; }
-    // Fallback: Razorpay.
-    try {
-      const r = await fetch("/api/credits/topup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ packId: pack.id }) });
-      const j = await r.json();
-      if (!j.ok) { setMsg(j.error || "Could not start checkout."); setBusy(""); return; }
-      const ok = await loadRazorpay();
-      if (!ok || !window.Razorpay) { setMsg("Could not load the payment window."); setBusy(""); return; }
-      const rzp = new window.Razorpay({
-        key: j.keyId, order_id: j.orderId, amount: j.amount, currency: "INR",
-        name: "MNB Cortex", description: `${pack.credits.toLocaleString("en-IN")} AI credits`,
-        handler: async (resp: any) => {
-          const v = await fetch("/api/credits/verify", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...resp, packId: pack.id }),
-          }).then((x) => x.json());
-          if (v.ok) { setDone(true); setMsg(`Added ${pack.credits.toLocaleString("en-IN")} credits. New balance ${v.balance?.toLocaleString("en-IN")}.`); setTimeout(() => location.reload(), 1400); }
-          else setMsg(v.error || "Payment verification failed.");
-          setBusy("");
-        },
-        modal: { ondismiss: () => setBusy("") },
-        theme: { color: "#1f4a3b" },
-      });
-      rzp.open();
-    } catch (e: any) { setMsg(e?.message || "Checkout error."); setBusy(""); }
+    setBusy("");
+    if (cf.ok) { setDone(true); setMsg(`Added ${pack.credits.toLocaleString("en-IN")} credits. New balance ${cf.balance?.toLocaleString("en-IN")}.`); setTimeout(() => location.reload(), 1400); return; }
+    setMsg(cf.needsConfig ? "Online payments are being set up — please contact us to add credits." : (cf.error || "Payment could not be completed."));
   }
 
   return (
