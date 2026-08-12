@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzeBankStatement } from "@/lib/ai/bankstatement";
-import { chargeForMode } from "@/lib/credits";
+import { chargeForMode, refundForMode } from "@/lib/credits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +19,10 @@ export async function POST(req: Request) {
     }
 
     const analysis = await analyzeBankStatement(t);
-    if (!analysis) return NextResponse.json({ ok: false, error: "Couldn't read that statement — try a clearer CSV export, or paste the transaction rows." }, { status: 200 });
+    if (!analysis) {
+      if (gate.enforced) await refundForMode("bankstatement");   // no result → don't bill
+      return NextResponse.json({ ok: false, error: "Couldn't read that statement — try a clearer CSV export, or paste the transaction rows." }, { status: 200 });
+    }
 
     return NextResponse.json({ ok: true, analysis, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
