@@ -71,7 +71,7 @@ export function PublicHeader() {
 export function PublicFooter() {
   const cols = [
     { h: "Product", links: [["Features", "/features"], ["Industries", "/industries"], ["Compare", "/compare"], ["Pricing", "/pricing"], ["AI Visibility check", "/ai-visibility"], ["Free health check", "/health-check"]] },
-    { h: "Company", links: [["Resources", "/resources"], ["Contact", "/contact"], ["Changelog", "/changelog"], ["Status", "/status"], ["Help", "/help"], ["MNB Research", "https://www.mnbresearch.com"]] },
+    { h: "Company", links: [["Investors", "/investors"], ["Resources", "/resources"], ["Contact", "/contact"], ["Changelog", "/changelog"], ["Status", "/status"], ["MNB Research", "https://www.mnbresearch.com"]] },
     { h: "Legal", links: [["Terms", "/terms"], ["Privacy", "/privacy"], ["Refund Policy", "/refund"]] },
   ];
   return (
