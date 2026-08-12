@@ -3,6 +3,7 @@ import { createHmac } from "crypto";
 import { CREDIT_PACKS } from "@/lib/config";
 import { getUserAndOrg } from "@/lib/data";
 import { grantCredits } from "@/lib/credits";
+import { claimPaymentOnce } from "@/lib/pay/settle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,9 @@ export async function POST(req: Request) {
   if (!orgId) return NextResponse.json({ ok: false, error: "no workspace" });
 
   try {
+    // Idempotent: a retried verify can't grant the same pack twice.
+    const isNew = await claimPaymentOnce(`rzp:${razorpay_payment_id}`, orgId, "credits", pack.id, pack.price);
+    if (!isNew) return NextResponse.json({ ok: true, credits: pack.credits, already: true });
     const balance = await grantCredits(orgId, pack.credits, "topup:" + pack.id, user?.id);
     return NextResponse.json({ ok: true, credits: pack.credits, balance });
   } catch (e: any) {
