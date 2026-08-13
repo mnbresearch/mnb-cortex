@@ -7,9 +7,9 @@ export function Logo({ size = 34, animated = true, className = "" }: { size?: nu
     <svg width={size} height={size} viewBox="0 0 40 40" className={className} role="img" aria-label="MNB Cortex">
       <defs>
         <linearGradient id={`${uid}-grad`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="hsl(178 74% 38%)" />
-          <stop offset="55%" stopColor="hsl(168 72% 40%)" />
-          <stop offset="100%" stopColor="hsl(158 74% 42%)" />
+          <stop offset="0%" stopColor="hsl(44 66% 60%)" />
+          <stop offset="55%" stopColor="hsl(40 60% 50%)" />
+          <stop offset="100%" stopColor="hsl(33 54% 43%)" />
         </linearGradient>
         <radialGradient id={`${uid}-glow`} cx="50%" cy="42%" r="60%">
           <stop offset="0%" stopColor="white" stopOpacity="0.35" />
