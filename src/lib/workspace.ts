@@ -35,7 +35,7 @@ export async function ensureWorkspace(opts?: { name?: string; industry?: string 
   if (!orgId) {
     const name = wantName || meta.full_name || (user.email || "").split("@")[0] || "My workspace";
     const { data: org, error } = await svc.from("organizations")
-      .insert({ name, industry: opts?.industry || meta.industry || null, currency: "INR", plan: "growth", accent: "teal" })
+      .insert({ name, industry: opts?.industry || meta.industry || null, currency: "INR", plan: "growth", accent: "gold" })
       .select("id").single();
     if (error || !org) return { ok: false, error: error?.message || "Could not create your workspace." };
     orgId = String((org as any).id);
