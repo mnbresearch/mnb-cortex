@@ -12,7 +12,7 @@ export async function GET() {
 
   const label = "MNB Cortex";
   const value = allUp ? "operational" : "degraded";
-  const color = allUp ? "#0f9d8e" : "#f59e0b";
+  const color = allUp ? "#B8912F" : "#f59e0b";
   const lw = 84, vw = value.length * 7 + 22, w = lw + vw;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="20" role="img" aria-label="${label}: ${value}">
