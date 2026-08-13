@@ -29,7 +29,7 @@ export async function provisionBusinesses() {
     let orgId = (existing as any)?.id as string | undefined;
     if (!orgId) {
       const { data: row, error } = await sb.from("organizations")
-        .insert({ name: b.name, industry: b.industry, currency: "INR", plan: "premium", accent: "teal" })
+        .insert({ name: b.name, industry: b.industry, currency: "INR", plan: "premium", accent: "gold" })
         .select("id").single();
       if (error) throw new Error(`Could not create ${b.name}: ${error.message}`);
       orgId = (row as any).id;
@@ -160,7 +160,7 @@ export async function provisionCustomer(input: {
 
   // 1) Create the workspace (same insert shape proven in provisionBusinesses).
   const { data: org, error: orgErr } = await sb.from("organizations")
-    .insert({ name: orgName, industry: input.industry || "general", currency: "INR", plan, accent: "teal" })
+    .insert({ name: orgName, industry: input.industry || "general", currency: "INR", plan, accent: "gold" })
     .select("id").single();
   if (orgErr) throw new Error(`Could not create workspace: ${orgErr.message}`);
   const orgId = (org as any).id as string;
