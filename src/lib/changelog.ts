@@ -5,7 +5,8 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "6.39.0", date: "Latest", items: ["Mobile fix — the homepage’s in-product dashboard preview no longer overflows to the right on phones (a hidden sidebar column was being reserved, jamming the content); the live demo and preview now sit cleanly on small screens"] },
+  { v: "6.40.0", date: "Latest", items: ["A more premium look — the brand has moved from the generic ‘AI green’ to a refined graphite-and-champagne-gold palette across the whole product", "New ink + gold theme in both light and dark modes, with a warm bone/ivory light theme and a deep graphite dark theme", "Re-coloured logo, app icons, PWA install icon and browser theme colour to match — a consistent, high-end feel from the homepage into the app"] },
+  { v: "6.39.0", date: "Earlier", items: ["Mobile fix — the homepage’s in-product dashboard preview no longer overflows to the right on phones (a hidden sidebar column was being reserved, jamming the content); the live demo and preview now sit cleanly on small screens"] },
   { v: "6.38.0", date: "Earlier", items: ["New Investors page — a public /investors page (linked in the footer) with the positioning, the moat, why-now, business model and team, plus a downloadable one-page PDF"] },
   { v: "6.37.0", date: "Earlier", items: ["Tailored from minute one — new workspaces get a friendly ‘What does your business do?’ prompt on the dashboard; pick your industry and Cortex instantly personalises your playbook, tools and agents", "Once set, the prompt becomes your industry playbook automatically"] },
   { v: "6.36.0", date: "Earlier", items: ["Smarter default workspace — if you belong to more than one workspace, Cortex now lands you in your real (paid or named) one instead of an empty default, so provisioned and invited customers see the right data straight away"] },
