@@ -4,56 +4,57 @@
 
 /* ============================================================
    MNB Cortex identity — "Living Intelligence"
-   Teal → Emerald brand: growth, money, trust (not generic AI purple)
+   Graphite × Champagne Gold: money, trust, premium
+   (deliberately not the generic AI teal/emerald)
    ============================================================ */
 :root {
-  --background: 210 22% 99%;
-  --foreground: 215 28% 14%;
-  --card: 0 0% 100%;
-  --card-foreground: 215 28% 14%;
-  --primary: 178 74% 33%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 214 20% 96%;
-  --secondary-foreground: 215 28% 14%;
-  --muted: 214 20% 96%;
-  --muted-foreground: 215 16% 46%;
-  --accent: 174 44% 94%;
-  --accent-foreground: 178 78% 26%;
-  --border: 214 20% 91%;
-  --input: 214 20% 91%;
-  --ring: 178 74% 33%;
-  --success: 150 68% 38%;
+  --background: 42 30% 97%;      /* warm ivory */
+  --foreground: 40 14% 11%;      /* ink */
+  --card: 40 40% 99%;
+  --card-foreground: 40 14% 11%;
+  --primary: 40 60% 44%;         /* deep champagne gold (contrast on light) */
+  --primary-foreground: 40 40% 98%;
+  --secondary: 42 24% 93%;
+  --secondary-foreground: 40 14% 11%;
+  --muted: 42 24% 93%;
+  --muted-foreground: 40 8% 40%;
+  --accent: 42 46% 90%;          /* warm gold tint */
+  --accent-foreground: 40 58% 30%;
+  --border: 42 20% 87%;
+  --input: 42 20% 87%;
+  --ring: 40 60% 44%;
+  --success: 152 40% 38%;        /* muted, refined green — semantic only */
   --success-foreground: 0 0% 100%;
-  --warning: 34 94% 48%;
+  --warning: 34 90% 46%;
   --warning-foreground: 0 0% 100%;
-  --danger: 356 74% 52%;
+  --danger: 356 70% 50%;
   --danger-foreground: 0 0% 100%;
-  --brand-2: 158 74% 42%;   /* emerald */
-  --brand-3: 190 90% 42%;   /* cyan */
+  --brand-2: 44 72% 56%;   /* bright gold */
+  --brand-3: 32 48% 55%;   /* warm bronze/amber */
   --radius: 0.9rem;
   --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui;
 }
 .dark {
-  --background: 220 24% 6%;
-  --foreground: 210 20% 96%;
-  --card: 220 20% 10%;
-  --card-foreground: 210 20% 96%;
-  --primary: 172 70% 46%;
-  --primary-foreground: 220 40% 8%;
-  --secondary: 218 18% 15%;
-  --secondary-foreground: 210 20% 96%;
-  --muted: 218 18% 15%;
-  --muted-foreground: 215 16% 64%;
-  --accent: 195 35% 17%;
-  --accent-foreground: 172 72% 74%;
-  --border: 218 16% 18%;
-  --input: 218 16% 18%;
-  --ring: 172 70% 46%;
-  --success: 150 62% 46%;
-  --warning: 36 92% 56%;
-  --danger: 356 74% 62%;
-  --brand-2: 158 70% 48%;
-  --brand-3: 190 85% 52%;
+  --background: 220 14% 7%;      /* graphite ink */
+  --foreground: 40 24% 92%;      /* warm bone */
+  --card: 220 13% 10%;
+  --card-foreground: 40 24% 92%;
+  --primary: 41 58% 55%;         /* champagne gold */
+  --primary-foreground: 40 30% 8%;
+  --secondary: 220 10% 15%;
+  --secondary-foreground: 40 24% 92%;
+  --muted: 220 10% 15%;
+  --muted-foreground: 220 8% 60%;
+  --accent: 41 30% 16%;          /* deep warm gold tint */
+  --accent-foreground: 41 62% 74%;
+  --border: 220 9% 17%;
+  --input: 220 9% 17%;
+  --ring: 41 58% 55%;
+  --success: 152 40% 48%;
+  --warning: 36 88% 56%;
+  --danger: 356 72% 62%;
+  --brand-2: 44 64% 62%;   /* lighter gold */
+  --brand-3: 32 48% 58%;   /* amber/bronze */
 }
 
 * { border-color: hsl(var(--border)); }
@@ -106,7 +107,7 @@ body {
 .nav-item:not(.is-active):hover { background: hsl(var(--accent) / 0.6); }
 /* Soft elevated card shadow used app-wide. */
 .card-elevated {
-  box-shadow: 0 1px 2px -1px hsl(200 24% 12% / 0.06), 0 12px 34px -20px hsl(200 24% 12% / 0.22);
+  box-shadow: 0 1px 2px -1px hsl(35 24% 10% / 0.07), 0 12px 34px -20px hsl(35 24% 10% / 0.20);
 }
 /* Gentle per-card entrance used by grids. */
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -154,7 +155,7 @@ body {
 
 /* ============================================================
    Editorial "Loco" public-site system
-   Big kinetic type · generous whitespace · teal accent
+   Big kinetic type · generous whitespace · gold accent
    ============================================================ */
 .font-display { font-family: var(--font-sans); letter-spacing: -0.035em; font-weight: 800; line-height: 0.92; }
 .display-1 { font-size: clamp(2.9rem, 10vw, 9rem); }
