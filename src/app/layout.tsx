@@ -16,7 +16,12 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "MNB Cortex — The AI operating brain for your business", description: "Your business now has a brain of its own — one AI that runs it and never forgets." },
 };
 
-export const viewport = { themeColor: "#0f9d8e" };
+export const viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F5F1E8" },
+    { media: "(prefers-color-scheme: dark)", color: "#0E1116" },
+  ],
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
