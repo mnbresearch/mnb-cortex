@@ -49,8 +49,8 @@ export default async function Settings() {
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">Brand accent
-                  <select className={inp} name="accent" defaultValue={profile?.accent || "indigo"}>
-                    {["indigo","violet","emerald","rose","amber","sky"].map((c)=> <option key={c} value={c}>{c}</option>)}
+                  <select className={inp} name="accent" defaultValue={profile?.accent || "gold"}>
+                    {["gold","indigo","violet","emerald","rose","amber","sky"].map((c)=> <option key={c} value={c}>{c}</option>)}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-3">Logo URL (white-label)
