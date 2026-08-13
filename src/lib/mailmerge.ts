@@ -32,7 +32,7 @@ export function buildHtml(bodyText: string, opts: { origin: string; recipientId:
   const withLinks = parts.map((p) => {
     if (/^https?:\/\//.test(p)) {
       const tracked = `${origin}/api/track/click?r=${encodeURIComponent(recipientId)}&u=${encodeURIComponent(p)}`;
-      return `<a href="${tracked}" style="color:#0f9d8e">${p}</a>`;
+      return `<a href="${tracked}" style="color:#9A7B1F">${p}</a>`;
     }
     return p;
   }).join("");
