@@ -19,7 +19,7 @@ export function ProductPreview() {
         <span className="h-3 w-3 rounded-full bg-success/60" />
         <div className="mx-auto text-xs text-muted-foreground rounded-md bg-background/70 px-3 py-1 border">cortex.mnbresearch.com/dashboard</div>
       </div>
-      <div className="grid grid-cols-[64px_1fr] md:grid-cols-[180px_1fr]">
+      <div className="grid grid-cols-1 sm:grid-cols-[64px_1fr] md:grid-cols-[180px_1fr]">
         {/* sidebar */}
         <div className="border-r p-3 hidden sm:block">
           <div className="flex items-center gap-2 mb-5">
