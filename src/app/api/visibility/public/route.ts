@@ -4,11 +4,20 @@ import { sendEmail } from "@/lib/email";
 import { ADMIN_EMAIL } from "@/lib/config";
 import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
 import { createClient, hasSupabase } from "@/lib/supabase/server";
+import { clientIp, enforce, visibilityLimits } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/**
+ * Public AI Visibility teaser — the only endpoint that runs a model without a
+ * session, because it's the top-of-funnel lead magnet. It is deliberately
+ * cheap (3 prompts) AND rate limited per email, per IP and globally, so it
+ * can't be farmed for free AI. See src/lib/ratelimit.ts.
+ */
 export async function POST(req: Request) {
   try {
     const b = await req.json().catch(() => ({} as any));
@@ -18,6 +27,19 @@ export async function POST(req: Request) {
     const category = String(b.category || "").trim();
     const location = String(b.location || "").trim();
     if (!name || !email || !brand) return NextResponse.json({ ok: false, error: "Name, email and brand are required." }, { status: 200 });
+    if (!EMAIL_RE.test(email)) return NextResponse.json({ ok: false, error: "Enter a valid email address." }, { status: 200 });
+
+    // Throttle BEFORE spending anything on the model.
+    const exceeded = await enforce(visibilityLimits(email, clientIp(req)));
+    if (exceeded) {
+      const global = exceeded.key === "vis:global";
+      return NextResponse.json({
+        ok: false, rateLimited: true,
+        error: global
+          ? "The free visibility check is at capacity for today. Please try again tomorrow, or start a trial for unlimited checks."
+          : "You've used your free visibility checks for today. Start a free trial to run unlimited checks on your brand.",
+      }, { status: 429 });
+    }
 
     // Capture the lead (best-effort).
     if (hasSupabase()) {
