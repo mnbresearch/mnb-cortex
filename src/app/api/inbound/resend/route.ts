@@ -28,14 +28,21 @@ export async function POST(req: Request) {
 
   let verified = false;
   let secretOrg: string | null = null;
-  if (secretRows.length > 0) {
-    for (const s of secretRows) {
-      if (verifySvix(raw, headers, s.value)) { verified = true; secretOrg = s.org_id; break; }
-    }
-    if (!verified) {
-      // A secret is configured but the signature didn't match → forged. Reject.
-      return NextResponse.json({ ok: false, error: "invalid signature" }, { status: 400 });
-    }
+  if (secretRows.length === 0) {
+    // No signing secret configured — we cannot tell a real Resend delivery from
+    // a forged one, so refuse rather than accepting attacker-supplied rows into
+    // the inbound-email table.
+    return NextResponse.json(
+      { ok: false, error: "inbound webhook not configured (no resend_webhook_secret in app_settings)" },
+      { status: 503 },
+    );
+  }
+  for (const s of secretRows) {
+    if (verifySvix(raw, headers, s.value)) { verified = true; secretOrg = s.org_id; break; }
+  }
+  if (!verified) {
+    // A secret is configured but the signature didn't match → forged. Reject.
+    return NextResponse.json({ ok: false, error: "invalid signature" }, { status: 400 });
   }
 
   let payload: any = {};

@@ -3,15 +3,36 @@ import { sendEmail } from "@/lib/email";
 import { ADMIN_EMAIL } from "@/lib/config";
 import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
 import { createClient, hasSupabase } from "@/lib/supabase/server";
+import { clientIp, contactFormLimits, enforce } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const cap = (v: any, n: number) => String(v ?? "").slice(0, n);
+
 export async function POST(req: Request) {
   try {
-    const { name, email, phone, plan, currency, cycle, source, note } = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({} as any));
+    const name = cap(body.name, 120).trim();
+    const email = cap(body.email, 200).trim();
+    const phone = cap(body.phone, 30).trim();
+    const { plan, currency, cycle, source } = body;
+    const note = cap(body.note, 2000);
     if (!name || !email) return NextResponse.json({ ok: false, error: "Name and email are required." }, { status: 200 });
-    const src = (source || "pricing").toString();
+    if (!EMAIL_RE.test(email)) return NextResponse.json({ ok: false, error: "Enter a valid email address." }, { status: 200 });
+
+    // Unauthenticated and it sends mail from our verified domain — throttle it,
+    // or it's a free spam relay against our sender reputation.
+    const exceeded = await enforce(contactFormLimits(email, clientIp(req)));
+    if (exceeded) {
+      return NextResponse.json({
+        ok: false, rateLimited: true,
+        error: "We've already received your request. Our team will be in touch shortly — or message us on WhatsApp for a faster reply.",
+      }, { status: 429 });
+    }
+
+    const src = cap(source || "pricing", 40);
 
     // Where the operator gets notified (defaults to ADMIN_EMAIL; override with LEAD_NOTIFY_EMAIL).
     const notifyTo = process.env.LEAD_NOTIFY_EMAIL || ADMIN_EMAIL;

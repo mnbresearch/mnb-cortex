@@ -3,16 +3,35 @@ import { sendEmail } from "@/lib/email";
 import { ADMIN_EMAIL } from "@/lib/config";
 import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
 import { createClient, hasSupabase } from "@/lib/supabase/server";
+import { clientIp, contactFormLimits, enforce } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CONTACT_URL = "https://www.mnbresearch.com/contactus";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const cap = (v: any, n: number) => String(v ?? "").slice(0, n);
 
 export async function POST(req: Request) {
   try {
-    const { name, email, company, phone, message } = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({} as any));
+    const name = cap(body.name, 120).trim();
+    const email = cap(body.email, 200).trim();
+    const company = cap(body.company, 160).trim();
+    const phone = cap(body.phone, 30).trim();
+    const message = cap(body.message, 2000);
     if (!name || !email) return NextResponse.json({ ok: false, error: "Name and email are required." }, { status: 200 });
+    if (!EMAIL_RE.test(email)) return NextResponse.json({ ok: false, error: "Enter a valid email address.", contactUrl: CONTACT_URL }, { status: 200 });
+
+    // Unauthenticated and it sends mail from our verified domain — throttle it,
+    // or it's a free spam relay against our sender reputation.
+    const exceeded = await enforce(contactFormLimits(email, clientIp(req)));
+    if (exceeded) {
+      return NextResponse.json({
+        ok: false, rateLimited: true, contactUrl: CONTACT_URL,
+        error: "We've already received your request — our team will be in touch shortly.",
+      }, { status: 429 });
+    }
 
     const when = new Date().toLocaleString("en-IN");
 

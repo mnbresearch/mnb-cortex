@@ -43,8 +43,12 @@ async function hit(rule: LimitRule): Promise<boolean> {
 }
 
 /**
- * Apply several buckets at once (per-email, per-IP, global).
- * Returns the first rule that was exceeded, or null when everything passed.
+ * Apply several buckets in order, stopping at the first one exceeded.
+ * Returns the rule that blocked the request, or null when everything passed.
+ *
+ * Pass the NARROWEST bucket first (email, then IP, then global): each check
+ * increments its counter, so evaluating the global ceiling first would let a
+ * single spammer who is already blocked per-email still eat the daily budget.
  */
 export async function enforce(rules: LimitRule[]): Promise<LimitRule | null> {
   for (const rule of rules) {
@@ -61,8 +65,22 @@ export async function enforce(rules: LimitRule[]): Promise<LimitRule | null> {
 export function visibilityLimits(email: string, ip: string): LimitRule[] {
   const who = email.trim().toLowerCase();
   return [
-    { key: `vis:global`, limit: 200, windowSecs: DAY },
-    { key: `vis:ip:${ip}`, limit: 3, windowSecs: DAY },
     { key: `vis:email:${who}`, limit: 2, windowSecs: DAY },
+    { key: `vis:ip:${ip}`, limit: 3, windowSecs: DAY },
+    { key: `vis:global`, limit: 200, windowSecs: DAY },
+  ];
+}
+
+/**
+ * Buckets for the unauthenticated contact / access-request forms. These send
+ * mail from our verified domain, so they're throttled for deliverability and
+ * reputation as much as for cost.
+ */
+export function contactFormLimits(email: string, ip: string): LimitRule[] {
+  const who = email.trim().toLowerCase();
+  return [
+    { key: `contact:email:${who}`, limit: 3, windowSecs: DAY },
+    { key: `contact:ip:${ip}`, limit: 5, windowSecs: DAY },
+    { key: `contact:global`, limit: 500, windowSecs: DAY },
   ];
 }
