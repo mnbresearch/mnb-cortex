@@ -70,6 +70,8 @@ export async function manageOrg(org_id: string, patch: {
   creditsSet?: number;
   creditsAllowance?: number;
   extendTrialDays?: number;
+  /** Give this workspace a paid period of N days from now (or from its current end). */
+  subscriptionDays?: number;
 }) {
   await assertSuper();
   const sb = serviceClient();
@@ -84,6 +86,19 @@ export async function manageOrg(org_id: string, patch: {
   if (patch.subscription_status) {
     if (!VALID_STATUS.includes(patch.subscription_status)) throw new Error(`Unknown status: ${patch.subscription_status}`);
     updates.subscription_status = patch.subscription_status;
+    // Switching a workspace back to "active" by hand must not leave a stale past
+    // end date behind, or the nightly sweep would expire it again immediately.
+    // No explicit period = a perpetual manual grant (null end date).
+    if (patch.subscription_status === "active" && typeof patch.subscriptionDays !== "number") {
+      updates.subscription_ends_at = null;
+    }
+  }
+  if (typeof patch.subscriptionDays === "number" && patch.subscriptionDays > 0) {
+    const { data } = await sb.from("organizations").select("subscription_ends_at").eq("id", org_id).maybeSingle();
+    const cur = (data as any)?.subscription_ends_at ? new Date((data as any).subscription_ends_at).getTime() : 0;
+    const base = Math.max(cur, Date.now()); // extend from now if already lapsed
+    updates.subscription_ends_at = new Date(base + patch.subscriptionDays * 86_400_000).toISOString();
+    updates.subscription_status = "active";
   }
   if (typeof patch.extendTrialDays === "number" && patch.extendTrialDays !== 0) {
     const { data } = await sb.from("organizations").select("trial_ends_at").eq("id", org_id).maybeSingle();

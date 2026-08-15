@@ -32,6 +32,7 @@ export async function POST(req: Request) {
       creditsSet: num(body.creditsSet),
       creditsAllowance: num(body.creditsAllowance),
       extendTrialDays: num(body.extendTrialDays),
+      subscriptionDays: num(body.subscriptionDays),
     }));
     return NextResponse.json({ ok: false, error: "Unknown operation" }, { status: 400 });
   } catch (e: any) {

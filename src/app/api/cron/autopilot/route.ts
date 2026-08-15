@@ -3,15 +3,47 @@ import { serviceClient } from "@/lib/supabase/server";
 import { generateFor } from "@/lib/ai/cortex";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
+/** Is this workspace entitled to have AI run on its behalf today? */
+function entitled(o: any): boolean {
+  const status = String(o?.subscription_status || "trialing");
+  if (status === "suspended" || status === "cancelled" || status === "expired") return false;
+  const now = Date.now();
+  if (status === "active") {
+    // No recorded period = manually granted workspace, treat as entitled.
+    if (!o?.subscription_ends_at) return true;
+    return new Date(o.subscription_ends_at).getTime() > now;
+  }
+  // Trialing: only while the trial window is still open.
+  if (!o?.trial_ends_at) return true;
+  return new Date(o.trial_ends_at).getTime() > now;
+}
 
 export async function GET(req: Request) {
   const isCron = req.headers.get("x-vercel-cron") || new URL(req.url).searchParams.get("secret") === process.env.CRON_SECRET;
   if (!isCron) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const sb = serviceClient();
   if (!sb) return NextResponse.json({ ok: true, ran: 0, note: "add SUPABASE_SERVICE_ROLE_KEY to enable scheduled autopilot" });
-  const { data: orgs } = await sb.from("organizations").select("id");
-  let ran = 0;
-  for (const o of (orgs as any[] || []).slice(0, 50)) {
+
+  // 1. Expire any paid plan whose period has run out, before doing anything else.
+  let expired = 0;
+  try {
+    const { data } = await sb.rpc("expire_lapsed_subscriptions");
+    expired = Number(data ?? 0);
+  } catch { /* migration not applied yet */ }
+
+  // 2. Housekeeping on the public rate-limit buckets.
+  try { await sb.rpc("prune_rate_limits"); } catch { /* migration not applied yet */ }
+
+  // 3. Daily analysis — only for workspaces that are actually entitled to it.
+  //    Running the model for expired/suspended workspaces is money spent on
+  //    customers who aren't paying.
+  const { data: orgs } = await sb.from("organizations").select("*");
+  let ran = 0, skipped = 0;
+  for (const o of (orgs as any[] || [])) {
+    if (!entitled(o)) { skipped++; continue; }
+    if (ran >= 50) break;
     const { data: m } = await sb.from("health_metrics").select("label,value,unit,delta_pct,status").eq("org_id", o.id);
     if (!m?.length) continue;
     const ctx = "KEY METRICS:\n" + m.map((x: any) => `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + x.unit} (${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, ${x.status})`).join("\n");
@@ -43,5 +75,5 @@ export async function GET(req: Request) {
     }
   } catch (e: any) { plan = { error: e?.message }; }
 
-  return NextResponse.json({ ok: true, ran, weekly, plan });
+  return NextResponse.json({ ok: true, ran, skipped, expired, weekly, plan });
 }

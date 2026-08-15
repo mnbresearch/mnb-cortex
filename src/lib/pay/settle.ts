@@ -4,24 +4,6 @@ import { serviceClient } from "@/lib/supabase/server";
 import { grantCredits } from "@/lib/credits";
 import { PLANS, CREDIT_PACKS } from "@/lib/config";
 
-/**
- * Idempotently claim a payment in the `payments` ledger (order_id is the PK).
- * Returns true only for the FIRST caller — so a retried/duplicated payment
- * verification (e.g. the Razorpay fallback) grants exactly once. If the ledger
- * isn't available, returns true so activation still happens (fail-open).
- */
-export async function claimPaymentOnce(orderId: string, orgId: string, kind: string, ref: string, amount: number, provider = "razorpay"): Promise<boolean> {
-  const svc = serviceClient();
-  if (!svc || !orderId) return true;
-  try {
-    const { data } = await svc.from("payments").upsert(
-      { order_id: orderId, org_id: orgId, kind, ref, amount, status: "paid", provider },
-      { onConflict: "order_id", ignoreDuplicates: true },
-    ).select("order_id");
-    return Array.isArray(data) && data.length > 0;
-  } catch { return true; }
-}
-
 export type SettleResult = {
   ok: boolean;
   pending?: boolean;
@@ -29,6 +11,7 @@ export type SettleResult = {
   kind?: "plan" | "credits";
   plan?: string;
   cycle?: string;
+  endsAt?: string;
   credits?: number;
   balance?: number;
   error?: string;
@@ -87,10 +70,29 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
   if (type === "plan") {
     if (!PLANS.find((x) => x.id === ref)) return { ok: false, error: "Unknown plan." };
     if (isNew) {
-      await svc.from("organizations").update({ plan: ref, subscription_status: "active" }).eq("id", orgId);
+      // A paid plan runs for a fixed period and then lapses — one payment must not
+      // buy the product forever. If the workspace is already inside a paid period,
+      // stack the new one on top of it rather than truncating what they've paid for.
+      const days = cycle === "annual" ? 365 : 30;
+      let from = Date.now();
+      try {
+        const { data: cur } = await svc.from("organizations").select("subscription_ends_at").eq("id", orgId).single();
+        const existing = (cur as any)?.subscription_ends_at ? new Date((cur as any).subscription_ends_at).getTime() : 0;
+        if (existing > from) from = existing;
+      } catch { /* column not migrated yet — start from now */ }
+      const endsAt = new Date(from + days * 86_400_000).toISOString();
+
+      const patch: Record<string, any> = { plan: ref, subscription_status: "active" };
+      const { error: withPeriod } = await svc.from("organizations")
+        .update({ ...patch, subscription_ends_at: endsAt, subscription_cycle: cycle === "annual" ? "annual" : "monthly" })
+        .eq("id", orgId);
+      // Migration-safe: if the period columns don't exist yet, still activate the plan.
+      if (withPeriod) await svc.from("organizations").update(patch).eq("id", orgId);
+
       try { await svc.from("subscriptions").insert({ org_id: orgId, plan: ref, status: "active", provider: "cashfree", amount: order.amount, reference: orderId }); } catch { /* audit only */ }
+      return { ok: true, kind: "plan", plan: ref, cycle, endsAt };
     }
-    return { ok: true, already: !isNew, kind: "plan", plan: ref, cycle };
+    return { ok: true, already: true, kind: "plan", plan: ref, cycle };
   }
 
   if (type === "credits") {
