@@ -128,12 +128,32 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
     const pack = CREDIT_PACKS.find((p) => p.id === ref);
     if (!pack) return { ok: false, error: "Unknown credit pack." };
     if (isNew) {
+      // The ledger reason carries the order id, which makes the grant itself
+      // idempotent. That matters because releaseClaim() below re-opens the order
+      // for a webhook retry: without this, a grant that COMMITTED but whose
+      // response was lost (lambda timeout, dropped connection) would be applied
+      // a second time by that retry.
+      const reason = `topup:${pack.id}:${orderId}`;
+      const alreadyGranted = async () => {
+        try {
+          const { data } = await svc.from("credit_ledger").select("balance_after").eq("org_id", orgId).eq("reason", reason).limit(1);
+          return Array.isArray(data) && data.length > 0 ? Number((data[0] as any).balance_after) : null;
+        } catch { return null; }
+      };
+
+      const prior = await alreadyGranted();
+      if (prior !== null) return { ok: true, already: true, kind: "credits", credits: pack.credits, balance: prior };
+
       try {
-        const balance = await grantCredits(orgId, pack.credits, "topup:" + pack.id, null);
+        const balance = await grantCredits(orgId, pack.credits, reason, null);
         return { ok: true, kind: "credits", credits: pack.credits, balance };
       } catch (e: any) {
-        // The customer paid but we couldn't credit them — release the claim so
-        // the webhook retry grants the pack instead of reporting "already done".
+        // Did it actually land before the error? If so, this was a lost response,
+        // not a failed grant — keep the claim and report success.
+        const landed = await alreadyGranted();
+        if (landed !== null) return { ok: true, kind: "credits", credits: pack.credits, balance: landed };
+
+        // Genuinely not credited. Release the claim so the webhook retry can.
         await releaseClaim();
         return { ok: false, error: e?.message || "Could not add the credits. Please contact support." };
       }

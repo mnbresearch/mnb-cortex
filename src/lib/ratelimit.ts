@@ -25,6 +25,21 @@ export function clientIp(req: Request): string {
   return first || req.headers.get("x-real-ip") || "unknown";
 }
 
+/**
+ * "The function isn't there yet" — PostgREST can't find it in the schema cache
+ * (PGRST202) or Postgres reports undefined_function (42883).
+ *
+ * This is the ONLY condition we fail open on. Before 2026_hardening.sql runs the
+ * RPC genuinely doesn't exist, and failing closed there would 429 every contact
+ * form and access request on the marketing site — turning a missing migration
+ * into a total lead-capture outage. Every other error still fails closed.
+ */
+function isMissingFunction(error: any): boolean {
+  const code = String(error?.code || "");
+  if (code === "PGRST202" || code === "42883") return true;
+  return /could not find the function|does not exist/i.test(String(error?.message || ""));
+}
+
 /** Check one bucket. Returns true when the caller is still within allowance. */
 async function hit(rule: LimitRule): Promise<boolean> {
   const svc = serviceClient();
@@ -35,7 +50,7 @@ async function hit(rule: LimitRule): Promise<boolean> {
       p_limit: rule.limit,
       p_window_secs: rule.windowSecs,
     });
-    if (error) return false;
+    if (error) return isMissingFunction(error);
     return data === true;
   } catch {
     return false;
