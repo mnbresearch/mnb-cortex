@@ -67,6 +67,23 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
   if (claimErr) return { ok: false, error: claimErr.message };
   const isNew = Array.isArray(claimed) && claimed.length > 0;
 
+  // If we didn't claim it, make sure the existing row is actually a PAID one.
+  // An earlier 'amount_mismatch' row would otherwise make every later attempt
+  // report "already settled" while nothing was ever activated.
+  if (!isNew) {
+    const { data: prior } = await svc.from("payments").select("status").eq("order_id", orderId).maybeSingle();
+    const priorStatus = String((prior as any)?.status || "");
+    if (priorStatus && priorStatus !== "paid") {
+      return { ok: false, error: `This order was previously recorded as "${priorStatus}" and cannot be activated. Please contact support.` };
+    }
+  }
+
+  /** Release our claim so a webhook retry can settle this order again. */
+  const releaseClaim = async () => {
+    if (!isNew) return;
+    try { await svc.from("payments").delete().eq("order_id", orderId); } catch { /* best effort */ }
+  };
+
   if (type === "plan") {
     if (!PLANS.find((x) => x.id === ref)) return { ok: false, error: "Unknown plan." };
     if (isNew) {
@@ -86,8 +103,20 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       const { error: withPeriod } = await svc.from("organizations")
         .update({ ...patch, subscription_ends_at: endsAt, subscription_cycle: cycle === "annual" ? "annual" : "monthly" })
         .eq("id", orgId);
-      // Migration-safe: if the period columns don't exist yet, still activate the plan.
-      if (withPeriod) await svc.from("organizations").update(patch).eq("id", orgId);
+
+      if (withPeriod) {
+        // Only fall back for a genuinely missing column (the migration hasn't run
+        // yet). Falling back on ANY error would turn a transient failure into a
+        // permanent, never-expiring plan that was paid for once.
+        const missingColumn = withPeriod.code === "PGRST204" || withPeriod.code === "42703"
+          || /column .* does not exist/i.test(withPeriod.message || "");
+        if (!missingColumn) {
+          await releaseClaim(); // let the webhook retry settle this order properly
+          return { ok: false, error: withPeriod.message || "Could not activate the plan." };
+        }
+        const retry = await svc.from("organizations").update(patch).eq("id", orgId);
+        if (retry.error) { await releaseClaim(); return { ok: false, error: retry.error.message }; }
+      }
 
       try { await svc.from("subscriptions").insert({ org_id: orgId, plan: ref, status: "active", provider: "cashfree", amount: order.amount, reference: orderId }); } catch { /* audit only */ }
       return { ok: true, kind: "plan", plan: ref, cycle, endsAt };
@@ -99,8 +128,15 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
     const pack = CREDIT_PACKS.find((p) => p.id === ref);
     if (!pack) return { ok: false, error: "Unknown credit pack." };
     if (isNew) {
-      const balance = await grantCredits(orgId, pack.credits, "topup:" + pack.id, null);
-      return { ok: true, kind: "credits", credits: pack.credits, balance };
+      try {
+        const balance = await grantCredits(orgId, pack.credits, "topup:" + pack.id, null);
+        return { ok: true, kind: "credits", credits: pack.credits, balance };
+      } catch (e: any) {
+        // The customer paid but we couldn't credit them — release the claim so
+        // the webhook retry grants the pack instead of reporting "already done".
+        await releaseClaim();
+        return { ok: false, error: e?.message || "Could not add the credits. Please contact support." };
+      }
     }
     return { ok: true, already: true, kind: "credits", credits: pack.credits };
   }
