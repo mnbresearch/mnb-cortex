@@ -13,7 +13,7 @@ const PLANS = ALL_PLANS
 // Pages that must stay reachable so a locked user can actually pay.
 const ALLOW = ["/billing", "/settings", "/pricing"];
 
-export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = false }: { status: string; daysLeft: number; locked: boolean; lapsedSubscription?: boolean }) {
+export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = false, subscriptionEndsAt = null }: { status: string; daysLeft: number; locked: boolean; lapsedSubscription?: boolean; subscriptionEndsAt?: string | null }) {
   const path = usePathname();
   const [dismissed, setDismissed] = useState(false);
 
@@ -67,7 +67,9 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
   }
 
   // ---- Renewal reminder for a paid plan about to lapse ----
-  if (status === "active" && daysLeft <= 7 && !dismissed && !ALLOW.some((p) => path?.startsWith(p))) {
+  // Only when there IS a recorded end date: an active workspace without one
+  // never expires and must never be nagged to renew.
+  if (status === "active" && subscriptionEndsAt && daysLeft <= 7 && !dismissed && !ALLOW.some((p) => path?.startsWith(p))) {
     const urgent = daysLeft <= 2;
     return (
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100%-2rem)]">

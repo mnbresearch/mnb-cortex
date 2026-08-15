@@ -40,8 +40,11 @@ export async function getBillingStatus(): Promise<BillingStatus> {
   let subEnd: number | null = null;
 
   try {
-    const { data, error } = await sb.from("organizations")
-      .select("created_at, plan, trial_ends_at, subscription_status, subscription_ends_at").eq("id", orgId).single();
+    // select("*") deliberately: naming subscription_ends_at explicitly would make
+    // this query fail on a database that hasn't run 2026_hardening.sql yet, and
+    // the catch below switches enforcement OFF — which would silently disable the
+    // trial paywall until the migration lands.
+    const { data, error } = await sb.from("organizations").select("*").eq("id", orgId).single();
     if (error) throw error;
     subStatus = (data as any).subscription_status || "trialing";
     plan = (data as any).plan || "growth";
@@ -76,8 +79,14 @@ export async function getBillingStatus(): Promise<BillingStatus> {
 
   // Countdown shown to the user: days left on the paid period when subscribed,
   // otherwise days left on the trial.
-  const daysLeft = paidAndCurrent && subEnd
-    ? Math.max(0, Math.ceil((subEnd - now) / DAY))
+  //
+  // An active workspace with NO recorded end date never expires (a manual grant,
+  // or a customer from before periods existed). It must NOT fall through to the
+  // long-past trial date, or every such customer would see "your plan ends
+  // today" forever — so report a large number instead.
+  const NEVER = 36_500; // ~100 years
+  const daysLeft = paidAndCurrent
+    ? (subEnd ? Math.max(0, Math.ceil((subEnd - now) / DAY)) : NEVER)
     : (trialEnd ? Math.max(0, Math.ceil((trialEnd - now) / DAY)) : TRIAL_DAYS);
 
   const locked = enforceable && (blocked || status === "expired");

@@ -127,9 +127,21 @@ export async function manageOrg(org_id: string, patch: {
     }
   }
 
+  let periodWarning: string | undefined;
   if (Object.keys(updates).length) {
     const { error } = await sb.from("organizations").update(updates).eq("id", org_id);
-    if (error) throw new Error(error.message);
+    if (error) {
+      // The subscription-period columns may not exist yet. Retry without them so
+      // changing a plan or status still works before 2026_hardening.sql is run.
+      const { subscription_ends_at, subscription_cycle, ...rest } = updates;
+      if (("subscription_ends_at" in updates) && Object.keys(rest).length) {
+        const retry = await sb.from("organizations").update(rest).eq("id", org_id);
+        if (retry.error) throw new Error(retry.error.message);
+        periodWarning = "Saved, but the subscription period columns don't exist yet — run supabase/migrations/2026_hardening.sql to enable plan expiry.";
+      } else {
+        throw new Error(error.message);
+      }
+    }
   }
 
   // Record the credit change in the ledger (best-effort; table may not exist yet).
@@ -139,7 +151,7 @@ export async function manageOrg(org_id: string, patch: {
       await sb.from("credit_ledger").insert({ org_id, delta: newCredits - prevCredits, balance_after: newCredits, reason, meta: {} });
     } catch { /* ledger table not migrated yet */ }
   }
-  return { ok: true, credits: newCredits, creditsWarning };
+  return { ok: true, credits: newCredits, creditsWarning, periodWarning };
 }
 
 /** Make the super-admin an owner of any workspace so they can view it. */
