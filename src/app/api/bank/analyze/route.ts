@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzeBankStatement } from "@/lib/ai/bankstatement";
+import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundForMode } from "@/lib/credits";
 
 export const runtime = "nodejs";
@@ -13,10 +14,7 @@ export async function POST(req: Request) {
     if (t.length < 40) return NextResponse.json({ ok: false, error: "Upload or paste a bank statement (CSV or PDF text)." }, { status: 200 });
 
     const gate = await chargeForMode("bankstatement");
-    if (!gate.ok) {
-      return NextResponse.json({ ok: false, outOfCredits: true, cost: gate.cost, balance: gate.balance,
-        error: `You're out of AI credits. Analysing a statement costs ${gate.cost} credits (balance ${gate.balance}). Top up under Usage & Credits.` }, { status: 402 });
-    }
+    if (!gate.ok) { const d = creditDenial(gate, "Analysing a statement"); return NextResponse.json(d.body, { status: d.status }); }
 
     const analysis = await analyzeBankStatement(t);
     if (!analysis) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runVisibility, draftAeoFix, defaultPrompts } from "@/lib/ai/visibility";
+import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode } from "@/lib/credits";
 
 export const runtime = "nodejs";
@@ -17,10 +18,7 @@ export async function POST(req: Request) {
     const prompts: string[] = Array.isArray(b.prompts) && b.prompts.length ? b.prompts.map((p: any) => String(p)) : defaultPrompts(category, location);
 
     const gate = await chargeForMode("visibility");
-    if (!gate.ok) {
-      return NextResponse.json({ ok: false, outOfCredits: true, cost: gate.cost, balance: gate.balance,
-        error: `You're out of AI credits. An AI Visibility check costs ${gate.cost} credits (balance ${gate.balance}). Top up under Usage & Credits.` }, { status: 402 });
-    }
+    if (!gate.ok) { const d = creditDenial(gate, "An AI Visibility check"); return NextResponse.json(d.body, { status: d.status }); }
 
     const report = await runVisibility(brand, competitors, prompts, 8);
     let fix = "";

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserAndOrg, getBusinessContext } from "@/lib/data";
 import { runCortex } from "@/lib/ai/cortex";
 import { recallContext } from "@/lib/memory";
+import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode } from "@/lib/credits";
 import { DEPARTMENTS } from "@/lib/agents/catalog";
 
@@ -13,7 +14,7 @@ export async function POST() {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return NextResponse.json({ ok: false, error: "No workspace." });
   const gate = await chargeForMode("report");
-  if (!gate.ok) return NextResponse.json({ ok: false, outOfCredits: true, error: `Out of AI credits (balance ${gate.balance}).` }, { status: 402 });
+  if (!gate.ok) { const d = creditDenial(gate, "An AI workforce audit"); return NextResponse.json(d.body, { status: d.status }); }
 
   const [context, mem] = await Promise.all([getBusinessContext(), recallContext(orgId, "priorities goals bottlenecks", 8)]);
   const depts = DEPARTMENTS.map((d) => d.name).join(", ");

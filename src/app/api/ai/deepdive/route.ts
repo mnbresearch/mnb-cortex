@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runDeepDive } from "@/lib/ai/cortex";
 import { getBusinessContext, getUserAndOrg } from "@/lib/data";
+import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundForMode } from "@/lib/credits";
 import { recallContext } from "@/lib/memory";
 
@@ -16,12 +17,7 @@ export async function POST(req: Request) {
     const q = String(question || "");
 
     const gate = await chargeForMode("deepdive");
-    if (!gate.ok) {
-      return NextResponse.json({
-        ok: false, outOfCredits: true, cost: gate.cost, balance: gate.balance,
-        error: `You're out of AI credits. A Deep Dive costs ${gate.cost} credits and your balance is ${gate.balance}. Top up under Usage & Credits.`,
-      }, { status: 402 });
-    }
+    if (!gate.ok) { const d = creditDenial(gate, "A Deep Dive"); return NextResponse.json(d.body, { status: d.status }); }
     charged = gate.enforced;
 
     const context = await getBusinessContext();

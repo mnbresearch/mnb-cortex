@@ -17,7 +17,25 @@ export type CreditState = {
   resetAt: string | null;
 };
 
-export type ChargeResult = { ok: boolean; enforced: boolean; cost: number; balance: number };
+/**
+ * `reason` explains a refusal so callers can answer with the right HTTP status
+ * and message: "anonymous" → 401 (sign in), "insufficient" → 402 (top up).
+ */
+export type ChargeReason = "anonymous" | "insufficient";
+export type ChargeResult = { ok: boolean; enforced: boolean; cost: number; balance: number; reason?: ChargeReason };
+
+/**
+ * The status that actually counts. A workspace whose paid period has run out is
+ * still stored as 'active' until the nightly sweep flips it, so we evaluate the
+ * period here too — otherwise a lapsed plan would keep drawing its full monthly
+ * allowance for up to a day.
+ */
+function effectiveStatus(status: string, endsAt: any): string {
+  if (status !== "active") return status;
+  if (!endsAt) return status; // no period recorded (manually granted) — leave it active
+  const t = new Date(endsAt).getTime();
+  return Number.isFinite(t) && Date.now() > t ? "expired" : "active";
+}
 
 function planAllowance(plan: string, status: string, override?: number | null): number {
   // Explicit super-admin override wins (0 = ignore, -1 = unlimited, +n = fixed).
@@ -36,11 +54,13 @@ export async function getCreditState(): Promise<CreditState> {
   const superAdmin = await isSuperAdmin();
   const sb = createClient();
   try {
-    const { data, error } = await sb.from("organizations")
-      .select("plan, credits, credits_allowance, credits_reset_at, subscription_status").eq("id", orgId).single();
+    // select("*") rather than a column list: the period columns may not exist on
+    // a database that hasn't run 2026_hardening.sql yet, and a missing-column
+    // error here would silently switch metering off for a paying customer.
+    const { data, error } = await sb.from("organizations").select("*").eq("id", orgId).single();
     if (error) throw error;
     const plan = String((data as any).plan || "growth").toLowerCase();
-    const status = String((data as any).subscription_status || "trialing");
+    const status = effectiveStatus(String((data as any).subscription_status || "trialing"), (data as any).subscription_ends_at);
     const allowance = planAllowance(plan, status, (data as any).credits_allowance);
     const unlimited = superAdmin || plan === "enterprise" || allowance < 0;
     let balance = Number((data as any).credits ?? 0);
@@ -69,23 +89,29 @@ export async function getCreditState(): Promise<CreditState> {
 
 /**
  * Charge the active workspace for one AI action BEFORE running the model.
- * Migration-safe: if the columns/RPCs don't exist, or there's no service role,
- * enforcement is OFF and the call is always allowed.
+ *
+ * Fails CLOSED for anonymous callers: no session means no billable AI, full stop.
+ * Every AI endpoint routes through here, so this is the single choke point that
+ * stops the models being run for free by an unauthenticated request.
+ *
+ * For a signed-in workspace it stays migration-safe: if the credit columns/RPCs
+ * don't exist yet, or there's no service role, metering is OFF and the call is
+ * allowed — a half-migrated database must never lock out a paying customer.
  */
 export async function chargeForMode(mode: string): Promise<ChargeResult> {
   const cost = creditCost(mode);
   const { user, orgId } = await getUserAndOrg();
-  if (!user || !orgId) return { ok: true, enforced: false, cost, balance: 0 };
+  if (!user || !orgId) return { ok: false, enforced: true, cost, balance: 0, reason: "anonymous" };
 
   const svc = serviceClient();
   if (!svc) return { ok: true, enforced: false, cost, balance: 0 };
 
   try {
     const superAdmin = await isSuperAdmin();
-    const { data: org, error } = await svc.from("organizations").select("plan, credits_allowance, subscription_status").eq("id", orgId).single();
+    const { data: org, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
     if (error) return { ok: true, enforced: false, cost, balance: 0 };
     const plan = String((org as any)?.plan || "growth").toLowerCase();
-    const status = String((org as any)?.subscription_status || "trialing");
+    const status = effectiveStatus(String((org as any)?.subscription_status || "trialing"), (org as any)?.subscription_ends_at);
     const allowance = planAllowance(plan, status, (org as any)?.credits_allowance);
     if (superAdmin || plan === "enterprise" || allowance < 0) return { ok: true, enforced: false, cost, balance: -1 };
 
@@ -99,7 +125,7 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
     const bal = Number(nb);
     if (bal < 0) {
       const { data: cur } = await svc.from("organizations").select("credits").eq("id", orgId).single();
-      return { ok: false, enforced: true, cost, balance: Number((cur as any)?.credits ?? 0) };
+      return { ok: false, enforced: true, cost, balance: Number((cur as any)?.credits ?? 0), reason: "insufficient" };
     }
     return { ok: true, enforced: true, cost, balance: bal };
   } catch {
@@ -145,10 +171,10 @@ export async function imageGenGate(): Promise<ImageGate> {
   const svc = serviceClient();
   if (!svc) return { allowed: false, used: 0, limit: 0, plan: "none", active: false, reason: "Image generation is temporarily unavailable." };
   try {
-    const { data: org, error } = await svc.from("organizations").select("plan, subscription_status").eq("id", orgId).single();
+    const { data: org, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
     if (error) throw error;
     const plan = String((org as any)?.plan || "growth").toLowerCase();
-    const status = String((org as any)?.subscription_status || "trialing");
+    const status = effectiveStatus(String((org as any)?.subscription_status || "trialing"), (org as any)?.subscription_ends_at);
     if (superAdmin || plan === "enterprise") return { allowed: true, used: 0, limit: -1, plan, active: true };
     if (["suspended", "cancelled", "expired"].includes(status)) {
       return { allowed: false, used: 0, limit: 0, plan, active: false, reason: "Your plan is inactive. Reactivate a paid plan to use image agents." };

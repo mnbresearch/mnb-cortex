@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateFor } from "@/lib/ai/cortex";
 import { getBusinessContext, getUserAndOrg } from "@/lib/data";
+import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode } from "@/lib/credits";
 import { recallContext } from "@/lib/memory";
 export const runtime = "nodejs";
@@ -11,10 +12,8 @@ export async function POST(req: Request) {
     const m = String(mode || "pulse");
     const gate = await chargeForMode(m);
     if (!gate.ok) {
-      return NextResponse.json({
-        text: `You're out of AI credits. This action costs ${gate.cost} credit${gate.cost === 1 ? "" : "s"} and your balance is ${gate.balance}. Top up under Usage & Credits to continue.`,
-        outOfCredits: true, cost: gate.cost, balance: gate.balance,
-      }, { status: 402 });
+      const d = creditDenial(gate, "This action");
+      return NextResponse.json({ ...d.body, text: d.body.error }, { status: d.status });
     }
     const context = await getBusinessContext();
     const { orgId } = await getUserAndOrg();

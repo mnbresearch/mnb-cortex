@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { draftOutreach } from "@/lib/ai/act";
+import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode } from "@/lib/credits";
 import { getUserAndOrg, getBusinessContext } from "@/lib/data";
 import { sendEmail } from "@/lib/email";
@@ -15,8 +16,7 @@ export async function POST(req: Request) {
 
     if (op === "draft") {
       const gate = await chargeForMode("act");
-      if (!gate.ok) return NextResponse.json({ ok: false, outOfCredits: true, cost: gate.cost, balance: gate.balance,
-        error: `You're out of AI credits. Drafting costs ${gate.cost} credits (balance ${gate.balance}).` }, { status: 402 });
+      if (!gate.ok) { const d = creditDenial(gate, "Drafting"); return NextResponse.json(d.body, { status: d.status }); }
       let context = "";
       try { context = await getBusinessContext(); } catch {}
       const draft = await draftOutreach(String(b.kind || "custom"), String(b.brief || ""), context);

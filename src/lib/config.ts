@@ -85,7 +85,7 @@ export function planPrice(p: Plan, cur: CurrencyCode, annual: boolean): number |
 export const CREDIT_COSTS: Record<string, number> = {
   chat: 1, pulse: 1, ask: 1,
   document: 5, meeting: 4, market: 5, strategy: 6,
-  report: 10, forecast: 8, board: 10, investor: 6,
+  report: 10, forecast: 8, board: 10, investor: 6, brief: 3,
   marketing: 5, competitor: 5, negotiate: 4, hiring: 4,
   contract: 6, account: 5, critique: 3, playbook: 6,
   proposal: 6, valuation: 6, broadcast: 3, sop: 4, costs: 4, loan: 3, vendor: 3,

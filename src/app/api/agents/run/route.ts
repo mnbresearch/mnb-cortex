@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserAndOrg } from "@/lib/data";
 import { resolveAgent, fillPrompt, runReasoning, saveRun } from "@/lib/agents/runtime";
 import { recallContext } from "@/lib/memory";
+import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, imageGenGate } from "@/lib/credits";
 import { hasImageProvider, generateImages } from "@/lib/ai/image";
 
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, limited: true, message: ig.reason, used: ig.used, limit: ig.limit, plan: ig.plan }, { status: 200 });
     }
     const gate = await chargeForMode("agent_image");
-    if (!gate.ok) return NextResponse.json({ ok: false, outOfCredits: true, error: `Out of AI credits (balance ${gate.balance}).` }, { status: 402 });
+    if (!gate.ok) { const d = creditDenial(gate, "Generating an image"); return NextResponse.json(d.body, { status: d.status }); }
     const prompt = imagePrompt(agent.name, agent.id, inputs, Boolean(b.image)) + (b.reviseNote ? ` Revision: ${b.reviseNote}.` : "");
     const { images, note } = await generateImages(prompt, b.image ? String(b.image) : undefined);
     if (!images.length) {
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
 
   // ---- Reasoning agents ----
   const gate = await chargeForMode("document");
-  if (!gate.ok) return NextResponse.json({ ok: false, outOfCredits: true, error: `Out of AI credits (balance ${gate.balance}).` }, { status: 402 });
+  if (!gate.ok) { const d = creditDenial(gate, "Running an agent"); return NextResponse.json(d.body, { status: d.status }); }
   const mem = orgId ? await recallContext(orgId, Object.values(inputs).join(" ").slice(0, 400), 5) : "";
   let prompt = fillPrompt(agent.prompt, inputs, b.reviseNote ? String(b.reviseNote) : undefined, b.prior ? String(b.prior) : undefined);
   if (mem) prompt = `${prompt}\n\n---\nUse this remembered business context where relevant:\n${mem}`;

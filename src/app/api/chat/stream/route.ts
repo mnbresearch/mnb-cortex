@@ -1,5 +1,6 @@
 import { streamCortex } from "@/lib/ai/cortex";
 import { getBusinessContext, getUserAndOrg } from "@/lib/data";
+import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode } from "@/lib/credits";
 import { recallContext } from "@/lib/memory";
 export const runtime = "nodejs";
@@ -9,9 +10,8 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
     const gate = await chargeForMode("chat");
     if (!gate.ok) {
-      return new Response(`You're out of AI credits (balance ${gate.balance}). Top up under Usage & Credits to keep chatting.`, {
-        status: 402, headers: { "Content-Type": "text/plain; charset=utf-8" },
-      });
+      const d = creditDenial(gate, "Chatting with your AI COO");
+      return new Response(d.body.error, { status: d.status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
     const context = await getBusinessContext();
     const lastUser = Array.isArray(messages) ? [...messages].reverse().find((m: any) => m?.role === "user")?.content : "";

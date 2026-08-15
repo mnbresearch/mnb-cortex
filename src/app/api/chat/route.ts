@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runCortex } from "@/lib/ai/cortex";
 import { getBusinessContext, getUserAndOrg } from "@/lib/data";
+import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode } from "@/lib/credits";
 import { recallContext } from "@/lib/memory";
 
@@ -12,10 +13,8 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
     const gate = await chargeForMode("chat");
     if (!gate.ok) {
-      return NextResponse.json({
-        reply: `You're out of AI credits (balance ${gate.balance}). Top up under Usage & Credits to keep chatting with your AI COO.`,
-        outOfCredits: true,
-      }, { status: 402 });
+      const d = creditDenial(gate, "Chatting with your AI COO");
+      return NextResponse.json({ ...d.body, reply: d.body.error }, { status: d.status });
     }
     const context = await getBusinessContext();
     const lastUser = Array.isArray(messages) ? [...messages].reverse().find((m: any) => m?.role === "user")?.content : "";

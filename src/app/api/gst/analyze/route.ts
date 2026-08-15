@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzeGst } from "@/lib/ai/gst";
+import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundForMode } from "@/lib/credits";
 
 export const runtime = "nodejs";
@@ -13,8 +14,7 @@ export async function POST(req: Request) {
     if (t.length < 30) return NextResponse.json({ ok: false, error: "Upload or paste a GST return / summary." }, { status: 200 });
 
     const gate = await chargeForMode("gst");
-    if (!gate.ok) return NextResponse.json({ ok: false, outOfCredits: true, cost: gate.cost, balance: gate.balance,
-      error: `You're out of AI credits. Reading a GST return costs ${gate.cost} credits (balance ${gate.balance}).` }, { status: 402 });
+    if (!gate.ok) { const d = creditDenial(gate, "Reading a GST return"); return NextResponse.json(d.body, { status: d.status }); }
 
     const analysis = await analyzeGst(t);
     if (!analysis) {
