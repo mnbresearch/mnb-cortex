@@ -64,6 +64,10 @@ begin
   ] loop
     begin
       execute format('revoke execute on function %s from public, anon, authenticated', fn);
+      -- REVOKE ... FROM PUBLIC also removes the implicit grant that service_role
+      -- may have been relying on. The server calls all four of these with the
+      -- service role, so re-grant explicitly or credit metering stops working.
+      execute format('grant execute on function %s to service_role', fn);
     exception when undefined_function or undefined_object then
       null; -- not created on this database yet
     end;
@@ -158,6 +162,8 @@ begin
 end $$;
 
 revoke execute on function expire_lapsed_subscriptions() from public, anon, authenticated;
+-- The nightly cron calls this with the service role.
+grant execute on function expire_lapsed_subscriptions() to service_role;
 
 
 -- ------------------------------------------------------------
@@ -209,3 +215,8 @@ $$;
 -- defeat the entire limiter.
 revoke execute on function rate_limit_hit(text, integer, integer) from public, anon, authenticated;
 revoke execute on function prune_rate_limits() from public, anon, authenticated;
+-- Both are called server-side with the service role; REVOKE ... FROM PUBLIC
+-- would otherwise strip the implicit grant it relies on and the limiter would
+-- fail closed on every request.
+grant execute on function rate_limit_hit(text, integer, integer) to service_role;
+grant execute on function prune_rate_limits() to service_role;
