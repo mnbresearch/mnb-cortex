@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { analyzeGst } from "@/lib/ai/gst";
 import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundForMode } from "@/lib/credits";
+import { getUserAndOrg } from "@/lib/data";
+import { persistGstAnalysis } from "@/lib/persist-analysis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +23,11 @@ export async function POST(req: Request) {
       if (gate.enforced) await refundForMode("gst");
       return NextResponse.json({ ok: false, error: "Couldn't read that return — try a clearer export or paste the summary rows." }, { status: 200 });
     }
-    return NextResponse.json({ ok: true, analysis, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
+    // Persist the filed turnover so it reaches the dashboard and the AI context.
+    const { orgId } = await getUserAndOrg();
+    const saved = await persistGstAnalysis(orgId, analysis);
+
+    return NextResponse.json({ ok: true, analysis, saved, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || "Analysis failed — check the AI key." }, { status: 200 });
   }

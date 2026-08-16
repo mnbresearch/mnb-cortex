@@ -158,17 +158,25 @@ export const getWorkflowRuns = () => fetchRows("workflow_runs", "ran_at");
 
 export async function getFinanceSeries() {
   const org = await currentOrg();
-  if (!org) return { series: null as any[] | null, live: false };
+  if (!org) return { series: null as any[] | null, live: false, keys: [] as string[] };
   const sb = createClient();
-  const { data } = await sb.from("finance_ledger").select("*").eq("org_id", org).order("period", { ascending: true }).limit(12);
-  if (!data?.length) return { series: null, live: false };
+  // Newest 12 months, then reversed for the chart. An ascending limit would
+  // eventually stop including the current month as the ledger grows.
+  const { data: recent } = await sb.from("finance_ledger").select("*").eq("org_id", org).order("period", { ascending: false }).limit(12);
+  if (!recent?.length) return { series: null, live: false, keys: [] };
+  const data = recent.slice().reverse();
   const series = data.map((r: any) => ({
     month: new Date(r.period).toLocaleString("en", { month: "short" }),
     revenue: +(Number(r.revenue) / 1e7).toFixed(2),
     profit: +(Number(r.net_profit) / 1e7).toFixed(2),
     cash: +(Number(r.cash_balance) / 1e7).toFixed(2),
   }));
-  return { series, live: true };
+  // Revenue is derived from real sales orders, but profit and cash need cost data
+  // we may not have (they arrive from a bank-statement or GST analysis). Report
+  // which series actually carry numbers so the chart plots those and no others —
+  // a flat zero line reads as "your profit is zero", which would be a lie.
+  const keys = (["revenue", "profit", "cash"] as const).filter((k) => series.some((p: any) => Number(p[k]) !== 0));
+  return { series, live: true, keys: keys as unknown as string[] };
 }
 
 export async function getApprovals() {

@@ -29,6 +29,18 @@ export default async function Dashboard() {
   const isReal = Boolean(orgId);                 // signed-in workspace vs public demo preview
   const hasMetrics = metrics.length > 0;
   const chartData = fin.live && fin.series ? fin.series : (isReal ? [] : demoRevenueSeries);
+  // Only plot the series that actually carry data. A derived ledger has real
+  // revenue but no profit/cash until costs are known, and a flat zero line would
+  // read as "your profit is zero" rather than "we don't know it yet".
+  const ALL_KEYS = [
+    { k: "revenue", label: "Revenue", color: "hsl(var(--primary))" },
+    { k: "profit", label: "Net profit", color: "hsl(var(--success))" },
+    { k: "cash", label: "Cash", color: "hsl(var(--warning))" },
+  ];
+  // When live, plot exactly the series that carry data — even if that's none.
+  // Falling back to ALL_KEYS on an empty list would draw three flat zero lines,
+  // which is the precise thing this is meant to prevent.
+  const chartKeys = fin.live ? ALL_KEYS.filter((s) => fin.keys.includes(s.k)) : ALL_KEYS;
   const reds = metrics.filter((m) => m.status === "red").length;
   const greens = metrics.filter((m) => m.status === "green").length;
   const overall = reds >= 2 ? "needs attention" : reds === 1 ? "mostly healthy" : "healthy";
@@ -96,12 +108,8 @@ export default async function Dashboard() {
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <Section title="Revenue, profit & cash" desc="Trailing 12 months (₹ Cr)">
-              {chartData.length ? (
-                <TrendChart data={chartData} keys={[
-                  { k: "revenue", label: "Revenue", color: "hsl(var(--primary))" },
-                  { k: "profit", label: "Net profit", color: "hsl(var(--success))" },
-                  { k: "cash", label: "Cash", color: "hsl(var(--warning))" },
-                ]} />
+              {chartData.length && chartKeys.length ? (
+                <TrendChart data={chartData} keys={chartKeys} />
               ) : (
                 <Card className="p-8 text-center text-sm text-muted-foreground">
                   No finance data yet. <Link href="/bank" className="text-primary">Upload a bank statement</Link> or <Link href="/import" className="text-primary">import your ledger</Link> to see your revenue, profit and cash trend.

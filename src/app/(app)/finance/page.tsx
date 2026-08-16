@@ -17,6 +17,8 @@ export default async function Finance() {
   const { rows, live } = await getInvoices();
   const fin = await getFinanceSeries();
   const chartData = fin.live && fin.series ? fin.series : pl;
+  // Plot only the series with real numbers (see getFinanceSeries).
+  const FIN_KEYS = [{ k: "revenue", label: "Revenue", color: "hsl(var(--primary))" }, { k: "profit", label: "Net profit", color: "hsl(var(--success))" }];
   return (
     <>
       <Topbar title="Finance Intelligence" subtitle="Tally · Zoho Books · QuickBooks · GST · Bank" />
@@ -28,7 +30,7 @@ export default async function Finance() {
           <Stat label="EBITDA" value="₹62.0 L" hint="14.6% margin" />
         </div>
         <Section title="Revenue vs net profit" desc="Trailing 12 months (₹ Cr)">
-          <TrendChart data={chartData} keys={[{ k: "revenue", label: "Revenue", color: "hsl(var(--primary))" }, { k: "profit", label: "Net profit", color: "hsl(var(--success))" }]} />
+          <TrendChart data={chartData} keys={fin.live ? FIN_KEYS.filter((s) => fin.keys.includes(s.k)) : FIN_KEYS} />
         </Section>
 
         <Section title="AI actions" desc="The COO executes — these write real records">

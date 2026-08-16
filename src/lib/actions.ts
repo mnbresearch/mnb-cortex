@@ -4,6 +4,7 @@ import { getUserAndOrg, getBusinessContext } from "@/lib/data";
 import { SUPER_ADMINS } from "@/lib/config";
 import { generateFor } from "@/lib/ai/cortex";
 import { sendEmail } from "@/lib/email";
+import { recomputeQuietly } from "@/lib/metrics";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -12,11 +13,22 @@ async function requireOrg() {
   if (!orgId) throw new Error("Sign in to use this feature.");
   return orgId;
 }
+
+/**
+ * Guard for actions that WRITE. Database policy now allows inserts and updates
+ * from `analyst` and above, so without this a `viewer` would get the raw
+ * Postgres string "new row violates row-level security policy" instead of an
+ * explanation. Keeps the app's message and the DB's rule in agreement.
+ */
+async function requireWriteOrg() {
+  const { orgId } = await requireRole("analyst");
+  return orgId;
+}
 const num = (v: FormDataEntryValue | null) => { const n = parseFloat(String(v ?? "")); return isNaN(n) ? 0 : n; };
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
 export async function seedDemoData() {
-  const orgId = await requireOrg();
+  const orgId = await requireWriteOrg();
   const sb = createClient();
   const { error } = await sb.rpc("seed_demo_data", { p_org: orgId });
   if (error) throw new Error(error.message);
@@ -38,46 +50,50 @@ export async function updateOrgProfile(fd: FormData) {
 }
 
 export async function addSalesOrder(fd: FormData) {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   const { error } = await sb.from("sales_orders").insert({
     org_id: orgId, order_no: "SO-" + Date.now().toString().slice(-6),
     customer_name: str(fd.get("customer_name")), region: str(fd.get("region")) || "West",
     product: str(fd.get("product")), amount: num(fd.get("amount")),
     status: str(fd.get("status")) || "won", order_date: new Date().toISOString().slice(0,10) });
   if (error) throw new Error(error.message);
-  revalidatePath("/sales");
+  await recomputeQuietly(orgId);
+  revalidatePath("/sales"); revalidatePath("/dashboard");
 }
 
 export async function addInvoice(fd: FormData) {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   const { error } = await sb.from("invoices").insert({
     org_id: orgId, invoice_no: "INV-" + Date.now().toString().slice(-6),
     party: str(fd.get("party")), amount: num(fd.get("amount")),
     status: str(fd.get("status")) || "pending", type: str(fd.get("type")) || "receivable",
     due_date: str(fd.get("due_date")) || new Date(Date.now()+15*864e5).toISOString().slice(0,10) });
   if (error) throw new Error(error.message);
-  revalidatePath("/finance");
+  await recomputeQuietly(orgId);
+  revalidatePath("/finance"); revalidatePath("/dashboard");
 }
 
 export async function addInventoryItem(fd: FormData) {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   const { error } = await sb.from("inventory_items").insert({
     org_id: orgId, sku: str(fd.get("sku")), name: str(fd.get("name")),
     category: str(fd.get("category")) || "raw", on_hand: num(fd.get("on_hand")),
     reorder_level: num(fd.get("reorder_level")), unit_cost: num(fd.get("unit_cost")),
     supplier: str(fd.get("supplier")) });
   if (error) throw new Error(error.message);
-  revalidatePath("/inventory");
+  await recomputeQuietly(orgId);
+  revalidatePath("/inventory"); revalidatePath("/dashboard");
 }
 
 export async function addEmployee(fd: FormData) {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   const { error } = await sb.from("employees").insert({
     org_id: orgId, name: str(fd.get("name")), department: str(fd.get("department")),
     role: str(fd.get("role")), monthly_ctc: num(fd.get("monthly_ctc")),
     performance: num(fd.get("performance")) || 3.5 });
   if (error) throw new Error(error.message);
-  revalidatePath("/hr");
+  await recomputeQuietly(orgId);
+  revalidatePath("/hr"); revalidatePath("/dashboard");
 }
 
 export async function deleteRecord(fd: FormData) {
@@ -88,42 +104,84 @@ export async function deleteRecord(fd: FormData) {
   const sb = createClient();
   const { error } = await sb.from(table).delete().eq("id", id).eq("org_id", orgId);
   if (error) throw new Error(error.message);
+  // Deleting rows changes the KPIs too — a workspace that clears its data must
+  // fall back to an honest empty dashboard, not keep stale numbers.
+  if (["sales_orders", "invoices", "inventory_items", "employees", "purchase_orders"].includes(table)) {
+    await recomputeQuietly(orgId);
+    revalidatePath("/dashboard");
+  }
   revalidatePath(path);
 }
 
 export async function generatePO() {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
+  // Was hardcoded to "PetroChem Ltd / RM-204 Polymer Resin / ₹14.5 L" and written
+  // straight into the customer's purchase_orders table. Now it drafts a PO for
+  // the item that is genuinely most below its reorder level, or does nothing.
+  const { data: items } = await sb.from("inventory_items")
+    .select("sku,name,on_hand,reorder_level,unit_cost,supplier,daily_consumption")
+    .eq("org_id", orgId).limit(2000);
+  const low = ((items as any[]) || [])
+    .filter((i) => Number(i.reorder_level) > 0 && Number(i.on_hand) < Number(i.reorder_level))
+    .sort((a, b) => (Number(a.on_hand) / Number(a.reorder_level)) - (Number(b.on_hand) / Number(b.reorder_level)))[0];
+
+  if (!low) {
+    throw new Error("Nothing is below its reorder level right now, so there's no purchase order to draft.");
+  }
+
+  // Order back up to reorder level plus a fortnight of consumption.
+  const qty = Math.max(1, Math.ceil((Number(low.reorder_level) - Number(low.on_hand)) + Number(low.daily_consumption || 0) * 14));
   const { error } = await sb.from("purchase_orders").insert({
-    org_id: orgId, po_no: "PO-" + Date.now().toString().slice(-5), supplier: "PetroChem Ltd",
-    item: "RM-204 Polymer Resin", qty: 10000, amount: 1450000, status: "draft", created_by_ai: true });
+    org_id: orgId, po_no: "PO-" + Date.now().toString().slice(-5),
+    supplier: low.supplier || "To be assigned",
+    item: [low.sku, low.name].filter(Boolean).join(" — ") || "Item",
+    qty, amount: Math.round(qty * Number(low.unit_cost || 0)), status: "draft", created_by_ai: true });
   if (error) throw new Error(error.message);
-  await logActivity(orgId, "ai", "AI drafted purchase order PO for RM-204 (10,000 units)");
-  revalidatePath("/inventory");
+  await logActivity(orgId, "ai", `AI drafted purchase order for ${low.sku || low.name} (${qty} units)`);
+  revalidatePath("/inventory"); revalidatePath("/approvals");
 }
 
 export async function createInvoiceAI() {
-  const orgId = await requireOrg(); const sb = createClient();
-  const { error } = await sb.from("invoices").insert({
-    org_id: orgId, invoice_no: "INV-" + Date.now().toString().slice(-6), party: "Auto-generated draft",
-    amount: 250000, status: "pending", type: "receivable",
-    due_date: new Date(Date.now()+15*864e5).toISOString().slice(0,10) });
-  if (error) throw new Error(error.message);
-  revalidatePath("/finance");
+  // Previously inserted a fictional ₹2.5 L invoice with party "Auto-generated
+  // draft" into the customer's real ledger. An invoice is a legal document —
+  // Cortex must never invent one. Send them to the real builder instead.
+  redirect("/invoice");
 }
 
 export async function sendReminderAI() {
-  const { orgId, user } = await getUserAndOrg();
-  if (!orgId) throw new Error("Sign in to use this feature.");
+  const orgId = await requireWriteOrg();
+  const { user } = await getUserAndOrg();
   const sb = createClient();
-  let note = "AI queued WhatsApp + email reminders to overdue customers.";
-  if (user?.email) {
-    const res = await sendEmail(user.email, "MNB Cortex — payment reminders sent",
-      "<h2>Payment reminders sent</h2><p>Your AI COO has queued reminders to overdue customers. Top overdue: Apex Traders ₹18 L (48 days).</p>");
-    note = res.sent ? `Reminders sent — confirmation emailed to ${user.email}.` : "Reminders queued (add RESEND_API_KEY to send real emails).";
+
+  // Was hardcoded to "Apex Traders ₹18 L (48 days)" — a real email, to the real
+  // customer, about a company that does not exist. Read their actual ledger.
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: rows } = await sb.from("invoices")
+    .select("party,amount,due_date,status").eq("org_id", orgId).eq("type", "receivable")
+    .neq("status", "paid").limit(500);
+  const overdue = ((rows as any[]) || [])
+    .filter((i) => i.status === "overdue" || (i.due_date && String(i.due_date) < today))
+    .sort((a, b) => Number(b.amount) - Number(a.amount));
+
+  if (!overdue.length) {
+    throw new Error("You have no overdue receivables right now — nothing to chase.");
   }
-  const { error } = await sb.from("alerts").insert({ org_id: orgId, severity: "green", module: "finance", title: "Payment reminders sent", body: note });
+
+  const total = overdue.reduce((a, i) => a + Number(i.amount || 0), 0);
+  const days = (d: any) => (d ? Math.max(0, Math.round((Date.now() - new Date(d).getTime()) / 86_400_000)) : 0);
+  const top = overdue.slice(0, 5)
+    .map((i) => `<li>${i.party || "Unnamed party"} — ₹${Number(i.amount || 0).toLocaleString("en-IN")}${i.due_date ? ` (${days(i.due_date)} days)` : ""}</li>`)
+    .join("");
+
+  let note = `Queued reminders for ${overdue.length} overdue invoice${overdue.length === 1 ? "" : "s"} worth ₹${total.toLocaleString("en-IN")}.`;
+  if (user?.email) {
+    const res = await sendEmail(user.email, "MNB Cortex — your overdue receivables",
+      `<h2>${overdue.length} overdue invoice${overdue.length === 1 ? "" : "s"}, ₹${total.toLocaleString("en-IN")} outstanding</h2><ul>${top}</ul>`);
+    if (res.sent) note += ` Summary emailed to ${user.email}.`;
+  }
+  const { error } = await sb.from("alerts").insert({ org_id: orgId, severity: "yellow", module: "finance", title: "Overdue receivables", body: note });
   if (error) throw new Error(error.message);
-  ["/dashboard","/finance"].forEach((p) => revalidatePath(p));
+  ["/dashboard", "/finance"].forEach((p) => revalidatePath(p));
 }
 
 export async function signOut() {
@@ -134,7 +192,7 @@ export async function signOut() {
 
 // ---- Persist AI artifacts ----
 export async function saveArtifact(fd: FormData) {
-  const orgId = await requireOrg();
+  const orgId = await requireWriteOrg();
   const mode = str(fd.get("mode"));
   const title = str(fd.get("title")) || "Untitled";
   const content = str(fd.get("content"));
@@ -150,7 +208,7 @@ export async function saveArtifact(fd: FormData) {
 
 // ---- Workflows ----
 export async function addWorkflow(fd: FormData) {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   const steps = str(fd.get("steps")).split(",").map((s) => s.trim()).filter(Boolean);
   const { error } = await sb.from("workflows").insert({
     org_id: orgId, name: str(fd.get("name")), trigger: str(fd.get("trigger")) || "manual",
@@ -160,7 +218,7 @@ export async function addWorkflow(fd: FormData) {
 }
 
 export async function runWorkflow(fd: FormData) {
-  const orgId = await requireOrg(); const id = str(fd.get("id")); const name = str(fd.get("name"));
+  const orgId = await requireWriteOrg(); const id = str(fd.get("id")); const name = str(fd.get("name"));
   const sb = createClient();
   await sb.from("workflow_runs").insert({ org_id: orgId, workflow_id: id, status: "success", log: `Ran "${name}" — steps executed successfully.` });
   await sb.from("workflows").update({ last_run: new Date().toISOString() }).eq("id", id).eq("org_id", orgId);
@@ -170,7 +228,7 @@ export async function runWorkflow(fd: FormData) {
 }
 
 export async function updateStatus(fd: FormData) {
-  const orgId = await requireOrg();
+  const orgId = await requireWriteOrg();
   const table = str(fd.get("table")); const id = str(fd.get("id")); const status = str(fd.get("status"));
   const path = str(fd.get("path")) || "/approvals";
   const allowed: Record<string, string[]> = {
@@ -182,6 +240,7 @@ export async function updateStatus(fd: FormData) {
   const sb = createClient();
   const { error } = await sb.from(table).update({ status }).eq("id", id).eq("org_id", orgId);
   if (error) throw new Error(error.message);
+  await recomputeQuietly(orgId);
   await logActivity(orgId, "approval", `Set ${table} to ${status}`);
   ["/approvals", "/inventory", "/finance", "/sales", path].forEach((p) => revalidatePath(p));
 }
@@ -195,7 +254,7 @@ const IMPORT_COLS: Record<string, { cols: string[]; nums: string[] }> = {
 
 export async function importRows(fd: FormData): Promise<{ inserted: number; error?: string }> {
   try {
-    const orgId = await requireOrg();
+    const orgId = await requireWriteOrg();
     const table = str(fd.get("table"));
     const spec = IMPORT_COLS[table];
     if (!spec) return { inserted: 0, error: "Unsupported dataset" };
@@ -213,6 +272,7 @@ export async function importRows(fd: FormData): Promise<{ inserted: number; erro
     const sb = createClient();
     const { error } = await sb.from(table).insert(mapped);
     if (error) return { inserted: 0, error: error.message };
+    await recomputeQuietly(orgId);
     await logActivity(orgId, "import", `Imported ${mapped.length} rows into ${table} (CSV)`);
     ["/sales", "/finance", "/inventory", "/hr", "/dashboard"].forEach((p) => revalidatePath(p));
     return { inserted: mapped.length };
@@ -222,7 +282,7 @@ export async function importRows(fd: FormData): Promise<{ inserted: number; erro
 // ---- Import from a public CSV / Google Sheets URL ----
 export async function importFromUrl(fd: FormData): Promise<{ inserted: number; error?: string }> {
   try {
-    const orgId = await requireOrg();
+    const orgId = await requireWriteOrg();
     const table = str(fd.get("table"));
     const spec = IMPORT_COLS[table];
     if (!spec) return { inserted: 0, error: "Unsupported dataset" };
@@ -241,6 +301,7 @@ export async function importFromUrl(fd: FormData): Promise<{ inserted: number; e
     const sb = createClient();
     const { error } = await sb.from(table).insert(mapped);
     if (error) return { inserted: 0, error: error.message };
+    await recomputeQuietly(orgId);
     await logActivity(orgId, "import", `Imported ${mapped.length} rows into ${table} (URL)`);
     ["/sales", "/finance", "/inventory", "/hr", "/dashboard", "/data"].forEach((p) => revalidatePath(p));
     return { inserted: mapped.length };
@@ -284,7 +345,7 @@ async function logActivity(orgId: string, type: string, message: string) {
 
 // ---- CRM: customers ----
 export async function addCustomer(fd: FormData) {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   const { error } = await sb.from("customers").insert({
     org_id: orgId, name: str(fd.get("name")), company: str(fd.get("company")),
     email: str(fd.get("email")), phone: str(fd.get("phone")),
@@ -314,7 +375,7 @@ export async function inviteMember(fd: FormData) {
   revalidatePath("/admin");
 }
 export async function cancelInvite(fd: FormData) {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   await sb.from("invites").delete().eq("org_id", orgId).eq("id", str(fd.get("id")));
   revalidatePath("/admin");
 }
@@ -333,7 +394,7 @@ async function requireRole(min: string) {
 
 // ---- Deals / pipeline ----
 export async function addDeal(fd: FormData) {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   const { error } = await sb.from("sales_pipeline").insert({
     org_id: orgId, stage: str(fd.get("stage")) || "lead", deal_name: str(fd.get("deal_name")),
     customer_name: str(fd.get("customer_name")), value: num(fd.get("value")),
@@ -343,7 +404,7 @@ export async function addDeal(fd: FormData) {
   revalidatePath("/pipeline");
 }
 export async function moveDeal(fd: FormData) {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   const { error } = await sb.from("sales_pipeline").update({ stage: str(fd.get("stage")) }).eq("id", str(fd.get("id"))).eq("org_id", orgId);
   if (error) throw new Error(error.message);
   revalidatePath("/pipeline");
@@ -366,7 +427,7 @@ export async function deleteApiKey(fd: FormData) {
 
 // ---- AI Autopilot ----
 export async function runAutopilot() {
-  const orgId = await requireOrg();
+  const orgId = await requireWriteOrg();
   const ctx = await getBusinessContext();
   const text = await generateFor("pulse", "", ctx);
   const sb = createClient();
@@ -377,14 +438,14 @@ export async function runAutopilot() {
 
 // ---- Shareable public report links ----
 export async function createReportLink() {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   const token = "r_" + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
   const { error } = await sb.from("report_links").insert({ org_id: orgId, token });
   if (error) throw new Error(error.message);
   revalidatePath("/reports");
 }
 export async function revokeReportLink(fd: FormData) {
-  const orgId = await requireOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = createClient();
   await sb.from("report_links").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   revalidatePath("/reports");
 }
