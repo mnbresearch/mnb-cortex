@@ -20,7 +20,7 @@ const LOOP = [
 
 const DOMAINS: { n: string; name: string; blurb: string; tools: string[] }[] = [
   { n: "01", name: "Cortex Workforce", blurb: "A complete AI org chart you can actually run — like hiring a whole team on day one.",
-    tools: ["7 departments, one brain", "250+ runnable agents", "Sales → Back Office coverage", "Industry packs (e.g. jewellery sketch → spec)", "Every agent uses your memory", "Audit engine marks a deploy-first roadmap", "Cortex builds custom agents for you", "Image agents via your Gemini key"] },
+    tools: ["7 departments, one brain", "290+ runnable agents", "Sales → Back Office coverage", "Industry packs (e.g. jewellery sketch → spec)", "Every agent uses your memory", "Audit engine marks a deploy-first roadmap", "Cortex builds custom agents for you", "Image agents via your Gemini key"] },
   { n: "02", name: "Cortex Memory", blurb: "A living, permanent memory of your business that grounds every answer.",
     tools: ["Long-term business memory", "Grounds every AI response", "Knowledge graph of people, customers & vendors", "A self-updating company profile", "Extract memories from any pasted text", "Teach Cortex from your real data", "Export your memory anytime (JSON / Markdown)"] },
   { n: "03", name: "Finance & Money", blurb: "A CFO-grade financial cockpit, tuned for Indian businesses.",

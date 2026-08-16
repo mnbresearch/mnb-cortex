@@ -45,7 +45,7 @@ const GROUPS: Group[] = [
       { href: "/act", name: "AI Outreach", icon: Megaphone, blurb: "Payment reminders, follow-ups and supplier notes.", you: "You approve; it sends by email (your domain) or WhatsApp.", cost: c("act") },
       { href: "/marketing", name: "Marketing Studio", icon: Sparkles, blurb: "Full campaign kits — copy, posts, emails.", you: "A launch-ready marketing pack in one click.", cost: c("marketing") },
       { href: "/broadcast", name: "WhatsApp Broadcast", icon: Radio, blurb: "Compose and personalise a broadcast.", you: "Ready-to-send wa.me messages for your list.", cost: c("broadcast") },
-      { href: "/agents", name: "AI Agents & Workforce", icon: Bot, blurb: "300+ department agents across 26 industries.", you: "Run, approve, revise and export specialist work.", cost: null },
+      { href: "/agents", name: "AI Agents & Workforce", icon: Bot, blurb: "380+ department agents across 25 Indian industries.", you: "Run, approve, revise and export specialist work.", cost: null },
     ],
   },
   {
@@ -72,7 +72,7 @@ export default function ToolsHub() {
         {/* Hero */}
         <Card className="p-6 brand-gradient text-white overflow-hidden relative">
           <div className="relative z-10 max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 text-xs font-medium bg-white/15 rounded-full px-2.5 py-1"><Sparkles className="h-3.5 w-3.5" /> {total} flagship tools · 130+ modules</div>
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium bg-white/15 rounded-full px-2.5 py-1"><Sparkles className="h-3.5 w-3.5" /> {total} flagship tools · 120+ modules</div>
             <h2 className="mt-3 text-2xl font-display font-semibold tracking-tight">One brain, many hands.</h2>
             <p className="mt-1.5 text-white/85 text-sm leading-6">
               MNB Cortex isn't a chatbot bolted onto a dashboard. It reads your real data, reasons over it, acts on your behalf and remembers everything —
@@ -109,7 +109,7 @@ export default function ToolsHub() {
         ))}
 
         <Card className="p-5 flex items-center justify-between gap-3 flex-wrap">
-          <div className="text-sm text-muted-foreground">Looking for a specific calculator or module? There are 130+ in the sidebar — or ask the AI CEO Chat to take you there.</div>
+          <div className="text-sm text-muted-foreground">Looking for a specific calculator or module? There are 120+ in the sidebar — or ask the AI CEO Chat to take you there.</div>
           <Link href="/chat" className="inline-flex items-center gap-1.5 rounded-lg brand-gradient text-white px-4 h-9 text-sm font-medium">Ask Cortex <ArrowRight className="h-4 w-4" /></Link>
         </Card>
       </PageShell>

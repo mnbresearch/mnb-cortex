@@ -7,10 +7,17 @@ function scoreOf(metrics: HealthMetric[]) {
   return Math.round(s);
 }
 
+/**
+ * Below this many KPIs the average isn't a meaningful health read — two green
+ * rows from a single import scored a confident 100/100 "Healthy".
+ */
+const MIN_METRICS = 4;
+
 export function CortexScore({ metrics }: { metrics: HealthMetric[] }) {
+  const thin = metrics.length > 0 && metrics.length < MIN_METRICS;
   const score = scoreOf(metrics);
   const color = score >= 75 ? "hsl(var(--success))" : score >= 50 ? "hsl(var(--warning))" : "hsl(var(--danger))";
-  const label = score >= 75 ? "Healthy" : score >= 50 ? "Needs attention" : "At risk";
+  const label = thin ? "Not enough data" : score >= 75 ? "Healthy" : score >= 50 ? "Needs attention" : "At risk";
   const R = 52, C = 2 * Math.PI * R, off = C * (1 - score / 100);
   return (
     <div className="flex items-center gap-4">
@@ -26,7 +33,11 @@ export function CortexScore({ metrics }: { metrics: HealthMetric[] }) {
       <div>
         <div className="text-xs text-muted-foreground uppercase tracking-wider">Cortex Score</div>
         <div className="text-xl font-semibold mt-0.5" style={{ color }}>{label}</div>
-        <p className="text-sm text-muted-foreground mt-1 max-w-xs">A single real-time score of your company's overall health, computed by the AI across all KPIs.</p>
+        <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+          {thin
+            ? `Based on only ${metrics.length} KPI${metrics.length === 1 ? "" : "s"} so far — connect more data for a score worth trusting.`
+            : "A single real-time score of your company's overall health, computed across all your KPIs."}
+        </p>
       </div>
     </div>
   );

@@ -28,7 +28,7 @@ export function NextBestActions() {
         <div>
           <div className="font-semibold leading-tight">Do this now</div>
           <div className="text-xs text-muted-foreground">
-            {mode === "setup" ? "Get set up in a minute — then Cortex reads your business" : "Your top priorities, chosen from 130+ tools for you"}
+            {mode === "setup" ? "Get set up in a minute — then Cortex reads your business" : "Your top priorities, chosen from 120+ modules for you"}
           </div>
         </div>
       </div>

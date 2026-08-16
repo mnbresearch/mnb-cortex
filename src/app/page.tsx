@@ -60,7 +60,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
       { icon: LineChart, name: "Forecasting & Scenarios", d: "90-day forecast with interactive what-ifs." },
       { icon: Brain, name: "Strategy Consultant", d: "SWOT, growth levers and a prioritised plan." },
       { icon: FileBarChart, name: "Executive Reports", d: "Board-ready reviews, exportable to PDF." },
-      { icon: Calculator, name: "130+ Business Calculators", d: "Margins, GST, payroll, valuation, ratios & more." },
+      { icon: Calculator, name: "50+ Business Calculators", d: "Margins, GST, payroll, valuation, ratios & more." },
     ],
   },
   {
@@ -68,7 +68,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
     items: [
       { icon: Megaphone, name: "AI Outreach", d: "Drafts reminders & follow-ups; you approve, it sends." },
       { icon: Sparkles, name: "Marketing Studio", d: "Full campaign kits — copy, posts and emails in one click." },
-      { icon: Bot, name: "300+ AI Agents", d: "A 7-department AI workforce across 26 industries." },
+      { icon: Bot, name: "380+ AI Agents", d: "A 7-department AI workforce across 25 Indian industries." },
       { icon: Workflow, name: "Workflows & Approvals", d: "Automate the busywork with a human in the loop." },
       { icon: Radio, name: "WhatsApp Broadcast", d: "Personalised broadcasts, ready to send." },
       { icon: Cpu, name: "AI Autopilot", d: "Runs a daily analysis and briefs you each morning." },
@@ -99,7 +99,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
 ];
 
 const CAPS = [
-  { n: "01", name: "Cortex Workforce", blurb: "A 7-department AI org chart — 300+ runnable agents." },
+  { n: "01", name: "Cortex Workforce", blurb: "A 7-department AI org chart — 290+ runnable agents." },
   { n: "02", name: "Cortex Memory", blurb: "A permanent second brain that grounds every answer." },
   { n: "03", name: "Finance & Money", blurb: "Dashboards, cash flow, GST, payroll, ratios." },
   { n: "04", name: "Strategy & Advisory", blurb: "AI CEO chat, forecasts, board decks, playbooks." },
@@ -144,7 +144,7 @@ const TESTI = [
 
 const MOATS = [
   { n: "01", name: "A memory that compounds", claim: "Every workspace builds its own permanent brain — decisions, numbers, context, preferences — that gets sharper every single day. A rival starting today starts from zero for each customer; your Cortex only deepens. The data moat is private, per-customer, and grows on its own." },
-  { n: "02", name: "One brain, not 130 point tools", claim: "Finance, sales, ops and 300+ agents all reason over the same memory and your live data, so the whole company thinks together. You can bolt a chatbot onto a dashboard — you can't retrofit a unified operating brain." },
+  { n: "02", name: "One brain, not 130 point tools", claim: "Finance, sales, ops and 380+ agents all reason over the same memory and your live data, so the whole company thinks together. You can bolt a chatbot onto a dashboard — you can't retrofit a unified operating brain." },
   { n: "03", name: "It acts, not just answers", claim: "Cortex reads your real bank statements and GST returns, drafts the reminder, PO or plan, and — with one approval — sends it. Advice is a commodity. A system that closes the loop across every function is not." },
   { n: "04", name: "Vertical depth × the AI-search era", claim: "Tuned to 25 Indian industries and built to get you recommended by ChatGPT, Gemini and Perplexity. Generic tools can't match the depth, and latecomers can't catch a head start that compounds." },
 ];
@@ -315,7 +315,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="03">Everything you get</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Not one AI trick.<br />An operating system for your business.</h2>
-          <p className="mt-4 text-muted-foreground max-w-2xl">130+ tools, 300+ agents and a permanent memory — organised into the jobs you actually need done. Here&rsquo;s the whole thing.</p>
+          <p className="mt-4 text-muted-foreground max-w-2xl">120+ modules, 380+ agents and a permanent memory — organised into the jobs you actually need done. Here&rsquo;s the whole thing.</p>
 
           <div className="mt-14 space-y-14">
             {FEATURES.map((g) => (

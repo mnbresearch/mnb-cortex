@@ -40,7 +40,7 @@ export function PlanBoard() {
             <span className="h-11 w-11 rounded-2xl brand-gradient grid place-items-center text-white"><Zap className="h-5 w-5" /></span>
             <div>
               <div className="font-semibold">{mode === "setup" ? "Get set up, then Cortex plans your week" : "Your plan for the week"}</div>
-              <div className="text-sm text-muted-foreground">{items && items.length ? `${doneCount} of ${items.length} done — chosen from 130+ tools for your business` : "Cortex reads your numbers and picks the few actions that matter."}</div>
+              <div className="text-sm text-muted-foreground">{items && items.length ? `${doneCount} of ${items.length} done — chosen from 120+ modules for your business` : "Cortex reads your numbers and picks the few actions that matter."}</div>
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={load} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh</Button>

@@ -34,6 +34,16 @@ export async function GET(req: Request) {
     expired = Number(data ?? 0);
   } catch { /* migration not applied yet */ }
 
+  // 1b. Renewal reminders. Runs AFTER the expiry sweep so a plan that lapsed
+  //     today gets its "your plan has ended" note on the same run. Each notice
+  //     is claimed in renewal_notices before sending, so it goes out exactly
+  //     once per period however often this cron fires.
+  let renewals: any = null;
+  try {
+    const { sendRenewalReminders } = await import("@/lib/renewal-email");
+    renewals = await sendRenewalReminders();
+  } catch (e: any) { renewals = { error: e?.message }; }
+
   // 2. Housekeeping on the public rate-limit buckets.
   try { await sb.rpc("prune_rate_limits"); } catch { /* migration not applied yet */ }
 
@@ -98,5 +108,5 @@ export async function GET(req: Request) {
     ran++;
   }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, weekly, plan });
+  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, weekly, plan });
 }

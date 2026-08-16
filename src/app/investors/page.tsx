@@ -11,7 +11,7 @@ export const metadata = {
 
 const MOATS = [
   { n: "1", name: "A memory that compounds", claim: "Each workspace builds a private, permanent brain that sharpens daily. A rival starts from zero for every customer; Cortex only deepens. A per‑customer data moat with rising switching cost." },
-  { n: "2", name: "One brain, not 130 point tools", claim: "Finance, sales, ops and 300+ agents reason over the same memory and live data. You can bolt a chatbot onto a dashboard — you can’t retrofit a unified operating brain." },
+  { n: "2", name: "One brain, not 130 point tools", claim: "Finance, sales, ops and 380+ agents reason over the same memory and live data. You can bolt a chatbot onto a dashboard — you can’t retrofit a unified operating brain." },
   { n: "3", name: "It acts, not just answers", claim: "Reads real bank statements and GST returns, drafts the action, and — with one approval — sends it. Advice is a commodity; closing the loop across every function is not." },
   { n: "4", name: "Vertical depth × the AI‑search era", claim: "Deep tuning for 25 Indian industries, plus getting you recommended by ChatGPT, Gemini & Perplexity. Generalists can’t match the depth; latecomers can’t catch the head start." },
 ];
@@ -67,7 +67,7 @@ export default function Investors() {
                 <span key={s} className="rounded-lg bg-primary/10 text-primary px-2.5 py-1 text-sm font-medium">{s}</span>
               ))}
             </div>
-            <p className="mt-4 text-muted-foreground leading-7">130+ tools, 300+ AI agents, tuned to 25 industries — all grounded in <span className="text-foreground font-medium">Cortex Memory</span>. Reads bank statements &amp; GST returns; drafts &amp; sends reminders / POs / plans on approval; a weekly plan; and AI Visibility so buyers’ AI assistants recommend you.</p>
+            <p className="mt-4 text-muted-foreground leading-7">120+ modules, 380+ AI agents, tuned to 25 Indian industries — all grounded in <span className="text-foreground font-medium">Cortex Memory</span>. Reads bank statements &amp; GST returns; drafts &amp; sends reminders / POs / plans on approval; a weekly plan; and AI Visibility so buyers’ AI assistants recommend you.</p>
           </div>
         </div>
       </section>

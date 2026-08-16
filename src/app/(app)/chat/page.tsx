@@ -102,7 +102,7 @@ export default function Chat() {
               <div className="text-center py-12">
                 <div className="h-14 w-14 rounded-2xl bg-primary/15 grid place-items-center mx-auto"><Sparkles className="h-7 w-7 text-primary" /></div>
                 <h2 className="mt-4 text-xl font-semibold">Good morning. What do you want to know?</h2>
-                <p className="text-sm text-muted-foreground mt-1">I've already read your sales, finance, inventory, production and HR data.</p>
+                <p className="text-sm text-muted-foreground mt-1">I answer from whatever data is in your workspace — imports, bank statements, GST returns and Cortex Memory.</p>
                 <div className="mt-6 grid sm:grid-cols-2 gap-2 max-w-xl mx-auto">
                   {SUGGESTIONS.map((s) => (
                     <button key={s} onClick={() => send(s)} className="text-left text-sm rounded-lg border px-4 py-3 hover:bg-accent transition-colors">{s}</button>
