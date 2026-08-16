@@ -2,14 +2,36 @@
 import { useState } from "react";
 import { Check, Sparkles, X, MessageCircle } from "lucide-react";
 import { PLANS, WHATSAPP_NUMBER, CURRENCIES, formatMoney, planPrice, type CurrencyCode } from "@/lib/config";
+import { payCashfree } from "@/lib/pay/checkout-client";
 
-export function PricingClient() {
+/**
+ * `signedIn` decides what a plan button does. A Cashfree order needs a workspace
+ * to attach the payment to, so an anonymous visitor is sent to sign up first —
+ * but a signed-in customer now goes straight to checkout instead of a
+ * lead-capture form, which is all any of these buttons used to do.
+ */
+export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
+  const [busy, setBusy] = useState("");
+  const [payErr, setPayErr] = useState("");
   const [annual, setAnnual] = useState(false);
   const [cur, setCur] = useState<CurrencyCode>("INR");
   const [open, setOpen] = useState(false);
   const [plan, setPlan] = useState("Growth");
   const [form, setForm] = useState({ name: "", email: "", phone: "" });
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+
+  async function choosePlan(p: (typeof PLANS)[number]) {
+    // Enterprise is bespoke, and Cashfree settles INR only — both stay a
+    // conversation with the team rather than a self-serve checkout.
+    if (p.monthly === 0 || cur === "USD") { openForm(p.name); return; }
+    if (!signedIn) { window.location.href = `/login?next=${encodeURIComponent("/billing")}`; return; }
+    setBusy(p.id); setPayErr("");
+    const res = await payCashfree({ kind: "plan", plan: p.id, annual });
+    setBusy("");
+    if (res.ok) { window.location.href = "/billing"; return; }
+    if (res.needsConfig) { openForm(p.name); return; }  // payments off — capture the lead
+    setPayErr(res.error || "Could not start checkout. Please try again.");
+  }
 
   function openForm(p: string) { setPlan(p); setForm({ name: "", email: "", phone: "" }); setStatus("idle"); setOpen(true); }
 
@@ -68,7 +90,13 @@ export function PricingClient() {
                   </div>
                 )}
               </div>
-              <button onClick={() => openForm(p.name)} className={`w-full rounded-full h-11 text-sm font-medium transition-colors ${p.highlight ? "btn-ink" : "border hover:bg-accent"}`}>{p.cta}</button>
+              <button
+                onClick={() => choosePlan(p)}
+                disabled={busy === p.id}
+                className={`w-full rounded-full h-11 text-sm font-medium transition-colors disabled:opacity-60 ${p.highlight ? "btn-ink" : "border hover:bg-accent"}`}
+              >
+                {busy === p.id ? "Starting…" : p.monthly === 0 || cur === "USD" ? p.cta : signedIn ? (annual ? "Pay yearly" : "Subscribe") : "Start free trial"}
+              </button>
               <ul className="mt-5 space-y-2 text-sm">
                 {p.features.map((f) => <li key={f} className="flex gap-2"><Check className="h-4 w-4 text-success shrink-0 mt-0.5" /><span>{f}</span></li>)}
               </ul>
@@ -76,6 +104,8 @@ export function PricingClient() {
           );
         })}
       </div>
+
+      {payErr && <p className="text-center text-sm text-danger mt-6">{payErr}</p>}
 
       {cur === "USD" && (
         <p className="text-center text-xs text-muted-foreground mt-6 max-w-xl mx-auto">

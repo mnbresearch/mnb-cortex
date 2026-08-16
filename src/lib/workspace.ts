@@ -1,9 +1,8 @@
 import "server-only";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { grantCredits } from "@/lib/credits";
-import { TRIAL_CREDITS } from "@/lib/config";
+import { TRIAL_CREDITS, TRIAL_DAYS } from "@/lib/config";
 
-const TRIAL_DAYS = 3;
 
 /**
  * Ensure the signed-in user has a workspace. Called after every sign-in

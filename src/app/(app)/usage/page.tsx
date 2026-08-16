@@ -1,4 +1,5 @@
 import { Topbar } from "@/components/topbar";
+import { PaymentReturn } from "@/components/payment-return";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
@@ -43,6 +44,7 @@ export default async function Usage() {
     <>
       <Topbar title="Usage & Credits" subtitle="Your AI credit balance, history, and top-ups" />
       <PageShell>
+        <PaymentReturn />
         {!state.enforceable && (
           <Card className="p-4 border-warning/30 bg-warning/5 text-sm">
             <b className="text-warning">Metering inactive.</b> Credit tracking turns on once the database migration is applied. Until then, AI runs freely and balances aren't charged.

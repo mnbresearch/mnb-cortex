@@ -9,6 +9,9 @@ import { PLANS } from "@/lib/config";
 import { Check, Zap, Clock, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { UpgradeButton } from "@/components/upgrade-button";
+import { PlanPicker } from "@/components/plan-picker";
+import { PaymentReturn } from "@/components/payment-return";
+import { TRIAL_DAYS } from "@/lib/config";
 import { createReportLink, revokeReportLink } from "@/lib/actions";
 import { Link2, Trash2 } from "lucide-react";
 
@@ -29,6 +32,7 @@ export default async function Billing() {
     <>
       <Topbar title="Billing & Plan" subtitle="Manage your subscription" />
       <PageShell>
+        <PaymentReturn />
         <Card className={`p-5 flex flex-wrap items-center justify-between gap-3 ${billing.status === "expired" ? "border-danger/30 bg-danger/5" : ""}`}>
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-primary/15 p-2.5">
@@ -37,24 +41,26 @@ export default async function Billing() {
             <div>
               <div className="flex items-center gap-2"><span className="font-semibold">{planName} plan</span><Badge className={badge.cls}>{badge.text}</Badge></div>
               <div className="text-sm text-muted-foreground">
-                {billing.status === "active" ? "Subscription active · thank you!"
+                {billing.status === "active"
+                  ? (billing.subscriptionEndsAt
+                      ? `Active · renews ${new Date(billing.subscriptionEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+                      : "Subscription active · thank you!")
                   : billing.status === "expired" ? "Your free trial has ended — choose a plan to continue."
                   : billing.trialEndsAt ? `Free trial ends ${new Date(billing.trialEndsAt).toLocaleDateString("en-IN")} · full access until then`
-                  : "14-day free trial · full access"}
+                  : `${TRIAL_DAYS}-day free trial · full access`}
               </div>
             </div>
           </div>
-          <UpgradeButton plan="Premium" />
         </Card>
 
         {billing.status !== "active" && (
           <Card className="p-4 text-sm text-muted-foreground">
-            Your 14-day free trial gives you the complete platform. After it ends, an active plan is required to keep using MNB Cortex — your data stays safe and is restored the moment you subscribe.
+            Your {TRIAL_DAYS}-day free trial gives you the complete platform. After it ends, an active plan is required to keep using MNB Cortex — your data stays safe and is restored the moment you subscribe.
           </Card>
         )}
 
         {live && (
-          <Section title="Usage this month">
+          <Section title="Your data" desc="Records in this workspace — not billing usage">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {Object.entries(counts).map(([k, v]) => (
                 <Card key={k} className="p-4"><div className="text-sm text-muted-foreground">{LABEL[k] || k}</div><div className="text-2xl font-semibold mt-1">{v as number}</div></Card>
@@ -79,17 +85,9 @@ export default async function Billing() {
         )}
 
         <Section title="Available plans" desc="Change anytime — annual saves ~20%">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
-            {PLANS.map((p) => (
-              <Card key={p.id} className={`p-4 ${p.highlight ? "border-primary" : ""}`}>
-                <div className="font-semibold">{p.name}</div>
-                <div className="text-lg font-bold mt-1">{p.monthly === 0 ? "Custom" : `₹${p.monthly.toLocaleString("en-IN")}`}<span className="text-xs text-muted-foreground font-normal">{p.monthly ? "/mo" : ""}</span></div>
-                <ul className="mt-3 space-y-1.5 text-xs">{p.features.slice(0, 4).map((f) => <li key={f} className="flex gap-1.5"><Check className="h-3.5 w-3.5 text-success shrink-0" />{f}</li>)}</ul>
-                <Link href="/pricing" className="mt-3 block text-center rounded-lg border h-8 leading-8 text-xs hover:bg-accent">Choose</Link>
-              </Card>
-            ))}
-          </div>
+          <PlanPicker currentPlan={billing.status === "active" ? planName : ""} />
         </Section>
+
       </PageShell>
     </>
   );

@@ -2,10 +2,15 @@ import Link from "next/link";
 import { PricingClient } from "@/components/pricing-client";
 import { SmoothScroll, Cursor, Kinetic, SectionLabel } from "@/components/loco";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
+import { getUserAndOrg } from "@/lib/data";
+import { TRIAL_DAYS } from "@/lib/config";
 
 export const metadata = { title: "Pricing — MNB Cortex" };
 
-export default function Pricing() {
+export const dynamic = "force-dynamic";
+
+export default async function Pricing() {
+  const { orgId } = await getUserAndOrg();
   return (
     <main className="min-h-screen overflow-x-hidden">
       <SmoothScroll />
@@ -18,12 +23,12 @@ export default function Pricing() {
           <Kinetic as="h1" text={"Run your company\non AI."} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
             One AI COO with 300+ agents, memory and automation — from <span className="text-foreground font-medium">₹799/mo</span>.
-            Start with a free 3-day trial. No card required.
+            Start with a free {TRIAL_DAYS}-day trial. No card required.
           </p>
         </div>
       </section>
 
-      <section className="px-5 lg:px-10 pb-16"><PricingClient /></section>
+      <section className="px-5 lg:px-10 pb-16"><PricingClient signedIn={Boolean(orgId)} /></section>
 
       <section className="px-5 lg:px-10 pb-24 text-center text-sm text-muted-foreground">
         Payments processed securely via Cashfree. By subscribing you agree to our{" "}

@@ -107,6 +107,13 @@ export const PLAN_CREDITS: Record<string, number> = {
   solo: 300, starter: 900, growth: 4000, premium: 15000, business: 45000, enterprise: -1,
 };
 
+/**
+ * Free-trial length in days. Single source of truth — billing.ts, workspace.ts
+ * and the /billing copy all read this. The UI used to claim "14-day free trial"
+ * while the code enforced 3.
+ */
+export const TRIAL_DAYS = 3;
+
 // One-time credits for a free-trial workspace — a small taste, granted once (not monthly).
 // Enough to try text agents + a couple of images, not enough for daily use.
 export const TRIAL_CREDITS = 150;
