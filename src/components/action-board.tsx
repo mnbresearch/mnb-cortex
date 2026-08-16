@@ -7,12 +7,10 @@ import { Sparkles, Plus, Trash2, ChevronLeft, ChevronRight, Loader2 } from "luci
 type Task = { id: string; title: string; col: 0 | 1 | 2; priority?: "P1" | "P2" | "P3" };
 const COLS = ["To do", "In progress", "Done"] as const;
 
-const SEED: Task[] = [
-  { id: "t1", title: "Approve PO-4471 for RM-204", col: 0, priority: "P1" },
-  { id: "t2", title: "Chase Apex Traders (₹18 L overdue)", col: 0, priority: "P1" },
-  { id: "t3", title: "Reprice low-elasticity SKUs +4%", col: 1, priority: "P2" },
-  { id: "t4", title: "Add backup RM-204 supplier", col: 0, priority: "P2" },
-];
+// Starts empty. This used to seed every workspace's board with another
+// company's tasks ("Chase Apex Traders (₹18 L overdue)"), which then persisted
+// to localStorage as if the owner had written them.
+const SEED: Task[] = [];
 
 const pt: Record<string, string> = { P1: "bg-danger/10 text-danger border-danger/20", P2: "bg-warning/10 text-warning border-warning/20", P3: "bg-primary/10 text-primary border-primary/20" };
 

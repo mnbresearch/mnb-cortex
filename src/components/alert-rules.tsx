@@ -6,42 +6,49 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, Plus, Trash2, BellRing, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { mdToHtml } from "@/lib/utils";
 
-// Key metrics with their current live values (from the business snapshot).
-const METRICS: Record<string, { label: string; value: number; unit: string; lowerBad?: boolean }> = {
-  revenue_growth: { label: "Revenue growth (MoM)", value: 12, unit: "%" },
-  profit_change: { label: "Net profit change", value: -7, unit: "%" },
-  gross_margin: { label: "Gross margin", value: 31, unit: "%" },
-  cash_runway: { label: "Cash runway", value: 5, unit: "mo" },
-  overdue: { label: "Overdue receivables", value: 72, unit: "L", lowerBad: true },
-  inv_cover: { label: "Inventory cover (RM-204)", value: 9, unit: "days" },
-  dso: { label: "Receivable days (DSO)", value: 47, unit: "days", lowerBad: true },
-};
+/**
+ * Live KPI values for this workspace, passed in from the server.
+ *
+ * These used to be a hardcoded map ("gross margin 31%", "inventory cover on
+ * RM-204: 9 days"), so every workspace — including a brand-new empty one —
+ * permanently showed "3 alerts firing" against another company's numbers.
+ */
+export type LiveMetric = { key: string; label: string; value: number; unit: string; lowerBad?: boolean };
 
 type Rule = { id: string; metric: string; op: "<" | ">"; threshold: number };
 
-const DEFAULTS: Rule[] = [
-  { id: "r1", metric: "cash_runway", op: "<", threshold: 6 },
-  { id: "r2", metric: "gross_margin", op: "<", threshold: 33 },
-  { id: "r3", metric: "overdue", op: ">", threshold: 50 },
-  { id: "r4", metric: "inv_cover", op: "<", threshold: 12 },
-];
 
-function breached(r: Rule): boolean {
-  const m = METRICS[r.metric]; if (!m) return false;
+function breached(r: Rule, m?: LiveMetric): boolean {
+  if (!m) return false;
   return r.op === "<" ? m.value < r.threshold : m.value > r.threshold;
 }
 
-export function AlertRules() {
-  const [rules, setRules] = useState<Rule[]>(DEFAULTS);
+export function AlertRules({ metrics = [] }: { metrics?: LiveMetric[] }) {
+  const byKey = useMemo(() => Object.fromEntries(metrics.map((m) => [m.key, m])) as Record<string, LiveMetric>, [metrics]);
+  // Seed one sensible rule per metric the workspace actually has.
+  const defaults = useMemo<Rule[]>(() => metrics.slice(0, 4).map((m, i) => ({
+    id: "r" + i, metric: m.key, op: m.lowerBad ? ">" : "<", threshold: Math.round(m.value),
+  })), [metrics]);
+  const [rules, setRules] = useState<Rule[]>(defaults);
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
 
-  useEffect(() => { try { const s = localStorage.getItem("cortex_alert_rules"); if (s) setRules(JSON.parse(s)); } catch {} }, []);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("cortex_alert_rules");
+      if (!saved) return;
+      const parsed: Rule[] = JSON.parse(saved);
+      // Drop rules for metrics this workspace doesn't have, so a stale rule can
+      // never fire against a KPI we no longer compute.
+      const kept = parsed.filter((r) => byKey[r.metric]);
+      if (kept.length) setRules(kept);
+    } catch {}
+  }, [byKey]);
   useEffect(() => { try { localStorage.setItem("cortex_alert_rules", JSON.stringify(rules)); } catch {} }, [rules]);
 
-  const evaluated = useMemo(() => rules.map((r) => ({ ...r, hit: breached(r), m: METRICS[r.metric] })), [rules]);
+  const evaluated = useMemo(() => rules.map((r) => ({ ...r, hit: breached(r, byKey[r.metric]), m: byKey[r.metric] })), [rules, byKey]);
   const alerts = evaluated.filter((r) => r.hit);
 
-  function add() { setRules((rs) => [...rs, { id: "r" + Date.now(), metric: "revenue_growth", op: "<", threshold: 0 }]); }
+  function add() { setRules((rs) => [...rs, { id: "r" + Date.now(), metric: metrics[0]?.key ?? "", op: "<", threshold: 0 }]); }
   function del(id: string) { setRules((rs) => rs.filter((r) => r.id !== id)); }
   function upd(id: string, f: keyof Rule, v: string) { setRules((rs) => rs.map((r) => r.id === id ? { ...r, [f]: f === "threshold" ? Number(v) : v } : r)); }
 
@@ -72,7 +79,7 @@ export function AlertRules() {
             <div key={r.id} className={`flex flex-wrap items-center gap-2 rounded-lg border p-3 ${r.hit ? "border-danger/30 bg-danger/5" : ""}`}>
               <span className="text-sm text-muted-foreground">Alert me when</span>
               <select value={r.metric} onChange={(e) => upd(r.id, "metric", e.target.value)} className="rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring">
-                {Object.entries(METRICS).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+                {metrics.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
               </select>
               <select value={r.op} onChange={(e) => upd(r.id, "op", e.target.value)} className="rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring">
                 <option value="<">is below</option><option value=">">is above</option>

@@ -106,39 +106,29 @@ async function runOnce(messages: Msg[], context: string): Promise<string | null>
   return null;
 }
 
-function fallback(messages: Msg[]): string {
-  const q = (messages[messages.length - 1]?.content || "").toLowerCase();
-  if (q.includes("how is my business"))
-    return `**Your business is healthy but tightening on two fronts.**
+/**
+ * Shown only when NO AI provider key is configured at all.
+ *
+ * This used to answer with specific invented financials — "Revenue is ₹4.25 Cr
+ * this month", "Apex Traders ₹18 L, 48 days overdue" — presented as the
+ * reader's own business. An SME owner acting on fabricated numbers is a
+ * liability, not a demo, and it directly contradicted the guard in
+ * getBusinessContext() that tells the model never to invent figures.
+ *
+ * It now says plainly that the AI is not configured, and nothing else.
+ */
+function fallback(_messages: Msg[]): string {
+  return `**The AI engine isn't configured yet, so I can't analyse your business.**
 
-- Revenue is ₹4.25 Cr this month, up 12% — strongest in the West region and the new Premium-X line.
-- But net profit fell 7% because raw material RM-204 rose 9% and you didn't pass it through; gross margin slipped 33% → 31%.
-- Cash runway is ~5 months and shrinking, with ₹72 L of receivables now overdue.
-- Inventory cover on RM-204 is only 9 days vs a 12-day lead time — Line B is at stockout risk.
+No AI provider key is set on this deployment, which means I have no model to reason with — and I'm not going to make up numbers about your company.
 
-**What I'd do now:**
-1. Approve the PO I've already drafted (PO-4471, 10,000 units of RM-204).
-2. Push a 4% price increase on low-elasticity SKUs to rebuild margin.
-3. Chase the top 5 overdue customers — Apex Traders (₹18 L, 48 days) first.
+To switch me on, add one of these to your environment and redeploy:
 
-_Confidence: high on the diagnosis; the stockout date is a 9-day estimate._
+- \`GEMINI_API_KEY\` — free at [aistudio.google.com](https://aistudio.google.com/apikey), no card required
+- \`GROQ_API_KEY\` — free at [console.groq.com](https://console.groq.com/keys)
+- \`OPENAI_API_KEY\` or \`ANTHROPIC_API_KEY\` if you'd rather use a paid provider
 
-(Add a free GEMINI_API_KEY or GROQ_API_KEY to enable full live reasoning.)`;
-  if (q.includes("profit"))
-    return `**Profit is down 7% even though revenue grew — it's a margin problem, not a sales problem.**
-
-- Raw material RM-204 rose ~9%; you absorbed it instead of repricing.
-- Gross margin moved 33% → 31%, costing roughly ₹8–9 L this month.
-- Overtime in Packing added avoidable opex.
-
-**Actions:** reprice low-elasticity SKUs +4%, renegotiate your top-3 supplier contracts, and cap Packing overtime with a second shift.
-
-_Add a free AI key (Gemini/Groq) for live, data-grounded analysis._`;
-  return `Here's my read based on your current data: revenue is up 12% but profit is down 7% on rising raw-material costs, cash runway is ~5 months, and RM-204 is heading for a stockout in ~9 days.
-
-Tell me which area to go deeper on — sales, finance, inventory, production, HR, or strategy — and I'll give you the diagnosis and the actions I'd take.
-
-(Configure a free GEMINI_API_KEY or GROQ_API_KEY to unlock full AI reasoning over your live data.)`;
+Everything else in Cortex — your dashboard, imports and the 50+ calculators — works without it.`;
 }
 
 // ---- Streaming (OpenAI-compatible providers: Groq/OpenAI); others fall back to one chunk ----

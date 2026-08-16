@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
 
-const MONTHLY_PROFIT = 5_100_000; // ₹51 L
-
 export function FundingCalculator() {
   const [amount, setAmount] = useState(5_000_000);
   const [rate, setRate] = useState(14);
   const [years, setYears] = useState(3);
+  // Was hardcoded to ₹51 L for every user, so "EMI coverage" was computed
+  // against an invented profit and that fake figure was then sent to the AI.
+  const [monthlyProfit, setMonthlyProfit] = useState(0);
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
 
   const m = useMemo(() => {
@@ -19,13 +20,17 @@ export function FundingCalculator() {
     const emi = r === 0 ? amount / n : (amount * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
     const total = emi * n;
     const interest = total - amount;
-    const coverage = emi > 0 ? MONTHLY_PROFIT / emi : 0; // times monthly profit covers EMI
+    // Only meaningful once the owner tells us their actual monthly profit.
+    const coverage = emi > 0 && monthlyProfit > 0 ? monthlyProfit / emi : null;
     return { emi, total, interest, coverage };
-  }, [amount, rate, years]);
+  }, [amount, rate, years, monthlyProfit]);
 
   async function advise() {
     setLoading(true); setOut("");
-    const input = `Considering a loan of ${inr(amount)} at ${rate}% for ${years} years. EMI ≈ ${inr(m.emi)}/month, total interest ${inr(m.interest)}. Monthly profit is ~₹51 L, so EMI coverage is ${m.coverage.toFixed(1)}x. Should I take it?`;
+    const cover = m.coverage === null
+      ? "Monthly profit not provided, so EMI coverage is unknown — ask me for it before judging affordability."
+      : `Monthly profit is ${inr(monthlyProfit)}, so EMI coverage is ${m.coverage.toFixed(1)}x.`;
+    const input = `Considering a loan of ${inr(amount)} at ${rate}% for ${years} years. EMI ≈ ${inr(m.emi)}/month, total interest ${inr(m.interest)}. ${cover} Should I take it?`;
     try { const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "loan", input }) }); const j = await r.json(); setOut(j.text || "No response."); }
     catch { setOut("Network error reaching the AI."); } finally { setLoading(false); }
   }
@@ -37,13 +42,21 @@ export function FundingCalculator() {
         <Slider label="Loan amount" value={amount} min={500000} max={50000000} step={500000} onChange={setAmount} fmt={(v) => inr(v)} />
         <Slider label="Interest rate" value={rate} min={8} max={28} step={0.5} onChange={setRate} fmt={(v) => v + "%"} />
         <Slider label="Tenure" value={years} min={1} max={7} step={1} onChange={setYears} fmt={(v) => v + " yr"} />
+        <Slider label="Your monthly profit" value={monthlyProfit} min={0} max={20000000} step={100000} onChange={setMonthlyProfit} fmt={(v) => (v ? inr(v) : "not set")} />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Monthly EMI" value={inr(m.emi)} />
         <Stat label="Total interest" value={inr(m.interest)} tone="down" />
         <Stat label="Total repayment" value={inr(m.total)} />
-        <Stat label="EMI coverage" value={`${m.coverage.toFixed(1)}x`} tone={m.coverage >= 5 ? "up" : m.coverage >= 3 ? "flat" : "down"} />
+        <Stat
+          label="EMI coverage"
+          value={m.coverage === null ? "—" : `${m.coverage.toFixed(1)}x`}
+          tone={m.coverage === null ? "flat" : m.coverage >= 5 ? "up" : m.coverage >= 3 ? "flat" : "down"}
+        />
       </div>
+      {m.coverage === null && (
+        <p className="text-xs text-muted-foreground -mt-2">Set your monthly profit above to see whether you can service this EMI.</p>
+      )}
       <Button onClick={advise} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "Should I take this loan? (ask the AI CFO)"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
     </Card>

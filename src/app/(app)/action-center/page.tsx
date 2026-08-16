@@ -7,10 +7,19 @@ import { Button } from "@/components/ui/button";
 import { AIPanel } from "@/components/ai-panel";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { getUserAndOrg, getMetrics, getAlerts } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
-const actions = [
+/**
+ * Illustrative queue for the logged-out product preview ONLY.
+ *
+ * These were previously rendered to every signed-in workspace as if they were
+ * that customer's own outstanding decisions — complete with working "Do it"
+ * buttons pointing at their real data. A customer who has never heard of
+ * "Apex Traders" or "RM-204" is being shown another company's fiction.
+ */
+const demoActions = [
   { p: "P1", title: "Approve PO-4471 (RM-204, 10,000 units)", why: "Line B stocks out in ~9 days vs 12-day lead time", impact: "Avoids ~₹6 L lost output", href: "/approvals" },
   { p: "P1", title: "Chase Apex Traders — ₹18 L, 48 days overdue", why: "Largest overdue account, dragging cash runway", impact: "Frees ₹18 L cash", href: "/finance" },
   { p: "P1", title: "Reprice low-elasticity SKUs +4%", why: "Margin slipped 33%→31% on RM-204 inflation", impact: "+₹8–9 L/mo margin", href: "/pricing-optimizer" },
@@ -27,7 +36,34 @@ const tone: Record<string, string> = {
   P3: "bg-primary/10 text-primary border-primary/20",
 };
 
-export default function ActionCenter() {
+export default async function ActionCenter() {
+  const [{ orgId }, metrics, alerts] = await Promise.all([getUserAndOrg(), getMetrics(), getAlerts()]);
+  const signedIn = Boolean(orgId);
+
+  // A signed-in workspace only ever sees its OWN data: real red/amber KPIs and
+  // real alerts. If there aren't any, we say so instead of borrowing someone
+  // else's problems.
+  const liveActions = signedIn
+    ? [
+        ...metrics
+          .filter((m) => m.status === "red" || m.status === "yellow")
+          .map((m) => ({
+            p: m.status === "red" ? "P1" : "P2",
+            title: `${m.label} needs attention`,
+            why: `Currently ${m.value}${m.unit === "INR" ? "" : " " + m.unit}${m.delta_pct ? ` (${m.delta_pct > 0 ? "+" : ""}${m.delta_pct}% vs last period)` : ""}`,
+            impact: "Flagged by your live KPIs",
+            href: "/dashboard",
+          })),
+        ...alerts.slice(0, 5).map((a) => ({
+          p: a.severity === "red" ? "P1" : a.severity === "yellow" ? "P2" : "P3",
+          title: a.title,
+          why: a.body || "Raised by Cortex",
+          impact: a.module ? `From ${a.module}` : "",
+          href: "/alerts",
+        })),
+      ]
+    : demoActions;
+
   return (
     <>
       <Topbar title="AI Action Center" subtitle="Everything that needs a decision — ranked by impact" />
@@ -36,11 +72,20 @@ export default function ActionCenter() {
           <AIPanel mode="actions" placeholder="" cta="Generate my prioritised action plan" saveMode="strategy" />
         </Section>
 
-        <Section title="Priority queue" desc="Standing recommendations, highest impact-to-effort first">
+        <Section
+          title="Priority queue"
+          desc={signedIn ? "Built from your live KPIs and alerts" : "Example queue — sign in to see your own"}
+        >
+          {signedIn && liveActions.length === 0 ? (
+            <Card className="p-8 text-center text-sm text-muted-foreground">
+              Nothing needs a decision right now. Once your KPIs move into amber or red, or Cortex raises an alert, it shows up here.{" "}
+              <Link href="/import" className="text-primary">Import your data</Link> to get started.
+            </Card>
+          ) : (
           <div className="space-y-2">
-            {actions.map((a) => (
+            {liveActions.map((a) => (
               <Card key={a.title} className="p-4 flex items-start gap-3">
-                <Badge className={tone[a.p]}>{a.p}</Badge>
+                <Badge className={tone[a.p] || tone.P3}>{a.p}</Badge>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm">{a.title}</div>
                   <div className="text-sm text-muted-foreground">{a.why}</div>
@@ -52,6 +97,7 @@ export default function ActionCenter() {
               </Card>
             ))}
           </div>
+          )}
         </Section>
       </PageShell>
     </>
