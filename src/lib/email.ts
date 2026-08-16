@@ -1,4 +1,5 @@
 import "server-only";
+import { envKey } from "@/lib/env";
 
 // Sends real email via Resend when RESEND_API_KEY is set; otherwise reports not-sent.
 export async function sendEmail(
@@ -7,7 +8,7 @@ export async function sendEmail(
   html: string,
   opts?: { from?: string; replyTo?: string },
 ): Promise<{ sent: boolean; reason?: string; providerId?: string }> {
-  const key = process.env.RESEND_API_KEY;
+  const key = envKey("RESEND_API_KEY");
   if (!key || !to) return { sent: false, reason: "no RESEND_API_KEY" };
   try {
     const from = opts?.from || process.env.EMAIL_FROM || "MNB Cortex <noreply@updates.mnbresearch.com>";

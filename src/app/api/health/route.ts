@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { anyEnvKey, envKey } from "@/lib/env";
 import { hasSupabase, serviceClient } from "@/lib/supabase/server";
 import { encryptionAvailable } from "@/lib/crypto";
 
@@ -37,10 +38,10 @@ async function trialReady(): Promise<boolean> {
 }
 
 export async function GET() {
-  const ai = Boolean(process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
+  const ai = anyEnvKey("GROQ_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY");
   const db = hasSupabase();
-  const email = Boolean(process.env.RESEND_API_KEY);
-  const serviceRole = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const email = Boolean(envKey("RESEND_API_KEY"));
+  const serviceRole = Boolean(envKey("SUPABASE_SERVICE_ROLE_KEY"));
   const encryption = encryptionAvailable();
   const integrations = await integrationsReady();
   const emailSystem = await emailReady();

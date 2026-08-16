@@ -2,6 +2,7 @@
 // Supports FREE providers (Google Gemini, Groq) and paid (Anthropic, OpenAI).
 // Set ONE key; provider is auto-detected (or force with AI_PROVIDER).
 import "server-only";
+import { anyEnvKey, envKey } from "@/lib/env";
 
 export const COO_SYSTEM = `You are MNB Cortex — the AI Chief Operating Officer for an SME owner.
 You are NOT a chatbot or a dashboard. You behave like a McKinsey/BCG-grade operator who has read all of the company's data.
@@ -18,10 +19,10 @@ type Msg = { role: "user" | "assistant"; content: string };
 function pickProvider(): string {
   const forced = (process.env.AI_PROVIDER || "").toLowerCase();
   if (forced) return forced;
-  if (process.env.GEMINI_API_KEY) return "gemini";
-  if (process.env.GROQ_API_KEY) return "groq";
-  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
-  if (process.env.OPENAI_API_KEY) return "openai";
+  if (envKey("GEMINI_API_KEY")) return "gemini";
+  if (envKey("GROQ_API_KEY")) return "groq";
+  if (envKey("ANTHROPIC_API_KEY")) return "anthropic";
+  if (envKey("OPENAI_API_KEY")) return "openai";
   return "none";
 }
 
@@ -29,7 +30,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** True when at least one AI provider key is configured. */
 export function hasAIKey(): boolean {
-  return Boolean(process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
+  return anyEnvKey("GROQ_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY");
 }
 
 /**

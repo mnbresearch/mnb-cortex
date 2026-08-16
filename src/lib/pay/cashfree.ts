@@ -1,10 +1,11 @@
 import "server-only";
+import { envKey } from "@/lib/env";
 
 // Cashfree Payment Gateway (PG) — Orders API v2023-08-01.
 // Set CASHFREE_APP_ID, CASHFREE_SECRET_KEY, and optionally CASHFREE_ENV=sandbox.
 
 export function hasCashfree(): boolean {
-  return Boolean(process.env.CASHFREE_APP_ID && process.env.CASHFREE_SECRET_KEY);
+  return Boolean(envKey("CASHFREE_APP_ID") && envKey("CASHFREE_SECRET_KEY"));
 }
 export function cfMode(): "sandbox" | "production" {
   return (process.env.CASHFREE_ENV || "production").toLowerCase() === "sandbox" ? "sandbox" : "production";

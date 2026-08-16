@@ -1,3 +1,4 @@
+import { anyEnvKey, envKey } from "@/lib/env";
 import { hasSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -5,9 +6,9 @@ export const dynamic = "force-dynamic";
 
 /** Live status badge (SVG) — embed anywhere with <img src="/api/badge" />. */
 export async function GET() {
-  const ai = Boolean(process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
+  const ai = anyEnvKey("GROQ_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY");
   const db = hasSupabase();
-  const email = Boolean(process.env.RESEND_API_KEY);
+  const email = Boolean(envKey("RESEND_API_KEY"));
   const allUp = ai && db && email;
 
   const label = "MNB Cortex";
