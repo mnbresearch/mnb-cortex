@@ -1,17 +1,26 @@
 # Hardening release — deploy runbook
 
-Ten commits, `5537f33..952560e`. Build passes, `tsc --noEmit` clean, working tree clean.
+Fifteen commits, `5537f33..663b01e`. Build passes, `tsc --noEmit` clean, working tree clean.
 **Nothing is pushed yet** — run `git push origin main` when you're ready.
 
 ---
 
 ## Order matters
 
-Run the migration **before or at the same time as** the deploy. Never after.
+Run the migrations **before or at the same time as** the deploy. Never after.
 
-The code is written to survive an un-migrated database (the paywall, credit metering
-and the contact forms all degrade rather than break), but you get the security fixes
-only once the SQL has run.
+Most of the code survives an un-migrated database (the paywall, credit metering and
+the contact forms all degrade rather than break), but **the metrics layer does not**:
+without `2026_metrics_layer.sql` every ledger upsert fails on a missing conflict
+target, so the dashboard chart stays empty and paid bank analyses are charged and
+silently discarded.
+
+Run them in this order:
+
+1. `2026_hardening.sql` — RLS on billing tables, locked-down RPCs, subscription periods
+2. `2026_metrics_layer.sql` — merge key + GST columns for the aggregation layer
+3. `2026_tenancy.sql` — the three tenancy holes
+4. `2026_signup_trigger.sql` — **manual check required first**, see below
 
 ---
 
@@ -52,6 +61,26 @@ select o.id, o.name, o.plan, o.subscription_status, s.amount, s.created_at
 Anyone whose payment date is more than one period ago will be flipped to `expired` by the
 first nightly cron. If that's not what you want for a specific customer, give them a fresh
 period from the Super Admin panel (`subscriptionDays`) after migrating.
+
+## Step 1b — `2026_metrics_layer.sql` then `2026_tenancy.sql`
+
+`2026_metrics_layer.sql` adds the `(org_id, period)` merge key the aggregation layer
+upserts on, plus `gst_turnover`/`gst_tax`, and drops the `default 0` on
+`cash_balance`/`net_profit` so NULL can mean "unknown" rather than "zero".
+
+`2026_tenancy.sql` closes the three RLS holes. One line in it matters more than the
+rest — `grant execute on function public.user_org_rank(uuid) to authenticated`. Every
+new write policy calls that function through the anon+cookie client; without the grant
+the whole app would read fine and save nothing.
+
+After running it, sanity-check that writes still work:
+
+```sql
+-- expect your own rank (5 for an owner), not an error
+select public.user_org_rank('<one-of-your-org-uuids>');
+```
+
+Then sign in and add one sales order through the UI. If it saves, the policies are right.
 
 ## Step 2 — `supabase/migrations/2026_signup_trigger.sql`
 
@@ -136,6 +165,31 @@ Cashfree checkout completes on a real ₹799 Solo purchase.
 - Committed `package-lock.json` so Vercel stops re-resolving the tree each deploy.
 
 ---
+
+## Still false on the marketing site — not yet fixed
+
+A full claim-by-claim audit found these. None are fixed yet; they are the next tranche.
+
+| Claim | Where | Reality |
+|---|---|---|
+| "130+ Business Calculators" | landing | 52 real calculators. `config.ts` already says the honest "50+" |
+| "300+ runnable AI agents" | landing | 386 defined, **292 runnable**. 80 need a Gemini key, 14 video agents are hard-blocked. The features page already says "250+" — the two pages contradict each other |
+| "Workflow automation + approvals" | landing + Growth plan | `runWorkflow()` inserts the text "steps executed successfully" and executes nothing |
+| "Pipeline + AI Lead Scoring" | landing + features | `/pipeline` is a plain kanban; grep for `score` returns zero hits |
+| "named by ChatGPT, Gemini & Perplexity" | landing | only Gemini (or Groq) is ever queried |
+| "62 Integrations" | landing | the count is right, but nothing syncs — 16 have a credential test, 46 just store a key, 0 move data |
+| "Public API + webhooks" | Business plan | the API is real and good; outbound webhooks do not exist in any form |
+| "Real email / WhatsApp automations" | Premium plan | WhatsApp is `wa.me` links only. Email campaigns are real but **super-admin-only** — no paying customer on any tier can open the page |
+| "Scheduled reports" | landing + features | no scheduler exists |
+| "White-label & custom branding" | Business plan | `logo_url` is saved and never rendered anywhere |
+| "SSO / SAML" | Enterprise | no implementation; needs Supabase Pro |
+| "Custom integrations (Tally, ERP, Shopify)" | Enterprise | Tally is a form field with placeholder `http://localhost:9000` — unreachable from Vercel by design |
+| Industry count | four places | says 25, 26, 26 and "27+" |
+
+Also worth fixing: seat limits are not enforced on any tier (₹799 and ₹39,999 both buy
+unlimited users), and `PLAN_RANK` in `integrations.ts` is missing `solo` and `business`,
+so a ₹39,999 Business workspace is treated as Starter and capped at **2** integrations
+while Starter gets 3.
 
 ## Known, deliberately not changed
 
