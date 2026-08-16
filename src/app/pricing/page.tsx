@@ -31,6 +31,9 @@ export default async function Pricing() {
       <section className="px-5 lg:px-10 pb-16"><PricingClient signedIn={Boolean(orgId)} /></section>
 
       <section className="px-5 lg:px-10 pb-24 text-center text-sm text-muted-foreground">
+        MNB Cortex is a product of <span className="text-foreground font-medium">Abrobot Technologies</span> — payments and card
+        statements show <span className="text-foreground font-medium">ABROBOT TECHNOLOGIES</span>.
+        <br />
         Payments processed securely via Cashfree. By subscribing you agree to our{" "}
         <Link href="/terms" className="text-primary link-sweep">Terms</Link>,{" "}
         <Link href="/privacy" className="text-primary link-sweep">Privacy Policy</Link> and{" "}

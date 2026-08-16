@@ -107,6 +107,16 @@ export function PlanPicker({ currentPlan = "", savedPhone = "" }: { currentPlan?
       <p className="text-xs text-muted-foreground">
         Secure payment via Cashfree. Plans run for the period you buy — 30 days monthly, 365 days annual — and stack if you renew early.
       </p>
+      {/*
+        MNB Cortex is operated by Abrobot Technologies, which is the name
+        Cashfree shows at checkout and on the card statement. Saying so up front
+        is the cheapest possible defence against "I don't recognise this charge"
+        chargebacks — the customer has already been told.
+      */}
+      <p className="text-xs text-muted-foreground">
+        MNB Cortex is a product of <b>Abrobot Technologies</b>. Your payment and card statement will show
+        <b> ABROBOT TECHNOLOGIES</b>.
+      </p>
     </div>
   );
 }
