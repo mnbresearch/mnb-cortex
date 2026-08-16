@@ -12,14 +12,19 @@ import { payCashfree } from "@/lib/pay/checkout-client";
  * and a locked-out trial user was offered exactly one price: the hardcoded
  * ₹17,999 Premium button.
  */
-export function PlanPicker({ currentPlan = "" }: { currentPlan?: string }) {
+export function PlanPicker({ currentPlan = "", savedPhone = "" }: { currentPlan?: string; savedPhone?: string }) {
   const [annual, setAnnual] = useState(false);
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
+  // Cashfree requires a customer phone. We used to send 9999999999 for
+  // everyone, which showed up on the checkout page and the receipt.
+  const [phone, setPhone] = useState(savedPhone);
+  const phoneOk = /^[6-9]\d{9}$/.test(phone.replace(/\D/g, "").slice(-10));
 
   async function choose(planId: string, planName: string) {
+    if (!phoneOk) { setMsg("Enter the mobile number for your payment receipt first."); return; }
     setBusy(planId); setMsg("");
-    const res = await payCashfree({ kind: "plan", plan: planId, annual });
+    const res = await payCashfree({ kind: "plan", plan: planId, annual, phone: phone.replace(/\D/g, "").slice(-10) });
     setBusy("");
     if (res.ok) { location.reload(); return; }
     setMsg(res.needsConfig
@@ -41,6 +46,22 @@ export function PlanPicker({ currentPlan = "" }: { currentPlan?: string }) {
         <span className={annual ? "font-medium" : "text-muted-foreground"}>
           Annual <span className="text-success text-xs">(save ~20%)</span>
         </span>
+      </div>
+
+      <div className="rounded-xl border p-4 max-w-md">
+        <label className="text-sm font-medium">Mobile number for your receipt</label>
+        <p className="text-xs text-muted-foreground mt-0.5">Required by the payment gateway. Used for your receipt and UPI confirmation.</p>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">+91</span>
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            inputMode="numeric"
+            placeholder="98765 43210"
+            className="rounded-lg border bg-background px-3 h-10 text-sm flex-1 outline-none focus:ring-2 focus:ring-ring"
+          />
+          {phoneOk && <span className="text-xs text-success">✓</span>}
+        </div>
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -69,7 +90,7 @@ export function PlanPicker({ currentPlan = "" }: { currentPlan?: string }) {
               ) : (
                 <button
                   onClick={() => choose(p.id, p.name)}
-                  disabled={Boolean(busy) || isCurrent}
+                  disabled={Boolean(busy) || isCurrent || !phoneOk}
                   className={`mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg h-9 text-xs font-medium disabled:opacity-60 ${p.highlight ? "bg-primary text-primary-foreground hover:opacity-90" : "border hover:bg-accent"}`}
                 >
                   {busy === p.id

@@ -13,7 +13,7 @@ function loadCashfree(): Promise<boolean> {
 export type PayResult = { ok: boolean; needsConfig?: boolean; error?: string; kind?: string; balance?: number; plan?: string };
 
 /** Create a Cashfree order, open the checkout modal, then verify server-side. */
-export async function payCashfree(payload: Record<string, any>): Promise<PayResult> {
+export async function payCashfree(payload: { kind: string; plan?: string; packId?: string; annual?: boolean; phone?: string } & Record<string, any>): Promise<PayResult> {
   let order: any;
   try { order = await fetch("/api/pay/cashfree/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).then((r) => r.json()); }
   catch { return { ok: false, error: "Network error." }; }

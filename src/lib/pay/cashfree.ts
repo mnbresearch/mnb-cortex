@@ -33,7 +33,10 @@ export async function createOrder(opts: {
     customer_details: {
       customer_id: (opts.customer.id || "cust").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) || "cust",
       customer_email: opts.customer.email || "billing@example.com",
-      customer_phone: (opts.customer.phone && /^\d{10}$/.test(opts.customer.phone)) ? opts.customer.phone : "9999999999",
+      // Cashfree makes this mandatory. We now collect a real one at checkout;
+      // the placeholder only survives as a last resort so a missing phone can
+      // never block a payment outright.
+      customer_phone: (opts.customer.phone && /^[6-9]\d{9}$/.test(opts.customer.phone)) ? opts.customer.phone : "9999999999",
       customer_name: opts.customer.name || "MNB Cortex customer",
     },
     order_meta: { return_url: `${opts.returnUrl}?order_id={order_id}` },

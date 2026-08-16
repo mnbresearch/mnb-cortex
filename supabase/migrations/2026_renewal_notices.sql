@@ -30,3 +30,15 @@ create index if not exists renewal_notices_org_idx
 
 -- Server-only: written with the service role, never read by the client.
 alter table renewal_notices enable row level security;
+
+
+-- ------------------------------------------------------------
+-- Billing phone.
+--
+-- createOrder() sent customer_phone: "9999999999" for EVERY customer because
+-- nothing in the app ever collected one. Cashfree shows that number on the
+-- checkout ("Payment Options for +91 9999999999"), uses it for UPI collect and
+-- for risk scoring, and it appears on the receipt — so every buyer saw an
+-- obviously fake number at the exact moment they were deciding to trust us.
+-- ------------------------------------------------------------
+alter table organizations add column if not exists billing_phone text;

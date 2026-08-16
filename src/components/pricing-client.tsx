@@ -24,13 +24,12 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
     // Enterprise is bespoke, and Cashfree settles INR only — both stay a
     // conversation with the team rather than a self-serve checkout.
     if (p.monthly === 0 || cur === "USD") { openForm(p.name); return; }
-    if (!signedIn) { window.location.href = `/login?next=${encodeURIComponent("/billing")}`; return; }
-    setBusy(p.id); setPayErr("");
-    const res = await payCashfree({ kind: "plan", plan: p.id, annual });
-    setBusy("");
-    if (res.ok) { window.location.href = "/billing"; return; }
-    if (res.needsConfig) { openForm(p.name); return; }  // payments off — capture the lead
-    setPayErr(res.error || "Could not start checkout. Please try again.");
+    // Checkout lives on /billing, which collects the mobile number the payment
+    // gateway requires. Keeping ONE checkout path means the phone step can't be
+    // skipped by starting from the marketing page.
+    window.location.href = signedIn
+      ? "/billing"
+      : `/login?next=${encodeURIComponent("/billing")}`;
   }
 
   function openForm(p: string) { setPlan(p); setForm({ name: "", email: "", phone: "" }); setStatus("idle"); setOpen(true); }
@@ -95,7 +94,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
                 disabled={busy === p.id}
                 className={`w-full rounded-full h-11 text-sm font-medium transition-colors disabled:opacity-60 ${p.highlight ? "btn-ink" : "border hover:bg-accent"}`}
               >
-                {busy === p.id ? "Starting…" : p.monthly === 0 || cur === "USD" ? p.cta : signedIn ? (annual ? "Pay yearly" : "Subscribe") : "Start free trial"}
+                {p.monthly === 0 || cur === "USD" ? p.cta : signedIn ? "Subscribe" : "Start free trial"}
               </button>
               <ul className="mt-5 space-y-2 text-sm">
                 {p.features.map((f) => <li key={f} className="flex gap-2"><Check className="h-4 w-4 text-success shrink-0 mt-0.5" /><span>{f}</span></li>)}

@@ -26,10 +26,27 @@ export async function POST(req: Request) {
     note = `plan:${plan.id}:${annual ? "annual" : "monthly"}`;
   }
 
+  // A real 10-digit phone. Cashfree requires one; we used to invent it.
+  const digits = String(b.phone || "").replace(/\D/g, "").slice(-10);
+  const phone = /^[6-9]\d{9}$/.test(digits) ? digits : "";
+
   const profile = await getOrgProfile();
+  // Remember it so the customer only ever types it once.
+  if (phone && phone !== (profile as any)?.billing_phone) {
+    try {
+      const { serviceClient } = await import("@/lib/supabase/server");
+      await serviceClient()?.from("organizations").update({ billing_phone: phone }).eq("id", orgId);
+    } catch { /* not fatal — the order can still go through */ }
+  }
+  const customerPhone = phone || (profile as any)?.billing_phone || "";
   const res = await createOrder({
     amount, note, returnUrl: `${origin}${returnPath}`,
-    customer: { id: orgId, email: (profile as any)?.userEmail || user?.email || undefined, name: (profile as any)?.name },
+    customer: {
+      id: orgId,
+      email: (profile as any)?.userEmail || user?.email || undefined,
+      name: (profile as any)?.name,
+      phone: customerPhone || undefined,
+    },
   });
   return NextResponse.json(res);
 }

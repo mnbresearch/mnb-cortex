@@ -3,7 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getUsage, getReportLinks } from "@/lib/data";
+import { getUsage, getReportLinks, getOrgProfile } from "@/lib/data";
 import { getBillingStatus } from "@/lib/billing";
 import { PLANS } from "@/lib/config";
 import { Check, Zap, Clock, AlertTriangle } from "lucide-react";
@@ -22,6 +22,7 @@ export default async function Billing() {
   const { counts, live } = await getUsage();
   const links = await getReportLinks();
   const billing = await getBillingStatus();
+  const profile = await getOrgProfile();   // carries the remembered billing phone
   const planName = billing.plan.charAt(0).toUpperCase() + billing.plan.slice(1);
   const badge = billing.status === "active"
     ? { cls: "bg-success/10 text-success border-success/20", text: "Active" }
@@ -85,7 +86,7 @@ export default async function Billing() {
         )}
 
         <Section title="Available plans" desc="Change anytime — annual saves ~20%">
-          <PlanPicker currentPlan={billing.status === "active" ? planName : ""} />
+          <PlanPicker currentPlan={billing.status === "active" ? planName : ""} savedPhone={(profile as any)?.billing_phone || ""} />
         </Section>
 
       </PageShell>
