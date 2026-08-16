@@ -1,6 +1,7 @@
 // GST Return Intelligence — read a GST return/summary and surface the numbers that matter.
 // Figures are extracted by the model; every ratio, split and check is computed in code.
 import "server-only";
+import { geminiTextModels } from "@/lib/ai/models";
 
 export type GstCheck = { label: string; ok: boolean };
 export type GstSignal = { label: string; tone: "good" | "warn" | "bad" | "info"; detail: string };
@@ -53,7 +54,7 @@ function safeJson(t: string): any | null {
 
 async function callJson(prompt: string): Promise<any | null> {
   if (process.env.GEMINI_API_KEY) {
-    const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const model = geminiTextModels()[0];
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
         method: "POST", headers: { "Content-Type": "application/json" },

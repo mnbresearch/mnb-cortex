@@ -1,4 +1,5 @@
 import "server-only";
+import { geminiTextModels } from "@/lib/ai/models";
 
 // "What should I do next?" — the guided command layer that turns 130+ tools into
 // the 3–5 that matter for THIS business right now. Grounded in the workspace's
@@ -56,7 +57,7 @@ function safeArray(t: string): any[] | null {
 
 async function callJson(prompt: string, sys: string): Promise<any[] | null> {
   if (process.env.GEMINI_API_KEY) {
-    const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const model = geminiTextModels()[0];
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
         method: "POST", headers: { "Content-Type": "application/json" },

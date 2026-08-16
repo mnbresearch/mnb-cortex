@@ -3,6 +3,7 @@
 // recurring detection, counterparties, health) is computed in code (deterministic),
 // so the numbers are trustworthy, not hallucinated.
 import "server-only";
+import { geminiTextModels } from "@/lib/ai/models";
 
 export type Txn = { date: string; desc: string; amount: number; direction: "in" | "out"; category: string };
 export type MonthPoint = { key: string; label: string; inflow: number; outflow: number; net: number };
@@ -61,7 +62,7 @@ ${text.slice(0, 18000)}`;
 async function callJson(prompt: string): Promise<any | null> {
   // Gemini first
   if (process.env.GEMINI_API_KEY) {
-    const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const model = geminiTextModels()[0];
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
         method: "POST", headers: { "Content-Type": "application/json" },

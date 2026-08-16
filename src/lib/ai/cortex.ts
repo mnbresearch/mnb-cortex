@@ -3,6 +3,7 @@
 // Set ONE key; provider is auto-detected (or force with AI_PROVIDER).
 import "server-only";
 import { anyEnvKey, envKey } from "@/lib/env";
+import { geminiTextModels, geminiUrl } from "@/lib/ai/models";
 
 export const COO_SYSTEM = `You are MNB Cortex — the AI Chief Operating Officer for an SME owner.
 You are NOT a chatbot or a dashboard. You behave like a McKinsey/BCG-grade operator who has read all of the company's data.
@@ -76,19 +77,26 @@ async function runOnce(messages: Msg[], context: string): Promise<string | null>
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
   try {
     // ---- Google Gemini (FREE: aistudio.google.com) ----
-    if (provider === "gemini" && process.env.GEMINI_API_KEY) {
-      const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: sys }] },
-          contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
-          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
-        }),
+    if (provider === "gemini" && envKey("GEMINI_API_KEY")) {
+      const body = JSON.stringify({
+        system_instruction: { parts: [{ text: sys }] },
+        contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+        generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
       });
-      if (!r.ok) return await note("gemini", r);
-      const j = await r.json();
-      return j?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+      // Walk the candidate models: a 404 means that name was retired, so try
+      // the next one rather than taking the whole product down.
+      for (const model of geminiTextModels()) {
+        const r = await fetch(geminiUrl(model, process.env.GEMINI_API_KEY!), {
+          method: "POST", headers: { "Content-Type": "application/json" }, body,
+        });
+        if (r.ok) {
+          const j = await r.json();
+          return j?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+        }
+        await note(`gemini(${model})`, r);
+        if (r.status !== 404) break; // a real error — don't burn the other models
+      }
+      return null;
     }
     // ---- Groq (FREE: console.groq.com) — OpenAI-compatible ----
     if (provider === "groq" && process.env.GROQ_API_KEY) {

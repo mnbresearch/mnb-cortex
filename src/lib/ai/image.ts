@@ -1,4 +1,5 @@
 import "server-only";
+import { geminiImageModels } from "@/lib/ai/models";
 
 // Image generation + editing via Google Gemini (free tier at aistudio.google.com).
 // One GEMINI_API_KEY powers both the text engine and image agents.
@@ -8,7 +9,9 @@ export function hasImageProvider(): boolean {
 }
 
 export function imageModel(): string {
-  return process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image-preview";
+  // "gemini-2.5-flash-image-preview" was the preview name and is gone;
+  // the stable endpoint dropped the suffix.
+  return geminiImageModels()[0];
 }
 
 /**

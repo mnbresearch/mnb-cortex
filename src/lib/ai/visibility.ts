@@ -2,6 +2,7 @@
 // Runs real buyer-intent questions through AI answer engines, detects whether the
 // brand (and competitors) get recommended, scores it, and drafts the fix.
 import "server-only";
+import { geminiTextModels } from "@/lib/ai/models";
 
 export type EngineResult = {
   prompt: string;
@@ -28,7 +29,7 @@ const NEUTRAL_SYSTEM =
 /** Ask one answer engine. Prefers Gemini with Google Search grounding (live web); falls back to Groq (model knowledge). */
 async function askEngine(prompt: string): Promise<{ answer: string; engine: string; grounded: boolean }> {
   if (process.env.GEMINI_API_KEY) {
-    const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const model = geminiTextModels()[0];
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -129,7 +130,7 @@ A 3–4 sentence description of ${brand}, optimised to be quoted.
 
   // Reuse the same providers directly (neutral AEO persona, not the COO persona).
   if (process.env.GEMINI_API_KEY) {
-    const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const model = geminiTextModels()[0];
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
