@@ -1,8 +1,14 @@
 // Integration catalogue + plan gating. Safe to import from client components
 // (contains no secrets — only metadata describing what each integration needs).
 
-export type PlanId = "starter" | "growth" | "premium" | "enterprise";
-export const PLAN_RANK: Record<PlanId, number> = { starter: 1, growth: 2, premium: 3, enterprise: 4 };
+/**
+ * `solo` and `business` were missing from this type and both maps, even though
+ * they are real, purchasable plans in config.ts. A ₹39,999 Business workspace
+ * looked up as `undefined` and fell through to the Starter cap — so the most
+ * expensive plan got FEWER integrations (2) than the ₹2,499 one (3).
+ */
+export type PlanId = "solo" | "starter" | "growth" | "premium" | "business" | "enterprise";
+export const PLAN_RANK: Record<PlanId, number> = { solo: 1, starter: 2, growth: 3, premium: 4, business: 5, enterprise: 6 };
 
 export type Field = {
   key: string;
@@ -27,11 +33,21 @@ export type Integration = {
 
 /** How many integrations each plan may connect. */
 export const PLAN_INTEGRATION_LIMIT: Record<PlanId, number> = {
+  solo: 2,
   starter: 3,
   growth: 10,
   premium: 30,
+  business: 100,
   enterprise: 999,
 };
+
+/** Plan ids that aren't in the catalogue fall back to the cheapest tier. */
+export function planRank(plan: string | null | undefined): number {
+  return PLAN_RANK[(String(plan || "").toLowerCase() as PlanId)] ?? PLAN_RANK.solo;
+}
+export function integrationLimit(plan: string | null | undefined): number {
+  return PLAN_INTEGRATION_LIMIT[(String(plan || "").toLowerCase() as PlanId)] ?? PLAN_INTEGRATION_LIMIT.solo;
+}
 
 const KEY = (label = "API key", ph = "sk_live_…"): Field => ({ key: "api_key", label, type: "password", placeholder: ph, required: true });
 

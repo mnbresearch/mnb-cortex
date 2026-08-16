@@ -1,7 +1,7 @@
 "use server";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { getUserAndOrg, getBusinessContext } from "@/lib/data";
-import { SUPER_ADMINS } from "@/lib/config";
+import { SUPER_ADMINS, seatLimit } from "@/lib/config";
 import { generateFor } from "@/lib/ai/cortex";
 import { sendEmail } from "@/lib/email";
 import { recomputeQuietly } from "@/lib/metrics";
@@ -362,9 +362,28 @@ export async function inviteMember(fd: FormData) {
   const email = str(fd.get("email")); const role = str(fd.get("role")) || "analyst";
   if (!email) throw new Error("Email required");
   const sb = createClient();
-  const org = await sb.from("organizations").select("name").eq("id", orgId).single();
+  const org = await sb.from("organizations").select("name, plan").eq("id", orgId).single();
   const orgName = (org.data as any)?.name || "our company";
-  const { error } = await sb.from("invites").insert({ org_id: orgId, email, role });
+
+  // Seat limit. Every plan advertises a user cap and none was enforced, so a
+  // ₹799 Solo workspace could add unlimited teammates. Pending invites count,
+  // otherwise the cap is trivially bypassed by inviting everyone at once.
+  const cap = seatLimit((org.data as any)?.plan);
+  if (cap > 0) {
+    const [{ count: members }, { count: pending }] = await Promise.all([
+      sb.from("memberships").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+      sb.from("invites").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "pending"),
+    ]);
+    const used = (members || 0) + (pending || 0);
+    if (used >= cap) {
+      throw new Error(`Your plan includes ${cap} user${cap === 1 ? "" : "s"} and you've used ${used}. Upgrade under Billing to add more.`);
+    }
+  }
+
+  // Don't stack duplicate invites for the same address.
+  const { data: dupe } = await sb.from("invites").select("id").eq("org_id", orgId).ilike("email", email).eq("status", "pending").limit(1);
+  if (dupe && dupe.length) throw new Error(`${email} already has a pending invite.`);
+  const { error } = await sb.from("invites").insert({ org_id: orgId, email: email.toLowerCase(), role });
   if (error) throw new Error(error.message);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mnb-cortex.vercel.app";
   await sendEmail(email, `You're invited to ${orgName} on MNB Cortex`,

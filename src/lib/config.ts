@@ -118,6 +118,18 @@ export const TRIAL_DAYS = 3;
 // Enough to try text agents + a couple of images, not enough for daily use.
 export const TRIAL_CREDITS = 150;
 
+/**
+ * Users allowed per plan — the caps the pricing page advertises ("1 user",
+ * "up to 3 users", "Up to 75 users"). Nothing enforced them, so ₹799 and
+ * ₹39,999 both bought unlimited seats. -1 means unlimited.
+ */
+export const PLAN_SEATS: Record<string, number> = {
+  solo: 1, starter: 3, growth: 10, premium: 25, business: 75, enterprise: -1,
+};
+export function seatLimit(plan: string | null | undefined): number {
+  return PLAN_SEATS[String(plan || "").toLowerCase()] ?? PLAN_SEATS.solo;
+}
+
 // Buyable top-up packs (one-time). Price in INR.
 export type CreditPack = { id: string; label: string; credits: number; price: number; per: string };
 export const CREDIT_PACKS: CreditPack[] = [
