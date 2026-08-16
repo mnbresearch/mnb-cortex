@@ -6,13 +6,19 @@ import { InsightCard } from "@/components/insight-card";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { DataTable } from "@/components/data-table";
 import { CollapsibleForm, Field, SelectField, ActionForm } from "@/components/forms";
-import { getInsights, getInvoices, getFinanceSeries } from "@/lib/data";
+import { getInsights, getInvoices, getFinanceSeries, getUserAndOrg, getMetrics } from "@/lib/data";
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
 import { addInvoice, createInvoiceAI, sendReminderAI } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 const pl = Array.from({ length: 12 }, (_, m) => ({ month: new Date(2025, m, 1).toLocaleString("en", { month: "short" }), revenue: 3.0 + m * 0.11, profit: 0.42 + m * 0.009 }));
 
 export default async function Finance() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+  const metrics = await getMetrics();
+  const byKey = Object.fromEntries(metrics.map((m) => [m.metric_key, m]));
   const insights = await getInsights("finance");
   const { rows, live } = await getInvoices();
   const fin = await getFinanceSeries();
@@ -23,12 +29,48 @@ export default async function Finance() {
     <>
       <Topbar title="Finance Intelligence" subtitle="Tally · Zoho Books · QuickBooks · GST · Bank" />
       <PageShell>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat label="Net profit (MTD)" value="₹51.0 L" hint="-7% MoM" tone="text-warning" />
-          <Stat label="Gross margin" value="31%" hint="-2 pts" tone="text-warning" />
-          <Stat label="Cash runway" value="5 months" hint="watch" tone="text-warning" />
-          <Stat label="EBITDA" value="₹62.0 L" hint="14.6% margin" />
-        </div>
+        {/*
+          These four were hardcoded — "Net profit ₹51.0 L", "Gross margin 31%",
+          "Cash runway 5 months", "EBITDA ₹62.0 L" — and shown to every signed-in
+          workspace as its own figures, directly above a chart plotting their real
+          (and completely different) numbers. A signed-in workspace now sees only
+          KPIs derived from its own data.
+        */}
+        {signedIn ? (
+          metrics.length ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {["revenue", "receivables", "cash_balance", "cash", "working_capital", "gst_turnover"]
+                .filter((k) => byKey[k])
+                .slice(0, 4)
+                .map((k) => {
+                  const m = byKey[k];
+                  const money = m.unit === "INR";
+                  return (
+                    <Stat
+                      key={k}
+                      label={m.label}
+                      value={money ? `₹${Number(m.value).toLocaleString("en-IN")}` : `${m.value}${m.unit ? " " + m.unit : ""}`}
+                      hint={m.delta_pct ? `${m.delta_pct > 0 ? "+" : ""}${m.delta_pct}% vs last period` : undefined}
+                      tone={m.status === "red" ? "text-danger" : m.status === "yellow" ? "text-warning" : undefined}
+                    />
+                  );
+                })}
+            </div>
+          ) : (
+            <Card className="p-6 text-center text-sm text-muted-foreground">
+              No finance KPIs yet. <Link href="/bank" className="text-primary">Upload a bank statement</Link>,{" "}
+              <Link href="/gst-reader" className="text-primary">read a GST return</Link> or{" "}
+              <Link href="/import" className="text-primary">import invoices</Link> and they'll appear here.
+            </Card>
+          )
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Stat label="Net profit (MTD)" value="₹51.0 L" hint="-7% MoM" tone="text-warning" />
+            <Stat label="Gross margin" value="31%" hint="-2 pts" tone="text-warning" />
+            <Stat label="Cash runway" value="5 months" hint="watch" tone="text-warning" />
+            <Stat label="EBITDA" value="₹62.0 L" hint="14.6% margin" />
+          </div>
+        )}
         <Section title="Revenue vs net profit" desc="Trailing 12 months (₹ Cr)">
           <TrendChart data={chartData} keys={fin.live ? FIN_KEYS.filter((s) => fin.keys.includes(s.k)) : FIN_KEYS} />
         </Section>

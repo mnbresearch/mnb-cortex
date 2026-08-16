@@ -35,7 +35,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <WhatsNew />
       <OnboardingTour signedIn={Boolean(orgId)} />
       {/* Super-admins operate the platform and are never gated. */}
-      {!superAdmin && <TrialGuard status={billing.status} daysLeft={billing.daysLeft} locked={billing.locked} lapsedSubscription={billing.lapsedSubscription} subscriptionEndsAt={billing.subscriptionEndsAt} />}
+      {/* billing.known is false for a logged-out visitor — they have no trial to count down. */}
+      {!superAdmin && billing.known && <TrialGuard status={billing.status} daysLeft={billing.daysLeft} locked={billing.locked} lapsedSubscription={billing.lapsedSubscription} subscriptionEndsAt={billing.subscriptionEndsAt} />}
       {!superAdmin && <CreditBanner />}
       {!superAdmin && <DailyNudge status={billing.status} daysLeft={billing.daysLeft} />}
     </div>

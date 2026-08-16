@@ -28,6 +28,26 @@ function pickProvider(): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Why the last provider call failed. Every failure used to collapse into the
+ * same "the engine is busy (rate limit)" message, so a dead API key, a retired
+ * model name and a genuine 429 were indistinguishable — in production the AI
+ * was down and nothing said why.
+ */
+type ProviderFailure = { provider: string; status?: number; detail: string };
+let lastFailure: ProviderFailure | null = null;
+
+/** Human-readable cause of the most recent failure, for the user-facing message. */
+function describeFailure(f: ProviderFailure | null): string {
+  if (!f) return "The AI provider did not respond.";
+  if (f.status === 429) return "The AI provider is rate-limiting us right now.";
+  if (f.status === 401 || f.status === 403) return `The ${f.provider} API key is invalid or has no access (HTTP ${f.status}).`;
+  if (f.status === 404) return `The configured ${f.provider} model was not found (HTTP 404) — it may have been retired. Set ${f.provider.toUpperCase()}_MODEL to a current model.`;
+  if (f.status && f.status >= 500) return `The ${f.provider} service is failing (HTTP ${f.status}).`;
+  if (f.status) return `${f.provider} returned HTTP ${f.status}.`;
+  return `Could not reach ${f.provider}: ${f.detail}`;
+}
+
 /** True when at least one AI provider key is configured. */
 export function hasAIKey(): boolean {
   return anyEnvKey("GROQ_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY");
@@ -46,9 +66,8 @@ export async function runCortex(messages: Msg[], context: string): Promise<strin
     if (out !== null) return out;
     if (i < attempts - 1) await sleep(500 * Math.pow(2, i) + Math.random() * 250);
   }
-  return hasAIKey()
-    ? "The AI engine is busy right now (rate limit). Please try again in a few seconds — your data is safe and nothing was lost."
-    : fallback(messages);
+  if (!hasAIKey()) return fallback(messages);
+  return `I couldn't reach the AI engine. ${describeFailure(lastFailure)}\n\nYour data is safe and nothing was lost — please try again shortly, or check the AI provider settings.`;
 }
 
 /** One model call. Returns null on a transient/failed call so the caller can retry. */
@@ -67,7 +86,7 @@ async function runOnce(messages: Msg[], context: string): Promise<string | null>
           generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
         }),
       });
-      if (!r.ok) return null;
+      if (!r.ok) return await note("gemini", r);
       const j = await r.json();
       return j?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
     }
@@ -77,7 +96,7 @@ async function runOnce(messages: Msg[], context: string): Promise<string | null>
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
         body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
       });
-      if (!r.ok) return null; // 429 rate-limit or 5xx → let the caller retry
+      if (!r.ok) return await note("groq", r); // 429 rate-limit or 5xx → let the caller retry
       const j = await r.json();
       return j?.choices?.[0]?.message?.content ?? null;
     }
@@ -87,7 +106,7 @@ async function runOnce(messages: Msg[], context: string): Promise<string | null>
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
         body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
       });
-      if (!r.ok) return null;
+      if (!r.ok) return await note("openai", r);
       const j = await r.json();
       return j?.choices?.[0]?.message?.content ?? null;
     }
@@ -97,13 +116,27 @@ async function runOnce(messages: Msg[], context: string): Promise<string | null>
         method: "POST", headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022", max_tokens: 1024, system: sys, messages }),
       });
-      if (!r.ok) return null;
+      if (!r.ok) return await note("anthropic", r);
       const j = await r.json();
       return j?.content?.[0]?.text ?? null;
     }
-  } catch {
+  } catch (e: any) {
+    lastFailure = { provider, detail: e?.message || "network error" };
+    console.error("[cortex] provider call threw", lastFailure);
     return null; // network/transient — retry
   }
+  lastFailure = { provider, detail: provider === "none" ? "no provider key configured" : "no matching provider branch" };
+  return null;
+}
+
+/** Record an upstream non-OK response, log it, and signal a retry. */
+async function note(provider: string, r: Response): Promise<null> {
+  let detail = "";
+  try { detail = (await r.text()).slice(0, 300); } catch { /* body already consumed */ }
+  lastFailure = { provider, status: r.status, detail };
+  // Surfaces in the Vercel runtime logs, which is the only place this was
+  // ever going to be diagnosable from.
+  console.error(`[cortex] ${provider} HTTP ${r.status}: ${detail}`);
   return null;
 }
 
