@@ -21,8 +21,9 @@ export function StatusBoard() {
         {services.map((s: any) => (
           <div key={s.name} className="flex items-center justify-between p-4">
             <span className="text-sm font-medium">{s.name}</span>
-            <span className={`inline-flex items-center gap-1.5 text-xs ${s.status === "operational" ? "text-success" : "text-warning"}`}>
-              <span className={`h-2 w-2 rounded-full ${s.status === "operational" ? "bg-success" : "bg-warning"}`} /> {s.status}
+            <span className={`inline-flex items-center gap-1.5 text-xs ${s.status === "operational" ? "text-success" : s.status === "down" ? "text-danger" : "text-warning"}`}>
+              <span className={`h-2 w-2 rounded-full ${s.status === "operational" ? "bg-success" : s.status === "down" ? "bg-danger" : "bg-warning"}`} />
+              {s.status}{s.detail ? ` · ${s.detail}` : ""}
             </span>
           </div>
         ))}

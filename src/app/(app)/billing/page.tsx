@@ -10,6 +10,7 @@ import { Check, Zap, Clock, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { UpgradeButton } from "@/components/upgrade-button";
 import { PlanPicker } from "@/components/plan-picker";
+import { AutoRenew } from "@/components/autorenew";
 import { PaymentReturn } from "@/components/payment-return";
 import { TRIAL_DAYS } from "@/lib/config";
 import { createReportLink, revokeReportLink } from "@/lib/actions";
@@ -84,6 +85,14 @@ export default async function Billing() {
             </div>
           </Section>
         )}
+
+        <Section title="Auto-renewal" desc="Authorise once instead of re-paying every cycle">
+          <AutoRenew
+            planId={billing.plan}
+            status={(profile as any)?.autorenew_status}
+            nextCharge={(profile as any)?.autorenew_next}
+          />
+        </Section>
 
         <Section title="Available plans" desc="Change anytime — annual saves ~20%">
           <PlanPicker currentPlan={billing.status === "active" ? planName : ""} savedPhone={(profile as any)?.billing_phone || ""} />

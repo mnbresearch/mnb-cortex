@@ -9,5 +9,9 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as any));
   const res = await ensureWorkspace({ name: body?.company || body?.name, industry: body?.industry });
-  return NextResponse.json(res);
+  // Tell the client where to land. A brand-new workspace goes through
+  // onboarding once — that page was previously unreachable, so the only flow
+  // collecting company name, industry and currency together was dead code.
+  const next = res.created ? "/onboarding" : "/dashboard";
+  return NextResponse.json({ ...res, next });
 }

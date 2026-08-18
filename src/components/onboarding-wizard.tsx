@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { INDUSTRIES } from "@/lib/industries";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,7 @@ export function OnboardingWizard() {
           <h2 className="text-lg font-semibold flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /> Tell us about your company</h2>
           <input className={inp} placeholder="Company name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <select className={inp} value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })}>
-            {["manufacturing", "trading", "distribution", "education", "retail", "d2c"].map((o) => <option key={o} value={o}>{o}</option>)}
+            {INDUSTRIES.map((o) => <option key={o.slug} value={o.slug}>{o.name}</option>)}
           </select>
           <select className={inp} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
             {["INR", "USD", "EUR", "GBP", "AED", "SGD"].map((c) => <option key={c} value={c}>{c}</option>)}

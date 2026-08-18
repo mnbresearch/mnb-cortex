@@ -179,6 +179,36 @@ An unrecognised step is reported as **skipped**, never as success.
 
 ---
 
+## Auto-renewal (Cashfree mandates)
+
+Without a mandate every plan is a one-off order: the workspace locks at the end
+of the period unless the customer pays again. A mandate is authorised **once**
+and each cycle is debited automatically.
+
+Uses the same `CASHFREE_APP_ID` / `CASHFREE_SECRET_KEY`. **Ask Cashfree to
+enable Subscriptions on your account** — it isn't on by default.
+
+Customers turn it on under *Billing → Auto-renewal*. Cashfree charges ₹1 to
+verify the mandate and refunds it.
+
+**The one limit to know:** UPI Autopay is capped at **₹15,000 per mandate**.
+
+| Plan | Monthly | UPI Autopay? |
+|---|---|---|
+| Solo | ₹799 | yes |
+| Starter | ₹2,499 | yes |
+| Growth | ₹6,999 | yes |
+| Premium | ₹17,999 | no — card or eNACH |
+| Business | ₹39,999 | no — card or eNACH |
+
+The UI says this before the customer starts, rather than letting them discover
+it at their bank's screen. Successful cycles arrive as `SUBSCRIPTION_*`
+webhooks and extend the paid period; a cancelled or on-hold mandate leaves the
+already-paid period intact and simply stops future renewals. Renewal reminder
+emails skip workspaces with a live mandate.
+
+---
+
 ## Integration data sync
 
 Most of the 62-provider catalogue is a **secure credential vault** — it stores

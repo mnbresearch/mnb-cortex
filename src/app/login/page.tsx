@@ -21,8 +21,16 @@ export default function Login() {
 
   async function afterAuthed() {
     // Guarantee a workspace exists, then enter the app.
-    try { await fetch("/api/workspace/bootstrap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ company }) }); } catch {}
-    window.location.href = "/dashboard";
+    // Land new workspaces on onboarding, returning users on the dashboard.
+    let next = "/dashboard";
+    try {
+      const r = await fetch("/api/workspace/bootstrap", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ company }),
+      });
+      const j = await r.json().catch(() => ({} as any));
+      if (j?.next) next = j.next;
+    } catch {}
+    window.location.href = next;
   }
 
   async function submit(e: React.FormEvent) {

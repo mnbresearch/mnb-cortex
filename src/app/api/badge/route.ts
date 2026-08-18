@@ -5,15 +5,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Live status badge (SVG) — embed anywhere with <img src="/api/badge" />. */
-export async function GET() {
-  const ai = anyEnvKey("GROQ_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY");
-  const db = hasSupabase();
-  const email = Boolean(envKey("RESEND_API_KEY"));
-  const allUp = ai && db && email;
+export async function GET(req: Request) {
+  // Was computed from Boolean(process.env.X): the badge said "operational"
+  // while the AI was returning 404s. It now reflects the real health check.
+  let value = "operational";
+  try {
+    const r = await fetch(new URL("/api/health", req.url), { cache: "no-store" });
+    const j = await r.json().catch(() => ({} as any));
+    value = j?.status === "down" ? "down" : j?.status === "degraded" ? "degraded" : "operational";
+  } catch { value = "unknown"; }
 
   const label = "MNB Cortex";
-  const value = allUp ? "operational" : "degraded";
-  const color = allUp ? "#B8912F" : "#f59e0b";
+  const color = value === "operational" ? "#B8912F" : value === "down" ? "#dc2626" : "#f59e0b";
   const lw = 84, vw = value.length * 7 + 22, w = lw + vw;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="20" role="img" aria-label="${label}: ${value}">

@@ -104,7 +104,7 @@ export async function sendRenewalReminders(): Promise<RenewalResult> {
   try {
     const { data } = await svc
       .from("organizations")
-      .select("id, name, plan, subscription_status, subscription_ends_at")
+      .select("id, name, plan, subscription_status, subscription_ends_at, autorenew_status")
       .not("subscription_ends_at", "is", null)
       .limit(500);
     orgs = (data as any[]) || [];
@@ -119,6 +119,10 @@ export async function sendRenewalReminders(): Promise<RenewalResult> {
 
     const daysLeft = Math.ceil((end - now) / DAY);
     const status = String(o.subscription_status || "");
+
+    // A live mandate renews on its own — reminding them to "renew now" would be
+    // wrong, and the lapsed notice would be plain incorrect.
+    if (String(o.autorenew_status || "") === "ACTIVE" && status === "active") { out.skipped++; continue; }
 
     // Which notice, if any, is due today.
     let kind: Notice | null = null;

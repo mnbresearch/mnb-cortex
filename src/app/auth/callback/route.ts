@@ -9,8 +9,14 @@ export async function GET(request: Request) {
   if (code) {
     const supabase = createClient();
     await supabase.auth.exchangeCodeForSession(code);
-    // Make sure every newly-verified user has a workspace + trial before landing.
-    try { await ensureWorkspace(); } catch { /* non-fatal */ }
+    // Make sure every newly-verified user has a workspace + trial before landing,
+    // and route a brand-new one through onboarding once.
+    try {
+      const res = await ensureWorkspace();
+      if (res?.created && !searchParams.get("next")) {
+        return NextResponse.redirect(`${origin}/onboarding`);
+      }
+    } catch { /* non-fatal */ }
   }
   return NextResponse.redirect(`${origin}${next.startsWith("/") ? next : "/dashboard"}`);
 }
