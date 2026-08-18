@@ -28,9 +28,16 @@ export async function POST(req: Request) {
   if (!agent) return NextResponse.json({ ok: false, error: "Unknown agent." }, { status: 200 });
   const inputs = (b.inputs || {}) as Record<string, string>;
 
-  // ---- Video: no free provider yet ----
+  // ---- Video: handled by its own async route ----
+  // Veo takes 1-3 minutes, so it can't run inside this request. The console
+  // posts to /api/agents/video and polls. This branch only exists to stop an
+  // old client silently getting nothing back.
   if (agent.kind === "video") {
-    return NextResponse.json({ ok: false, needsProvider: true, message: `“${agent.name}” is a video agent. The workflow is built; connect a video-generation provider (paid) to enable it.` }, { status: 200 });
+    return NextResponse.json({
+      ok: false,
+      useVideoEndpoint: true,
+      error: `"${agent.name}" is a video agent — please refresh the page to load the video runner.`,
+    }, { status: 200 });
   }
 
   // ---- Image agents (premium, gated) ----

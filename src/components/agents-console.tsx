@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { INDUSTRIES, DEPARTMENTS, agentsForIndustry, agentsForDepartment, findAgent, type Agent } from "@/lib/agents/catalog";
-import { Sparkles, Play, Download, Copy, Check, Loader2, RefreshCw, Lock, ChevronLeft, WandSparkles, Image as ImageIcon, Video, Upload, ArrowRight } from "lucide-react";
+import { Sparkles, Play, Download, Copy, Check, Loader2, RefreshCw, ChevronLeft, WandSparkles, Image as ImageIcon, Video, Upload, ArrowRight } from "lucide-react";
 
 const kindBadge: Record<string, { label: string; cls: string }> = {
   reasoning: { label: "Text", cls: "bg-primary/10 text-primary" },
@@ -30,6 +30,10 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
   const [upgrade, setUpgrade] = useState(false);
   const [quota, setQuota] = useState<{ left: number; limit: number; active: boolean; plan: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  // Veo is long-running (1-3 min), so the browser polls rather than holding a
+  // serverless function open for the whole generation.
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoNote, setVideoNote] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [biz, setBiz] = useState("");
   const [goals, setGoals] = useState("");
@@ -60,6 +64,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
 
   function open(a: Agent) {
     setSel(a); setOutput(""); setImages([]); setImgIn(""); setVersion(0); setRevise(""); setMsg("");
+    setVideoUrl(""); setVideoNote("");
     const seed: Record<string, string> = {}; a.inputs.forEach((i) => (seed[i.key] = ""));
     setInputs(seed);
   }
@@ -68,8 +73,37 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     const r = new FileReader(); r.onload = () => setImgIn(String(r.result)); r.readAsDataURL(f);
   }
 
+  /** Submit a Veo job, then poll until the file is ready. */
+  async function runVideo(reviseNote?: string) {
+    if (!sel) return;
+    setBusy("run"); setMsg(""); setUpgrade(false); setVideoUrl("");
+    const brief = [Object.values(inputs).filter(Boolean).join(". "), reviseNote ? `Revision: ${reviseNote}` : ""].filter(Boolean).join(" ");
+    const j = await api("/api/agents/video", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: `${sel.desc}. ${brief}`, image: imgIn || undefined }),
+    });
+    if (j.needsProvider || j.limited) { setBusy(""); setMsg(j.error || j.message); setUpgrade(Boolean(j.limited)); return; }
+    if (!j.ok) { setBusy(""); setMsg(j.error || "Could not start the video."); return; }
+
+    setVideoNote("Generating — this usually takes one to three minutes.");
+    const started = Date.now();
+    // Poll for up to 6 minutes, then stop and say so rather than spinning forever.
+    while (Date.now() - started < 6 * 60_000) {
+      await new Promise((r) => setTimeout(r, 8000));
+      const st = await api(`/api/agents/video?op=${encodeURIComponent(j.operation)}`);
+      if (st.state === "done" && st.url) {
+        setVideoUrl(st.url); setVideoNote(""); setVersion((v) => v + 1); setRevise(""); setBusy("");
+        return;
+      }
+      if (st.state === "error") { setBusy(""); setVideoNote(""); setMsg(st.error || "Video generation failed."); return; }
+    }
+    setBusy(""); setVideoNote("");
+    setMsg("Still generating after 6 minutes — it may finish shortly. Try running it again if nothing appears.");
+  }
+
   async function run(reviseNote?: string) {
     if (!sel) return;
+    if (sel.kind === "video") return runVideo(reviseNote);
     setBusy("run"); setMsg(""); setUpgrade(false);
     const j = await api("/api/agents/run", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agentId: sel.id, inputs, reviseNote, prior: reviseNote ? output : undefined, version, image: imgIn || undefined }) });
@@ -114,12 +148,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">{sel.desc}</p>
 
-          {isVideo ? (
-            <div className="mt-4 rounded-lg border border-warning/30 bg-warning/5 p-4 text-sm flex items-start gap-2">
-              <Lock className="h-4 w-4 text-warning mt-0.5 shrink-0" />
-              <span>Video generation has no free provider yet. The workflow — inputs, revise, export — is fully built and runs the moment a video model is connected.</span>
-            </div>
-          ) : (
+          {false ? null : (
             <div className="mt-4 space-y-3">
               {sel.inputs.map((f) => (
                 <label key={f.key} className="block">
@@ -144,7 +173,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
               {isImage && quota && quota.limit >= 0 && (
                 <div className="text-xs text-muted-foreground">{quota.active ? `${quota.plan} plan` : "Free trial"} · {quota.left} of {quota.limit} image generations left this week</div>
               )}
-              <Button onClick={() => run()} disabled={busy === "run"}>{busy === "run" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {output || images.length ? "Run again" : isImage ? "Generate" : "Run agent"}</Button>
+              <Button onClick={() => run()} disabled={busy === "run"}>{busy === "run" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {output || images.length || videoUrl ? "Run again" : isImage ? "Generate" : isVideo ? "Generate video" : "Run agent"}</Button>
             </div>
           )}
           {msg && (
@@ -154,6 +183,32 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
             </div>
           )}
         </Card>
+
+        {(videoNote || videoUrl) && (
+          <Card className="p-5 space-y-3">
+            <div className="font-semibold">Video {videoUrl && <span className="text-xs text-muted-foreground">· v{version}</span>}</div>
+            {videoNote && (
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> {videoNote}
+              </div>
+            )}
+            {videoUrl && (
+              <>
+                <video src={videoUrl} controls playsInline className="w-full rounded-lg border" />
+                <a href={videoUrl} download={`${sel.id.replace(/\./g, "-")}.mp4`}>
+                  <Button size="sm" variant="outline"><Download className="h-4 w-4" /> MP4</Button>
+                </a>
+                <div className="border-t pt-3">
+                  <div className="text-sm font-medium mb-1">Revise the video</div>
+                  <div className="flex gap-2">
+                    <input className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. slower pace, show the label close up" value={revise} onChange={(e) => setRevise(e.target.value)} />
+                    <Button variant="outline" disabled={busy === "run" || !revise.trim()} onClick={() => run(revise)}><RefreshCw className="h-4 w-4" /> Revise</Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </Card>
+        )}
 
         {images.length > 0 && (
           <Card className="p-5 space-y-3">
