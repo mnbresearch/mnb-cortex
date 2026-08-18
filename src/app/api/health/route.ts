@@ -109,16 +109,18 @@ async function checkPayments(): Promise<Check> {
   return { name: "Payments", status: "operational", detail: base.includes("sandbox") ? "sandbox" : "production", critical: true };
 }
 
-/** Has the daily cron actually run recently? A silent cron is the classic outage. */
+/** Has the daily cron actually run recently? Reads its own heartbeat. */
 async function checkCron(): Promise<Check> {
   const sb = serviceClient();
   if (!sb) return { name: "Scheduled jobs", status: "degraded", detail: "No service role" };
   try {
-    const { data } = await sb.from("activity").select("created_at")
-      .eq("type", "ai").order("created_at", { ascending: false }).limit(1);
-    const last = (data as any[])?.[0]?.created_at;
-    if (!last) return { name: "Scheduled jobs", status: "degraded", detail: "No cron activity recorded yet" };
-    const hours = (Date.now() - new Date(last).getTime()) / 3_600_000;
+    const { data, error } = await sb.from("system_status").select("value").eq("key", "cron_last_run").maybeSingle();
+    if (error) return { name: "Scheduled jobs", status: "degraded", detail: "Heartbeat table missing — run 2026_system_status.sql" };
+    const last = (data as any)?.value;
+    if (!last) {
+      return { name: "Scheduled jobs", status: "degraded", detail: "Not run since this was deployed — first run is 08:00 IST" };
+    }
+    const hours = (Date.now() - new Date(String(last)).getTime()) / 3_600_000;
     if (hours > 48) return { name: "Scheduled jobs", status: "down", detail: `Last ran ${Math.round(hours)}h ago` };
     if (hours > 26) return { name: "Scheduled jobs", status: "degraded", detail: `Last ran ${Math.round(hours)}h ago` };
     return { name: "Scheduled jobs", status: "operational", detail: `Last ran ${Math.round(hours)}h ago` };

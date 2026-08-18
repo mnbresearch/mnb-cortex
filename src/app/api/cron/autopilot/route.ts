@@ -131,5 +131,15 @@ export async function GET(req: Request) {
     ran++;
   }
 
+  // Heartbeat. /api/health reads this rather than inferring liveness from a
+  // side effect that only happens when a workspace has data — a healthy cron
+  // over an empty account would otherwise look dead.
+  try {
+    await sb.from("system_status").upsert(
+      { key: "cron_last_run", value: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { onConflict: "key" },
+    );
+  } catch { /* health reporting only */ }
+
   return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan });
 }
