@@ -319,3 +319,35 @@ export async function getReportLinks() {
   const { data } = await sb.from("report_links").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
   return { rows: (data as any[]) || [], live: true };
 }
+
+
+/** Webhook endpoints for the current workspace. The signing secret is included
+ *  because only an admin can reach /developers, and they need it to verify. */
+export async function getWebhooks() {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return { rows: [] as any[], live: false };
+  const svc = serviceClient();
+  if (!svc) return { rows: [], live: false };
+  const { data } = await svc.from("webhook_endpoints").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
+  return { rows: (data as any[]) || [], live: true };
+}
+
+export async function getWebhookDeliveries(limit = 15) {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return { rows: [] as any[], live: false };
+  const svc = serviceClient();
+  if (!svc) return { rows: [], live: false };
+  const { data } = await svc.from("webhook_deliveries")
+    .select("id,event,status,attempts,last_status,last_error,created_at")
+    .eq("org_id", orgId).order("created_at", { ascending: false }).limit(limit);
+  return { rows: (data as any[]) || [], live: true };
+}
+
+export async function getScheduledReports() {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return { rows: [] as any[], live: false };
+  const svc = serviceClient();
+  if (!svc) return { rows: [], live: false };
+  const { data } = await svc.from("scheduled_reports").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
+  return { rows: (data as any[]) || [], live: true };
+}

@@ -6,6 +6,7 @@ import { getUserAndOrg, getBusinessContext } from "@/lib/data";
 import { sendEmail } from "@/lib/email";
 import { brandFrom } from "@/lib/branded-email";
 import { enforce } from "@/lib/ratelimit";
+import { sendText, sendTemplate, hasWhatsApp, whatsappSetupHint } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +56,40 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: res.reason || "Send failed. Check that email is configured (RESEND_API_KEY)." }, { status: 200 });
       }
       return NextResponse.json({ ok: true, to, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
+    }
+
+    if (op === "whatsapp") {
+      const { user, orgId } = await getUserAndOrg();
+      if (!user || !orgId) return NextResponse.json({ ok: false, error: "Please sign in to send." }, { status: 200 });
+
+      // Honest, actionable state when the operator hasn't connected Meta yet.
+      if (!hasWhatsApp()) {
+        return NextResponse.json({ ok: false, needsSetup: true, error: whatsappSetupHint() }, { status: 200 });
+      }
+
+      const to = String(b.to || "").trim();
+      const text = String(b.body || "").trim();
+      const template = String(b.template || "").trim();
+      if (!to || (!text && !template)) {
+        return NextResponse.json({ ok: false, error: "A recipient and a message (or template name) are required." }, { status: 200 });
+      }
+
+      // Same per-workspace daily cap as email — this leaves on our number.
+      const over = await enforce([{ key: `act:whatsapp:org:${orgId}`, limit: 100, windowSecs: 86_400 }]);
+      if (over) return NextResponse.json({ ok: false, rateLimited: true, error: "Daily WhatsApp limit reached for this workspace (100)." }, { status: 429 });
+
+      const gate = await chargeForMode("act");
+      if (!gate.ok) { const d = creditDenial(gate, "Sending a WhatsApp message"); return NextResponse.json(d.body, { status: d.status }); }
+
+      const res = template
+        ? await sendTemplate(to, template, Array.isArray(b.variables) ? b.variables.map(String) : [])
+        : await sendText(to, text);
+
+      if (!res.sent) {
+        if (gate.enforced) await refundForMode("act");
+        return NextResponse.json({ ok: false, needsSetup: res.needsSetup, error: res.error }, { status: 200 });
+      }
+      return NextResponse.json({ ok: true, to, id: res.id, charged: gate.enforced ? gate.cost : 0 });
     }
 
     return NextResponse.json({ ok: false, error: "Unknown operation." }, { status: 400 });

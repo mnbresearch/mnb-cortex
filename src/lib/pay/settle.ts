@@ -3,6 +3,7 @@ import { getOrder } from "@/lib/pay/cashfree";
 import { serviceClient } from "@/lib/supabase/server";
 import { grantCredits } from "@/lib/credits";
 import { PLANS, CREDIT_PACKS } from "@/lib/config";
+import { emitQuietly } from "@/lib/webhooks";
 
 export type SettleResult = {
   ok: boolean;
@@ -119,6 +120,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       }
 
       try { await svc.from("subscriptions").insert({ org_id: orgId, plan: ref, status: "active", provider: "cashfree", amount: order.amount, reference: orderId }); } catch { /* audit only */ }
+      emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
       return { ok: true, kind: "plan", plan: ref, cycle, endsAt };
     }
     return { ok: true, already: true, kind: "plan", plan: ref, cycle };

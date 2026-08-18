@@ -245,6 +245,8 @@ export async function runWorkflow(fd: FormData) {
     log: log.slice(0, 4000),
   });
   await sb.from("workflows").update({ last_run: new Date().toISOString() }).eq("id", id).eq("org_id", orgId);
+  const { emitQuietly } = await import("@/lib/webhooks");
+  emitQuietly(orgId, "workflow.completed", { name, ok: run.ok, summary: run.summary, steps: run.results });
   await logActivity(orgId, "workflow", `Ran workflow "${name}" — ${run.summary}`);
   ["/workflows", "/dashboard", "/alerts"].forEach((p) => revalidatePath(p));
 }
@@ -488,5 +490,68 @@ export async function createReportLink() {
 export async function revokeReportLink(fd: FormData) {
   const orgId = await requireWriteOrg(); const sb = createClient();
   await sb.from("report_links").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
+  revalidatePath("/reports");
+}
+
+
+// ---- Outbound webhooks ------------------------------------------------------
+
+export async function addWebhook(fd: FormData) {
+  const { orgId } = await requireRole("admin");
+  const url = str(fd.get("url"));
+  if (!/^https:\/\/.+/i.test(url)) throw new Error("Enter an https:// URL — plain http isn't accepted for webhooks.");
+  const label = str(fd.get("label"));
+  const events = str(fd.get("events")).split(",").map((e) => e.trim()).filter(Boolean);
+
+  const { newSecret } = await import("@/lib/webhooks");
+  const svc = serviceClient();
+  if (!svc) throw new Error("Service role not configured.");
+  const { error } = await svc.from("webhook_endpoints").insert({
+    org_id: orgId, url, label: label || null, events, secret: newSecret(),
+  });
+  if (error) throw new Error(error.message);
+  await logActivity(orgId, "crud", `Added webhook endpoint ${url}`);
+  revalidatePath("/developers");
+}
+
+export async function deleteWebhook(fd: FormData) {
+  const { orgId } = await requireRole("admin");
+  const svc = serviceClient();
+  if (!svc) throw new Error("Service role not configured.");
+  await svc.from("webhook_endpoints").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
+  revalidatePath("/developers");
+}
+
+/** Send a signed test event so the receiver can be verified before going live. */
+export async function testWebhook(fd: FormData) {
+  const { orgId } = await requireRole("admin");
+  const { emit } = await import("@/lib/webhooks");
+  await emit(orgId, "report.generated", { test: true, message: "Test event from MNB Cortex" });
+  revalidatePath("/developers");
+}
+
+// ---- Scheduled reports ------------------------------------------------------
+
+export async function addScheduledReport(fd: FormData) {
+  const { orgId } = await requireRole("admin");
+  const svc = serviceClient();
+  if (!svc) throw new Error("Service role not configured.");
+  const mode = str(fd.get("mode")) || "brief";
+  const cadence = str(fd.get("cadence")) || "weekly";
+  if (!["daily", "weekly", "monthly"].includes(cadence)) throw new Error("Cadence must be daily, weekly or monthly.");
+  const sendTo = str(fd.get("send_to"));
+  const { error } = await svc.from("scheduled_reports").insert({
+    org_id: orgId, mode, cadence, send_to: sendTo || null,
+  });
+  if (error) throw new Error(error.message);
+  await logActivity(orgId, "crud", `Scheduled a ${cadence} ${mode} report`);
+  revalidatePath("/reports");
+}
+
+export async function deleteScheduledReport(fd: FormData) {
+  const { orgId } = await requireRole("admin");
+  const svc = serviceClient();
+  if (!svc) throw new Error("Service role not configured.");
+  await svc.from("scheduled_reports").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   revalidatePath("/reports");
 }

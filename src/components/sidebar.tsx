@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/logo";
-import { ShieldAlert, Mail, ChevronDown, Sun, Moon } from "lucide-react";
+import { KeyRound, ShieldAlert, Mail, ChevronDown, Sun, Moon } from "lucide-react";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { useTheme } from "next-themes";
 
@@ -86,6 +86,9 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
             </Link>
             <Link href="/email" className={cn("nav-item flex items-center gap-3 rounded-lg pl-3 pr-2.5 py-2 text-sm text-muted-foreground hover:text-foreground mt-0.5", path === "/email" && "is-active")}>
               <Mail className="h-4 w-4 shrink-0" /> Email Console
+            </Link>
+            <Link href="/setup" className={cn("nav-item flex items-center gap-3 rounded-lg pl-3 pr-2.5 py-2 text-sm text-muted-foreground hover:text-foreground mt-0.5", path === "/setup" && "is-active")}>
+              <KeyRound className="h-4 w-4 shrink-0" /> Setup status
             </Link>
           </div>
         )}

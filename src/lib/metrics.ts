@@ -1,5 +1,6 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
+import { emitQuietly } from "@/lib/webhooks";
 
 /**
  * The aggregation layer.
@@ -318,6 +319,10 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     } catch { /* the chart is secondary to the KPIs — don't fail the recompute */ }
   }
 
+  emitQuietly(orgId, "metrics.recomputed", {
+    org_id: orgId,
+    metrics: metrics.map((m) => ({ key: m.metric_key, label: m.label, value: m.value, unit: m.unit, status: m.status })),
+  });
   return { ok: true, metrics: metrics.length, months };
 }
 

@@ -44,6 +44,21 @@ export async function GET(req: Request) {
     renewals = await sendRenewalReminders();
   } catch (e: any) { renewals = { error: e?.message }; }
 
+  // 1c. Scheduled reports. Each row decides for itself whether it's due, using
+  //     last_sent as the guard, so a double cron run can't double-send.
+  let reports: any = null;
+  try {
+    const { runScheduledReports } = await import("@/lib/scheduled-reports");
+    reports = await runScheduledReports();
+  } catch (e: any) { reports = { error: e?.message }; }
+
+  // 1d. Retry any webhook delivery that hasn't landed yet.
+  let webhooks: any = null;
+  try {
+    const { retryPending } = await import("@/lib/webhooks");
+    webhooks = await retryPending();
+  } catch (e: any) { webhooks = { error: e?.message }; }
+
   // 2. Housekeeping on the public rate-limit buckets.
   try { await sb.rpc("prune_rate_limits"); } catch { /* migration not applied yet */ }
 
@@ -108,5 +123,5 @@ export async function GET(req: Request) {
     ran++;
   }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, weekly, plan });
+  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, weekly, plan });
 }
