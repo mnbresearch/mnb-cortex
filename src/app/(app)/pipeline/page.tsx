@@ -4,6 +4,9 @@ import { CollapsibleForm, Field, SelectField, DeleteButton } from "@/components/
 import { getPipeline } from "@/lib/data";
 import { addDeal, moveDeal } from "@/lib/actions";
 import { inr } from "@/lib/utils";
+import { scorePipeline, pipelineSummary } from "@/lib/lead-score";
+import { Card } from "@/components/ui/card";
+import { Flame, Snowflake, TrendingUp } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 const STAGES = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
@@ -18,10 +21,45 @@ const demo = [
 export default async function Pipeline() {
   const { rows, live } = await getPipeline();
   const deals = live && rows.length ? rows : demo;
+
+  // Scored, ranked and explained — the "AI-ranked pipeline that tells you who
+  // to chase" the marketing has always promised. Deterministic arithmetic, so
+  // it costs nothing, never rate-limits, and gives the same answer twice.
+  const scored = scorePipeline(deals as any);
+  const sum = pipelineSummary(scored);
+  const chase = scored.slice(0, 5);
+  const byId = new Map(scored.map((d) => [String(d.id), d]));
+
   return (
     <>
-      <Topbar title="Deals Pipeline" subtitle="Kanban view of your sales pipeline" />
+      <Topbar title="Deals Pipeline" subtitle="Ranked by what's actually worth chasing" />
       <PageShell>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card className="p-4"><div className="text-sm text-muted-foreground">Open deals</div><div className="text-2xl font-semibold mt-1">{sum.count}</div></Card>
+          <Card className="p-4"><div className="text-sm text-muted-foreground">Pipeline value</div><div className="text-2xl font-semibold mt-1">{inr(sum.gross)}</div></Card>
+          <Card className="p-4"><div className="text-sm text-muted-foreground">Weighted forecast</div><div className="text-2xl font-semibold mt-1">{inr(sum.weighted)}</div><div className="text-xs text-muted-foreground">value × probability</div></Card>
+          <Card className="p-4"><div className="text-sm text-muted-foreground">Going cold</div><div className="text-2xl font-semibold mt-1">{sum.stale}</div><div className="text-xs text-muted-foreground">untouched 45+ days</div></Card>
+        </div>
+
+        {chase.length > 0 && (
+          <Card className="p-5">
+            <div className="font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-primary" /> Chase these first</div>
+            <div className="mt-3 space-y-2">
+              {chase.map((d) => (
+                <div key={String(d.id)} className="flex items-start gap-3 rounded-lg border p-3">
+                  <span className={`text-xs font-bold rounded-md px-2 py-1 shrink-0 ${d.band === "hot" ? "bg-danger/10 text-danger" : d.band === "warm" ? "bg-warning/10 text-warning" : "bg-secondary text-muted-foreground"}`}>{d.score}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium">{d.deal_name} <span className="text-muted-foreground font-normal">· {d.customer_name}</span></div>
+                    <div className="text-xs text-muted-foreground">{d.why}</div>
+                  </div>
+                  {d.band === "hot" ? <Flame className="h-4 w-4 text-danger shrink-0" /> : d.ageDays > 45 ? <Snowflake className="h-4 w-4 text-muted-foreground shrink-0" /> : null}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">Score = expected value (55) + stage progress (30) + recency (15). Hot ≥ 65, warm ≥ 35.</p>
+          </Card>
+        )}
+
         <CollapsibleForm title="Add deal" action={addDeal}>
           <Field name="deal_name" label="Deal name" required />
           <Field name="customer_name" label="Customer" />
@@ -43,7 +81,15 @@ export default async function Pipeline() {
                 <div className="space-y-2">
                   {col.map((d: any) => (
                     <div key={d.id} className="rounded-lg border bg-card p-2.5">
-                      <div className="text-sm font-medium leading-tight">{d.deal_name}</div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-sm font-medium leading-tight">{d.deal_name}</div>
+                        {byId.get(String(d.id)) && (
+                          <span
+                            title={byId.get(String(d.id))!.why}
+                            className={`text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0 ${byId.get(String(d.id))!.band === "hot" ? "bg-danger/10 text-danger" : byId.get(String(d.id))!.band === "warm" ? "bg-warning/10 text-warning" : "bg-secondary text-muted-foreground"}`}
+                          >{byId.get(String(d.id))!.score}</span>
+                        )}
+                      </div>
                       <div className="text-xs text-muted-foreground">{d.customer_name}</div>
                       <div className="text-xs mt-1 font-medium">{inr(Number(d.value) || 0)}</div>
                       {live && (

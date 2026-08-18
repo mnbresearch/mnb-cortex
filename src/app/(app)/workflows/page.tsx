@@ -7,12 +7,16 @@ import { CollapsibleForm, Field, SelectField, DeleteButton } from "@/components/
 import { getWorkflowsList, getWorkflowRuns } from "@/lib/data";
 import { addWorkflow, runWorkflow } from "@/lib/actions";
 import { Workflow, Zap, Play } from "lucide-react";
+import { ACTIONS } from "@/lib/workflows";
 
 export const dynamic = "force-dynamic";
+// Example workflows written in the real step language, so what a visitor sees
+// is exactly what they can run. The old demo used prose ("Pull ledger") that
+// the executor has no way to interpret.
 const demo = [
-  { id: "d1", name: "Daily cash & receivables digest", trigger: "schedule", steps: ["Pull ledger", "Flag overdue >30d", "Email owner"], is_active: true },
-  { id: "d2", name: "Auto reorder on stockout risk", trigger: "event", steps: ["Detect risk", "Draft PO", "Notify for approval"], is_active: true },
-  { id: "d3", name: "WhatsApp payment reminders", trigger: "schedule", steps: ["Find overdue", "Send WhatsApp", "Log response"], is_active: true },
+  { id: "d1", name: "Daily cash & receivables digest", trigger: "schedule", steps: ["recompute", "receivables", "email Your daily cash digest"], is_active: true },
+  { id: "d2", name: "Stockout watch", trigger: "schedule", steps: ["reorder", "alert Items are below reorder level"], is_active: true },
+  { id: "d3", name: "Monday priorities", trigger: "schedule", steps: ["recompute", "ai actions", "email Your plan for the week"], is_active: true },
 ];
 
 export default async function Workflows() {
@@ -23,12 +27,27 @@ export default async function Workflows() {
     <>
       <Topbar title="Workflow Automation" subtitle="The COO doesn't just advise — it executes" />
       <PageShell>
-        <p className="text-sm text-muted-foreground">{wf.live ? `${list.length} workflows` : "Demo workflows"} · {runs.live ? runs.rows.length : 142} runs logged</p>
+        <p className="text-sm text-muted-foreground">{wf.live ? `${list.length} workflows` : "Demo workflows"} · {runs.live ? runs.rows.length : 0} runs logged</p>
+
+        <Card className="p-4">
+          <div className="text-sm font-medium">What a step can do</div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Start each step with one of these words. Steps run in order, and the run log tells you exactly what each one did.
+          </p>
+          <div className="mt-3 grid sm:grid-cols-2 gap-1.5">
+            {ACTIONS.map((a) => (
+              <div key={a.verb} className="text-xs flex gap-2">
+                <code className="rounded bg-secondary px-1.5 py-0.5 shrink-0 h-fit">{a.verb}{a.arg ? " " + a.arg : ""}</code>
+                <span className="text-muted-foreground">{a.does}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
 
         <CollapsibleForm title="New workflow" action={addWorkflow}>
           <Field name="name" label="Workflow name" required />
           <SelectField name="trigger" label="Trigger" options={["schedule","event","manual"]} />
-          <Field name="steps" label="Steps (comma-separated)" placeholder="Pull data, Analyze, Notify" />
+          <Field name="steps" label="Steps (comma-separated)" placeholder="recompute, receivables, email Daily digest" />
         </CollapsibleForm>
 
         <div className="grid md:grid-cols-2 gap-3">
@@ -63,9 +82,12 @@ export default async function Workflows() {
           <Section title="Recent runs">
             <div className="space-y-2">
               {runs.rows.slice(0, 8).map((r: any) => (
-                <div key={r.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
-                  <span>{r.log}</span>
-                  <Badge className="bg-success/10 text-success border-success/20">{r.status}</Badge>
+                <div key={r.id} className="rounded-lg border p-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed flex-1">{r.log}</pre>
+                    <Badge className={r.status === "success" ? "bg-success/10 text-success border-success/20" : "bg-danger/10 text-danger border-danger/20"}>{r.status}</Badge>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">{r.ran_at ? new Date(r.ran_at).toLocaleString("en-IN") : ""}</div>
                 </div>
               ))}
             </div>

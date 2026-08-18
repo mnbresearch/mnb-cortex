@@ -218,13 +218,35 @@ export async function addWorkflow(fd: FormData) {
 }
 
 export async function runWorkflow(fd: FormData) {
-  const orgId = await requireWriteOrg(); const id = str(fd.get("id")); const name = str(fd.get("name"));
+  const orgId = await requireWriteOrg();
+  const id = str(fd.get("id")); const name = str(fd.get("name"));
   const sb = createClient();
-  await sb.from("workflow_runs").insert({ org_id: orgId, workflow_id: id, status: "success", log: `Ran "${name}" — steps executed successfully.` });
+
+  // This used to insert a row reading "steps executed successfully." and
+  // execute nothing whatsoever. It now runs the steps and logs what each one
+  // actually did — including, honestly, the ones it didn't understand.
+  const { data: wf } = await sb.from("workflows").select("steps").eq("id", id).eq("org_id", orgId).maybeSingle();
+  const steps: string[] = Array.isArray((wf as any)?.steps) ? (wf as any).steps : [];
+
+  if (!steps.length) {
+    await sb.from("workflow_runs").insert({ org_id: orgId, workflow_id: id, status: "failed", log: `"${name}" has no steps to run.` });
+    revalidatePath("/workflows");
+    throw new Error("This workflow has no steps yet. Edit it and add some.");
+  }
+
+  const { user } = await getUserAndOrg();
+  const { executeWorkflow } = await import("@/lib/workflows");
+  const run = await executeWorkflow(orgId, steps, { name, ownerEmail: user?.email });
+
+  const log = `${name} — ${run.summary}\n` + run.results.map((r) => `${r.ok ? "✓" : r.skipped ? "–" : "✗"} ${r.step}: ${r.detail}`).join("\n");
+  await sb.from("workflow_runs").insert({
+    org_id: orgId, workflow_id: id,
+    status: run.ok ? "success" : "failed",
+    log: log.slice(0, 4000),
+  });
   await sb.from("workflows").update({ last_run: new Date().toISOString() }).eq("id", id).eq("org_id", orgId);
-  await sb.from("alerts").insert({ org_id: orgId, severity: "green", module: "workflow", title: `Workflow ran: ${name}`, body: "Executed successfully just now." });
-  await logActivity(orgId, "workflow", `Ran workflow "${name}"`);
-  revalidatePath("/workflows"); revalidatePath("/dashboard");
+  await logActivity(orgId, "workflow", `Ran workflow "${name}" — ${run.summary}`);
+  ["/workflows", "/dashboard", "/alerts"].forEach((p) => revalidatePath(p));
 }
 
 export async function updateStatus(fd: FormData) {
