@@ -79,7 +79,15 @@ export async function ensureWorkspace(opts?: { name?: string; industry?: string 
   } catch { /* ignore */ }
 
   // Profile row (best-effort).
-  try { await svc.from("profiles").upsert({ id: user.id, full_name: meta.full_name || null }); } catch { /* ignore */ }
+  // Only write full_name when we actually have one. This runs on EVERY sign-in,
+  // so passing null overwrote the value the signup trigger seeded (which falls
+  // back to the email address) for anyone signing in without name metadata.
+  try {
+    const row: any = { id: user.id };
+    const fullName = String(meta.full_name || "").trim();
+    if (fullName) row.full_name = fullName;
+    await svc.from("profiles").upsert(row);
+  } catch { /* ignore */ }
 
   // One-time trial credits — granted exactly once (guarded by the ledger reason).
   try {

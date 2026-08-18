@@ -1,3 +1,4 @@
+import { likeLiteral } from "@/lib/sql";
 import { NextResponse } from "next/server";
 import { createClient, serviceClient, hasSupabase } from "@/lib/supabase/server";
 import { isSuperAdmin } from "@/lib/superadmin";
@@ -65,7 +66,10 @@ export async function POST(req: Request) {
       const from = String(body.from || "").trim().toLowerCase();
       const text = String(body.text || "This is a simulated reply for testing.");
       if (!from) return NextResponse.json({ ok: false, error: "From email required" });
-      const { data: rec } = await sb.from("campaign_recipients").select("id,campaign_id").ilike("email", from).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const { data: recs } = await sb.from("campaign_recipients")
+        .select("id,campaign_id,email").ilike("email", likeLiteral(from))
+        .order("created_at", { ascending: false }).limit(5);
+      const rec = ((recs as any[]) || []).find((r: any) => String(r.email || "").trim().toLowerCase() === from);
       await svc.from("email_replies").insert({
         org_id: orgId, resend_email_id: `sim-${Date.now()}`, campaign_id: (rec as any)?.campaign_id || null, recipient_id: (rec as any)?.id || null,
         from_email: from, to_email: "inbound@simulated", subject: "Re: your email", text, verified: false,

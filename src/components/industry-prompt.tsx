@@ -8,6 +8,7 @@ import { Loader2, Sparkles } from "lucide-react";
 export function IndustryPrompt() {
   const [busy, setBusy] = useState("");
   const [hidden, setHidden] = useState(false);
+  const [err, setErr] = useState("");
   if (hidden) return null;
 
   async function pick(id: string) {
@@ -16,7 +17,10 @@ export function IndustryPrompt() {
       const r = await fetch("/api/workspace/industry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ industry: id }) });
       const j = await r.json();
       if (j.ok) { location.reload(); return; }
-    } catch { /* ignore */ }
+      // The route can legitimately refuse (only admins/owners may set this).
+      // Discarding j.error left a button that just quietly did nothing.
+      setErr(j.error || "Could not save that. Please try again.");
+    } catch { setErr("Network error. Please try again."); }
     setBusy("");
   }
 
@@ -40,6 +44,7 @@ export function IndustryPrompt() {
           </button>
         ))}
       </div>
+      {err && <p className="mt-3 text-xs text-destructive">{err}</p>}
     </Card>
   );
 }

@@ -49,10 +49,24 @@ export async function updateOrgProfile(fd: FormData) {
   revalidatePath("/settings");
 }
 
+/**
+ * Suffix for a generated order/invoice number.
+ *
+ * This was the last 6 digits of Date.now(), which wraps every ~16.7 minutes.
+ * That was harmless when duplicates were allowed; with a unique natural key a
+ * collision becomes a hard error in the user's face. Base-36 seconds plus
+ * randomness is short, sorts roughly by time, and won't realistically repeat.
+ */
+function seqSuffix(): string {
+  const t = Math.floor(Date.now() / 1000).toString(36).toUpperCase().slice(-5);
+  const r = Math.floor(Math.random() * 1296).toString(36).toUpperCase().padStart(2, "0");
+  return `${t}${r}`;
+}
+
 export async function addSalesOrder(fd: FormData) {
   const orgId = await requireWriteOrg(); const sb = createClient();
   const { error } = await sb.from("sales_orders").insert({
-    org_id: orgId, order_no: "SO-" + Date.now().toString().slice(-6),
+    org_id: orgId, order_no: "SO-" + seqSuffix(),
     customer_name: str(fd.get("customer_name")), region: str(fd.get("region")) || "West",
     product: str(fd.get("product")), amount: num(fd.get("amount")),
     status: str(fd.get("status")) || "won", order_date: new Date().toISOString().slice(0,10) });
@@ -64,7 +78,7 @@ export async function addSalesOrder(fd: FormData) {
 export async function addInvoice(fd: FormData) {
   const orgId = await requireWriteOrg(); const sb = createClient();
   const { error } = await sb.from("invoices").insert({
-    org_id: orgId, invoice_no: "INV-" + Date.now().toString().slice(-6),
+    org_id: orgId, invoice_no: "INV-" + seqSuffix(),
     party: str(fd.get("party")), amount: num(fd.get("amount")),
     status: str(fd.get("status")) || "pending", type: str(fd.get("type")) || "receivable",
     due_date: str(fd.get("due_date")) || new Date(Date.now()+15*864e5).toISOString().slice(0,10) });
@@ -276,6 +290,65 @@ const IMPORT_COLS: Record<string, { cols: string[]; nums: string[] }> = {
   employees: { cols: ["name", "department", "role", "monthly_ctc", "performance"], nums: ["monthly_ctc", "performance"] },
 };
 
+/**
+ * Write imported rows.
+ *
+ * sales_orders and invoices now carry a unique natural key, so a plain INSERT
+ * makes re-uploading a corrected file fail the entire batch with a raw
+ * "duplicate key value violates unique constraint". Upserting on that key is
+ * what the user means by re-importing: same order number, updated figures.
+ * Tables without a natural key keep insert semantics.
+ */
+const IMPORT_CONFLICT: Record<string, string> = {
+  sales_orders: "org_id,order_no",
+  invoices: "org_id,invoice_no",
+};
+
+async function writeImported(sb: any, table: string, mapped: any[]): Promise<{ written: number; error?: string }> {
+  const conflict = IMPORT_CONFLICT[table];
+  if (!conflict) {
+    const { error } = await sb.from(table).insert(mapped);
+    return error ? { written: 0, error: error.message } : { written: mapped.length };
+  }
+
+  const col = conflict.split(",")[1];
+  const keyed = mapped.filter((r) => r[col]);
+  const rest = mapped.filter((r) => !r[col]);
+
+  // Last row wins for a natural key repeated inside one file — Postgres refuses
+  // to let one statement touch the same row twice. The collapse is why the
+  // caller is told how many rows were WRITTEN rather than how many were parsed.
+  const byKey = new Map<string, any>();
+  for (const r of keyed) byKey.set(String(r[col]), r);
+  const unique = [...byKey.values()];
+
+  let written = 0;
+  if (unique.length) {
+    const { error } = await sb.from(table).upsert(unique, { onConflict: conflict });
+    if (error) {
+      // 42P10 = the unique index this upsert needs isn't there yet. Importing
+      // is more important than de-duplicating, so fall back to a plain insert
+      // rather than blocking the user behind a migration.
+      if (error.code === "42P10") {
+        const { error: insErr } = await sb.from(table).insert(unique);
+        if (insErr) return { written, error: insErr.message };
+        written += unique.length;
+      } else {
+        return { written, error: error.message };
+      }
+    } else {
+      written += unique.length;
+    }
+  }
+  if (rest.length) {
+    const { error } = await sb.from(table).insert(rest);
+    // Report what actually landed: the upsert above may already have committed.
+    if (error) return { written, error: error.message };
+    written += rest.length;
+  }
+  return { written };
+}
+
 export async function importRows(fd: FormData): Promise<{ inserted: number; error?: string }> {
   try {
     const orgId = await requireWriteOrg();
@@ -294,12 +367,19 @@ export async function importRows(fd: FormData): Promise<{ inserted: number; erro
       return o;
     });
     const sb = createClient();
-    const { error } = await sb.from(table).insert(mapped);
-    if (error) return { inserted: 0, error: error.message };
+    const wrote = await writeImported(sb, table, mapped);
+    if (wrote.error) {
+      return {
+        inserted: wrote.written,
+        error: wrote.written
+          ? `${wrote.error} (${wrote.written} row${wrote.written === 1 ? "" : "s"} were saved before this)`
+          : wrote.error,
+      };
+    }
     await recomputeQuietly(orgId);
-    await logActivity(orgId, "import", `Imported ${mapped.length} rows into ${table} (CSV)`);
+    await logActivity(orgId, "import", `Imported ${wrote.written} rows into ${table} (CSV)`);
     ["/sales", "/finance", "/inventory", "/hr", "/dashboard"].forEach((p) => revalidatePath(p));
-    return { inserted: mapped.length };
+    return { inserted: wrote.written };
   } catch (e: any) { return { inserted: 0, error: e?.message || "Import failed" }; }
 }
 
@@ -323,12 +403,19 @@ export async function importFromUrl(fd: FormData): Promise<{ inserted: number; e
       return o;
     });
     const sb = createClient();
-    const { error } = await sb.from(table).insert(mapped);
-    if (error) return { inserted: 0, error: error.message };
+    const wrote = await writeImported(sb, table, mapped);
+    if (wrote.error) {
+      return {
+        inserted: wrote.written,
+        error: wrote.written
+          ? `${wrote.error} (${wrote.written} row${wrote.written === 1 ? "" : "s"} were saved before this)`
+          : wrote.error,
+      };
+    }
     await recomputeQuietly(orgId);
-    await logActivity(orgId, "import", `Imported ${mapped.length} rows into ${table} (URL)`);
+    await logActivity(orgId, "import", `Imported ${wrote.written} rows into ${table} (URL)`);
     ["/sales", "/finance", "/inventory", "/hr", "/dashboard", "/data"].forEach((p) => revalidatePath(p));
-    return { inserted: mapped.length };
+    return { inserted: wrote.written };
   } catch (e: any) { return { inserted: 0, error: e?.message || "Import failed" }; }
 }
 

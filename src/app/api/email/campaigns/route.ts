@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient, hasSupabase } from "@/lib/supabase/server";
+import { createClient, serviceClient, hasSupabase } from "@/lib/supabase/server";
 import { isSuperAdmin } from "@/lib/superadmin";
 import { getUserAndOrg } from "@/lib/data";
 import { sendEmail } from "@/lib/email";
@@ -16,12 +16,12 @@ async function ctx() {
   if (!(await isSuperAdmin())) throw new Error("Not authorised");
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) throw new Error("No workspace found");
-  return { sb: createClient(), userId: user.id, orgId };
+  return { sb: createClient(), svc: serviceClient(), userId: user.id, orgId };
 }
 
 export async function POST(req: Request) {
   try {
-    const { sb, userId, orgId } = await ctx();
+    const { sb, svc, userId, orgId } = await ctx();
     const body = await req.json().catch(() => ({} as any));
     const op = String(body?.op || "");
 
@@ -60,7 +60,11 @@ export async function POST(req: Request) {
 
       // Replies go to a real monitored mailbox (contact@…). If an inbound capture
       // address was configured, that takes precedence.
-      const { data: addr } = await sb.from("app_settings").select("value").eq("org_id", orgId).eq("key", "inbound_address").maybeSingle();
+      // app_settings has RLS enabled with NO policies, so the anon client reads
+      // an empty set without erroring — the configured inbound address was
+      // silently ignored and replies never reached it. Service client required.
+      const { data: addr } = await (svc || sb).from("app_settings")
+        .select("value").eq("org_id", orgId).eq("key", "inbound_address").maybeSingle();
       const replyTo = (addr as any)?.value || brandReplyTo();
 
       const { data: camp, error: cErr } = await sb.from("email_campaigns")

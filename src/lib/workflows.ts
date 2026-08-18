@@ -122,13 +122,26 @@ export async function executeWorkflow(
           const context = facts.length ? `WORKFLOW FINDINGS:\n${facts.map((f) => `- ${f}`).join("\n")}` : "";
           const text = await generateFor(mode.toLowerCase(), tail.join(" "), context);
           const okAi = Boolean(text) && !/^I couldn't reach the AI engine/.test(text);
+          let saved = false;
           if (okAi) {
-            try {
-              await svc.from("strategy_docs").insert({ org_id: orgId, title: `${ctx.name} — ${mode}`, body: text.slice(0, 20000) });
-            } catch { /* saving is a bonus, not the point */ }
+            // strategy_docs is (framework, question, content jsonb) — an insert
+            // naming `title`/`body` is rejected by PostgREST, and supabase-js
+            // returns that in the result rather than throwing, so the old
+            // try/catch never saw it and every run still claimed "and saved".
+            const { error: saveErr } = await svc.from("strategy_docs").insert({
+              org_id: orgId,
+              framework: "workflow",
+              question: `${ctx.name} — ${mode}`,
+              content: { text: text.slice(0, 20000) },
+            });
+            saved = !saveErr;
             facts.push(`AI ${mode}: ${text.slice(0, 160)}…`);
           }
-          results.push({ step: raw, ok: okAi, detail: okAi ? `Generated and saved "${mode}" output` : "AI unavailable" });
+          results.push({
+            step: raw,
+            ok: okAi,
+            detail: okAi ? (saved ? `Generated and saved "${mode}" output` : `Generated "${mode}" output (could not save it)`) : "AI unavailable",
+          });
           break;
         }
 

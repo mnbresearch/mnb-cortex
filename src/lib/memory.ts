@@ -1,4 +1,5 @@
 import "server-only";
+import { likeLiteral } from "@/lib/sql";
 import { serviceClient, createClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
 import { runCortex } from "@/lib/ai/cortex";
@@ -159,7 +160,16 @@ export async function upsertEntity(orgId: string, name: string, type?: string, s
   const svc = serviceClient(); if (!svc || !orgId || !name?.trim()) return null;
   const clean = name.trim().slice(0, 120);
   try {
-    const { data: existing } = await svc.from("memory_entities").select("id,mention_count").eq("org_id", orgId).ilike("name", clean).maybeSingle();
+    // .ilike() with an unescaped name treats `_` and `%` in an entity name as
+    // wildcards, which can match several rows; maybeSingle() then errors, the
+    // insert below hits the unique index, and the entity is silently dropped.
+    // The unique index is on lower(name), so a case-insensitive exact match is
+    // both correct and unique.
+    const { data: matches } = await svc.from("memory_entities")
+      .select("id,mention_count,name").eq("org_id", orgId).ilike("name", likeLiteral(clean)).limit(25);
+    const existing = ((matches as any[]) || []).find(
+      (m) => String(m.name || "").toLowerCase() === clean.toLowerCase(),
+    );
     if (existing) {
       await svc.from("memory_entities").update({ mention_count: ((existing as any).mention_count || 1) + 1, updated_at: new Date().toISOString(), ...(summary ? { summary } : {}), ...(type ? { type } : {}) }).eq("id", (existing as any).id);
       return (existing as any).id;

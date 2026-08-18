@@ -1,3 +1,4 @@
+import { likeLiteral } from "@/lib/sql";
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabase/server";
 import { verifySvix } from "@/lib/svix";
@@ -68,8 +69,31 @@ export async function POST(req: Request) {
   // Link to the most recent campaign recipient with this sender address.
   let recipientId: string | null = null, campaignId: string | null = null, org: string | null = secretOrg;
   if (fromEmail) {
-    const { data: rec } = await sb.from("campaign_recipients").select("id,campaign_id,org_id").ilike("email", fromEmail).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (rec) { recipientId = (rec as any).id; campaignId = (rec as any).campaign_id; org = (rec as any).org_id; }
+    // fromEmail is attacker-controlled. Unescaped, `_` is a wildcard, so
+    // `john_doe@acme.com` also matches `johnXdoe@acme.com` — and the line below
+    // would then file this reply into that OTHER tenant's workspace, overriding
+    // the signature-verified org. Escape, then re-check equality in JS.
+    // Two separate risks here, both about attributing a reply to the wrong
+    // tenant. fromEmail is attacker-controlled, so (a) `_` is a LIKE wildcard
+    // and would match a different address, and (b) the SAME address can
+    // genuinely exist as a recipient in two workspaces. Escaping fixes (a);
+    // for (b) the signature-verified org from the webhook secret wins, and the
+    // lookup is scoped to it. Only when there is no verified org do we fall
+    // back to matching across workspaces.
+    let q = sb.from("campaign_recipients")
+      .select("id,campaign_id,org_id,email").ilike("email", likeLiteral(fromEmail))
+      .order("created_at", { ascending: false }).limit(10);
+    if (secretOrg) q = q.eq("org_id", secretOrg);
+    const { data: recs } = await q;
+    const rec = ((recs as any[]) || []).find(
+      (r) => String(r.email || "").trim().toLowerCase() === fromEmail.trim(),
+    );
+    if (rec) {
+      recipientId = (rec as any).id;
+      campaignId = (rec as any).campaign_id;
+      // Never let a row lookup override an org the signature already proved.
+      org = secretOrg || (rec as any).org_id;
+    }
   }
 
   // Idempotent insert on resend_email_id.
