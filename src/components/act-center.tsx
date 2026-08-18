@@ -74,7 +74,7 @@ export function ActCenter() {
           </div>
         </div>
         <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={2} className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-          placeholder="A line of detail — e.g. “Reminder to Apex Traders, invoice INV-204 for ₹1.8L, 45 days overdue.”" />
+          placeholder="A line of detail — e.g. “Reminder to Customer A, invoice INV-204 for ₹1.8L, 45 days overdue.”" />
         <Button onClick={draft} disabled={drafting}>
           {drafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} {drafting ? "Cortex is writing…" : "Draft with Cortex"}
         </Button>

@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -14,11 +15,20 @@ const ideas = [
   "Referral program for top accounts",
 ];
 
-export default function Marketing() {
+export default async function Marketing() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   return (
     <>
       <Topbar title="Marketing Studio" subtitle="Campaigns, captions and messages — ready to send" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+            built from your own numbers.
+          </Card>
+        )}
         <Section title="Create a campaign" desc="Describe the goal — Cortex writes the whole kit">
           <AIPanel mode="marketing" placeholder="e.g. A 10-day festive campaign to push Premium-X to distributors in the West" cta="Generate the campaign kit" multiline saveMode="strategy" />
         </Section>

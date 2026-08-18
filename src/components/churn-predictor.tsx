@@ -9,11 +9,11 @@ import { inr, mdToHtml } from "@/lib/utils";
 type Cust = { id: string; name: string; value: number; daysSince: number; tickets: number; sentiment: "good" | "neutral" | "poor" };
 
 const DEFAULTS: Cust[] = [
-  { id: "c1", name: "Apex Traders", value: 1800000, daysSince: 62, tickets: 3, sentiment: "poor" },
+  { id: "c1", name: "Customer A", value: 1800000, daysSince: 62, tickets: 3, sentiment: "poor" },
   { id: "c2", name: "Nova Distributors", value: 950000, daysSince: 41, tickets: 1, sentiment: "neutral" },
-  { id: "c3", name: "Sunrise Retail", value: 640000, daysSince: 12, tickets: 0, sentiment: "good" },
+  { id: "c3", name: "Customer C", value: 640000, daysSince: 12, tickets: 0, sentiment: "good" },
   { id: "c4", name: "Zenith Wholesale", value: 1200000, daysSince: 78, tickets: 2, sentiment: "neutral" },
-  { id: "c5", name: "Metro Mart", value: 430000, daysSince: 20, tickets: 0, sentiment: "good" },
+  { id: "c5", name: "Customer B", value: 430000, daysSince: 20, tickets: 0, sentiment: "good" },
 ];
 
 function churnRisk(c: Cust): number {

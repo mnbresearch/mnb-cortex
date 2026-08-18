@@ -9,11 +9,11 @@ import { inr, mdToHtml } from "@/lib/utils";
 type Cust = { id: string; name: string; recency: number; frequency: number; monetary: number };
 
 const SEED: Cust[] = [
-  { id: "c1", name: "Apex Traders", recency: 12, frequency: 14, monetary: 1800000 },
+  { id: "c1", name: "Customer A", recency: 12, frequency: 14, monetary: 1800000 },
   { id: "c2", name: "Nova Distributors", recency: 45, frequency: 9, monetary: 950000 },
-  { id: "c3", name: "Sunrise Retail", recency: 90, frequency: 3, monetary: 320000 },
+  { id: "c3", name: "Customer C", recency: 90, frequency: 3, monetary: 320000 },
   { id: "c4", name: "Zenith Wholesale", recency: 20, frequency: 11, monetary: 1200000 },
-  { id: "c5", name: "Metro Mart", recency: 150, frequency: 2, monetary: 120000 },
+  { id: "c5", name: "Customer B", recency: 150, frequency: 2, monetary: 120000 },
 ];
 
 const rScore = (d: number) => d <= 15 ? 5 : d <= 30 ? 4 : d <= 60 ? 3 : d <= 90 ? 2 : 1;

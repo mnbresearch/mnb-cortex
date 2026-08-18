@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -14,11 +15,20 @@ const vendors = [
 ];
 const tone: Record<string, string> = { warn: "bg-warning/10 text-warning border-warning/20", ok: "bg-success/10 text-success border-success/20" };
 
-export default function Vendors() {
+export default async function Vendors() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   return (
     <>
       <Topbar title="Vendor Scorecard" subtitle="Grade your suppliers — de-risk your supply chain" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+            built from your own numbers.
+          </Card>
+        )}
         <Section title="Current suppliers" desc="Weighted on price, quality, reliability, lead time, terms and risk">
           <div className="space-y-2">
             {vendors.map((v) => (

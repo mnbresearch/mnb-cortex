@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -7,11 +8,20 @@ import { AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default function Reorder() {
+export default async function Reorder() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   return (
     <>
       <Topbar title="Inventory Reorder Optimizer" subtitle="Never stock out, never over-order" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The worked example below is illustrative — it is not your data. Use the AI panel on this page to get the
+            same analysis built from your own numbers.
+          </Card>
+        )}
         <Card className="p-4 border-danger/30 bg-danger/5">
           <div className="text-sm flex items-start gap-2"><AlertTriangle className="h-4 w-4 text-danger mt-0.5" /><span><b className="text-danger">RM-204 alert:</b> current cover is ~9 days vs a 12-day lead time — you're below the reorder point. Use the optimizer to size the order (AI already drafted PO-4471).</span></div>
         </Card>

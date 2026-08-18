@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -22,11 +23,20 @@ const lvl: Record<string, string> = {
   L: "bg-success/10 text-success border-success/20",
 };
 
-export default function Risks() {
+export default async function Risks() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   return (
     <>
       <Topbar title="Risk Radar" subtitle="What could go wrong — and the early warning signs" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The worked example below is illustrative — it is not your data. Use the AI panel on this page to get the
+            same analysis built from your own numbers.
+          </Card>
+        )}
         <Card className="p-4 border-danger/30 bg-danger/5">
           <div className="text-sm"><b className="text-danger">Biggest risk right now:</b> Line B stockout on RM-204 within ~9 days. It's high-likelihood and high-impact, and the fix (PO-4471) is already drafted and waiting for approval.</div>
         </Card>

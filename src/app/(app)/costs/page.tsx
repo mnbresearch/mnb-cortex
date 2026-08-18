@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -14,11 +15,20 @@ const areas = [
   { area: "Working capital interest", idea: "Cut DSO to reduce borrowing", save: "₹1 L/mo", tone: "flat" },
 ];
 
-export default function Costs() {
+export default async function Costs() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   return (
     <>
       <Topbar title="Cost Optimizer" subtitle="Find savings without starving growth" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+            built from your own numbers.
+          </Card>
+        )}
         <Section title="Savings on the table" desc="Where the money is leaking — ranked by impact">
           <div className="space-y-2">
             {areas.map((a) => (

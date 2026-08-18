@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -16,11 +17,20 @@ const drivers = [
   { label: "New SKU adoption", detail: "Premium-X mix rising each week", tone: "up" },
 ];
 
-export default function Forecast() {
+export default async function Forecast() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   return (
     <>
       <Topbar title="Forecasting & Scenarios" subtitle="See the next 90 days before they happen" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The worked example below is illustrative — it is not your data. Use the AI panel on this page to get the
+            same analysis built from your own numbers.
+          </Card>
+        )}
         <div className="grid sm:grid-cols-3 gap-3">
           <Card className="p-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><TrendingUp className="h-4 w-4 text-success" /> Projected revenue (90d)</div>

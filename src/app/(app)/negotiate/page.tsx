@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -13,11 +14,20 @@ const plays = [
   { icon: Handshake, title: "New vendor onboarding", note: "Anchor on your target, keep a walk-away in your pocket" },
 ];
 
-export default function Negotiate() {
+export default async function Negotiate() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   return (
     <>
       <Topbar title="Negotiation Coach" subtitle="Walk in with leverage, targets and a talk track" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+            built from your own numbers.
+          </Card>
+        )}
         <div className="grid sm:grid-cols-3 gap-3">
           {plays.map((p) => (
             <Card key={p.title} className="p-4">

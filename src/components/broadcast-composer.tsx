@@ -34,7 +34,7 @@ export function BroadcastComposer() {
   return (
     <Card className="p-5 space-y-4">
       <div><div className="font-semibold flex items-center gap-2"><MessageCircle className="h-4 w-4 text-primary" /> Broadcast composer</div><div className="text-sm text-muted-foreground">Describe the campaign — get a ready-to-send WhatsApp broadcast.</div></div>
-      <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={3} placeholder="e.g. Festive 10% off on Premium-X for distributors who haven't ordered in 30 days"
+      <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={3} placeholder="e.g. Festive 10% off on Product A for distributors who haven't ordered in 30 days"
         className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
       <Button onClick={generate} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Writing…" : "Generate broadcast"}</Button>
 

@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -18,11 +19,20 @@ const swot = {
   Threats: ["Competitor 8% price cut", "Raw-material inflation", "Customer concentration"],
 };
 export default async function Strategy() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   const { rows, live } = await getStrategyList();
   return (
     <>
       <Topbar title="AI Strategy Consultant" subtitle="Thinks like McKinsey · BCG · Bain" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The worked example below is illustrative — it is not your data. Use the AI panel on this page to get the
+            same analysis built from your own numbers.
+          </Card>
+        )}
         <AIPanel mode="strategy" placeholder="Why is revenue flat? Should we change pricing? How do we hit 30% growth?" cta="Build the analysis" saveMode="strategy" />
         <DataTable title="Saved analyses" rows={rows} live={live} table="strategy_docs" path="/strategy" cols={[{key:"question",label:"Question"},{key:"framework",label:"Type"},{key:"created_at",label:"Saved",kind:"date"}]} />
         <Card className="p-4">

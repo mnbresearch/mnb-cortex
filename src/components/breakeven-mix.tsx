@@ -8,9 +8,9 @@ import { inr } from "@/lib/utils";
 type Prod = { id: string; name: string; price: number; varCost: number; volume: number };
 
 const SEED: Prod[] = [
-  { id: "p1", name: "Premium-X", price: 1200, varCost: 620, volume: 4000 },
-  { id: "p2", name: "Standard-100", price: 800, varCost: 500, volume: 6000 },
-  { id: "p3", name: "Value-Tier", price: 500, varCost: 380, volume: 5000 },
+  { id: "p1", name: "Product A", price: 1200, varCost: 620, volume: 4000 },
+  { id: "p2", name: "Product B", price: 800, varCost: 500, volume: 6000 },
+  { id: "p3", name: "Product F", price: 500, varCost: 380, volume: 5000 },
 ];
 
 export function BreakevenMix() {

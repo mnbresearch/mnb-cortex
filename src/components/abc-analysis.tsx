@@ -9,10 +9,10 @@ import { inr } from "@/lib/utils";
 type Item = { id: string; name: string; value: number };
 
 const SEED: Item[] = [
-  { id: "i1", name: "Premium-X", value: 4_800_000 },
-  { id: "i2", name: "Standard-100", value: 2_400_000 },
+  { id: "i1", name: "Product A", value: 4_800_000 },
+  { id: "i2", name: "Product B", value: 2_400_000 },
   { id: "i3", name: "Bulk-B2B", value: 1_600_000 },
-  { id: "i4", name: "Value-Tier", value: 700_000 },
+  { id: "i4", name: "Product F", value: 700_000 },
   { id: "i5", name: "Accessory-A", value: 300_000 },
   { id: "i6", name: "Spare-part-Z", value: 120_000 },
   { id: "i7", name: "Legacy-SKU", value: 60_000 },

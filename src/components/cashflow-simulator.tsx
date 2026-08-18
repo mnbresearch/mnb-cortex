@@ -42,7 +42,7 @@ export function CashflowSimulator() {
 
   async function analyse() {
     setLoading(true); setOut("");
-    const input = `Working-capital scenario: DSO ${dso} days, DIO ${dio} days, DPO ${dpo} days → cash conversion cycle ${m.ccc} days (today ${m.baseCcc}). Working capital tied up ≈ ${inr(m.wc)}; that ${m.freed >= 0 ? "frees" : "consumes"} ${inr(Math.abs(m.freed))} vs today. Given ~5-month runway and ₹72 L overdue receivables, tell me the fastest, realistic way to shorten this cycle and how much cash it frees.`;
+    const input = `Working-capital scenario: DSO ${dso} days, DIO ${dio} days, DPO ${dpo} days → cash conversion cycle ${m.ccc} days (today ${m.baseCcc}). Working capital tied up ≈ ${inr(m.wc)}; that ${m.freed >= 0 ? "frees" : "consumes"} ${inr(Math.abs(m.freed))} vs today. tell me the fastest, realistic way to shorten this cycle and how much cash it frees.`;
     try { const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "forecast", input }) }); const j = await r.json(); setOut(j.text || "No response."); }
     catch { setOut("Network error reaching the AI."); } finally { setLoading(false); }
   }

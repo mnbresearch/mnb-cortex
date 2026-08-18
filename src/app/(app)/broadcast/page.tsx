@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -8,11 +9,20 @@ export const dynamic = "force-dynamic";
 
 const segments = ["Lapsed customers (30+ days)", "Top 20 accounts", "New leads this month", "Region: South", "Premium-X buyers"];
 
-export default function Broadcast() {
+export default async function Broadcast() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   return (
     <>
       <Topbar title="WhatsApp Broadcast Composer" subtitle="Write once, send to the right segment" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+            built from your own numbers.
+          </Card>
+        )}
         <BroadcastComposer />
         <Section title="Suggested segments" desc="Who to target — pair with the message above">
           <div className="flex flex-wrap gap-2">

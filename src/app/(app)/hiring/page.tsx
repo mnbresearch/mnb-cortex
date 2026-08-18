@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -14,11 +15,20 @@ const roles = [
   { role: "Second packing shift lead", roi: "Medium", why: "Cuts overtime, lifts productivity", tone: "flat" },
 ];
 
-export default function Hiring() {
+export default async function Hiring() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   return (
     <>
       <Topbar title="Hiring & Org Advisor" subtitle="Hire only where it creates the most value — tied to your cash" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+            built from your own numbers.
+          </Card>
+        )}
         <Card className="p-4 border-warning/30 bg-warning/5">
           <div className="text-sm"><b className="text-warning">Cash-aware view:</b> runway is ~5 months, so fund roles that return cash fast (collections, sales) before overhead hires. Consider contractors for spiky work.</div>
         </Card>

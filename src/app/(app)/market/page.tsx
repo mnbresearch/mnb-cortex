@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -11,11 +12,20 @@ import { getMarketList } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 export default async function Market() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   const { rows, live } = await getMarketList();
   return (
     <>
       <Topbar title="Market Intelligence" subtitle="AI researches markets, competitors & trends" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+            built from your own numbers.
+          </Card>
+        )}
         <AIPanel mode="market" placeholder="Should I enter Saudi Arabia? Which city should I expand into? Which product to launch?" cta="Research this market" saveMode="market" />
         <DataTable title="Saved market briefs" rows={rows} live={live} table="market_reports" path="/market" cols={[{key:"title",label:"Title"},{key:"created_at",label:"Saved",kind:"date"}]} />
         <Card className="p-4">

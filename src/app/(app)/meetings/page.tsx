@@ -1,3 +1,5 @@
+import { getUserAndOrg } from "@/lib/data";
+import { Card } from "@/components/ui/card";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -16,11 +18,20 @@ const actions = [
 ];
 
 export default async function Meetings() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   const { rows, live } = await getMeetingsList();
   return (
     <>
       <Topbar title="Meeting Assistant" subtitle="Google Meet · Zoom · Microsoft Teams" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+            built from your own numbers.
+          </Card>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button variant="outline"><Video className="h-4 w-4" /> Connect Google Meet</Button>
           <Button variant="outline"><Video className="h-4 w-4" /> Connect Zoom</Button>

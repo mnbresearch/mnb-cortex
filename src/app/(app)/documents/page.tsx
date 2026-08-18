@@ -1,3 +1,4 @@
+import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -15,11 +16,20 @@ const sample = [
 ];
 
 export default async function Documents() {
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+
   const { rows, live } = await getDocumentsList();
   return (
     <>
       <Topbar title="Document Intelligence" subtitle="Upload anything — AI reads, extracts & flags risk" />
       <PageShell>
+        {signedIn && (
+          <Card className="p-4 text-sm text-muted-foreground">
+            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+            built from your own numbers.
+          </Card>
+        )}
         <AIPanel mode="document" saveMode="document" multiline allowFile
           placeholder="Paste a contract, invoice, GST return or report — or upload a PDF above. The AI summarizes and flags risks."
           cta="Analyze document" />
