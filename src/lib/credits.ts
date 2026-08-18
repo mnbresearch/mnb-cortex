@@ -19,28 +19,27 @@ export type CreditState = {
 
 /**
  * `reason` explains a refusal so callers can answer with the right HTTP status
- * and message: "anonymous" → 401 (sign in), "insufficient" → 402 (top up).
+ * and message: "anonymous" → 401 (sign in), "insufficient" → 402 (top up),
+ * "lapsed" → 402 (renew — the paid period has run out).
  */
-export type ChargeReason = "anonymous" | "insufficient";
+export type ChargeReason = "anonymous" | "insufficient" | "lapsed";
 export type ChargeResult = { ok: boolean; enforced: boolean; cost: number; balance: number; reason?: ChargeReason };
 
-/**
- * The status that actually counts. A workspace whose paid period has run out is
- * still stored as 'active' until the nightly sweep flips it, so we evaluate the
- * period here too — otherwise a lapsed plan would keep drawing its full monthly
- * allowance for up to a day.
- */
-function effectiveStatus(status: string, endsAt: any): string {
-  if (status !== "active") return status;
-  if (!endsAt) return status; // no period recorded (manually granted) — leave it active
-  const t = new Date(endsAt).getTime();
-  return Number.isFinite(t) && Date.now() > t ? "expired" : "active";
-}
+// The entitlement rules live in their own dependency-free module so they can be
+// unit-tested (`npm run test:entitlement`). Re-exported here because that is
+// where every caller already imports them from.
+export { effectiveStatus, isLapsed, statusOf } from "@/lib/entitlement";
+import { isLapsed, statusOf } from "@/lib/entitlement";
 
 function planAllowance(plan: string, status: string, override?: number | null): number {
   // Explicit super-admin override wins (0 = ignore, -1 = unlimited, +n = fixed).
   if (typeof override === "number" && override !== 0) return override;
-  // Trialing / non-active workspaces get a small ONE-TIME taste, not the plan's monthly allowance.
+  // A LAPSED workspace gets nothing. This used to return TRIAL_CREDITS for any
+  // non-active status, and sync_allowance tops that up every 30 days — so an
+  // expired workspace was handed 150 free credits a month, forever. The comment
+  // below says "one-time taste"; only `trialing` actually is one.
+  if (isLapsed(status)) return 0;
+  // Trialing workspaces get a small taste, not the plan's monthly allowance.
   if (status !== "active") return TRIAL_CREDITS;
   return PLAN_CREDITS[plan] ?? 500;
 }
@@ -60,7 +59,7 @@ export async function getCreditState(): Promise<CreditState> {
     const { data, error } = await sb.from("organizations").select("*").eq("id", orgId).single();
     if (error) throw error;
     const plan = String((data as any).plan || "growth").toLowerCase();
-    const status = effectiveStatus(String((data as any).subscription_status || "trialing"), (data as any).subscription_ends_at);
+    const status = statusOf(data);
     const allowance = planAllowance(plan, status, (data as any).credits_allowance);
     const unlimited = superAdmin || plan === "enterprise" || allowance < 0;
     let balance = Number((data as any).credits ?? 0);
@@ -111,9 +110,25 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
     const { data: org, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
     if (error) return { ok: true, enforced: false, cost, balance: 0 };
     const plan = String((org as any)?.plan || "growth").toLowerCase();
-    const status = effectiveStatus(String((org as any)?.subscription_status || "trialing"), (org as any)?.subscription_ends_at);
-    const allowance = planAllowance(plan, status, (org as any)?.credits_allowance);
+    const status = statusOf(org);
+    const override = (org as any)?.credits_allowance;
+    const hasOverride = typeof override === "number" && override !== 0;
+    const allowance = planAllowance(plan, status, override);
     if (superAdmin || plan === "enterprise" || allowance < 0) return { ok: true, enforced: false, cost, balance: -1 };
+
+    // THE PAYWALL. Until now this status was computed and then ignored, and the
+    // only thing standing between a lapsed workspace and the whole product was
+    // <TrialGuard>, a client-side overlay — defeated by deleting one DOM node or
+    // by calling the API directly. Every AI path goes through this function, so
+    // this is where the refusal belongs.
+    //
+    // Note this fires only when the org row was read successfully and genuinely
+    // says expired/cancelled/suspended. Every other failure below still fails
+    // OPEN, because locking out a paying customer over a transient database
+    // error is worse than one unmetered call.
+    if (isLapsed(status) && !hasOverride) {
+      return { ok: false, enforced: true, cost, balance: 0, reason: "lapsed" };
+    }
 
     if (allowance > 0) { try { await svc.rpc("sync_allowance", { p_org: orgId, p_amount: allowance, p_days: RESET_DAYS }); } catch {} }
 
@@ -174,7 +189,7 @@ export async function imageGenGate(): Promise<ImageGate> {
     const { data: org, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
     if (error) throw error;
     const plan = String((org as any)?.plan || "growth").toLowerCase();
-    const status = effectiveStatus(String((org as any)?.subscription_status || "trialing"), (org as any)?.subscription_ends_at);
+    const status = statusOf(org);
     if (superAdmin || plan === "enterprise") return { allowed: true, used: 0, limit: -1, plan, active: true };
     if (["suspended", "cancelled", "expired"].includes(status)) {
       return { allowed: false, used: 0, limit: 0, plan, active: false, reason: "Your plan is inactive. Reactivate a paid plan to use image agents." };

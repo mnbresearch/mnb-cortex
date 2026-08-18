@@ -15,6 +15,7 @@ export type DenialBody = {
   error: string;
   needsAuth?: boolean;
   outOfCredits?: boolean;
+  planExpired?: boolean;
   cost: number;
   balance: number;
 };
@@ -33,6 +34,17 @@ export function creditDenial(gate: ChargeResult, action = "This action"): { stat
       },
     };
   }
+  if (gate.reason === "lapsed") {
+    // Distinct from "out of credits": topping up would not help, because the
+    // subscription period itself has ended. Send them to /billing, not /usage.
+    return {
+      status: 402,
+      body: {
+        ok: false, planExpired: true, cost: gate.cost, balance: 0,
+        error: "Your MNB Cortex plan has ended, so this is paused. Your workspace and data are exactly as you left them — renew under Billing and everything comes straight back.",
+      },
+    };
+  }
   return {
     status: 402,
     body: {
@@ -48,7 +60,7 @@ export function creditDenial(gate: ChargeResult, action = "This action"): { stat
  */
 export async function requireWorkspace(): Promise<
   | { ok: true; userId: string; email: string; orgId: string }
-  | { ok: false; status: number; body: { ok: false; needsAuth: true; error: string } }
+  | { ok: false; status: number; body: { ok: false; needsAuth?: true; planExpired?: true; error: string } }
 > {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) {
@@ -58,5 +70,37 @@ export async function requireWorkspace(): Promise<
       body: { ok: false, needsAuth: true, error: "Sign in to your workspace to use this feature." },
     };
   }
+
+  // Entitlement, server-side. The non-metered features (exports, integrations,
+  // scheduled reports, outbound webhooks) cost us little to run but ARE the
+  // product, and until now a lapsed workspace kept every one of them — the only
+  // barrier was a client-side overlay.
+  //
+  // Fails OPEN on any error: a transient database problem must never lock out a
+  // paying customer. It refuses only when the row was read and clearly says the
+  // plan is over.
+  try {
+    const { serviceClient } = await import("@/lib/supabase/server");
+    const { statusOf, isLapsed } = await import("@/lib/credits");
+    const svc = serviceClient();
+    if (svc) {
+      const { data, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
+      if (!error && data) {
+        const status = statusOf(data);
+        if (isLapsed(status)) {
+          return {
+            ok: false,
+            status: 402,
+            body: {
+              ok: false,
+              planExpired: true,
+              error: "Your MNB Cortex plan has ended, so this is paused. Nothing has been deleted — renew under Billing and it all comes back.",
+            },
+          };
+        }
+      }
+    }
+  } catch { /* fail open — never lock out a paying customer over an error */ }
+
   return { ok: true, userId: user.id, email: user.email || "", orgId };
 }

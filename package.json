@@ -2,13 +2,14 @@
   "name": "mnb-cortex",
   "version": "1.0.0",
   "private": true,
-  "description": "MNB Cortex \u2014 The AI COO for SMEs",
+  "description": "MNB Cortex — The AI COO for SMEs",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:entitlement": "node scripts/test-entitlement.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

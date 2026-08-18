@@ -112,6 +112,22 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
         const missingColumn = withPeriod.code === "PGRST204" || withPeriod.code === "42703"
           || /column .* does not exist/i.test(withPeriod.message || "");
         if (!missingColumn) {
+          // Before re-opening this order for a retry, make sure the update
+          // didn't actually land. Releasing a claim on a write that DID commit
+          // is how one payment becomes two periods. The credits branch below
+          // guards the same way, via the ledger reason.
+          try {
+            const { data: check } = await svc.from("organizations")
+              .select("plan, subscription_ends_at").eq("id", orgId).single();
+            const landed = (check as any)?.subscription_ends_at;
+            // Compare instants, not strings: PostgREST returns "…+00:00" while
+            // toISOString() produces "…Z", so === can never match.
+            const sameInstant = landed && new Date(landed).getTime() === new Date(endsAt).getTime();
+            if ((check as any)?.plan === ref && sameInstant) {
+              emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
+              return { ok: true, kind: "plan", plan: ref, cycle, endsAt };
+            }
+          } catch { /* couldn't verify — fall through and release */ }
           await releaseClaim(); // let the webhook retry settle this order properly
           return { ok: false, error: withPeriod.message || "Could not activate the plan." };
         }
