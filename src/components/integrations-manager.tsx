@@ -17,7 +17,29 @@ async function call(op: string, id: string, credentials?: Record<string, string>
   return r.json();
 }
 
+/** Providers whose data Cortex can actually pull in — see src/lib/sync. */
+const SYNCABLE = ["shopify", "razorpay", "stripe", "google_sheets"];
+
 export function IntegrationsManager({ plan, connections, canManage }: { plan: string; connections: Conn[]; canManage: boolean }) {
+  const [syncing, setSyncing] = useState("");
+  const [syncMsg, setSyncMsg] = useState("");
+
+  /** Pull data now. Everything else in the catalogue only stores credentials. */
+  async function syncNow(id: string) {
+    setSyncing(id); setSyncMsg("");
+    try {
+      const r = await fetch("/api/integrations/sync", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: id }),
+      });
+      const j = await r.json();
+      setSyncMsg(j.ok
+        ? `${id}: imported ${j.salesOrders} orders, ${j.invoices} invoices, ${j.customers} customers. Your dashboard has been refreshed.`
+        : `${id}: ${j.error || "sync failed"}`);
+      if (j.ok) setTimeout(() => location.reload(), 1600);
+    } catch { setSyncMsg("Network error during sync."); }
+    finally { setSyncing(""); }
+  }
+
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("All");
   const [open, setOpen] = useState<Integration | null>(null);
@@ -70,6 +92,8 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
           <b className={used >= limit ? "text-warning" : ""}>{used}</b>
           <span className="text-muted-foreground"> / {limit === 999 ? "unlimited" : limit}</span>
         </div>
+
+      {syncMsg && <p className="text-sm text-muted-foreground mt-3">{syncMsg}</p>}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <ShieldCheck className="h-4 w-4 text-success" /> Keys are encrypted (AES-256-GCM) and never shown again after saving.
         </div>
@@ -117,11 +141,22 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
               {!canManage ? (
                 <p className="text-xs text-muted-foreground">Workspace admins can manage integrations.</p>
               ) : conn ? (
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => test(i.id)} disabled={testing === i.id}>
-                    {testing === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />} Test
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => disconnect(i.id)}>Disconnect</Button>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => test(i.id)} disabled={testing === i.id}>
+                      {testing === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />} Test
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => disconnect(i.id)}>Disconnect</Button>
+                  </div>
+                  {SYNCABLE.includes(i.id) ? (
+                    <Button size="sm" className="w-full" onClick={() => syncNow(i.id)} disabled={syncing === i.id}>
+                      {syncing === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />} Sync data now
+                    </Button>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      Credentials stored securely. Automatic data sync isn&rsquo;t available for this provider yet — import via CSV or the API.
+                    </p>
+                  )}
                 </div>
               ) : allowed ? (
                 <Button size="sm" onClick={() => openModal(i)}>Connect</Button>

@@ -59,6 +59,14 @@ export async function GET(req: Request) {
     webhooks = await retryPending();
   } catch (e: any) { webhooks = { error: e?.message }; }
 
+  // 1e. Pull fresh data from every connected integration, before the KPI sweep
+  //     so today's orders are already in when metrics recompute.
+  let synced: any = null;
+  try {
+    const { syncAll } = await import("@/lib/sync");
+    synced = await syncAll();
+  } catch (e: any) { synced = { error: e?.message }; }
+
   // 2. Housekeeping on the public rate-limit buckets.
   try { await sb.rpc("prune_rate_limits"); } catch { /* migration not applied yet */ }
 
@@ -123,5 +131,5 @@ export async function GET(req: Request) {
     ran++;
   }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, weekly, plan });
+  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan });
 }

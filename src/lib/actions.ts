@@ -555,3 +555,16 @@ export async function deleteScheduledReport(fd: FormData) {
   await svc.from("scheduled_reports").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   revalidatePath("/reports");
 }
+
+
+/** Pull data from a connected integration right now. */
+export async function syncIntegration(fd: FormData) {
+  const { orgId } = await requireRole("admin");
+  const provider = str(fd.get("provider"));
+  const { syncProvider } = await import("@/lib/sync");
+  const r = await syncProvider(orgId, provider);
+  if (!r.ok) throw new Error(r.error || `Could not sync ${provider}.`);
+  await logActivity(orgId, "integration",
+    `Synced ${provider} — ${r.salesOrders} orders, ${r.invoices} invoices, ${r.customers} customers`);
+  ["/integrations", "/dashboard", "/sales", "/finance"].forEach((p) => revalidatePath(p));
+}

@@ -120,8 +120,10 @@ export default async function Setup() {
             <Card className="p-4">
               <div className="font-medium">The 62-tool integration catalogue</div>
               <p className="text-muted-foreground mt-0.5">
-                Credentials are stored and (for 16 providers) verified, but nothing syncs data yet. Data comes in through
-                CSV import, the bank/GST readers, the public API and the Tally bridge.
+                Four providers pull data automatically — <b>Shopify</b>, <b>Razorpay</b>, <b>Stripe</b> and{" "}
+                <b>Google Sheets</b> — on demand and nightly. The rest of the catalogue securely stores and verifies
+                credentials but does not sync yet; those customers import via CSV, the bank/GST readers, the public API
+                or the Tally bridge. Adding a connector is one function in <code className="bg-secondary px-1 rounded">src/lib/sync</code>.
               </p>
             </Card>
           </div>

@@ -179,6 +179,33 @@ An unrecognised step is reported as **skipped**, never as success.
 
 ---
 
+## Integration data sync
+
+Most of the 62-provider catalogue is a **secure credential vault** — it stores
+and (for 16 providers) verifies keys. Four providers actually pull data into
+Cortex today:
+
+| Provider | What comes in | Credentials |
+|---|---|---|
+| **Shopify** | Orders → sales orders, customers | Shop domain + Admin API access token |
+| **Razorpay** | Captured payments → paid receivables | Key id + key secret |
+| **Stripe** | Paid charges → paid receivables | Secret key |
+| **Google Sheets** | Any sheet with amount + customer columns → sales orders | Published sheet URL |
+
+Connect one under *Integrations*, then press **Sync data now**. The nightly cron
+also syncs every connected provider automatically, before the KPI recompute, so
+the dashboard is current each morning.
+
+Re-syncing is safe: each record carries a deterministic external id
+(`SHOP-1234`, `RZP-pay_xxx`) written to its natural key, and Cortex upserts on
+it. The same order imported twice updates one row rather than creating two.
+
+Adding another connector is one function in `src/lib/sync/index.ts` — map the
+provider's response onto `sales_orders` / `invoices` / `customers` and add it to
+`CONNECTORS`.
+
+---
+
 ## Local development
 
 `vercel env pull` writes the literal string `[SENSITIVE]` for every variable
