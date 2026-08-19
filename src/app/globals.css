@@ -102,7 +102,9 @@ body {
   content: ""; position: absolute; left: 0; top: 50%; height: 0; width: 3px; border-radius: 0 3px 3px 0;
   background: hsl(var(--primary)); transform: translateY(-50%); transition: height .2s ease;
 }
-.nav-item.is-active { background: hsl(var(--primary) / 0.10); color: hsl(var(--primary)); font-weight: 600; }
+/* The fill is drawn by a shared framer-motion element that travels between
+   items, so the static background here would double up. Colour only. */
+.nav-item.is-active { color: hsl(var(--primary)); font-weight: 600; }
 .nav-item.is-active::before { height: 60%; }
 .nav-item:not(.is-active):hover { background: hsl(var(--accent) / 0.6); }
 /* Soft elevated card shadow used app-wide. */

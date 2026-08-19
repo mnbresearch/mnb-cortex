@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { NAV } from "@/lib/nav";
@@ -66,9 +67,22 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
                     const Icon = n.icon;
                     return (
                       <Link key={n.href} href={n.href}
-                        className={cn("nav-item flex items-center gap-3 rounded-lg pl-3 pr-2.5 py-2 text-sm text-muted-foreground hover:text-foreground", active && "is-active")}>
-                        <Icon className="h-4 w-4 shrink-0" />
-                        {n.label}
+                        className={cn("nav-item relative flex items-center gap-3 rounded-lg pl-3 pr-2.5 py-2 text-sm text-muted-foreground hover:text-foreground", active && "is-active")}>
+                        {/* A single shared element that physically travels to the
+                            newly-selected item rather than one highlight vanishing
+                            and another appearing. It's the detail that makes a
+                            sidebar feel built rather than assembled — and because
+                            layoutId is shared across every group, it animates even
+                            when you jump between sections. */}
+                        {active && (
+                          <motion.span
+                            layoutId="nav-active"
+                            className="absolute inset-0 rounded-lg bg-primary/10"
+                            transition={{ type: "spring", stiffness: 520, damping: 42, mass: 0.7 }}
+                          />
+                        )}
+                        <Icon className="relative h-4 w-4 shrink-0" />
+                        <span className="relative">{n.label}</span>
                       </Link>
                     );
                   })}
