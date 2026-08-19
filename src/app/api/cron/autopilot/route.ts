@@ -128,8 +128,16 @@ export async function GET(req: Request) {
   //    KPIs (overdue receivables, inventory cover) current as dates roll over.
   //    Batched and capped: every write path already recomputes inline, so this
   //    is a safety net, not the primary path — it must never eat the AI budget.
+  //    Deliberately NOT gated on entitlement. Recomputing KPIs costs a couple of
+  //    cheap queries and is about the stored numbers being TRUE, not about who
+  //    is paying. Gating it meant a lapsed workspace kept whatever figures were
+  //    last computed — the live dashboard was still reporting "Revenue (MTD)
+  //    ₹5.00 L / Orders 2" for a workspace whose sales table was empty, because
+  //    nothing had recomputed since the rows were removed. Stale numbers a
+  //    customer might act on are worse than a few milliseconds of database time,
+  //    and they're the first thing someone sees if they come back and renew.
   const SWEEP_CAP = 200, BATCH = 5;
-  const sweepable = (orgs as any[] || []).filter(entitled).slice(0, SWEEP_CAP);
+  const sweepable = (orgs as any[] || []).slice(0, SWEEP_CAP);
   let recomputed = 0;
   for (let i = 0; i < sweepable.length; i += BATCH) {
     const results = await Promise.all(sweepable.slice(i, i + BATCH).map(async (o) => {
