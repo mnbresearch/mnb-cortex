@@ -1,0 +1,55 @@
+# Daily autopilot trigger.
+#
+# Vercel's own cron is configured in vercel.json and remains the primary
+# scheduler. This is a belt-and-braces second one, because on the Hobby plan
+# cron jobs are limited per ACCOUNT — with several projects it is possible for a
+# project's cron to be silently skipped, and the work behind this endpoint is
+# not optional: it expires lapsed plans, sends renewal reminders, processes
+# auto-renewals, delivers scheduled reports, retries webhooks and syncs
+# integrations. Missing it quietly costs customers.
+#
+# The endpoint is idempotent — every step claims its work before doing it — so
+# being triggered twice in a day is harmless.
+#
+# SETUP (one time):
+#   GitHub → repo → Settings → Secrets and variables → Actions → New secret
+#     Name:  CRON_SECRET
+#     Value: the same value as CRON_SECRET in Vercel → Project → Settings →
+#            Environment Variables. If it isn't set there, create one (any long
+#            random string) and add it to BOTH places.
+
+name: autopilot
+
+on:
+  schedule:
+    # 02:40 UTC = 08:10 IST, just after Vercel's own 02:30 UTC slot, so this
+    # only does the work if Vercel's cron didn't.
+    - cron: "40 2 * * *"
+  workflow_dispatch: {}   # lets you run it by hand from the Actions tab
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger autopilot
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not set in this repository's Actions secrets."
+            echo "See the setup note at the top of .github/workflows/autopilot.yml"
+            exit 1
+          fi
+
+          code=$(curl -s -S --max-time 300 \
+            -o response.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            https://cortex.mnbresearch.com/api/cron/autopilot)
+
+          echo "HTTP $code"
+          cat response.json; echo
+
+          if [ "$code" != "200" ]; then
+            echo "::error::Autopilot returned HTTP $code"
+            exit 1
+          fi

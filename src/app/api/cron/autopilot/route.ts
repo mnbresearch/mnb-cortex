@@ -1,29 +1,55 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { serviceClient } from "@/lib/supabase/server";
 import { generateFor } from "@/lib/ai/cortex";
 import { recomputeMetrics } from "@/lib/metrics";
+import { statusOf, isLapsed } from "@/lib/entitlement";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-/** Is this workspace entitled to have AI run on its behalf today? */
+/**
+ * Is this workspace entitled to have AI run on its behalf today?
+ *
+ * Uses the same rules as the paywall rather than a second copy of them. The
+ * copy that used to live here had already drifted: it didn't know about the
+ * renewal grace period, so a customer whose mandate debited a day late would be
+ * allowed to use the product interactively but skipped by their own autopilot.
+ */
 function entitled(o: any): boolean {
-  const status = String(o?.subscription_status || "trialing");
-  if (status === "suspended" || status === "cancelled" || status === "expired") return false;
-  const now = Date.now();
-  if (status === "active") {
-    // No recorded period = manually granted workspace, treat as entitled.
-    if (!o?.subscription_ends_at) return true;
-    return new Date(o.subscription_ends_at).getTime() > now;
-  }
-  // Trialing: only while the trial window is still open.
-  if (!o?.trial_ends_at) return true;
-  return new Date(o.trial_ends_at).getTime() > now;
+  return !isLapsed(statusOf(o));
+}
+
+/**
+ * Is this a legitimate scheduler invocation?
+ *
+ * Three accepted callers, in order of preference:
+ *   1. Vercel's own cron (sets x-vercel-cron).
+ *   2. `Authorization: Bearer <CRON_SECRET>` — for GitHub Actions or any other
+ *      external scheduler. Preferred over the query string because a URL ends up
+ *      in access logs and browser history; a header does not.
+ *   3. `?secret=<CRON_SECRET>` — kept for backwards compatibility.
+ *
+ * The secret comparison is timing-safe and refuses to match an unset variable,
+ * so a missing CRON_SECRET can never be satisfied by an empty string.
+ */
+function authorised(req: Request): boolean {
+  if (req.headers.get("x-vercel-cron")) return true;
+
+  const secret = String(process.env.CRON_SECRET || "");
+  if (secret.length < 8) return false; // unset or trivially guessable — no external access
+
+  const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const query = new URL(req.url).searchParams.get("secret") || "";
+  const offered = bearer || query;
+  if (offered.length !== secret.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(offered), Buffer.from(secret));
+  } catch { return false; }
 }
 
 export async function GET(req: Request) {
-  const isCron = req.headers.get("x-vercel-cron") || new URL(req.url).searchParams.get("secret") === process.env.CRON_SECRET;
-  if (!isCron) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  if (!authorised(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const sb = serviceClient();
   if (!sb) return NextResponse.json({ ok: true, ran: 0, note: "add SUPABASE_SERVICE_ROLE_KEY to enable scheduled autopilot" });
 
@@ -94,7 +120,7 @@ export async function GET(req: Request) {
   // columns entitled() actually needs.
   const { data: orgs } = await sb
     .from("organizations")
-    .select("id,subscription_status,trial_ends_at,subscription_ends_at")
+    .select("id,subscription_status,trial_ends_at,subscription_ends_at,autorenew_status")
     .order("created_at", { ascending: true });
 
   // 3. Safety-net metrics sweep. Every write path recomputes inline, so this only
