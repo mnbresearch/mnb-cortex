@@ -169,14 +169,24 @@ export async function GET(req: Request) {
   let heartbeat = "ok";
   try {
     const now = new Date().toISOString();
-    const { error: hbErr } = await sb.from("system_status").upsert(
-      { key: "cron_last_run", value: now, updated_at: now },
-      { onConflict: "key" },
-    );
+    // .select() forces PostgREST to RETURN the written row. Without it the write
+    // reported success while nothing landed and nothing could be read back —
+    // which is indistinguishable from a dead cron, and took three deploys to
+    // pin down. Ask for the row and we know for certain whether it exists.
+    const { data: wrote, error: hbErr } = await sb
+      .from("system_status")
+      .upsert({ key: "cron_last_run", value: now, updated_at: now }, { onConflict: "key" })
+      .select("key,value");
+
     if (hbErr) {
       heartbeat = `${hbErr.code || "error"}: ${hbErr.message}`;
-      console.error("[cron] heartbeat write failed —", heartbeat);
+    } else if (!(wrote as any[])?.length) {
+      // No error and no row back means the write was accepted and then
+      // discarded — the signature of a row-level security policy silently
+      // filtering it, i.e. this client is not really the service role.
+      heartbeat = "write accepted but no row returned — check SUPABASE_SERVICE_ROLE_KEY is the service_role key, not the anon key";
     }
+    if (heartbeat !== "ok") console.error("[cron] heartbeat —", heartbeat);
   } catch (e: any) {
     heartbeat = `threw: ${e?.message}`;
     console.error("[cron] heartbeat threw —", e?.message);
