@@ -1,19 +1,17 @@
-import { Logo } from "@/components/logo";
+import { SkeletonPage } from "@/components/ui/skeleton";
 
+/**
+ * Shown while any in-app route is fetching on the server.
+ *
+ * This used to be a centred logo with "Reading your business…", which meant
+ * every navigation blanked the content area and then repainted it — the screen
+ * flashed, and nothing about the loading state told you where you were going.
+ *
+ * A skeleton of the destination is better on both counts: the layout is already
+ * in place when the data lands, so nothing jumps, and the page reads as "nearly
+ * here" rather than "gone". The navigation progress bar at the top of the
+ * window carries the sense of motion.
+ */
 export default function Loading() {
-  return (
-    <div className="relative min-h-[70vh] grid place-items-center overflow-hidden">
-      <div className="aurora" aria-hidden />
-      <div className="relative z-10 flex flex-col items-center gap-4 animate-scale-in">
-        <div className="animate-float"><Logo size={64} /></div>
-        <div className="text-center">
-          <div className="font-semibold tracking-tight">MNB Cortex</div>
-          <div className="text-sm text-muted-foreground">Reading your business…</div>
-        </div>
-        <div className="mt-1 h-1.5 w-40 overflow-hidden rounded-full bg-secondary">
-          <div className="h-full w-full brand-gradient rounded-full animate-pulse" />
-        </div>
-      </div>
-    </div>
-  );
+  return <SkeletonPage />;
 }

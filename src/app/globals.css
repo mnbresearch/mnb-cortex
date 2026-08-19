@@ -149,6 +149,47 @@ body {
 @keyframes float-a { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(4rem,3rem) scale(1.12); } }
 @keyframes float-b { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-3rem,4rem) scale(1.08); } }
 
+/* ---- Loading skeletons ----
+   A sweeping highlight rather than a pulsing opacity: at dashboard scale a
+   pulse makes the whole screen throb, while a sweep reads as "loading" without
+   demanding attention. */
+.skeleton { position: relative; overflow: hidden; }
+.skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.06), transparent);
+  animation: skeleton-sweep 1.6s cubic-bezier(.4,0,.6,1) infinite;
+}
+@keyframes skeleton-sweep { 100% { transform: translateX(100%); } }
+
+/* ---- Focus visibility ----
+   Keyboard users get a clear brand-coloured ring; mouse users never see it.
+   Applied globally so no interactive element can be missed. */
+:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: calc(var(--radius) - 6px);
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ---- Interactive polish ---- */
+/* Buttons and links settle rather than snap. */
+button, a, [role="button"] { transition: color .18s ease, background-color .18s ease, border-color .18s ease, opacity .18s ease, transform .18s cubic-bezier(.22,1,.36,1); }
+/* A pressed control should acknowledge the press. */
+button:active:not(:disabled), [role="button"]:active { transform: scale(.985); }
+
+/* Sheen that crosses a primary button on hover — the detail that makes a CTA
+   feel expensive. Opt in with .sheen. */
+.sheen { position: relative; overflow: hidden; }
+.sheen::after {
+  content: ""; position: absolute; top: 0; left: -75%; width: 50%; height: 100%;
+  background: linear-gradient(100deg, transparent, hsl(0 0% 100% / .28), transparent);
+  transform: skewX(-20deg); transition: left .7s cubic-bezier(.22,1,.36,1);
+}
+.sheen:hover::after { left: 130%; }
+
+/* Numbers should never reflow as they tick. */
+.tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / .35); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / .5); }

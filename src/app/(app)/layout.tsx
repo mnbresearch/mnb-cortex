@@ -1,3 +1,4 @@
+import { NavProgress } from "@/components/nav-progress";
 import { Sidebar } from "@/components/sidebar";
 import { MobileNav } from "@/components/mobile-nav";
 import { CommandPalette } from "@/components/command-palette";
@@ -22,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
   return (
     <div className="flex min-h-screen">
+      <NavProgress />
       <Sidebar superAdmin={superAdmin} orgs={orgs} activeOrgId={orgId} />
       <div className="flex-1 min-w-0 app-canvas">{children}</div>
       <MobileNav />
