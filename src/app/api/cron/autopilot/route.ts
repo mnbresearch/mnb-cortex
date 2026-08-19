@@ -160,12 +160,27 @@ export async function GET(req: Request) {
   // Heartbeat. /api/health reads this rather than inferring liveness from a
   // side effect that only happens when a workspace has data — a healthy cron
   // over an empty account would otherwise look dead.
+  //
+  // The error is REPORTED, not swallowed. The first version wrapped this in a
+  // bare try/catch, but supabase-js returns {error} for a rejected write rather
+  // than throwing — so the catch never fired, the write failed every run, and
+  // the response still said ok:true. A monitoring signal that fails silently is
+  // worse than none, because it looks like the thing it monitors is broken.
+  let heartbeat = "ok";
   try {
-    await sb.from("system_status").upsert(
-      { key: "cron_last_run", value: new Date().toISOString(), updated_at: new Date().toISOString() },
+    const now = new Date().toISOString();
+    const { error: hbErr } = await sb.from("system_status").upsert(
+      { key: "cron_last_run", value: now, updated_at: now },
       { onConflict: "key" },
     );
-  } catch { /* health reporting only */ }
+    if (hbErr) {
+      heartbeat = `${hbErr.code || "error"}: ${hbErr.message}`;
+      console.error("[cron] heartbeat write failed —", heartbeat);
+    }
+  } catch (e: any) {
+    heartbeat = `threw: ${e?.message}`;
+    console.error("[cron] heartbeat threw —", e?.message);
+  }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan });
+  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, heartbeat });
 }
