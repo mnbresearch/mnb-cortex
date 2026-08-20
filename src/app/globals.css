@@ -151,6 +151,28 @@ body {
 @keyframes float-a { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(4rem,3rem) scale(1.12); } }
 @keyframes float-b { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-3rem,4rem) scale(1.08); } }
 
+/* ---- Page entrance ----
+   Every in-app page is wrapped in .page-stagger, so its top-level sections
+   arrive one after another instead of the whole screen appearing at once. The
+   eye lands on the first card while the rest settle, which makes a
+   data-dense page feel ordered rather than dumped.
+
+   Done in CSS rather than framer-motion on purpose: PageShell is a server
+   component, and this needs no JavaScript, no client boundary and no hydration
+   before it runs — so it plays on the very first paint.
+
+   The step is 45ms and stops compounding after the eighth child; a page with
+   twenty sections must not make the last one wait a second to appear. */
+.page-stagger > * { animation: rise .42s cubic-bezier(.22,1,.36,1) both; }
+.page-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.page-stagger > *:nth-child(2) { animation-delay: 45ms; }
+.page-stagger > *:nth-child(3) { animation-delay: 90ms; }
+.page-stagger > *:nth-child(4) { animation-delay: 135ms; }
+.page-stagger > *:nth-child(5) { animation-delay: 180ms; }
+.page-stagger > *:nth-child(6) { animation-delay: 225ms; }
+.page-stagger > *:nth-child(7) { animation-delay: 270ms; }
+.page-stagger > *:nth-child(n+8) { animation-delay: 300ms; }
+
 /* ---- Loading skeletons ----
    A sweeping highlight rather than a pulsing opacity: at dashboard scale a
    pulse makes the whole screen throb, while a sweep reads as "loading" without
@@ -253,6 +275,8 @@ button:active:not(:disabled), [role="button"]:active { transform: scale(.985); }
 
 @media (prefers-reduced-motion: reduce) {
   .gradient-text, .aurora::before, .aurora::after, .marquee, .marquee-rev, .animate-float { animation: none !important; }
+  .page-stagger > *, .rise-in { animation: none !important; }
+  .skeleton::after { animation: none !important; }
   .hover-lift { transition: none; }
   .kin-armed .kin > span { transform: translateY(0) !important; transition: none !important; }
   .loco-cursor { display: none !important; }
