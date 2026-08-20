@@ -20,7 +20,13 @@ const demo = [
 
 export default async function Pipeline() {
   const { rows, live } = await getPipeline();
-  const deals = live && rows.length ? rows : demo;
+  // `live` is true for ANY signed-in workspace, so `live && rows.length ? rows : demo`
+  // handed a real customer with no deals five invented ones — Horizon Mfg,
+  // Gulf Imports, Metro Mart — scored and totalled into a "Pipeline value
+  // ₹2.19 Cr" headline, with nothing on the page saying it was a sample. The
+  // demo set is for the logged-out preview only.
+  const isDemo = !live;
+  const deals = live ? rows : demo;
 
   // Scored, ranked and explained — the "AI-ranked pipeline that tells you who
   // to chase" the marketing has always promised. Deterministic arithmetic, so
@@ -34,6 +40,21 @@ export default async function Pipeline() {
     <>
       <Topbar title="Deals Pipeline" subtitle="Ranked by what's actually worth chasing" />
       <PageShell>
+        {isDemo && (
+          <Card className="p-3 text-xs text-muted-foreground border-warning/30 bg-warning/5">
+            Sample pipeline — sign in and add your deals to see your own.
+          </Card>
+        )}
+        {!isDemo && deals.length === 0 && (
+          <Card className="p-8 text-center">
+            <p className="text-sm font-medium">No deals yet</p>
+            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+              Add a deal below, or import your pipeline, and Cortex ranks them by what's
+              genuinely worth chasing — expected value, stage progress and how long
+              they've been quiet.
+            </p>
+          </Card>
+        )}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Card className="p-4"><div className="text-sm text-muted-foreground">Open deals</div><div className="text-2xl font-semibold mt-1">{sum.count}</div></Card>
           <Card className="p-4"><div className="text-sm text-muted-foreground">Pipeline value</div><div className="text-2xl font-semibold mt-1">{inr(sum.gross)}</div></Card>

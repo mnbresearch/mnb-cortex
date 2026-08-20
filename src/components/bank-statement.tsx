@@ -49,8 +49,17 @@ async function extractPdf(f: File): Promise<string> {
   return out;
 }
 
+/**
+ * The model has a context limit, so very long statements are trimmed. The
+ * customer MUST be told: they pay credits for this, and an analysis of the
+ * first two months of a twelve-month statement — presented as a full reading —
+ * is worse than no analysis at all. `truncated` drives a visible warning.
+ */
+const MAX_CHARS = 18000;
+
 export function BankStatementPanel() {
   const [text, setText] = useState("");
+  const [truncated, setTruncated] = useState(false);
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(false);
   const [reading, setReading] = useState(false);
@@ -64,7 +73,8 @@ export function BankStatementPanel() {
     setReading(true); setErr(""); setFileName(f.name);
     try {
       const t = (f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")) ? await extractPdf(f) : await f.text();
-      setText(t.slice(0, 18000));
+      setTruncated(t.length > MAX_CHARS);
+      setText(t.slice(0, MAX_CHARS));
     } catch { setErr("Couldn't read that file — please paste the transaction rows instead."); }
     finally { setReading(false); }
   }
@@ -102,6 +112,16 @@ export function BankStatementPanel() {
           </Button>
           {fileName && <span className="text-xs text-muted-foreground">{fileName}</span>}
         </div>
+        {truncated && (
+          <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-warning" />
+            <span>
+              That file is longer than Cortex can read in one pass, so only the first part was
+              loaded — the analysis below will cover that portion, not the whole document.
+              For a long statement, upload one month at a time for a complete reading.
+            </span>
+          </div>
+        )}
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4}
           className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
           placeholder="…or paste your transaction rows here (date, description, amount, type)" />

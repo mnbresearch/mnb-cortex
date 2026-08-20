@@ -38,8 +38,17 @@ async function extractPdf(f: File): Promise<string> {
   return out;
 }
 
+/**
+ * The model has a context limit, so very long statements are trimmed. The
+ * customer MUST be told: they pay credits for this, and an analysis of the
+ * first two months of a twelve-month statement — presented as a full reading —
+ * is worse than no analysis at all. `truncated` drives a visible warning.
+ */
+const MAX_CHARS = 16000;
+
 export function GstReturnPanel() {
   const [text, setText] = useState("");
+  const [truncated, setTruncated] = useState(false);
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(false);
   const [reading, setReading] = useState(false);
@@ -51,7 +60,7 @@ export function GstReturnPanel() {
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f) return;
     setReading(true); setErr(""); setFileName(f.name);
-    try { const t = (f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")) ? await extractPdf(f) : await f.text(); setText(t.slice(0, 16000)); }
+    try { const t = (f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")) ? await extractPdf(f) : await f.text(); setTruncated(t.length > MAX_CHARS); setText(t.slice(0, MAX_CHARS)); }
     catch { setErr("Couldn't read that file — please paste the summary instead."); }
     finally { setReading(false); }
   }
@@ -91,6 +100,16 @@ export function GstReturnPanel() {
           </Button>
           {fileName && <span className="text-xs text-muted-foreground">{fileName}</span>}
         </div>
+        {truncated && (
+          <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-warning" />
+            <span>
+              That file is longer than Cortex can read in one pass, so only the first part was
+              loaded — the analysis below will cover that portion, not the whole document.
+              For a long statement, upload one month at a time for a complete reading.
+            </span>
+          </div>
+        )}
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4}
           className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
           placeholder="…or paste your GSTR-3B / GSTR-1 / 2B summary here" />

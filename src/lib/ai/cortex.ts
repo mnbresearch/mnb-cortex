@@ -17,14 +17,26 @@ Rules:
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-function pickProvider(): string {
-  const forced = (process.env.AI_PROVIDER || "").toLowerCase();
-  if (forced) return forced;
-  if (envKey("GEMINI_API_KEY")) return "gemini";
-  if (envKey("GROQ_API_KEY")) return "groq";
-  if (envKey("ANTHROPIC_API_KEY")) return "anthropic";
-  if (envKey("OPENAI_API_KEY")) return "openai";
-  return "none";
+/**
+ * Every configured provider, best first — not just the first match.
+ *
+ * This used to return ONE provider and there was no failover, so a GROQ_API_KEY
+ * sitting in the environment could never be reached while GEMINI_API_KEY
+ * existed. Gemini was a hard single point of failure: rate-limit it or revoke
+ * the key and every AI feature in the product went down until a human edited an
+ * env var and redeployed. With a chain, a second free key is genuine redundancy.
+ *
+ * AI_PROVIDER still forces one provider, for debugging or to pin cost.
+ */
+function providerChain(): string[] {
+  const forced = (process.env.AI_PROVIDER || "").toLowerCase().trim();
+  if (forced) return [forced];
+  const chain: string[] = [];
+  if (envKey("GEMINI_API_KEY")) chain.push("gemini");
+  if (envKey("GROQ_API_KEY")) chain.push("groq");
+  if (envKey("ANTHROPIC_API_KEY")) chain.push("anthropic");
+  if (envKey("OPENAI_API_KEY")) chain.push("openai");
+  return chain.length ? chain : ["none"];
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -61,19 +73,32 @@ export function hasAIKey(): boolean {
  */
 export async function runCortex(messages: Msg[], context: string): Promise<string> {
   if (!hasAIKey()) return fallback(messages); // genuinely unconfigured — show the setup hint
-  const attempts = 3;
-  for (let i = 0; i < attempts; i++) {
-    const out = await runOnce(messages, context);
-    if (out !== null) return out;
-    if (i < attempts - 1) await sleep(500 * Math.pow(2, i) + Math.random() * 250);
+
+  for (const provider of providerChain()) {
+    // Retry the SAME provider only for genuinely transient trouble. A 429 is not
+    // transient on this timescale: free-tier quotas reset on a 60-second window,
+    // so three retries 3.5 seconds apart cannot clear it and each one spends
+    // another request from an already-exhausted budget, deepening the outage for
+    // everyone else. Auth and model errors won't fix themselves either. In all
+    // three cases the right move is to hand over to the next provider at once.
+    const attempts = 3;
+    for (let i = 0; i < attempts; i++) {
+      const out = await runOnce(provider, messages, context);
+      if (out !== null) return out;
+
+      const st = lastFailure?.status;
+      const worthRetrying = !st || st >= 500;   // network blip or provider 5xx
+      if (!worthRetrying) break;                // 429 / 401 / 403 / 404 → next provider
+      if (i < attempts - 1) await sleep(500 * Math.pow(2, i) + Math.random() * 250);
+    }
+    // fall through to the next configured provider
   }
-  if (!hasAIKey()) return fallback(messages);
+
   return `I couldn't reach the AI engine. ${describeFailure(lastFailure)}\n\nYour data is safe and nothing was lost — please try again shortly, or check the AI provider settings.`;
 }
 
 /** One model call. Returns null on a transient/failed call so the caller can retry. */
-async function runOnce(messages: Msg[], context: string): Promise<string | null> {
-  const provider = pickProvider();
+async function runOnce(provider: string, messages: Msg[], context: string): Promise<string | null> {
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
   try {
     // ---- Google Gemini (FREE: aistudio.google.com) ----
@@ -175,7 +200,14 @@ Everything else in Cortex — your dashboard, imports and the 50+ calculators �
 
 // ---- Streaming (OpenAI-compatible providers: Groq/OpenAI); others fall back to one chunk ----
 export async function streamCortex(messages: Msg[], context: string): Promise<ReadableStream<Uint8Array>> {
-  const provider = pickProvider();
+  // Genuine token streaming only exists for the OpenAI-compatible providers, so
+  // look for one ANYWHERE in the chain rather than only at its head. Previously
+  // this read the single top provider: with Gemini configured it was never
+  // OpenAI-compatible, so /api/chat/stream always fell through to one blocking
+  // call emitted as a single chunk — the user watched an empty box for the whole
+  // generation. With a Groq key present the reply now actually streams.
+  const chain = providerChain();
+  const provider = chain.find((c) => (c === "groq" && process.env.GROQ_API_KEY) || (c === "openai" && process.env.OPENAI_API_KEY)) || chain[0];
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
   const enc = new TextEncoder();
   const openaiLike =

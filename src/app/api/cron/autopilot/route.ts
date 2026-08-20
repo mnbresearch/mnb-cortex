@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
+import { cronAuthorised } from "@/lib/cron-auth";
 import { serviceClient } from "@/lib/supabase/server";
 import { generateFor } from "@/lib/ai/cortex";
 import { recomputeMetrics } from "@/lib/metrics";
@@ -20,36 +20,8 @@ function entitled(o: any): boolean {
   return !isLapsed(statusOf(o));
 }
 
-/**
- * Is this a legitimate scheduler invocation?
- *
- * Three accepted callers, in order of preference:
- *   1. Vercel's own cron (sets x-vercel-cron).
- *   2. `Authorization: Bearer <CRON_SECRET>` — for GitHub Actions or any other
- *      external scheduler. Preferred over the query string because a URL ends up
- *      in access logs and browser history; a header does not.
- *   3. `?secret=<CRON_SECRET>` — kept for backwards compatibility.
- *
- * The secret comparison is timing-safe and refuses to match an unset variable,
- * so a missing CRON_SECRET can never be satisfied by an empty string.
- */
-function authorised(req: Request): boolean {
-  if (req.headers.get("x-vercel-cron")) return true;
-
-  const secret = String(process.env.CRON_SECRET || "");
-  if (secret.length < 8) return false; // unset or trivially guessable — no external access
-
-  const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  const query = new URL(req.url).searchParams.get("secret") || "";
-  const offered = bearer || query;
-  if (offered.length !== secret.length) return false;
-  try {
-    return crypto.timingSafeEqual(Buffer.from(offered), Buffer.from(secret));
-  } catch { return false; }
-}
-
 export async function GET(req: Request) {
-  if (!authorised(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  if (!cronAuthorised(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const sb = serviceClient();
   if (!sb) return NextResponse.json({ ok: true, ran: 0, note: "add SUPABASE_SERVICE_ROLE_KEY to enable scheduled autopilot" });
 
