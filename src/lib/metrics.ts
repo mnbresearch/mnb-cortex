@@ -94,10 +94,20 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   const hasGst = gstRows.length > 0;
 
   // Nothing to work from — clear the KPIs so a workspace that deleted its data
-  // returns to an honest empty state instead of keeping stale numbers. The
-  // ledger is left alone: bank and GST readings live there and aren't ours.
+  // returns to an honest empty state instead of keeping stale numbers.
   if (!hasSales && !hasInvoices && !hasStock && !hasStaff && !hasBank && !hasGst) {
     try { await svc.from("health_metrics").delete().eq("org_id", orgId); } catch { /* best effort */ }
+    // The ledger rows are NOT deleted — bank and GST readings live there and
+    // aren't ours to destroy — but the columns this function owns must be
+    // zeroed. Leaving them was visible in production: the dashboard printed
+    // "No business data yet" directly above a revenue line still plotting the
+    // deleted orders, because clearing health_metrics doesn't touch the chart's
+    // source.
+    try {
+      await svc.from("finance_ledger")
+        .update({ revenue: 0, receivables: 0, payables: 0, opex: 0 })
+        .eq("org_id", orgId);
+    } catch { /* best effort */ }
     return { ok: true, metrics: 0, months: 0, reason: "no source data" };
   }
 
@@ -311,13 +321,17 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     opex: period === thisMonth ? +payroll.toFixed(0) : 0,
   }));
 
+  // Written UNCONDITIONALLY. Guarding this on `hasSales || hasInvoices` meant a
+  // workspace that deleted its sales orders kept the old revenue in the ledger
+  // for ever, so the trend chart went on plotting figures nothing else in the
+  // app still believed. `rows` already carries zeros in that case, and the
+  // upsert only touches the columns this function owns, so a bank or GST
+  // analysis is unaffected either way.
   let months = 0;
-  if (hasSales || hasInvoices) {
-    try {
-      const { error } = await svc.from("finance_ledger").upsert(rows, { onConflict: "org_id,period" });
-      if (!error) months = rows.length;
-    } catch { /* the chart is secondary to the KPIs — don't fail the recompute */ }
-  }
+  try {
+    const { error } = await svc.from("finance_ledger").upsert(rows, { onConflict: "org_id,period" });
+    if (!error) months = rows.length;
+  } catch { /* the chart is secondary to the KPIs — don't fail the recompute */ }
 
   emitQuietly(orgId, "metrics.recomputed", {
     org_id: orgId,
