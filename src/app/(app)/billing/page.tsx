@@ -86,14 +86,34 @@ export default async function Billing() {
           </Section>
         )}
 
+        {/* Only offer a mandate for a plan the customer has actually chosen.
+            Every workspace is created with plan: "growth" as a signup default,
+            so a trial user who had never picked anything was being offered a
+            ₹6,999/month standing authorisation — five times the entry price,
+            for a tier they may not want. Anyone still on the default is sent to
+            the plan list below to choose first. */}
         <Section title="Auto-renewal" desc="Authorise once instead of re-paying every cycle">
-          <AutoRenew
-            planId={billing.plan}
-            status={(profile as any)?.autorenew_status}
-            nextCharge={(profile as any)?.autorenew_next}
-          />
+          {billing.status === "active" || (profile as any)?.autorenew_status ? (
+            <AutoRenew
+              planId={billing.plan}
+              status={(profile as any)?.autorenew_status}
+              nextCharge={(profile as any)?.autorenew_next}
+            />
+          ) : (
+            <div className="rounded-xl border p-4">
+              <p className="text-sm font-medium">Choose a plan first</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Auto-renewal sets up a standing authorisation for a specific plan, so pick the one you want below.
+                You can switch it on straight after — and turn it off at any time without losing the period you've paid for.
+              </p>
+              <a href="#plans" className="mt-3 inline-flex items-center rounded-lg border h-9 px-3 text-xs hover:bg-accent">
+                See plans
+              </a>
+            </div>
+          )}
         </Section>
 
+        <div id="plans" className="scroll-mt-24" />
         <Section title="Available plans" desc="Change anytime — annual saves ~20%">
           <PlanPicker currentPlan={billing.status === "active" ? planName : ""} savedPhone={(profile as any)?.billing_phone || ""} />
         </Section>

@@ -72,7 +72,11 @@ export default async function Finance() {
           </div>
         )}
         <Section title="Revenue vs net profit" desc="Trailing 12 months (₹ Cr)">
-          <TrendChart data={chartData} keys={fin.live ? FIN_KEYS.filter((s) => fin.keys.includes(s.k)) : FIN_KEYS} />
+          <TrendChart
+            data={chartData}
+            keys={fin.live ? FIN_KEYS.filter((s) => fin.keys.includes(s.k)) : FIN_KEYS}
+            empty={<>No revenue or profit history yet. <Link href="/bank" className="text-primary">Upload a bank statement</Link> or <Link href="/import" className="text-primary">import invoices</Link> to build the trend.</>}
+          />
         </Section>
 
         <Section title="AI actions" desc="The COO executes — these write real records">
