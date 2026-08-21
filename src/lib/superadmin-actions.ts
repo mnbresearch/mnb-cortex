@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { isSuperAdmin } from "@/lib/superadmin";
-import { MY_BUSINESSES } from "@/lib/config";
+import { MY_BUSINESSES, PLANS } from "@/lib/config";
 import { sendEmail } from "@/lib/email";
 import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
 
@@ -54,7 +54,12 @@ export async function grantOrgAccess(org_id: string, email: string, role: string
   return { ok: true };
 }
 
-const VALID_PLANS = ["solo", "starter", "growth", "premium", "business", "enterprise"];
+// Derived from the catalogue, not typed out again. The hand-written copy still
+// listed the old six-tier ladder after pricing changed, so `aicoo` was rejected
+// as "Unknown plan" — the ₹39,999 tier literally could not be assigned to
+// anyone. Legacy ids stay accepted so existing rows remain editable.
+const LEGACY_PLANS = ["solo", "premium"];
+const VALID_PLANS = [...PLANS.map((p) => p.id), ...LEGACY_PLANS];
 const VALID_STATUS = ["trialing", "active", "expired", "suspended", "cancelled"];
 
 /**

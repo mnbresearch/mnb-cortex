@@ -5,8 +5,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isSuperAdmin, getAllOrgs, getPortfolioStatus, currentEmail } from "@/lib/superadmin";
+import { getPlatformEconomics } from "@/lib/admin-metrics";
+import { inr } from "@/lib/utils";
 import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager, ProvisionCustomerForm } from "@/components/superadmin-panel";
-import { ShieldAlert, Building2, Users, Activity, Lock, ExternalLink } from "lucide-react";
+import { ShieldAlert, Building2, Users, Activity, Lock, ExternalLink, IndianRupee, TrendingUp, Cpu, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +35,7 @@ export default async function SuperAdmin() {
     );
   }
 
-  const [{ rows, live, reason }, portfolio] = await Promise.all([getAllOrgs(), getPortfolioStatus()]);
+  const [{ rows, live, reason }, portfolio, econ] = await Promise.all([getAllOrgs(), getPortfolioStatus(), getPlatformEconomics()]);
   const totalMembers = rows.reduce((s, r) => s + r.members, 0);
 
   // ---- Adoption ----
@@ -73,6 +75,80 @@ export default async function SuperAdmin() {
           <Card className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Users className="h-4 w-4 text-primary" /> Total members</div><div className="text-2xl font-bold mt-1">{totalMembers}</div></Card>
           <Card className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Activity className="h-4 w-4 text-primary" /> Orgs with live data</div><div className="text-2xl font-bold mt-1">{activated}</div></Card>
         </div>
+
+        {/* The screen that answers "is this making money?". Nothing in the product
+            showed revenue against what the AI actually costs — which is exactly
+            how a ₹270-per-clip loss on video went unnoticed for weeks. */}
+        <Section title="Money" desc="Revenue collected against estimated AI cost — the number that decides whether ads are worth it">
+          {!econ.live ? (
+            <p className="text-sm text-muted-foreground">Not available — {econ.reason}</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <Card className="p-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><TrendingUp className="h-4 w-4 text-success" /> MRR</div>
+                  <div className="text-2xl font-bold mt-1 tabular">{inr(econ.mrr)}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{econ.payingOrgs} paying · {econ.paygOrgs} pay-as-you-go</div>
+                </Card>
+                <Card className="p-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><IndianRupee className="h-4 w-4 text-primary" /> Collected · 30d</div>
+                  <div className="text-2xl font-bold mt-1 tabular">{inr(econ.revenue30d)}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{inr(econ.revenueTotal)} all time</div>
+                </Card>
+                <Card className="p-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><Cpu className="h-4 w-4 text-warning" /> AI cost · 30d</div>
+                  <div className="text-2xl font-bold mt-1 tabular">{inr(Math.round(econ.cogs30d))}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">estimated from the credit ledger</div>
+                </Card>
+                <Card className="p-4">
+                  <div className="text-sm text-muted-foreground">Gross margin · 30d</div>
+                  <div className={`text-2xl font-bold mt-1 tabular ${econ.grossMargin30d === null ? "" : econ.grossMargin30d >= 60 ? "text-success" : econ.grossMargin30d >= 0 ? "text-warning" : "text-danger"}`}>
+                    {econ.grossMargin30d === null ? "—" : `${econ.grossMargin30d.toFixed(0)}%`}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{econ.grossMargin30d === null ? "no revenue yet" : "revenue minus AI cost"}</div>
+                </Card>
+              </div>
+
+              {econ.usage.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-sm font-medium mb-2">Where the AI spend goes · last 30 days</div>
+                  <div className="rounded-xl border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/40 text-muted-foreground">
+                        <tr><th className="text-left px-3 py-2 font-medium">Action</th><th className="text-right px-3 py-2 font-medium">Runs</th><th className="text-right px-3 py-2 font-medium">Credits</th><th className="text-right px-3 py-2 font-medium">Est. cost</th></tr>
+                      </thead>
+                      <tbody>
+                        {econ.usage.slice(0, 12).map((u) => (
+                          <tr key={u.mode} className="border-t">
+                            <td className="px-3 py-2">{u.mode}</td>
+                            <td className="px-3 py-2 text-right tabular">{u.runs}</td>
+                            <td className="px-3 py-2 text-right tabular">{u.credits}</td>
+                            <td className="px-3 py-2 text-right tabular">{inr(Math.round(u.costInr))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {econ.watchlist.length > 0 && (
+                <div className="mt-4 rounded-xl border border-warning/40 bg-warning/5 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium"><AlertTriangle className="h-4 w-4 text-warning" /> Costing more than a third of what they pay</div>
+                  <p className="text-xs text-muted-foreground mt-1">Worth a look before it becomes a loss. A workspace paying ₹0 here is on pay-as-you-go — check the credits cover it.</p>
+                  <div className="mt-2 space-y-1.5">
+                    {econ.watchlist.map((w) => (
+                      <div key={w.org_id} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="truncate">{w.name} <span className="text-muted-foreground">· {w.plan}</span></span>
+                        <span className="tabular shrink-0">{inr(Math.round(w.cost30d))} cost vs {w.monthly ? inr(w.monthly) : "PAYG"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </Section>
 
         <Section title="Adoption" desc="Signups, activation and plan mix across the platform">
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">

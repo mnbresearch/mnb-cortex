@@ -33,13 +33,32 @@ export async function getAllOrgs(): Promise<{ rows: OrgRow[]; live: boolean; rea
   try {
     const { data: orgs, error } = await sb.from("organizations").select("*").order("created_at", { ascending: false });
     if (error) return { rows: [], live: false, reason: error.message };
+    const list = (orgs as any[]) || [];
+
+    // Three COUNT queries per organisation was 1,501 round-trips at 500
+    // customers — this page would have timed out long before it became useful,
+    // and it's the page you'd be looking at while deciding whether to keep
+    // spending on ads. Three queries total instead, tallied in memory.
+    const ids = list.map((o) => o.id);
+    const tally = async (table: string) => {
+      const map = new Map<string, number>();
+      if (!ids.length) return map;
+      const { data } = await sb.from(table).select("org_id").in("org_id", ids).limit(100_000);
+      for (const r of ((data as any[]) || [])) {
+        const k = String(r.org_id);
+        map.set(k, (map.get(k) || 0) + 1);
+      }
+      return map;
+    };
+    const [memberBy, metricBy, alertBy] = await Promise.all([
+      tally("memberships"), tally("health_metrics"), tally("alerts"),
+    ]);
+
     const rows: OrgRow[] = [];
-    for (const o of (orgs as any[]) || []) {
-      const [{ count: members }, { count: metrics }, { count: alerts }] = await Promise.all([
-        sb.from("memberships").select("id", { count: "exact", head: true }).eq("org_id", o.id),
-        sb.from("health_metrics").select("id", { count: "exact", head: true }).eq("org_id", o.id),
-        sb.from("alerts").select("id", { count: "exact", head: true }).eq("org_id", o.id),
-      ]);
+    for (const o of list) {
+      const members = memberBy.get(o.id) || 0;
+      const metrics = metricBy.get(o.id) || 0;
+      const alerts = alertBy.get(o.id) || 0;
       rows.push({
         id: o.id, name: o.name, industry: o.industry, plan: o.plan, currency: o.currency,
         created_at: o.created_at, members: members || 0, metrics: metrics || 0, alerts: alerts || 0,
