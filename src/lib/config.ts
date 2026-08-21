@@ -83,7 +83,13 @@ export function planPrice(p: Plan, cur: CurrencyCode, annual: boolean): number |
 // ---- AI credit metering ----------------------------------------------------
 // What each AI action costs, in credits. Heavier generations cost more.
 export const CREDIT_COSTS: Record<string, number> = {
-  chat: 1, pulse: 1, ask: 1,
+  // 2 credits, not 1. The 1-credit price assumed gemini-2.5-flash at ₹0.22 a
+  // call — but that model 404s on our key, so calls land on a model costing
+  // ₹0.40-0.88. At 1 credit (₹0.90 at the floor) chat was running at roughly
+  // break-even, and it is by far the highest-volume action. At 2 credits it
+  // clears 4x against the realistic model and stays positive even against the
+  // dearest one.
+  chat: 2, pulse: 1, ask: 2,
   document: 5, meeting: 4, market: 5, strategy: 6,
   report: 10, forecast: 8, board: 10, investor: 6, brief: 3,
   marketing: 5, competitor: 5, negotiate: 4, hiring: 4,

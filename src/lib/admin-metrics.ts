@@ -18,10 +18,13 @@ import { PLANS } from "@/lib/config";
 
 /** ₹ per unit, from ai.google.dev (Aug 2026) at ~₹95.77/USD. */
 export const UNIT_COST_INR: Record<string, number> = {
-  // gemini-2.5-flash, ~2.5k in / 600 out for a grounded call
-  text: 0.22,
-  // a Deep Dive is three larger calls
-  deepdive: 0.99,
+  // A grounded call, ~2.5k in / 600 out. gemini-2.5-flash (₹0.22) 404s on our
+  // key, so this reflects the models we can actually reach: ₹0.40 on
+  // gemini-3.7/3.6-flash, ₹0.88 if it falls all the way back to 3.5-flash.
+  // Taking the pessimistic end — understating cost is the dangerous direction.
+  text: 0.88,
+  // three larger calls, at the same pessimistic per-call rate
+  deepdive: 3.9,
   // gemini-2.5-flash-image, $0.039
   agent_image: 3.74,
   // Veo 3.1 Fast 720p, $0.10/s × 8s
