@@ -6,7 +6,7 @@ import { getUserAndOrg, getBusinessContext } from "@/lib/data";
 import { sendEmail } from "@/lib/email";
 import { brandFrom } from "@/lib/branded-email";
 import { enforce } from "@/lib/ratelimit";
-import { sendText, sendTemplate, hasWhatsApp, whatsappSetupHint } from "@/lib/whatsapp";
+import { sendText, sendTemplate, hasWhatsAppFor, whatsappSetupHint } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,8 +62,9 @@ export async function POST(req: Request) {
       const { user, orgId } = await getUserAndOrg();
       if (!user || !orgId) return NextResponse.json({ ok: false, error: "Please sign in to send." }, { status: 200 });
 
-      // Honest, actionable state when the operator hasn't connected Meta yet.
-      if (!hasWhatsApp()) {
+      // Honest, actionable state when THIS workspace hasn't connected Meta yet.
+      // Checked per workspace, not globally: WhatsApp is bring-your-own-account.
+      if (!(await hasWhatsAppFor(orgId))) {
         return NextResponse.json({ ok: false, needsSetup: true, error: whatsappSetupHint() }, { status: 200 });
       }
 
@@ -82,8 +83,8 @@ export async function POST(req: Request) {
       if (!gate.ok) { const d = creditDenial(gate, "Sending a WhatsApp message"); return NextResponse.json(d.body, { status: d.status }); }
 
       const res = template
-        ? await sendTemplate(to, template, Array.isArray(b.variables) ? b.variables.map(String) : [])
-        : await sendText(to, text);
+        ? await sendTemplate(to, template, Array.isArray(b.variables) ? b.variables.map(String) : [], "en", orgId)
+        : await sendText(to, text, orgId);
 
       if (!res.sent) {
         if (gate.enforced) await refundForMode("act");

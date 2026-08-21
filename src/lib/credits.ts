@@ -127,8 +127,16 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
     // says expired/cancelled/suspended. Every other failure below still fails
     // OPEN, because locking out a paying customer over a transient database
     // error is worse than one unmetered call.
-    if (isLapsed(status) && !hasOverride) {
-      return { ok: false, enforced: true, cost, balance: 0, reason: "lapsed" };
+    // PAY AS YOU GO. Since there is no free trial, a brand-new workspace is
+    // `expired` from its first second — so if "lapsed" alone blocked everything,
+    // someone who had just paid ₹149 for a credit pack could not spend a single
+    // credit of it. Bought credits ARE the entitlement: the charge below is the
+    // payment, and each action is priced with margin built in.
+    //
+    // Only a workspace that is BOTH lapsed and out of credits is refused.
+    const balanceNow = Number((org as any)?.credits ?? 0);
+    if (isLapsed(status) && !hasOverride && balanceNow < cost) {
+      return { ok: false, enforced: true, cost, balance: balanceNow, reason: "lapsed" };
     }
 
     if (allowance > 0) { try { await svc.rpc("sync_allowance", { p_org: orgId, p_amount: allowance, p_days: RESET_DAYS }); } catch {} }
@@ -203,11 +211,15 @@ async function generationGate(kind: "image" | "video"): Promise<ImageGate> {
     const plan = String((org as any)?.plan || "starter").toLowerCase();
     const status = statusOf(org);
     if (superAdmin || plan === "enterprise") return { allowed: true, used: 0, limit: -1, plan, active: true };
-    if (isLapsed(status)) {
-      return { allowed: false, used: 0, limit: 0, plan, active: false, reason: `Your plan is inactive. Reactivate a plan to use ${kind} agents.` };
+    // A workspace with no live plan but a bought credit balance is pay-as-you-go
+    // and must still be able to spend what it paid for.
+    const balance = Number((org as any)?.credits ?? 0);
+    const payg = isLapsed(status) && balance > 0;
+    if (isLapsed(status) && !payg) {
+      return { allowed: false, used: 0, limit: 0, plan, active: false, reason: `Your plan is inactive. Add credits or choose a plan to use ${kind} agents.` };
     }
     const table = kind === "video" ? VIDEO_WEEKLY : IMAGE_WEEKLY;
-    const limit = table[plan] ?? 0;
+    const limit = payg ? (table.payg ?? 0) : (table[plan] ?? 0);
     if (limit < 0) return { allowed: true, used: 0, limit: -1, plan, active: true };
     if (limit === 0) {
       return {

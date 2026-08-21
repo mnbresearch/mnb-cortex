@@ -21,7 +21,15 @@ const GRAPH = "https://graph.facebook.com/v21.0";
 
 export type WhatsAppConfig = { token: string; phoneNumberId: string };
 
-/** Credentials the operator must supply. */
+/**
+ * Platform-wide credentials from the environment.
+ *
+ * This is the FALLBACK. WhatsApp is bring-your-own-account: each workspace
+ * connects its own Meta app on /integrations so messages come from its own
+ * business number. Use whatsappConfigFor(orgId) on any customer-facing path —
+ * sending every tenant's messages from one shared number would be both wrong
+ * and a fast route to a Meta ban.
+ */
 export function whatsappConfig(): WhatsAppConfig | null {
   const token = envKey("WHATSAPP_TOKEN");
   const phoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
@@ -54,6 +62,32 @@ export function normalisePhone(raw: string): string | null {
 
 export type SendResult = { sent: boolean; id?: string; error?: string; needsSetup?: boolean };
 
+/**
+ * The workspace's OWN WhatsApp credentials, falling back to the platform ones.
+ *
+ * /integrations already collected a "Permanent access token" and "Phone number
+ * ID" for WhatsApp and encrypted them — and nothing ever read them back, so a
+ * customer who connected their Meta account saw no change in behaviour. This is
+ * what makes that connection actually do something.
+ */
+export async function whatsappConfigFor(orgId?: string | null): Promise<WhatsAppConfig | null> {
+  if (orgId) {
+    try {
+      const { credentialsFor } = await import("@/lib/credentials");
+      const c = await credentialsFor(orgId, "whatsapp");
+      const token = String(c?.api_key || c?.token || "").trim();
+      const phoneNumberId = String(c?.phone_number_id || "").trim();
+      if (token && phoneNumberId) return { token, phoneNumberId };
+    } catch { /* fall back to the platform account below */ }
+  }
+  return whatsappConfig();
+}
+
+/** True when THIS workspace can send — its own account, or the platform one. */
+export async function hasWhatsAppFor(orgId?: string | null): Promise<boolean> {
+  return (await whatsappConfigFor(orgId)) !== null;
+}
+
 async function post(cfg: WhatsAppConfig, body: any): Promise<SendResult> {
   try {
     const r = await fetch(`${GRAPH}/${cfg.phoneNumberId}/messages`, {
@@ -77,8 +111,8 @@ async function post(cfg: WhatsAppConfig, body: any): Promise<SendResult> {
  * Free-form text. Meta only permits this inside a 24-hour window opened by the
  * customer messaging you first — outside it, use sendTemplate().
  */
-export async function sendText(to: string, body: string): Promise<SendResult> {
-  const cfg = whatsappConfig();
+export async function sendText(to: string, body: string, orgId?: string | null): Promise<SendResult> {
+  const cfg = await whatsappConfigFor(orgId);
   if (!cfg) return { sent: false, needsSetup: true, error: whatsappSetupHint() };
   const num = normalisePhone(to);
   if (!num) return { sent: false, error: `"${to}" is not a valid phone number.` };
@@ -94,8 +128,9 @@ export async function sendTemplate(
   templateName: string,
   variables: string[] = [],
   lang = "en",
+  orgId?: string | null,
 ): Promise<SendResult> {
-  const cfg = whatsappConfig();
+  const cfg = await whatsappConfigFor(orgId);
   if (!cfg) return { sent: false, needsSetup: true, error: whatsappSetupHint() };
   const num = normalisePhone(to);
   if (!num) return { sent: false, error: `"${to}" is not a valid phone number.` };

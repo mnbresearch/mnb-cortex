@@ -87,7 +87,11 @@ export async function requireWorkspace(): Promise<
       const { data, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
       if (!error && data) {
         const status = statusOf(data);
-        if (isLapsed(status)) {
+        // Bought credits count as entitlement — see chargeForMode(). Without
+        // this, a ₹149 pay-as-you-go customer would be refused every
+        // non-metered feature (exports, integrations, reports) despite paying.
+        const hasCredits = Number((data as any).credits ?? 0) > 0;
+        if (isLapsed(status) && !hasCredits) {
           return {
             ok: false,
             status: 402,

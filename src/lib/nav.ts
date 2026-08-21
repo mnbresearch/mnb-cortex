@@ -20,7 +20,7 @@ import {
   Award, AlarmClock, Radar,
   HeartHandshake, Umbrella, CalendarDays, Repeat2, House,
   Network, Telescope
-} from "lucide-react";
+, KeyRound} from "lucide-react";
 
 export const NAV = [
   { href: "/dashboard", label: "Business Health", icon: LayoutDashboard, group: "Overview" },
@@ -134,6 +134,7 @@ export const NAV = [
   { href: "/import", label: "Import data", icon: Upload, group: "Automation" },
   { href: "/data", label: "Data Explorer", icon: Database, group: "Automation" },
   { href: "/integrations", label: "Integrations", icon: Plug, group: "Automation" },
+  { href: "/setup-guides", label: "Connection guides", icon: KeyRound, group: "Automation" },
   { href: "/leads", label: "Leads", icon: Inbox, group: "Automation" },
   { href: "/activity", label: "Activity", icon: Activity, group: "Automation" },
   { href: "/developers", label: "Developers · API", icon: Code2, group: "Automation" },
