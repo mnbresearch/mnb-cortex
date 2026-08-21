@@ -19,9 +19,15 @@
 /** Text/reasoning models, best first. Verified against ai.google.dev. */
 export function geminiTextModels(): string[] {
   const pinned = (process.env.GEMINI_MODEL || "").trim();
+  // COST ORDER, not capability order. Per ai.google.dev (Aug 2026), output
+  // tokens cost $9.00/M on gemini-3.5-flash against $2.50/M on 2.5-flash — a
+  // typical grounded chat is ₹0.88 versus ₹0.22, four times the price for
+  // reasoning over the customer's own figures that 2.5-flash does perfectly
+  // well. At the old 1-credit charge, 3.5-flash left literally no margin.
+  // Set GEMINI_MODEL to pin a stronger model for a premium tier.
   const fallbacks = [
-    "gemini-3.5-flash",     // stable, strong price/performance
-    "gemini-2.5-flash",     // stable, older but widely available
+    "gemini-2.5-flash",     // stable, $0.30/$2.50 per 1M — the workhorse
+    "gemini-3.5-flash",     // stronger, $1.50/$9.00 — fallback only
     "gemini-flash-latest",  // alias — always resolves to something live
   ];
   return pinned ? [pinned, ...fallbacks.filter((m) => m !== pinned)] : fallbacks;

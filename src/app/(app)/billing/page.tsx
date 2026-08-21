@@ -28,7 +28,7 @@ export default async function Billing() {
   const badge = billing.status === "active"
     ? { cls: "bg-success/10 text-success border-success/20", text: "Active" }
     : billing.status === "expired"
-    ? { cls: "bg-danger/10 text-danger border-danger/20", text: "Trial ended" }
+    ? { cls: "bg-danger/10 text-danger border-danger/20", text: "No active plan" }
     : { cls: "bg-warning/10 text-warning border-warning/20", text: `Trial · ${billing.daysLeft} ${billing.daysLeft === 1 ? "day" : "days"} left` };
   return (
     <>
@@ -47,9 +47,9 @@ export default async function Billing() {
                   ? (billing.subscriptionEndsAt
                       ? `Active · renews ${new Date(billing.subscriptionEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
                       : "Subscription active · thank you!")
-                  : billing.status === "expired" ? "Your free trial has ended — choose a plan to continue."
+                  : billing.status === "expired" ? "No active plan — choose one below to start using Cortex."
                   : billing.trialEndsAt ? `Free trial ends ${new Date(billing.trialEndsAt).toLocaleDateString("en-IN")} · full access until then`
-                  : `${TRIAL_DAYS}-day free trial · full access`}
+                  : "No active plan"}
               </div>
             </div>
           </div>
@@ -57,7 +57,7 @@ export default async function Billing() {
 
         {billing.status !== "active" && (
           <Card className="p-4 text-sm text-muted-foreground">
-            Your {TRIAL_DAYS}-day free trial gives you the complete platform. After it ends, an active plan is required to keep using MNB Cortex — your data stays safe and is restored the moment you subscribe.
+            Cortex runs on credits. Start with a ₹149 credit pack to try it with no subscription, or pick a plan below for a monthly allowance. Either way your data stays yours — nothing is deleted if you pause.
           </Card>
         )}
 

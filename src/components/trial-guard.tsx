@@ -23,7 +23,7 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
       <div className="fixed inset-0 z-[100] grid place-items-center bg-background/80 backdrop-blur-sm p-4">
         <div className="w-full max-w-lg rounded-2xl border bg-card p-6 text-center shadow-2xl glow-ring">
           <div className="h-12 w-12 rounded-full bg-primary/10 grid place-items-center mx-auto"><Lock className="h-6 w-6 text-primary" /></div>
-          <h2 className="mt-3 text-xl font-bold">{lapsedSubscription ? "Your subscription has ended" : "Your free trial has ended"}</h2>
+          <h2 className="mt-3 text-xl font-bold">{lapsedSubscription ? "Your subscription has ended" : "Choose a plan to get started"}</h2>
           <p className="text-sm text-muted-foreground mt-1">
             {lapsedSubscription
               ? "Renew your plan to pick up right where you left off. Your data is safe and waiting."
@@ -57,7 +57,7 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
         <div className={`flex items-center gap-3 rounded-full border shadow-lg px-4 py-2 text-sm ${urgent ? "bg-danger/10 border-danger/30" : "bg-card"}`}>
           <Sparkles className={`h-4 w-4 shrink-0 ${urgent ? "text-danger" : "text-primary"}`} />
           <span className={urgent ? "text-danger font-medium" : ""}>
-            {daysLeft > 0 ? <><b>{daysLeft}</b> {daysLeft === 1 ? "day" : "days"} left in your free trial</> : "Your trial ends today"}
+            {daysLeft > 0 ? <><b>{daysLeft}</b> {daysLeft === 1 ? "day" : "days"} left on your plan</> : "Choose a plan to continue"}
           </span>
           <Link href="/billing" className="rounded-full brand-gradient text-white px-3 py-1 text-xs font-medium shrink-0">Upgrade</Link>
           <button onClick={() => setDismissed(true)} className="text-muted-foreground hover:text-foreground shrink-0"><X className="h-3.5 w-3.5" /></button>

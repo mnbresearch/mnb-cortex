@@ -29,7 +29,15 @@ export function hasVideoProvider(): boolean {
 /** Candidate Veo models, best first. Same retirement defence as the text models. */
 export function veoModels(): string[] {
   const pinned = (process.env.VEO_MODEL || "").trim();
-  const fallbacks = ["veo-3.1-generate-preview", "veo-3.1-lite-generate-preview"];
+  // Veo is billed PER SECOND of output. At ai.google.dev (Aug 2026):
+  //   Standard $0.40/s -> ~₹306 for an 8s clip
+  //   Fast     $0.10/s -> ~₹77
+  //   Lite     $0.05/s -> ~₹38
+  // Standard was the default while a video cost the customer 40 credits (~₹36),
+  // i.e. a ₹270 loss on every clip and up to ₹3.4 lakh a month from a single
+  // Business account. Fast at 720p is the quality/cost balance; VEO_MODEL can
+  // pin Standard for a premium tier once it is priced for it.
+  const fallbacks = ["veo-3.1-fast-generate-preview", "veo-3.1-lite-generate-preview"];
   return pinned ? [pinned, ...fallbacks.filter((m) => m !== pinned)] : fallbacks;
 }
 

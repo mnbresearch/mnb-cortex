@@ -90,13 +90,33 @@ export const CREDIT_COSTS: Record<string, number> = {
   contract: 6, account: 5, critique: 3, playbook: 6,
   proposal: 6, valuation: 6, broadcast: 3, sop: 4, costs: 4, loan: 3, vendor: 3,
   deepdive: 12, visibility: 10, bankstatement: 8, gst: 8, act: 2,
-  agent_image: 15, agent_video: 40,
+  // Generation is where real money is spent. See COGS above: an image costs us
+  // about ₹3.74 and an 8-second Veo Fast clip about ₹77, so these two are
+  // priced for a ~4.7x margin at the ₹0.90 credit floor. Video was 40 credits
+  // — roughly ₹36 of revenue against ₹306 of Veo Standard billing, a ₹270 loss
+  // on every single clip, and up to ₹3.4 lakh a month from one Business
+  // account. It is the one number in this file that could have bankrupted the
+  // product, so it does not get changed without redoing the arithmetic.
+  agent_image: 20, agent_video: 400,
 };
 
 // Weekly image-generation caps by state. Trial = a small taste; paid tiers get more.
 export const IMAGE_WEEKLY: Record<string, number> = {
-  trial: 5, solo: 15, starter: 45, growth: 150, premium: 600, business: 2500, enterprise: -1,
+  starter: 0, growth: 120, business: 500, aicoo: 2000, enterprise: -1,
+  // legacy ids kept so an existing workspace never falls through to a default
+  solo: 0, premium: 500, trial: 0,
 };
+
+/**
+ * Videos per week. Video shares the image gate but needs its own ceiling:
+ * an 8-second clip costs ~₹77 against ~₹3.74 for an image, so one number
+ * cannot sensibly govern both.
+ */
+export const VIDEO_WEEKLY: Record<string, number> = {
+  starter: 0, growth: 5, business: 20, aicoo: 60, enterprise: -1,
+  solo: 0, premium: 20, trial: 0,
+};
+
 export const DEFAULT_CREDIT_COST = 2;
 export function creditCost(mode: string): number {
   return CREDIT_COSTS[String(mode || "").toLowerCase()] ?? DEFAULT_CREDIT_COST;
@@ -104,19 +124,28 @@ export function creditCost(mode: string): number {
 
 // Monthly included allowance per plan. -1 means unlimited.
 export const PLAN_CREDITS: Record<string, number> = {
-  solo: 300, starter: 900, growth: 4000, premium: 15000, business: 45000, enterprise: -1,
+  starter: 1000, growth: 5000, business: 20000, aicoo: 60000, enterprise: -1,
+  // legacy ids — an old row must still resolve to something sane
+  solo: 1000, premium: 20000,
 };
 
 /**
- * Free-trial length in days. Single source of truth — billing.ts, workspace.ts
- * and the /billing copy all read this. The UI used to claim "14-day free trial"
- * while the code enforced 3.
+ * There is no free trial.
+ *
+ * Kept as 0 rather than deleted because TRIAL_DAYS is read in several places;
+ * zero means a workspace is never granted a free window. Entry is either the
+ * ₹149 credit pack (pay as you go, no subscription) or a plan. The free public
+ * Business Health Check remains the top of funnel — it is rate-limited and
+ * costs three Gemini calls, not an open-ended account.
+ *
+ * A three-day trial on a product whose first step is "connect Tally or upload a
+ * bank statement" was converting badly anyway: the clock ran out before an
+ * owner had their data in.
  */
-export const TRIAL_DAYS = 3;
+export const TRIAL_DAYS = 0;
 
-// One-time credits for a free-trial workspace — a small taste, granted once (not monthly).
-// Enough to try text agents + a couple of images, not enough for daily use.
-export const TRIAL_CREDITS = 150;
+/** No free credits. A new workspace buys a pack or a plan. */
+export const TRIAL_CREDITS = 0;
 
 /**
  * Users allowed per plan — the caps the pricing page advertises ("1 user",
@@ -124,37 +153,96 @@ export const TRIAL_CREDITS = 150;
  * ₹39,999 both bought unlimited seats. -1 means unlimited.
  */
 export const PLAN_SEATS: Record<string, number> = {
-  solo: 1, starter: 3, growth: 10, premium: 25, business: 75, enterprise: -1,
+  starter: 1, growth: 5, business: 20, aicoo: 75, enterprise: -1,
+  solo: 1, premium: 20,
 };
 export function seatLimit(plan: string | null | undefined): number {
-  return PLAN_SEATS[String(plan || "").toLowerCase()] ?? PLAN_SEATS.solo;
+  return PLAN_SEATS[String(plan || "").toLowerCase()] ?? PLAN_SEATS.starter;
 }
 
 // Buyable top-up packs (one-time). Price in INR.
 export type CreditPack = { id: string; label: string; credits: number; price: number; per: string };
 export const CREDIT_PACKS: CreditPack[] = [
-  { id: "pack_1k", label: "Starter top-up", credits: 1000, price: 999, per: "₹1.00 / credit" },
-  { id: "pack_5k", label: "Growth top-up", credits: 5000, price: 3999, per: "₹0.80 / credit" },
-  { id: "pack_20k", label: "Scale top-up", credits: 20000, price: 12999, per: "₹0.65 / credit" },
+  // ₹0.90 is the FLOOR. Every credit cost above is sized for a ~4x margin at
+  // that price, so discounting past it quietly deletes the margin everywhere.
+  { id: "pack_100", label: "Taster", credits: 100, price: 149, per: "₹1.49 / credit" },
+  { id: "pack_500", label: "Small", credits: 500, price: 599, per: "₹1.20 / credit" },
+  { id: "pack_2k", label: "Standard", credits: 2000, price: 1999, per: "₹1.00 / credit" },
+  { id: "pack_10k", label: "Bulk", credits: 10000, price: 8999, per: "₹0.90 / credit" },
 ];
 
 export const PLANS: Plan[] = [
-  { id: "solo", name: "Solo", monthly: 799, annual: 7670, usdMonthly: 12, usdAnnual: 115, tagline: "For a solo founder or freelancer trying AI.",
-    cta: "Choose Solo",
-    features: ["1 workspace · 1 user", "300 AI credits / month", "Business Health Dashboard", "AI CEO Chat + Cortex Memory", "50+ business calculators", "15 image generations / week", "Email support"] },
-  { id: "starter", name: "Starter", monthly: 2499, annual: 23990, usdMonthly: 29, usdAnnual: 279, tagline: "For small teams getting started with AI.",
+  // Four tiers, not six. The old ladder ran ₹799 → ₹2,499 → ₹6,999 → ₹17,999 →
+  // ₹39,999; buyers couldn't tell Solo from Starter or Premium from Business,
+  // and ₹799 could never repay any paid-acquisition cost. Each tier now maps to
+  // a recognisable size of business and a distinct go-to-market motion.
+  //
+  // Every bullet below is something the product ACTUALLY does today. WhatsApp
+  // execution appears only on AI COO because it needs Meta credentials the
+  // customer supplies; "62 integrations" is not claimed anywhere, because only
+  // four currently sync data.
+  { id: "starter", name: "Starter", monthly: 1499, annual: 14990, usdMonthly: 19, usdAnnual: 189,
+    tagline: "See your business clearly. One owner, one workspace.",
     cta: "Choose Starter",
-    features: ["1 workspace · up to 3 users", "900 AI credits / month", "All calculators + AI agents", "Sales, Finance & HR modules", "CSV / Excel import & export", "45 image generations / week", "Email support"] },
-  { id: "growth", name: "Growth", monthly: 6999, annual: 67190, usdMonthly: 85, usdAnnual: 815, tagline: "The full AI COO for growing SMEs.", highlight: true,
+    features: [
+      "1 user · 1 workspace",
+      "1,000 AI credits / month",
+      "Business Health Dashboard + Cortex Score",
+      "AI CEO Chat grounded in your data",
+      "Bank statement & GST return reader",
+      "90+ business calculators",
+      "3 integrations · CSV / Excel import",
+      "Email support",
+    ] },
+  { id: "growth", name: "Growth", monthly: 4999, annual: 49990, usdMonthly: 59, usdAnnual: 599,
+    tagline: "The AI COO for a growing team.", highlight: true,
     cta: "Choose Growth",
-    features: ["Up to 10 users", "4,000 AI credits / month", "All 7 agent departments + 26 industries", "Workflow automation + approvals", "Document & Meeting Intelligence", "150 image generations / week", "Priority email + chat support"] },
-  { id: "premium", name: "Premium", monthly: 17999, annual: 172790, usdMonthly: 219, usdAnnual: 2099, tagline: "For scaling companies that run on AI.",
-    cta: "Choose Premium",
-    features: ["Up to 25 users", "15,000 AI credits / month", "Priority AI (faster, higher limits)", "Real email / WhatsApp automations", "Custom dashboards & auto-reports", "600 image generations / week", "Dedicated onboarding + SLA"] },
-  { id: "business", name: "Business", monthly: 39999, annual: 383990, usdMonthly: 489, usdAnnual: 4699, tagline: "For multi-brand groups & agencies.",
+    features: [
+      "Up to 5 users",
+      "5,000 AI credits / month",
+      "All 7 agent departments + 26 industries",
+      "Workflow automation + approvals",
+      "Cortex Memory — permanent business context",
+      "Scheduled reports & daily autopilot",
+      "10 integrations",
+      "120 images + 5 videos / week",
+      "Priority email support",
+    ] },
+  { id: "business", name: "Business", monthly: 14999, annual: 149990, usdMonthly: 179, usdAnnual: 1799,
+    tagline: "For companies that run on their numbers.",
     cta: "Choose Business",
-    features: ["Up to 75 users · multi-workspace", "45,000 AI credits / month", "White-label & custom branding", "Public API + webhooks", "2,500 image generations / week", "Priority support + success manager"] },
-  { id: "enterprise", name: "Enterprise", monthly: 0, annual: 0, tagline: "For large groups, PE funds & family offices.",
+    features: [
+      "Up to 20 users",
+      "20,000 AI credits / month",
+      "Everything in Growth",
+      "Public API + outbound webhooks",
+      "Custom dashboards & auto-reports",
+      "30 integrations",
+      "500 images + 20 videos / week",
+      "Guided onboarding · priority support",
+    ] },
+  { id: "aicoo", name: "AI COO", monthly: 39999, annual: 399990, usdMonthly: 469, usdAnnual: 4699,
+    tagline: "Cortex runs the operation, not just the reporting.",
+    cta: "Choose AI COO",
+    features: [
+      "Up to 75 users · multi-workspace",
+      "60,000 AI credits / month",
+      "Everything in Business",
+      "WhatsApp execution (your Meta account)",
+      "White-label & custom branding",
+      "Unlimited integrations",
+      "2,000 images + 60 videos / week",
+      "Done-for-you onboarding · success manager",
+    ] },
+  { id: "enterprise", name: "Enterprise", monthly: 0, annual: 0,
+    tagline: "For large groups, PE funds & family offices.",
     cta: "Contact us",
-    features: ["Unlimited users & workspaces", "Unlimited AI credits & images", "SSO / SAML", "Custom integrations (Tally, ERP, Shopify)", "On-prem / private cloud option", "Custom SLA & security review"] },
+    features: [
+      "Unlimited users & workspaces",
+      "Unlimited AI credits, images & video",
+      "SSO / SAML",
+      "Custom integrations (Tally, ERP, Shopify)",
+      "On-prem / private cloud option",
+      "Custom SLA & security review",
+    ] },
 ];

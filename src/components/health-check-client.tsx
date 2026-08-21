@@ -129,7 +129,7 @@ export function HealthCheckClient() {
         ) : (
           <>
             <div className="font-display text-xl tracking-tightest">Get your detailed report + a fix plan</div>
-            <p className="text-sm text-muted-foreground mt-1">We&rsquo;ll email a breakdown and set you up with a free trial.</p>
+            <p className="text-sm text-muted-foreground mt-1">We&rsquo;ll email the full breakdown and show you what Cortex would do with your numbers.</p>
             <form onSubmit={submit} className="mt-4 grid sm:grid-cols-2 gap-3">
               <input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
               <input required type="email" placeholder="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />

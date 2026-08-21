@@ -28,7 +28,7 @@ export function ReferralWidget() {
         <div className="relative z-10">
           <div className="h-12 w-12 rounded-full brand-gradient grid place-items-center text-white mx-auto"><Gift className="h-6 w-6" /></div>
           <h2 className="mt-3 text-xl font-bold">Refer a business, earn rewards</h2>
-          <p className="text-sm text-muted-foreground mt-1">Give another SME a free trial. When they subscribe, you both get a month on us.</p>
+          <p className="text-sm text-muted-foreground mt-1">Refer another SME. When they subscribe, you both get a month on us.</p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             <code className="rounded-lg border bg-background px-3 h-10 inline-flex items-center text-sm font-mono">{code}</code>
             <Button variant="outline" onClick={() => copy(link)}>{copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} Copy link</Button>

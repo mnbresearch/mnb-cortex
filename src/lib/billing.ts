@@ -27,14 +27,14 @@ export type BillingStatus = {
 export async function getBillingStatus(): Promise<BillingStatus> {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) {
-    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, plan: "growth", locked: false };
+    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, plan: "starter", locked: false };
   }
   const sb = createClient();
 
   // Try the full read (needs the migration). Fall back to created_at only.
   let enforceable = true;
   let subStatus = "trialing";
-  let plan = "growth";
+  let plan = "starter";
   let created: number | null = null;
   let trialEnd: number | null = null;
   let subEnd: number | null = null;
@@ -47,7 +47,7 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     const { data, error } = await sb.from("organizations").select("*").eq("id", orgId).single();
     if (error) throw error;
     subStatus = (data as any).subscription_status || "trialing";
-    plan = (data as any).plan || "growth";
+    plan = (data as any).plan || "starter";
     created = (data as any).created_at ? new Date((data as any).created_at).getTime() : null;
     trialEnd = (data as any).trial_ends_at ? new Date((data as any).trial_ends_at).getTime() : (created ? created + TRIAL_DAYS * DAY : null);
     subEnd = (data as any).subscription_ends_at ? new Date((data as any).subscription_ends_at).getTime() : null;
@@ -55,7 +55,7 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     enforceable = false;
     try {
       const { data } = await sb.from("organizations").select("created_at, plan").eq("id", orgId).single();
-      plan = (data as any)?.plan || "growth";
+      plan = (data as any)?.plan || "starter";
       created = (data as any)?.created_at ? new Date((data as any).created_at).getTime() : null;
       trialEnd = created ? created + TRIAL_DAYS * DAY : null;
     } catch { /* leave defaults */ }

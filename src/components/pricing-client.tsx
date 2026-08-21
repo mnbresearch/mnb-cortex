@@ -94,7 +94,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
                 disabled={busy === p.id}
                 className={`w-full rounded-full h-11 text-sm font-medium transition-colors disabled:opacity-60 ${p.highlight ? "btn-ink" : "border hover:bg-accent"}`}
               >
-                {p.monthly === 0 || cur === "USD" ? p.cta : signedIn ? "Subscribe" : "Start free trial"}
+                {p.monthly === 0 || cur === "USD" ? p.cta : signedIn ? "Subscribe" : "Get started"}
               </button>
               <ul className="mt-5 space-y-2 text-sm">
                 {p.features.map((f) => <li key={f} className="flex gap-2"><Check className="h-4 w-4 text-success shrink-0 mt-0.5" /><span>{f}</span></li>)}

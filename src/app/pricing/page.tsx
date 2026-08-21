@@ -23,7 +23,7 @@ export default async function Pricing() {
           <Kinetic as="h1" text={"Run your company\non AI."} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
             One AI COO with 380+ agents, memory and automation — from <span className="text-foreground font-medium">₹799/mo</span>.
-            Start with a free {TRIAL_DAYS}-day trial. No card required.
+            Try it for ₹149 with a credit pack — no subscription. Or pick a plan for a monthly allowance.
           </p>
         </div>
       </section>

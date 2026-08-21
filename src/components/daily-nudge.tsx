@@ -28,7 +28,7 @@ export function DailyNudge({ status, daysLeft }: { status: string; daysLeft: num
         <button onClick={dismiss} className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
         <div className="h-12 w-12 rounded-2xl brand-gradient grid place-items-center text-white mx-auto animate-float"><Sparkles className="h-6 w-6" /></div>
         <h2 className="mt-3 font-semibold text-lg">
-          {daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left in your free trial` : "Your free trial is ending"}
+          {daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left on your plan` : "Your plan is ending"}
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
           Loving Cortex? Upgrade now to keep your AI COO, agents, memory and reports running without interruption when the trial ends.

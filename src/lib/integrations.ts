@@ -7,8 +7,14 @@
  * looked up as `undefined` and fell through to the Starter cap — so the most
  * expensive plan got FEWER integrations (2) than the ₹2,499 one (3).
  */
-export type PlanId = "solo" | "starter" | "growth" | "premium" | "business" | "enterprise";
-export const PLAN_RANK: Record<PlanId, number> = { solo: 1, starter: 2, growth: 3, premium: 4, business: 5, enterprise: 6 };
+export type PlanId = "starter" | "growth" | "business" | "aicoo" | "enterprise" | "solo" | "premium";
+// Ordering drives every "minimum plan" gate, so a missing id here silently
+// under-privileges a paying customer. aicoo must outrank business.
+export const PLAN_RANK: Record<string, number> = {
+  starter: 1, growth: 2, business: 3, aicoo: 4, enterprise: 5,
+  // legacy ids mapped onto the nearest current tier
+  solo: 1, premium: 3,
+};
 
 export type Field = {
   key: string;
@@ -32,21 +38,23 @@ export type Integration = {
 };
 
 /** How many integrations each plan may connect. */
-export const PLAN_INTEGRATION_LIMIT: Record<PlanId, number> = {
-  solo: 2,
+export const PLAN_INTEGRATION_LIMIT: Record<string, number> = {
   starter: 3,
   growth: 10,
-  premium: 30,
-  business: 100,
+  business: 30,
+  aicoo: 999,
   enterprise: 999,
+  // legacy ids from the old six-tier ladder
+  solo: 3,
+  premium: 30,
 };
 
 /** Plan ids that aren't in the catalogue fall back to the cheapest tier. */
 export function planRank(plan: string | null | undefined): number {
-  return PLAN_RANK[(String(plan || "").toLowerCase() as PlanId)] ?? PLAN_RANK.solo;
+  return PLAN_RANK[String(plan || "").toLowerCase()] ?? PLAN_RANK.starter;
 }
 export function integrationLimit(plan: string | null | undefined): number {
-  return PLAN_INTEGRATION_LIMIT[(String(plan || "").toLowerCase() as PlanId)] ?? PLAN_INTEGRATION_LIMIT.solo;
+  return PLAN_INTEGRATION_LIMIT[String(plan || "").toLowerCase()] ?? PLAN_INTEGRATION_LIMIT.starter;
 }
 
 const KEY = (label = "API key", ph = "sk_live_…"): Field => ({ key: "api_key", label, type: "password", placeholder: ph, required: true });

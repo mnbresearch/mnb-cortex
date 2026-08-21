@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUserAndOrg } from "@/lib/data";
 import { creditDenial, requireWorkspace } from "@/lib/api-guard";
-import { chargeForMode, refundForMode, imageGenGate } from "@/lib/credits";
+import { chargeForMode, refundForMode, videoGenGate } from "@/lib/credits";
 import { startVideo, pollVideo, fetchVideo, hasVideoProvider } from "@/lib/ai/video";
 
 export const runtime = "nodejs";
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
   // Video is the most expensive thing the product can do, so it reuses the
   // same premium entitlement gate as image generation before charging.
-  const gate0 = await imageGenGate();
+  const gate0 = await videoGenGate();
   if (!gate0.allowed) {
     return NextResponse.json({ ok: false, limited: true, error: gate0.reason }, { status: 200 });
   }

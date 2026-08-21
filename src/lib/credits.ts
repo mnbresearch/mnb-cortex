@@ -2,7 +2,7 @@ import "server-only";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
 import { isSuperAdmin } from "@/lib/superadmin";
-import { PLAN_CREDITS, creditCost, IMAGE_WEEKLY, TRIAL_CREDITS } from "@/lib/config";
+import { PLAN_CREDITS, creditCost, IMAGE_WEEKLY, VIDEO_WEEKLY, TRIAL_CREDITS } from "@/lib/config";
 
 const RESET_DAYS = 30;
 const WEEK_MS = 7 * 86_400_000;
@@ -41,14 +41,15 @@ function planAllowance(plan: string, status: string, override?: number | null): 
   if (isLapsed(status)) return 0;
   // Trialing workspaces get a small taste, not the plan's monthly allowance.
   if (status !== "active") return TRIAL_CREDITS;
-  return PLAN_CREDITS[plan] ?? 500;
+  // Unknown plan id -> the SMALLEST allowance, never a generous one.
+  return PLAN_CREDITS[plan] ?? PLAN_CREDITS.starter;
 }
 
 /** Full credit state for the active workspace. Applies the monthly allowance top-up if due. */
 export async function getCreditState(): Promise<CreditState> {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) {
-    return { known: false, enforceable: false, unlimited: true, balance: 0, allowance: 0, plan: "growth", resetAt: null };
+    return { known: false, enforceable: false, unlimited: true, balance: 0, allowance: 0, plan: "starter", resetAt: null };
   }
   const superAdmin = await isSuperAdmin();
   const sb = createClient();
@@ -58,7 +59,7 @@ export async function getCreditState(): Promise<CreditState> {
     // error here would silently switch metering off for a paying customer.
     const { data, error } = await sb.from("organizations").select("*").eq("id", orgId).single();
     if (error) throw error;
-    const plan = String((data as any).plan || "growth").toLowerCase();
+    const plan = String((data as any).plan || "starter").toLowerCase();
     const status = statusOf(data);
     const allowance = planAllowance(plan, status, (data as any).credits_allowance);
     const unlimited = superAdmin || plan === "enterprise" || allowance < 0;
@@ -82,7 +83,7 @@ export async function getCreditState(): Promise<CreditState> {
     return { known: true, enforceable: true, unlimited, balance, allowance, plan, resetAt };
   } catch {
     // credits columns not migrated yet → metering inactive, never blocks
-    return { known: true, enforceable: false, unlimited: true, balance: 0, allowance: 0, plan: "growth", resetAt: null };
+    return { known: true, enforceable: false, unlimited: true, balance: 0, allowance: 0, plan: "starter", resetAt: null };
   }
 }
 
@@ -109,7 +110,7 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
     const superAdmin = await isSuperAdmin();
     const { data: org, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
     if (error) return { ok: true, enforced: false, cost, balance: 0 };
-    const plan = String((org as any)?.plan || "growth").toLowerCase();
+    const plan = String((org as any)?.plan || "starter").toLowerCase();
     const status = statusOf(org);
     const override = (org as any)?.credits_allowance;
     const hasOverride = typeof override === "number" && override !== 0;
@@ -175,48 +176,66 @@ export async function grantCredits(orgId: string, amount: number, reason: string
 export type ImageGate = { allowed: boolean; used: number; limit: number; plan: string; active: boolean; reason?: string };
 
 /**
- * Premium gate for image generation. Trial workspaces get a small weekly taste,
- * then must buy. Suspended/expired are blocked. Fails CLOSED on any doubt so the
- * paid image model can't be abused by free users.
+ * Weekly ceiling for generation, per kind.
+ *
+ * Images and video CANNOT share one number. An image costs us about ₹3.74; an
+ * 8-second Veo Fast clip about ₹77 — twenty times more. Worse, the old gate
+ * counted only `ai:agent_image` in the ledger, so video was never capped by it
+ * at all: the sole limit was credits, and at the old 40-credit price a Business
+ * workspace could have generated over a thousand clips in a month.
+ *
+ * Credits are the budget; this is the blast radius. Two independent limits mean
+ * a pricing mistake in one cannot empty the bank on its own.
+ *
+ * Fails CLOSED on any doubt — the expensive models must never be reachable by a
+ * workspace we can't positively confirm is entitled.
  */
-export async function imageGenGate(): Promise<ImageGate> {
+async function generationGate(kind: "image" | "video"): Promise<ImageGate> {
   const { user, orgId } = await getUserAndOrg();
-  if (!user || !orgId) return { allowed: false, used: 0, limit: 0, plan: "none", active: false, reason: "Sign in to a workspace to use image agents." };
+  const noun = kind === "video" ? "video generations" : "image generations";
+  if (!user || !orgId) return { allowed: false, used: 0, limit: 0, plan: "none", active: false, reason: `Sign in to a workspace to use ${kind} agents.` };
   const superAdmin = await isSuperAdmin();
   const svc = serviceClient();
-  if (!svc) return { allowed: false, used: 0, limit: 0, plan: "none", active: false, reason: "Image generation is temporarily unavailable." };
+  if (!svc) return { allowed: false, used: 0, limit: 0, plan: "none", active: false, reason: `${kind === "video" ? "Video" : "Image"} generation is temporarily unavailable.` };
   try {
     const { data: org, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
     if (error) throw error;
-    const plan = String((org as any)?.plan || "growth").toLowerCase();
+    const plan = String((org as any)?.plan || "starter").toLowerCase();
     const status = statusOf(org);
     if (superAdmin || plan === "enterprise") return { allowed: true, used: 0, limit: -1, plan, active: true };
-    if (["suspended", "cancelled", "expired"].includes(status)) {
-      return { allowed: false, used: 0, limit: 0, plan, active: false, reason: "Your plan is inactive. Reactivate a paid plan to use image agents." };
+    if (isLapsed(status)) {
+      return { allowed: false, used: 0, limit: 0, plan, active: false, reason: `Your plan is inactive. Reactivate a plan to use ${kind} agents.` };
     }
-    const active = status === "active";
-    const limit = active ? (IMAGE_WEEKLY[plan] ?? IMAGE_WEEKLY.starter) : IMAGE_WEEKLY.trial;
-    if (limit < 0) return { allowed: true, used: 0, limit: -1, plan, active };
+    const table = kind === "video" ? VIDEO_WEEKLY : IMAGE_WEEKLY;
+    const limit = table[plan] ?? 0;
+    if (limit < 0) return { allowed: true, used: 0, limit: -1, plan, active: true };
+    if (limit === 0) {
+      return {
+        allowed: false, used: 0, limit: 0, plan, active: true,
+        reason: `${kind === "video" ? "Video" : "Image"} generation isn't included on the ${plan} plan — upgrade to unlock it.`,
+      };
+    }
 
     const since = new Date(Date.now() - WEEK_MS).toISOString();
     const { count, error: cErr } = await svc.from("credit_ledger")
-      .select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("reason", "ai:agent_image").gte("created_at", since);
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", orgId).eq("reason", `ai:agent_${kind}`).gte("created_at", since);
     if (cErr) throw cErr;
     const used = count || 0;
     if (used >= limit) {
       return {
-        allowed: false, used, limit, plan, active,
-        reason: active
-          ? `You've used all ${limit} image generations on your ${plan} plan this week. Upgrade for a higher limit.`
-          : `You've used your ${limit} free image generations for this week. Buy a plan to keep generating — free access is limited on purpose.`,
+        allowed: false, used, limit, plan, active: true,
+        reason: `You've used all ${limit} ${noun} on your ${plan} plan this week. Upgrade for a higher limit.`,
       };
     }
-    return { allowed: true, used, limit, plan, active };
+    return { allowed: true, used, limit, plan, active: true };
   } catch {
-    // Fail closed — never let the paid image model run when we can't verify entitlement.
-    return { allowed: false, used: 0, limit: 0, plan: "unknown", active: false, reason: "Couldn't verify your image quota. Please try again shortly." };
+    return { allowed: false, used: 0, limit: 0, plan: "unknown", active: false, reason: `${kind === "video" ? "Video" : "Image"} generation is temporarily unavailable.` };
   }
 }
+
+export async function imageGenGate(): Promise<ImageGate> { return generationGate("image"); }
+export async function videoGenGate(): Promise<ImageGate> { return generationGate("video"); }
 
 /** Recent credit events for a workspace (usage history). */
 export async function getLedger(orgId: string, limit = 60) {
