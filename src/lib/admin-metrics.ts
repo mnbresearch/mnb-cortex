@@ -64,6 +64,9 @@ export type PlatformEconomics = {
   usage: ModeUsage[];
   /** Workspaces whose 30-day AI cost is closest to (or past) what they pay. */
   watchlist: { org_id: string; name: string; plan: string; cost30d: number; monthly: number }[];
+  /** The actual rows behind the revenue figure — a total you cannot drill into
+   *  is a number you cannot trust. Newest first. */
+  recentPayments: { order_id: string; org: string; kind: string; ref: string; amount: number; when: string }[];
 };
 
 const DAY = 86_400_000;
@@ -72,7 +75,7 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
   const empty: PlatformEconomics = {
     live: false, revenueTotal: 0, revenue30d: 0, mrr: 0, payingOrgs: 0,
     totalOrgs: 0, activeOrgs: 0, paygOrgs: 0, cogs30d: 0, grossMargin30d: null,
-    usage: [], watchlist: [],
+    usage: [], watchlist: [], recentPayments: [],
   };
   const sb = serviceClient();
   if (!sb) return { ...empty, reason: "SUPABASE_SERVICE_ROLE_KEY not set" };
@@ -82,7 +85,7 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
     const priceOf = new Map(PLANS.map((p) => [p.id, p.monthly]));
 
     const [paymentsRes, orgsRes, ledgerRes] = await Promise.all([
-      sb.from("payments").select("amount, status, created_at, org_id, kind").eq("status", "paid").limit(20_000),
+      sb.from("payments").select("order_id, amount, status, created_at, org_id, kind, ref").eq("status", "paid").order("created_at", { ascending: false }).limit(20_000),
       sb.from("organizations").select("id, name, plan, subscription_status, subscription_ends_at, credits").limit(5_000),
       // Only AI charges. Refunds and grants carry other reasons.
       sb.from("credit_ledger").select("org_id, reason, delta, created_at").lt("delta", 0).gte("created_at", since).limit(100_000),
@@ -140,8 +143,18 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
       .sort((a, b) => b.cost30d - a.cost30d)
       .slice(0, 10);
 
+    const recentPayments = payments.slice(0, 15).map((p: any) => ({
+      order_id: String(p.order_id || "—"),
+      org: orgName.get(p.org_id)?.name || "—",
+      kind: String(p.kind || "—"),
+      ref: String(p.ref || "—"),
+      amount: Number(p.amount) || 0,
+      when: p.created_at,
+    }));
+
     return {
       live: true,
+      recentPayments,
       revenueTotal, revenue30d, mrr, payingOrgs,
       totalOrgs: orgs.length, activeOrgs, paygOrgs,
       cogs30d,

@@ -132,6 +132,39 @@ export default async function SuperAdmin() {
                 </div>
               )}
 
+              {econ.recentPayments.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-sm font-medium mb-2">Recent payments</div>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    The rows behind the revenue figure. If a workspace paid but isn't on an active plan,
+                    that shows up here as a payment with no matching subscription — worth checking before
+                    it becomes a support ticket.
+                  </p>
+                  <div className="rounded-xl border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/40 text-muted-foreground">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium">When</th>
+                          <th className="text-left px-3 py-2 font-medium">Workspace</th>
+                          <th className="text-left px-3 py-2 font-medium">For</th>
+                          <th className="text-right px-3 py-2 font-medium">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {econ.recentPayments.map((p) => (
+                          <tr key={p.order_id} className="border-t">
+                            <td className="px-3 py-2 whitespace-nowrap">{new Date(p.when).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" })}</td>
+                            <td className="px-3 py-2 truncate max-w-[180px]">{p.org}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{p.kind}{p.ref && p.ref !== "—" ? ` · ${p.ref}` : ""}</td>
+                            <td className="px-3 py-2 text-right tabular">{inr(p.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {econ.watchlist.length > 0 && (
                 <div className="mt-4 rounded-xl border border-warning/40 bg-warning/5 p-4">
                   <div className="flex items-center gap-2 text-sm font-medium"><AlertTriangle className="h-4 w-4 text-warning" /> Costing more than a third of what they pay</div>

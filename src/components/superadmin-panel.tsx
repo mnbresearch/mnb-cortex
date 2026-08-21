@@ -1,11 +1,18 @@
 "use client";
+import { PLANS } from "@/lib/config";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Building2, Check, Loader2, Coins, CalendarPlus, Save, UserPlus } from "lucide-react";
 
 type Org = { id: string; name: string };
 
-const PLAN_OPTS = ["solo", "starter", "growth", "premium", "business", "enterprise"];
+// Derived from the catalogue, never typed out. This list was a hardcoded copy
+// of the old six-tier ladder, so after the repricing the console physically
+// could not assign `aicoo` — the ₹39,999 tier was unreachable from the one
+// screen built to assign it. The server-side allowlist had the same bug.
+// Legacy ids are appended so an existing row on `solo`/`premium` stays editable.
+const LEGACY_PLAN_OPTS = ["solo", "premium"];
+const PLAN_OPTS = [...PLANS.map((p) => p.id), ...LEGACY_PLAN_OPTS];
 const STATUS_OPTS = ["trialing", "active", "expired", "suspended", "cancelled"];
 
 async function call(op: string, extra: Record<string, any> = {}) {
@@ -223,10 +230,12 @@ export function OrgManager({ org }: { org: ManagedOrg }) {
         <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("revoke", { creditsDelta: -Math.abs(amount) })}>Revoke</Button>
         <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("set", { creditsSet: Math.abs(amount) })}>Set to</Button>
         <div className="w-px h-8 bg-border mx-1" />
-        <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("t14", { extendTrialDays: 14 })}>
-          {busy === "t14" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />} +14d trial
+        {/* Grants a PAID period, not a trial — trials no longer exist. This
+            button used to write trial_ends_at, which nothing reads any more. */}
+        <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("t14", { subscriptionDays: 14 })}>
+          {busy === "t14" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />} +14d paid
         </Button>
-        <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("t30", { extendTrialDays: 30 })}>+30d</Button>
+        <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("t30", { subscriptionDays: 30 })}>+30d paid</Button>
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
