@@ -50,7 +50,7 @@ export default function Refund() {
         <li>After the cycle ends, your workspace moves to a limited/expired state; your data is retained per our <Link href="/privacy" className="text-primary underline">Privacy Policy</Link> so you can resubscribe.</li>
       </UL>
 
-      <H2>5. Free Trial</H2>
+      <H2>5. Trials and credit packs</H2>
       <P>
         We do not currently offer a free trial. The public Business Health Check is free and needs no account, and credit packs start at ₹149 with no subscription. No payment is taken to
         start a trial. When the trial ends, you must choose a paid plan to continue — you are never auto-charged without explicitly
