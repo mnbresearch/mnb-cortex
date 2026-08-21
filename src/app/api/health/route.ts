@@ -61,20 +61,37 @@ async function checkAI(): Promise<Check> {
   }
   const gem = envKey("GEMINI_API_KEY");
   if (gem) {
-    const model = geminiTextModels()[0];
-    const r = await ping(geminiUrl(model, gem), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }], generationConfig: { maxOutputTokens: 1 } }),
-    });
-    if (r.ok) return { name: "AI engine", status: "operational", detail: `gemini · ${model}`, critical: true };
-    // A 404 here is exactly how the whole AI layer died unnoticed once before.
-    return {
-      name: "AI engine",
-      status: "down",
-      detail: r.status === 404 ? `model ${model} not found — it may have been retired` : (r.error || `HTTP ${r.status}`),
-      critical: true,
-    };
+    // Walk the SAME candidate list cortex.ts walks. Testing only the first name
+    // reported the whole engine "down" while the app was quietly succeeding on
+    // the second — a false alarm, which erodes trust in the check as surely as
+    // a missed one. It also names the model actually serving traffic, so a
+    // silent fallback (and the extra cost it implies) is visible rather than
+    // invisible.
+    const candidates = geminiTextModels();
+    const tried: string[] = [];
+    for (const model of candidates) {
+      const r = await ping(geminiUrl(model, gem), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }], generationConfig: { maxOutputTokens: 1 } }),
+      });
+      if (r.ok) {
+        const fellBack = model !== candidates[0];
+        return {
+          name: "AI engine",
+          status: fellBack ? "degraded" : "operational",
+          detail: fellBack
+            ? `gemini · ${model} — preferred ${candidates[0]} is unavailable (${tried.join(", ")}), so every call pays an extra failed request. Pin GEMINI_MODEL.`
+            : `gemini · ${model}`,
+          critical: true,
+        };
+      }
+      tried.push(`${model}: ${r.status === 404 ? "404 not found" : r.error || `HTTP ${r.status}`}`);
+      // Only a 404 means "wrong name, try the next". Anything else is a real
+      // fault and trying more models just burns quota against the same problem.
+      if (r.status !== 404) break;
+    }
+    return { name: "AI engine", status: "down", detail: `no usable model — ${tried.join("; ")}`, critical: true };
   }
   const groq = envKey("GROQ_API_KEY");
   if (groq) {
