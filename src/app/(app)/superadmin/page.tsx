@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isSuperAdmin, getAllOrgs, getPortfolioStatus, currentEmail } from "@/lib/superadmin";
 import { getPlatformEconomics } from "@/lib/admin-metrics";
+import { statusOf, isLapsed } from "@/lib/entitlement";
 import { inr } from "@/lib/utils";
 import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager, ProvisionCustomerForm } from "@/components/superadmin-panel";
 import { ShieldAlert, Building2, Users, Activity, Lock, ExternalLink, IndianRupee, TrendingUp, Cpu, AlertTriangle } from "lucide-react";
@@ -44,11 +45,27 @@ export default async function SuperAdmin() {
   const newWeek = rows.filter((r) => ctime(r) > now - 7 * DAY).length;
   const newMonth = rows.filter((r) => ctime(r) > now - 30 * DAY).length;
   const activated = rows.filter((r) => r.metrics > 0).length;
-  const paid = rows.filter((r) => String(r.subscription_status || "") === "active").length;
-  const trialing = rows.length - paid;
+  // Use the SAME rules as the paywall (statusOf/isLapsed), not the raw column.
+  // The old arithmetic counted any row whose status column said "active" —
+  // including ones whose paid period had already run out and the nightly sweep
+  // hadn't flipped yet — and then labelled every remaining workspace "Trialing",
+  // which since trials were removed is simply untrue: they are lapsed, or
+  // pay-as-you-go. Two screens disagreeing about who is a customer is how you
+  // end up chasing the wrong number.
+  const effective = rows.map((r) => ({ row: r, status: statusOf(r) }));
+  const paid = effective.filter((e) => e.status === "active").length;
+  const payg = effective.filter((e) => isLapsed(e.status) && r0(e.row.credits) > 0).length;
+  const lapsed = effective.filter((e) => isLapsed(e.status) && r0(e.row.credits) <= 0).length;
   const recent = rows.slice(0, 10);
   const fmtDate = (s: string) => { try { return new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" }); } catch { return "—"; } };
-  const statusText = (r: typeof rows[number]) => String(r.subscription_status || "trialing");
+  function r0(n: unknown) { return Number(n ?? 0); }
+  // What the customer's access ACTUALLY is right now — including the
+  // pay-as-you-go case, which no status column records.
+  function statusText(r: typeof rows[number]) {
+    const st = statusOf(r);
+    if (isLapsed(st) && r0(r.credits) > 0) return "pay-as-you-go";
+    return st;
+  }
 
   return (
     <>
@@ -190,7 +207,8 @@ export default async function SuperAdmin() {
               { l: "New this month", v: newMonth },
               { l: "Activated (has data)", v: activated },
               { l: "Paid", v: paid },
-              { l: "Trialing", v: trialing },
+              { l: "Pay-as-you-go", v: payg },
+              { l: "Lapsed", v: lapsed },
             ].map((s) => (
               <Card key={s.l} className="p-4"><div className="text-xs text-muted-foreground">{s.l}</div><div className="text-2xl font-bold mt-1">{s.v}</div></Card>
             ))}
@@ -214,7 +232,7 @@ export default async function SuperAdmin() {
                     <tr key={r.id} className="border-b border-border/60">
                       <td className="py-2 px-4 font-medium">{r.name}</td>
                       <td className="py-2 px-3">{r.plan || "—"}</td>
-                      <td className="py-2 px-3"><Badge className={statusText(r) === "active" ? "bg-success/10 text-success border-success/20" : statusText(r) === "trialing" ? "bg-warning/10 text-warning border-warning/20" : "border-border text-muted-foreground"}>{statusText(r)}</Badge></td>
+                      <td className="py-2 px-3"><Badge className={statusText(r) === "active" ? "bg-success/10 text-success border-success/20" : statusText(r) === "pay-as-you-go" ? "bg-primary/10 text-primary border-primary/20" : "border-border text-muted-foreground"}>{statusText(r)}</Badge></td>
                       <td className="py-2 px-3">{r.members}</td>
                       <td className="py-2 px-3">{r.metrics > 0 ? <span className="text-success">Yes</span> : <span className="text-muted-foreground">—</span>}</td>
                       <td className="py-2 px-3 text-muted-foreground">{fmtDate(r.created_at)}</td>

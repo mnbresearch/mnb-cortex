@@ -21,6 +21,7 @@ export type OrgRow = {
   id: string; name: string; industry: string | null; plan: string | null;
   currency: string | null; created_at: string; members: number; metrics: number; alerts: number;
   subscription_status: string | null; trial_ends_at: string | null; credits: number; credits_allowance: number | null;
+  subscription_ends_at: string | null; autorenew_status: string | null;
 };
 
 /**
@@ -63,6 +64,7 @@ export async function getAllOrgs(): Promise<{ rows: OrgRow[]; live: boolean; rea
         id: o.id, name: o.name, industry: o.industry, plan: o.plan, currency: o.currency,
         created_at: o.created_at, members: members || 0, metrics: metrics || 0, alerts: alerts || 0,
         subscription_status: o.subscription_status ?? null, trial_ends_at: o.trial_ends_at ?? null,
+        subscription_ends_at: o.subscription_ends_at ?? null, autorenew_status: o.autorenew_status ?? null,
         credits: Number(o.credits ?? 0), credits_allowance: o.credits_allowance ?? null,
       });
     }
