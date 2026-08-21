@@ -30,7 +30,7 @@ export function creditDenial(gate: ChargeResult, action = "This action"): { stat
       status: 401,
       body: {
         ok: false, needsAuth: true, cost: gate.cost, balance: 0,
-        error: "Sign in to your workspace to use MNB Cortex AI. Start a free trial at /login.",
+        error: "Sign in to your workspace to use MNB Cortex AI — a ₹149 credit pack is enough to start.",
       },
     };
   }

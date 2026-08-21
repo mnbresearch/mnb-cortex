@@ -104,7 +104,7 @@ export default function Investors() {
           </div>
           <div className="bg-card p-7 lg:p-9">
             <SectionLabel n="05">Business model</SectionLabel>
-            <p className="mt-4 text-muted-foreground leading-7">Self‑serve SaaS. Plans ₹799 → ₹39,999/mo (+ Enterprise), USD for international. Live payments via Cashfree. Credit‑metered AI with per‑plan allowances; white‑label &amp; multi‑brand tiers for agencies and groups. 3‑day trial, no card.</p>
+            <p className="mt-4 text-muted-foreground leading-7">Self‑serve SaaS. Plans ₹1,499 → ₹39,999/mo (+ Enterprise). Live payments via Cashfree. Credit‑metered AI with per‑plan allowances and pay‑as‑you‑go packs from ₹149; white‑label &amp; multi‑brand tiers for agencies and groups. No free trial — a free Business Health Check is the top of funnel.</p>
           </div>
         </div>
       </section>
@@ -131,7 +131,7 @@ export default function Investors() {
         <div className="max-w-3xl mx-auto">
           <SectionLabel n="07">The ask</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5">Let’s build the SME operating system for India.</h2>
-          <p className="mt-5 text-muted-foreground text-lg">Live at cortex.mnbresearch.com — self‑serve signup, 3‑day trial, real payments, industry‑tailored onboarding. In conversation with investors &amp; partners to scale go‑to‑market and deepen the data moat.</p>
+          <p className="mt-5 text-muted-foreground text-lg">Live at cortex.mnbresearch.com — self‑serve signup, pay‑as‑you‑go credits, real payments, industry‑tailored onboarding. In conversation with investors &amp; partners to scale go‑to‑market and deepen the data moat.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <a href="/investor-onepager.pdf" target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor><Download className="h-4 w-4" /> Download one‑pager</a>
             <a href="mailto:contact@mnbresearch.com" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">contact@mnbresearch.com</a>

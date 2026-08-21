@@ -85,7 +85,7 @@ export function PublicFooter() {
             </div>
             <div className="lg:justify-self-end">
               <Link href="/login" className="inline-flex items-center gap-2 rounded-full bg-background text-foreground px-7 h-14 text-base font-medium hover:opacity-90 transition-opacity" data-cursor>
-                Start free — 3-day trial <ArrowUpRight className="h-5 w-5" />
+                Get started <ArrowUpRight className="h-5 w-5" />
               </Link>
             </div>
           </div>

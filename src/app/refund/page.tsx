@@ -52,7 +52,7 @@ export default function Refund() {
 
       <H2>5. Free Trial</H2>
       <P>
-        Where a free trial is offered, it includes a small one-time credit grant so you can evaluate the platform. No payment is taken to
+        We do not currently offer a free trial. The public Business Health Check is free and needs no account, and credit packs start at ₹149 with no subscription. No payment is taken to
         start a trial. When the trial ends, you must choose a paid plan to continue — you are never auto-charged without explicitly
         purchasing a plan.
       </P>

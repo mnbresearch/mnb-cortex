@@ -124,7 +124,7 @@ export function HealthCheckClient() {
           <div className="text-center py-2">
             <Check className="h-8 w-8 text-success mx-auto" />
             <p className="mt-2 font-medium">Thanks, {form.name}! Your report is on its way.</p>
-            <Link href="/login" className="mt-4 inline-flex items-center gap-2 rounded-full btn-ink px-6 h-11 text-sm font-medium">Start free — 3-day trial <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/login" className="mt-4 inline-flex items-center gap-2 rounded-full btn-ink px-6 h-11 text-sm font-medium">Get started <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
         ) : (
           <>

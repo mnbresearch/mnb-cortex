@@ -45,7 +45,7 @@ export default function ArticlePage({ params }: { params: { slug: string } }) {
 
           <div className="mt-14 rounded-2xl border bg-primary/5 p-6">
             <div className="font-display text-xl tracking-tightest">See your own numbers in minutes.</div>
-            <p className="text-sm text-muted-foreground mt-1">Run the free Business Health Check, or start a 3-day trial of your AI COO.</p>
+            <p className="text-sm text-muted-foreground mt-1">Run the free Business Health Check — no account needed — then start from ₹149 of credits.</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link href="/health-check" className="inline-flex items-center gap-2 rounded-full border px-5 h-11 text-sm font-medium hover:bg-accent transition-colors">Free health check</Link>
               <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-5 h-11 text-sm font-medium" data-cursor>Start free <ArrowUpRight className="h-4 w-4" /></Link>

@@ -33,16 +33,14 @@ export default function Terms() {
         We offer the following subscription plans, billed in Indian Rupees (INR):
       </P>
       <UL>
-        <li><strong>Solo</strong> — ₹799/month or ₹7,670/year · 300 AI credits/month</li>
-        <li><strong>Starter</strong> — ₹2,499/month or ₹23,990/year · 900 AI credits/month</li>
-        <li><strong>Growth</strong> — ₹6,999/month or ₹67,190/year · 4,000 AI credits/month</li>
-        <li><strong>Premium</strong> — ₹17,999/month or ₹1,72,790/year · 15,000 AI credits/month</li>
-        <li><strong>Business</strong> — ₹39,999/month or ₹3,83,990/year · 45,000 AI credits/month</li>
+        <li><strong>Starter</strong> — ₹1,499/month or ₹14,990/year · 1,000 AI credits/month</li>
+        <li><strong>Growth</strong> — ₹4,999/month or ₹49,990/year · 5,000 AI credits/month</li>
+        <li><strong>Business</strong> — ₹14,999/month or ₹1,49,990/year · 20,000 AI credits/month</li>
+        <li><strong>AI COO</strong> — ₹39,999/month or ₹3,99,990/year · 60,000 AI credits/month</li>
         <li><strong>Enterprise</strong> — custom pricing · unlimited credits (contact us)</li>
       </UL>
       <P>
-        We also offer one-time <strong>credit top-up packs</strong> for workspaces that need more AI usage within a cycle. A limited free
-        trial may be offered to new workspaces with a small one-time credit grant. MNB Cortex reserves the right to modify, add, or
+        We also offer one-time <strong>credit top-up packs</strong> for workspaces that need more AI usage within a cycle. Credit packs can be used with no subscription at all. We do not currently offer a free trial; the public Business Health Check is free and needs no account. MNB Cortex reserves the right to modify, add, or
         discontinue features, credit allowances, image limits, or pricing at any time with reasonable notice, without affecting purchases
         already completed.
       </P>

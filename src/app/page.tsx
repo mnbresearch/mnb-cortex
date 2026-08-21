@@ -19,7 +19,7 @@ const FAQS = [
   { q: "Is my data safe?", a: "Yes. Every workspace is isolated with Postgres row-level security, traffic is encrypted with TLS, sensitive keys use AES-256-GCM, and you can export or delete your data anytime." },
   { q: "Do I need to be technical?", a: "No. You ask questions in plain language (English or Hinglish), load a demo dataset or connect your tools, and Cortex does the analysis and drafting for you." },
   { q: "Which businesses is it built for?", a: "Indian SMEs — manufacturers, D2C and retail brands, services and agencies, and founders who want a COO-grade brain without a COO-grade salary." },
-  { q: "How does billing work?", a: "Start with a free 3-day trial (no card). Then pick a plan from ₹799/mo, billed securely via Cashfree. Prices are shown in INR and USD; international customers are onboarded by our team." },
+  { q: "How does billing work?", a: "Cortex runs on credits. Buy a ₹149 pack and use it with no subscription, or pick a plan from ₹1,499/mo for a monthly allowance — billed securely via Cashfree. Your free Business Health Check needs no card at all. Prices are in INR; international customers are onboarded by our team." },
 ];
 
 const STATS = [
@@ -182,7 +182,7 @@ export default function Home() {
             <div className="flex flex-wrap items-center gap-3 lg:justify-end">
               <Magnetic>
                 <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>
-                  Start free — 3-day trial <ArrowUpRight className="h-4 w-4" />
+                  Get started <ArrowUpRight className="h-4 w-4" />
                 </Link>
               </Magnetic>
               <Link href="/dashboard" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">
@@ -475,11 +475,11 @@ export default function Home() {
       <section className="px-5 lg:px-10 py-28 border-t text-center">
         <div className="max-w-3xl mx-auto">
           <h2 className="font-display display-2 tracking-tightest">Give your business a brain.</h2>
-          <p className="mt-5 text-muted-foreground text-lg">Start free in under a minute — no card. Load a demo dataset or connect your own, and ask Cortex how your business is really doing.</p>
+          <p className="mt-5 text-muted-foreground text-lg">Create your workspace in under a minute — no card. Connect your numbers, then add ₹149 of credits (or a plan) and ask Cortex how your business is really doing.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Magnetic>
               <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>
-                Start free — 3-day trial <ArrowUpRight className="h-4 w-4" />
+                Get started <ArrowUpRight className="h-4 w-4" />
               </Link>
             </Magnetic>
             <Link href="/pricing" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">

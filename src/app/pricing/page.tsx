@@ -22,7 +22,7 @@ export default async function Pricing() {
           <SectionLabel n="00">Pricing</SectionLabel>
           <Kinetic as="h1" text={"Run your company\non AI."} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            One AI COO with 380+ agents, memory and automation — from <span className="text-foreground font-medium">₹799/mo</span>.
+            One AI COO with 380+ agents, memory and automation — from <span className="text-foreground font-medium">₹1,499/mo</span>, or ₹149 of credits with no subscription.
             Try it for ₹149 with a credit pack — no subscription. Or pick a plan for a monthly allowance.
           </p>
         </div>

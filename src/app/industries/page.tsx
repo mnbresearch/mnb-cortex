@@ -26,7 +26,7 @@ export default function Industries() {
             grounded in a permanent memory of your business.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Start free — 3-day trial <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>
             <Link href="/features" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">See all features <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
         </div>
