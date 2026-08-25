@@ -1,6 +1,8 @@
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
+import { AiInstructionsPanel } from "@/components/ai-instructions-panel";
+import { hasRole } from "@/lib/roles";
 import { Card } from "@/components/ui/card";
 import { Field, ActionForm } from "@/components/forms";
 import { getOrgProfile, getUserAndOrg } from "@/lib/data";
@@ -13,6 +15,10 @@ import { Database, LogOut, Building2 } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function Settings() {
+  // Instructions apply to everyone in the workspace, so writing them is an
+  // admin action. Read is open — people should be able to see why the AI
+  // behaves the way it does.
+  const canEditAi = await hasRole("admin");
   const { user } = await getUserAndOrg();
   const profile = await getOrgProfile();
   const inp = "rounded-lg border bg-background px-3 h-9 text-sm w-full outline-none focus:ring-2 focus:ring-ring";
@@ -30,6 +36,11 @@ export default async function Settings() {
 
         {user && (
           <>
+            {/* Highest-leverage setting in the product: it changes every AI
+                answer the workspace receives. Deliberately placed above the
+                company profile, which is filled in once and forgotten. */}
+            <AiInstructionsPanel canEdit={canEditAi} />
+
             <Section title="Company profile" desc="This is the company your AI COO manages">
               <form action={updateOrgProfile} className="grid sm:grid-cols-3 gap-3">
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-1">Company name

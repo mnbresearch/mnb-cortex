@@ -74,6 +74,24 @@ export function hasAIKey(): boolean {
 export async function runCortex(messages: Msg[], context: string): Promise<string> {
   if (!hasAIKey()) return fallback(messages); // genuinely unconfigured — show the setup hint
 
+  // The workspace's own instructions, resolved HERE because every AI feature in
+  // the product funnels through this function — chat, agents, reports, Deep
+  // Dive, the nightly autopilot. Injecting once means a customer writes their
+  // house style, vocabulary and priorities in one place and every answer
+  // changes, instead of us threading a parameter through thirty call sites and
+  // missing some.
+  //
+  // Best-effort: a workspace we can't resolve (the cron has no session) simply
+  // gets the default behaviour rather than an error.
+  let context2 = context;
+  try {
+    const { getUserAndOrg } = await import("@/lib/data");
+    const { getInstructions, instructionBlock } = await import("@/lib/ai-instructions");
+    const { orgId } = await getUserAndOrg();
+    const extra = instructionBlock(await getInstructions(orgId));
+    if (extra) context2 = `${context}${extra}`;
+  } catch { /* no session or no table — carry on with defaults */ }
+
   for (const provider of providerChain()) {
     // Retry the SAME provider only for genuinely transient trouble. A 429 is not
     // transient on this timescale: free-tier quotas reset on a 60-second window,
@@ -83,7 +101,7 @@ export async function runCortex(messages: Msg[], context: string): Promise<strin
     // three cases the right move is to hand over to the next provider at once.
     const attempts = 3;
     for (let i = 0; i < attempts; i++) {
-      const out = await runOnce(provider, messages, context);
+      const out = await runOnce(provider, messages, context2);
       if (out !== null) return out;
 
       const st = lastFailure?.status;
