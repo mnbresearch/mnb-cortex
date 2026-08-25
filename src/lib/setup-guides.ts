@@ -65,7 +65,7 @@ export const SETUP_GUIDES: SetupGuide[] = [
       },
       {
         title: "Put the CLIENT ID and SECRET in Supabase",
-        detail: "Supabase → Authentication → Providers → Google → Enabled, paste both, Save. Supabase must know the client ID to verify that the token really was issued for your app; without it sign-in fails with an audience error. Do this step yourself — the secret should not pass through anyone else's hands.",
+        detail: "Supabase → Authentication → Sign In / Providers → Google → Enabled, paste both, Save. The client ID already in use is 31653003935-bbqm7ei6jvf5i1of2t4eife5pdn6580r.apps.googleusercontent.com — it must go in the “Client IDs” field. Supabase needs it to verify the token was really issued for your app; without it sign-in fails with an audience error. Paste the SECRET yourself from the Google Cloud credentials page — it should not pass through anyone else's hands, and a secret that has been through a chat log or a shared screen should be rotated before launch.",
       },
       {
         title: "Set the site URLs in Supabase",
