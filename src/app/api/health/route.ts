@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { anyEnvKey, envKey } from "@/lib/env";
 import { hasSupabase, serviceClient } from "@/lib/supabase/server";
 import { encryptionAvailable } from "@/lib/crypto";
-import { geminiTextModels, geminiUrl } from "@/lib/ai/models";
+import { geminiTextModels, geminiImageModels, geminiUrl } from "@/lib/ai/models";
+import { veoModels } from "@/lib/ai/video";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -126,6 +127,50 @@ async function checkPayments(): Promise<Check> {
   return { name: "Payments", status: "operational", detail: base.includes("sandbox") ? "sandbox" : "production", critical: true };
 }
 
+/**
+ * Are the image and video models still alive?
+ *
+ * Google retires models on a schedule — gemini-2.0-flash went in June 2026 and
+ * took this product's entire AI layer down for days before anyone noticed, and
+ * Imagen 4 was shut down on 17 August 2026. Text is covered above, but image
+ * and video had no check at all: the first sign of a retirement would have been
+ * a customer paying 20 or 400 credits and receiving an error.
+ *
+ * Uses the model METADATA endpoint, not a generation call — it costs nothing
+ * and returns 404 for a retired name, which is exactly the question being
+ * asked. Non-critical: losing image or video is bad, but the product still runs.
+ */
+async function checkGenModels(): Promise<Check> {
+  const key = envKey("GEMINI_API_KEY");
+  if (!key) return { name: "Image & video models", status: "degraded", detail: "No Gemini key" };
+
+  const probe = async (model: string) => {
+    const r = await ping(`https://generativelanguage.googleapis.com/v1beta/models/${model}?key=${encodeURIComponent(key)}`);
+    return r.ok;
+  };
+
+  const [imgList, vidList] = [geminiImageModels(), veoModels()];
+  const [imgOk, vidOk] = await Promise.all([
+    (async () => { for (const m of imgList) if (await probe(m)) return m; return null; })(),
+    (async () => { for (const m of vidList) if (await probe(m)) return m; return null; })(),
+  ]);
+
+  const dead: string[] = [];
+  if (!imgOk) dead.push(`image (tried ${imgList.join(", ")})`);
+  if (!vidOk) dead.push(`video (tried ${vidList.join(", ")})`);
+  if (dead.length) {
+    return { name: "Image & video models", status: "down", detail: `retired or unavailable: ${dead.join("; ")}` };
+  }
+
+  const imgFellBack = imgOk !== imgList[0];
+  const vidFellBack = vidOk !== vidList[0];
+  return {
+    name: "Image & video models",
+    status: imgFellBack || vidFellBack ? "degraded" : "operational",
+    detail: `image ${imgOk}${imgFellBack ? " (fallback)" : ""} · video ${vidOk}${vidFellBack ? " (fallback — check cost, Lite is cheaper than Fast)" : ""}`,
+  };
+}
+
 /** Has the daily cron actually run recently? Reads its own heartbeat. */
 async function checkCron(): Promise<Check> {
   const sb = serviceClient();
@@ -171,13 +216,13 @@ async function checkSchema(): Promise<Check> {
 }
 
 export async function GET() {
-  const [db, ai, email, pay, cron, schema] = await Promise.all([
-    checkDatabase(), checkAI(), checkEmail(), checkPayments(), checkCron(), checkSchema(),
+  const [db, ai, gen, email, pay, cron, schema] = await Promise.all([
+    checkDatabase(), checkAI(), checkGenModels(), checkEmail(), checkPayments(), checkCron(), checkSchema(),
   ]);
 
   const services: Check[] = [
     { name: "Web app", status: "operational", critical: true },   // it answered, so it's up
-    db, ai, pay, email, cron, schema,
+    db, ai, gen, pay, email, cron, schema,
     { name: "Credential encryption", status: encryptionAvailable() ? "operational" : "degraded", detail: encryptionAvailable() ? undefined : "ENCRYPTION_KEY not set" },
   ];
 

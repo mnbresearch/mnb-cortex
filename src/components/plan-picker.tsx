@@ -22,7 +22,13 @@ export function PlanPicker({ currentPlan = "", savedPhone = "" }: { currentPlan?
   const phoneOk = /^[6-9]\d{9}$/.test(phone.replace(/\D/g, "").slice(-10));
 
   async function choose(planId: string, planName: string) {
-    if (!phoneOk) { setMsg("Enter the mobile number for your payment receipt first."); return; }
+    // The phone is OPTIONAL. It used to be a hard gate — the buy buttons were
+    // rendered disabled until a valid number was typed, with the explanation
+    // sitting far below the cards. The result was a pricing page where every
+    // button looked broken, which is the single worst possible bug for a
+    // product about to spend money on ads. Cashfree collects and verifies the
+    // number on its own hosted checkout anyway, so blocking here bought us
+    // nothing and cost us every sale.
     setBusy(planId); setMsg("");
     const res = await payCashfree({ kind: "plan", plan: planId, annual, phone: phone.replace(/\D/g, "").slice(-10) });
     setBusy("");
@@ -49,8 +55,8 @@ export function PlanPicker({ currentPlan = "", savedPhone = "" }: { currentPlan?
       </div>
 
       <div className="rounded-xl border p-4 max-w-md">
-        <label className="text-sm font-medium">Mobile number for your receipt</label>
-        <p className="text-xs text-muted-foreground mt-0.5">Required by the payment gateway. Used for your receipt and UPI confirmation.</p>
+        <label className="text-sm font-medium">Mobile number for your receipt <span className="text-muted-foreground font-normal">(optional)</span></label>
+        <p className="text-xs text-muted-foreground mt-0.5">Used for your receipt and UPI confirmation. Skip it and Cashfree will ask you at checkout.</p>
         <div className="mt-2 flex items-center gap-2">
           <span className="text-sm text-muted-foreground">+91</span>
           <input
@@ -90,7 +96,7 @@ export function PlanPicker({ currentPlan = "", savedPhone = "" }: { currentPlan?
               ) : (
                 <button
                   onClick={() => choose(p.id, p.name)}
-                  disabled={Boolean(busy) || isCurrent || !phoneOk}
+                  disabled={Boolean(busy) || isCurrent}
                   className={`mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg h-9 text-xs font-medium disabled:opacity-60 ${p.highlight ? "bg-primary text-primary-foreground hover:opacity-90" : "border hover:bg-accent"}`}
                 >
                   {busy === p.id
