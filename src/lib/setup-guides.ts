@@ -40,7 +40,7 @@ export const SETUP_GUIDES: SetupGuide[] = [
     unlocks: "One-click signup and login with Google — no password to invent, no confirmation email to wait for. The user never leaves cortex.mnbresearch.com. On paid traffic this is one of the largest single conversion levers there is.",
     time: "10 minutes, one-time — configured once for the whole platform",
     caveat:
-      "Free. Two values are involved and only one is secret: the CLIENT ID is public (it ships in your page source) and goes in Vercel; the CLIENT SECRET is confidential and only ever goes into Supabase — never into code, a repo, or a chat window. Until this is set up, Cortex shows no Google button rather than a broken one.",
+      "Free, and it needs no secret at all. Because Cortex signs people in on its own domain rather than bouncing them through supabase.co, the only value that moves is the CLIENT ID, which is public by design and already visible in your page source. Google's client secret stays in Google Cloud and is never copied anywhere. Until this is set up, Cortex shows no Google button rather than a broken one.",
     docs: "https://supabase.com/docs/guides/auth/social-login/auth-google",
     steps: [
       {
@@ -64,8 +64,8 @@ export const SETUP_GUIDES: SetupGuide[] = [
         detail: "Vercel → mnb-cortex → Settings → Environment Variables → Add: NEXT_PUBLIC_GOOGLE_CLIENT_ID = your ID ending in .apps.googleusercontent.com. Production. Then redeploy — NEXT_PUBLIC_ values are baked in at build time, so the button won't appear until you do. This value is public by design; it is visible in the page source of every site that uses Google sign-in.",
       },
       {
-        title: "Put the CLIENT ID and SECRET in Supabase",
-        detail: "Supabase → Authentication → Sign In / Providers → Google → Enabled, paste both, Save. The client ID already in use is 31653003935-bbqm7ei6jvf5i1of2t4eife5pdn6580r.apps.googleusercontent.com — it must go in the “Client IDs” field. Supabase needs it to verify the token was really issued for your app; without it sign-in fails with an audience error. Paste the SECRET yourself from the Google Cloud credentials page — it should not pass through anyone else's hands, and a secret that has been through a chat log or a shared screen should be rotated before launch.",
+        title: "Put the CLIENT ID in Supabase — the secret is NOT needed",
+        detail: "Supabase → Authentication → Sign In / Providers → Google → enable it, put the ID in “Client IDs”, Save. The ID in use is 31653003935-bbqm7ei6jvf5i1of2t4eife5pdn6580r.apps.googleusercontent.com . Supabase needs it to verify the token was really issued for your app; without it sign-in fails with an audience error. Leave “Client Secret (for OAuth)” EMPTY — that field is only used by the redirect flow, and the provider saves happily without it. So the on-domain route means no client secret exists in any second system at all. Leave “Skip nonce checks” off; the button doesn't set a nonce, so nothing needs relaxing.",
       },
       {
         title: "Set the site URLs in Supabase",
