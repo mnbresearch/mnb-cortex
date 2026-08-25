@@ -32,6 +32,21 @@ export default function Login() {
    * asks rather than assumes: switch Google on in the dashboard and the button
    * appears by itself, with no code change or redeploy.
    */
+  // The auth callback redirects here with ?error=… when a sign-in fails —
+  // cancelled Google consent, an expired magic link, or a workspace that
+  // couldn't be created. Without this the user is bounced back to a blank login
+  // form with no idea why, which reads as "the site is broken".
+  useEffect(() => {
+    try {
+      const u = new URL(window.location.href);
+      const e = u.searchParams.get("error");
+      if (!e) return;
+      setErr(e);
+      u.searchParams.delete("error");
+      window.history.replaceState(null, "", u.pathname + u.search);
+    } catch { /* ignore */ }
+  }, []);
+
   const [googleOn, setGoogleOn] = useState(false);
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

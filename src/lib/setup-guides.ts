@@ -35,6 +35,55 @@ export type SetupGuide = {
 
 export const SETUP_GUIDES: SetupGuide[] = [
   {
+    provider: "google_auth",
+    name: "Google sign-in (for your customers)",
+    unlocks: "One-click signup and login with a Google account — no password to invent, no confirmation email to wait for. On paid traffic this is one of the largest single conversion levers available.",
+    time: "10 minutes, one-time — you do this once for the whole platform",
+    caveat:
+      "This is an OPERATOR setting, not a per-customer one: you configure it once and every customer benefits. Free. Until it's switched on, Cortex hides the Google button rather than showing one that fails.",
+    docs: "https://supabase.com/docs/guides/auth/social-login/auth-google",
+    steps: [
+      {
+        title: "Create an OAuth client in Google Cloud",
+        detail: "console.cloud.google.com → create (or pick) a project → APIs & Services → Credentials → Create Credentials → OAuth client ID. If it asks you to configure the consent screen first, do that: User type External, app name “MNB Cortex”, your support email, and your logo.",
+      },
+      {
+        title: "Choose “Web application”",
+        detail: "Application type must be Web application. Name it anything — “MNB Cortex Web” is fine.",
+      },
+      {
+        title: "Add the authorised redirect URI — this is the step people get wrong",
+        detail: "Under “Authorised redirect URIs” add your SUPABASE callback, not your own domain: https://krklgsmeamnxeawdlmka.supabase.co/auth/v1/callback . Google sends the user to Supabase, and Supabase then forwards them to cortex.mnbresearch.com. Putting your own domain here is the single most common cause of “redirect_uri_mismatch”.",
+      },
+      {
+        title: "Copy the client ID and secret",
+        detail: "Google shows both once you create the client. The ID ends in .apps.googleusercontent.com.",
+      },
+      {
+        title: "Enable Google in Supabase",
+        detail: "Supabase dashboard → Authentication → Providers → Google → toggle Enabled, paste the Client ID and Client Secret, and Save.",
+      },
+      {
+        title: "Add your site URLs in Supabase",
+        detail: "Authentication → URL Configuration. Site URL: https://cortex.mnbresearch.com . Under Redirect URLs add https://cortex.mnbresearch.com/auth/callback . Without this Supabase refuses to send the user back and they land on localhost or an error.",
+      },
+      {
+        title: "Nothing to deploy",
+        detail: "Cortex asks Supabase which providers are enabled every time the login page loads. The moment you save in Supabase, the “Continue with Google” button appears on its own. Open the login page in a private window to confirm.",
+      },
+      {
+        title: "Publish the consent screen when you're ready for real traffic",
+        detail: "While the OAuth consent screen is in “Testing”, only accounts you list can sign in. Before advertising, set it to “In production”. For basic email/profile scopes Google does not require a review, so this is instant.",
+      },
+    ],
+    gotchas: [
+      "Putting cortex.mnbresearch.com in Google's redirect URI box instead of the Supabase .../auth/v1/callback URL. This causes redirect_uri_mismatch and is by far the most common mistake.",
+      "Forgetting the Redirect URL in Supabase's URL Configuration — sign-in succeeds and then dumps the user on localhost:3000.",
+      "Leaving the consent screen in Testing mode, so every real visitor sees “app is blocked” or “has not completed verification”.",
+      "A customer who signed up with email/password and later uses Google with the SAME address: Supabase links them to one account, which is what you want — but tell support, because it looks alarming the first time.",
+    ],
+  },
+  {
     provider: "whatsapp",
     name: "WhatsApp Business (Meta Cloud API)",
     unlocks: "Send reminders, payment chases and broadcasts from your own WhatsApp business number, and let Cortex agents message customers directly.",
