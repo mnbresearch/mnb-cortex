@@ -36,51 +36,52 @@ export type SetupGuide = {
 export const SETUP_GUIDES: SetupGuide[] = [
   {
     provider: "google_auth",
-    name: "Google sign-in (for your customers)",
-    unlocks: "One-click signup and login with a Google account — no password to invent, no confirmation email to wait for. On paid traffic this is one of the largest single conversion levers available.",
-    time: "10 minutes, one-time — you do this once for the whole platform",
+    name: "Google sign-in (on your own domain)",
+    unlocks: "One-click signup and login with Google — no password to invent, no confirmation email to wait for. The user never leaves cortex.mnbresearch.com. On paid traffic this is one of the largest single conversion levers there is.",
+    time: "10 minutes, one-time — configured once for the whole platform",
     caveat:
-      "This is an OPERATOR setting, not a per-customer one: you configure it once and every customer benefits. Free. Until it's switched on, Cortex hides the Google button rather than showing one that fails.",
+      "Free. Two values are involved and only one is secret: the CLIENT ID is public (it ships in your page source) and goes in Vercel; the CLIENT SECRET is confidential and only ever goes into Supabase — never into code, a repo, or a chat window. Until this is set up, Cortex shows no Google button rather than a broken one.",
     docs: "https://supabase.com/docs/guides/auth/social-login/auth-google",
     steps: [
       {
-        title: "Create an OAuth client in Google Cloud",
-        detail: "console.cloud.google.com → create (or pick) a project → APIs & Services → Credentials → Create Credentials → OAuth client ID. If it asks you to configure the consent screen first, do that: User type External, app name “MNB Cortex”, your support email, and your logo.",
+        title: "Why Supabase is still involved",
+        detail: "Every account, session and row-level security rule in Cortex is anchored to a Supabase auth user, so any Google sign-in has to end with a Supabase session — that part isn't optional. What you CAN avoid is the ugly full-page bounce through supabase.co: Cortex uses Google Identity Services, so the sign-in happens on your domain and Google only needs to trust cortex.mnbresearch.com.",
       },
       {
-        title: "Choose “Web application”",
-        detail: "Application type must be Web application. Name it anything — “MNB Cortex Web” is fine.",
+        title: "Create the OAuth client in Google Cloud",
+        detail: "console.cloud.google.com → your project → APIs & Services → Credentials → Create Credentials → OAuth client ID → application type Web application. Name it “MNB Cortex Web”. If prompted, configure the consent screen first: User type External, app name MNB Cortex, your support email and logo.",
       },
       {
-        title: "Add the authorised redirect URI — this is the step people get wrong",
-        detail: "Under “Authorised redirect URIs” add your SUPABASE callback, not your own domain: https://krklgsmeamnxeawdlmka.supabase.co/auth/v1/callback . Google sends the user to Supabase, and Supabase then forwards them to cortex.mnbresearch.com. Putting your own domain here is the single most common cause of “redirect_uri_mismatch”.",
+        title: "Whitelist your domain as a JavaScript origin — this is the bit you asked about",
+        detail: "Under “Authorised JavaScript origins” add exactly https://cortex.mnbresearch.com (scheme, no trailing slash, no path). This is what lets Google issue a token to a page served from your domain, and it is the only Google-side entry the on-domain flow needs.",
       },
       {
-        title: "Copy the client ID and secret",
-        detail: "Google shows both once you create the client. The ID ends in .apps.googleusercontent.com.",
+        title: "Also add the Supabase redirect URI, as a safety net",
+        detail: "Under “Authorised redirect URIs” add https://krklgsmeamnxeawdlmka.supabase.co/auth/v1/callback . The on-domain flow doesn't use it, but having it means the classic redirect route still works if a browser ever blocks the in-page one — and it costs nothing to add now.",
       },
       {
-        title: "Enable Google in Supabase",
-        detail: "Supabase dashboard → Authentication → Providers → Google → toggle Enabled, paste the Client ID and Client Secret, and Save.",
+        title: "Put the CLIENT ID in Vercel",
+        detail: "Vercel → mnb-cortex → Settings → Environment Variables → Add: NEXT_PUBLIC_GOOGLE_CLIENT_ID = your ID ending in .apps.googleusercontent.com. Production. Then redeploy — NEXT_PUBLIC_ values are baked in at build time, so the button won't appear until you do. This value is public by design; it is visible in the page source of every site that uses Google sign-in.",
       },
       {
-        title: "Add your site URLs in Supabase",
-        detail: "Authentication → URL Configuration. Site URL: https://cortex.mnbresearch.com . Under Redirect URLs add https://cortex.mnbresearch.com/auth/callback . Without this Supabase refuses to send the user back and they land on localhost or an error.",
+        title: "Put the CLIENT ID and SECRET in Supabase",
+        detail: "Supabase → Authentication → Providers → Google → Enabled, paste both, Save. Supabase must know the client ID to verify that the token really was issued for your app; without it sign-in fails with an audience error. Do this step yourself — the secret should not pass through anyone else's hands.",
       },
       {
-        title: "Nothing to deploy",
-        detail: "Cortex asks Supabase which providers are enabled every time the login page loads. The moment you save in Supabase, the “Continue with Google” button appears on its own. Open the login page in a private window to confirm.",
+        title: "Set the site URLs in Supabase",
+        detail: "Authentication → URL Configuration. Site URL https://cortex.mnbresearch.com , and add https://cortex.mnbresearch.com/auth/callback under Redirect URLs.",
       },
       {
-        title: "Publish the consent screen when you're ready for real traffic",
-        detail: "While the OAuth consent screen is in “Testing”, only accounts you list can sign in. Before advertising, set it to “In production”. For basic email/profile scopes Google does not require a review, so this is instant.",
+        title: "Publish the consent screen before you advertise",
+        detail: "While it is in “Testing”, only accounts you have explicitly listed can sign in — everyone else sees “app is blocked”. Switch it to “In production”. Basic email/profile scopes need no Google review, so this takes effect immediately.",
       },
     ],
     gotchas: [
-      "Putting cortex.mnbresearch.com in Google's redirect URI box instead of the Supabase .../auth/v1/callback URL. This causes redirect_uri_mismatch and is by far the most common mistake.",
-      "Forgetting the Redirect URL in Supabase's URL Configuration — sign-in succeeds and then dumps the user on localhost:3000.",
-      "Leaving the consent screen in Testing mode, so every real visitor sees “app is blocked” or “has not completed verification”.",
-      "A customer who signed up with email/password and later uses Google with the SAME address: Supabase links them to one account, which is what you want — but tell support, because it looks alarming the first time.",
+      "Adding a trailing slash or a path to the JavaScript origin. It must be exactly https://cortex.mnbresearch.com — origin only.",
+      "Setting NEXT_PUBLIC_GOOGLE_CLIENT_ID in Vercel and not redeploying. NEXT_PUBLIC_ variables are compiled into the build, so nothing changes until the next deployment.",
+      "Putting the client ID in Vercel but not in Supabase. Google signs the user in and Supabase then rejects the token with an audience error — Cortex names this case explicitly if it happens.",
+      "Leaving the consent screen in Testing mode, which blocks every real visitor.",
+      "A customer who signed up by email and later uses Google with the SAME address: Supabase links them to one account, which is what you want — but it surprises support the first time.",
     ],
   },
   {
