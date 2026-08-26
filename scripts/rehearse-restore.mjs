@@ -95,6 +95,10 @@ await db.exec(`
   );
   create or replace function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
   create or replace function auth.role() returns text language sql stable as $$ select 'authenticated'::text $$;
+  -- auth.jwt() was missing, and its absence CASCADED: 2026_tenancy.sql failed,
+  -- so user_org_rank() was never created, so every later migration that uses it
+  -- failed too. One missing stub made three files look like ordering bugs.
+  create or replace function auth.jwt() returns jsonb language sql stable as $$ select null::jsonb $$;
   -- user_org_ids() is used by the RLS policies in supabase/*.sql but is DEFINED
   -- NOWHERE IN THIS REPO — it lives only in the live database. That is a real
   -- gap: recreating this project from source would produce policies that
@@ -122,6 +126,27 @@ for (const p of sqlFiles) {
 }
 for (const [n, why] of skipped) console.log(`  skip  ${n} — ${why}`);
 ok(`${applied.length}/${sqlFiles.length} SQL files applied`);
+
+/*
+  Migrations are applied in FILENAME ORDER, and that has now bitten twice:
+  a file that alters a column created by a later-sorting file simply fails, and
+  the failure looked like a harmless "skip" line nobody read. Both times the
+  live database was fine (the dependency had been applied months earlier) and
+  only a rebuild-from-scratch was broken — which is exactly the scenario you
+  only discover on the day you need it.
+
+  A migration that references something that does not exist yet is an ordering
+  bug, not an environment quirk, so it fails the rehearsal loudly. The
+  Supabase-only dependencies are listed explicitly rather than pattern-matched,
+  so a genuinely new failure cannot hide behind them.
+*/
+const SUPABASE_ONLY = /auth\.jwt|auth\.email|storage\.|supabase_|extension/i;
+const orderingBugs = skipped.filter(([, why]) => !SUPABASE_ONLY.test(why));
+if (orderingBugs.length) {
+  for (const [n, why] of orderingBugs) bad(`${n} did not apply — ${why}`);
+  bad("These are ordering/dependency bugs: the repo cannot rebuild itself from scratch.");
+}
+
 const hasSchema = true;
 
 const live = (await db.query(
