@@ -28,7 +28,6 @@
  * and the reason scripts/dump-schema.sh exists.
  */
 
-import { PGlite } from "@electric-sql/pglite";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, readdirSync, mkdtempSync } from "node:fs";
 import { gzipSync } from "node:zlib";
@@ -38,6 +37,21 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const tmp = mkdtempSync(join(tmpdir(), "cortex-rehearsal-"));
+
+// PGlite is loaded at runtime and is deliberately NOT a devDependency. It is a
+// 26 MB WASM build of Postgres, and Vercel installs devDependencies during
+// production builds — so listing it would add 26 MB of download to every
+// deploy for the benefit of a script that only ever runs on a laptop.
+let PGlite;
+try {
+  ({ PGlite } = await import("@electric-sql/pglite"));
+} catch {
+  console.error("This rehearsal needs a real Postgres to be worth anything.\n");
+  console.error("  npm i -D @electric-sql/pglite --no-save\n");
+  console.error("It is not in package.json on purpose: 26 MB of WASM has no business");
+  console.error("being downloaded by your production build.");
+  process.exit(2);
+}
 
 let failures = 0;
 const ok = (m) => console.log(`  ok    ${m}`);
