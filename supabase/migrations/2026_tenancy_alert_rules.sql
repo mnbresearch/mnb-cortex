@@ -36,8 +36,16 @@
 -- silent rather than loud.
 -- ============================================================
 
+-- Both the OLD names and the new ones. Dropping only the old ones made this
+-- file fail on a second run ("policy already exists") — and "safe to run more
+-- than once" has to be true, not aspirational, because the whole point is that
+-- an operator can paste it again without checking what already applied.
 drop policy if exists alert_rules_select on alert_rules;
 drop policy if exists alert_rules_write  on alert_rules;
+drop policy if exists "tenant read alert_rules"   on alert_rules;
+drop policy if exists "tenant insert alert_rules" on alert_rules;
+drop policy if exists "tenant update alert_rules" on alert_rules;
+drop policy if exists "tenant delete alert_rules" on alert_rules;
 
 create policy "tenant read alert_rules" on alert_rules for select
   using (org_id in (select user_org_ids()));
