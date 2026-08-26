@@ -2,7 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createClient, hasSupabase, serviceClient } from "@/lib/supabase/server";
 import { demoMetrics, demoInsights, demoAlerts, demoContext } from "@/lib/demo";
-import { SUPER_ADMINS } from "@/lib/config";
+import { SUPER_ADMINS } from "@/lib/operators";
 import type { HealthMetric, AIInsight, Alert } from "@/types";
 
 export async function getUserAndOrg() {

@@ -1,15 +1,9 @@
 export const APP_VERSION = "6.40.0";
 export const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "919711488481";
-export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "mnbgotyou@gmail.com";
 
-/**
- * PLATFORM super-admins — a level ABOVE org "owner".
- * Org roles (viewer→analyst→manager→admin→owner) are scoped to a single workspace.
- * A super-admin operates the whole platform: sees every organization and grants access.
- * Override with SUPER_ADMIN_EMAILS="a@x.com,b@y.com".
- */
-export const SUPER_ADMINS: string[] = (process.env.SUPER_ADMIN_EMAILS || "mridulnanda2004@gmail.com,mnbgotyou@gmail.com")
-  .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+// ADMIN_EMAIL and SUPER_ADMINS moved to src/lib/operators.ts, which is
+// server-only. This file is imported by client components, so anything
+// left here ships in the browser bundle.
 
 /**
  * The businesses in your portfolio, with categorisation.

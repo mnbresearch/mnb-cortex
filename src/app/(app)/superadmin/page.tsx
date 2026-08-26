@@ -8,7 +8,7 @@ import { isSuperAdmin, getAllOrgs, getPortfolioStatus, currentEmail } from "@/li
 import { getPlatformEconomics } from "@/lib/admin-metrics";
 import { statusOf, isLapsed } from "@/lib/entitlement";
 import { inr } from "@/lib/utils";
-import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager, ProvisionCustomerForm } from "@/components/superadmin-panel";
+import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager, ProvisionCustomerForm, BackupButton } from "@/components/superadmin-panel";
 import { ShieldAlert, Building2, Users, Activity, Lock, ExternalLink, IndianRupee, TrendingUp, Cpu, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
@@ -293,6 +293,35 @@ export default async function SuperAdmin() {
           <p className="text-xs text-muted-foreground mt-2">
             This creates the workspaces and profiles only. Real revenue, margin and cash figures must come from your own systems — import them via <Link href="/import" className="text-primary">Import data</Link> or the public API. Nothing is invented.
           </p>
+        </Section>
+
+        <Section title="Backup" desc="Your only copy of customer data — take one before any migration">
+          <Card className="p-5">
+            <p className="text-sm text-muted-foreground max-w-3xl">
+              This project is on Supabase&apos;s free tier, which has <b>no automated backups and no
+              point-in-time recovery</b>. This button is the only safety net that currently exists.
+              Take one before every migration and before any bulk edit.
+            </p>
+            <p className="text-sm text-muted-foreground max-w-3xl mt-2">
+              The file contains the rows of all 47 tables, and nothing else. It does <b>not</b>{" "}
+              contain your schema — only 14 of those 47 tables have a <code className="text-xs">CREATE TABLE</code>{" "}
+              in <code className="text-xs">supabase/migrations</code>, so the rest exist only inside the live
+              Supabase project. It also excludes Supabase auth users. In practice that means it can
+              help you undo a bad migration or a mistaken delete, but if you lost the project
+              tomorrow you would have a JSON file and nowhere to load it.
+            </p>
+            <p className="text-sm text-muted-foreground max-w-3xl mt-2">
+              Customer API keys and webhook signing secrets are <b>redacted</b> — they are live
+              credentials and a backup file travels too widely to carry them. They must be reissued
+              after any restore. No restore has been rehearsed against this format yet, so treat it
+              as insurance you have not yet tested.
+            </p>
+            <p className="text-sm text-danger/90 max-w-3xl mt-2">
+              Treat the downloaded file like the database itself: it is every customer&apos;s
+              financial data, unencrypted, on your laptop.
+            </p>
+            <BackupButton />
+          </Card>
         </Section>
 
         <Section title="All organizations" desc="Every workspace on the platform">

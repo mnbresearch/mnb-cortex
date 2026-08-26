@@ -1,44 +1,76 @@
 import { NextResponse } from "next/server";
-import { isSuperAdmin } from "@/lib/superadmin";
-import { cronAuthorised } from "@/lib/cron-auth";
+import { isSuperAdmin, currentEmail } from "@/lib/superadmin";
+import { serviceClient } from "@/lib/supabase/server";
 import { createBackup } from "@/lib/backup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// The export walks 46 tables sequentially. The default limit would cut it off
+// The export walks 47 tables sequentially. A shorter limit would cut it off
 // partway and hand back a file that looks fine and isn't.
 export const maxDuration = 300;
 
 /**
  * Download a full logical backup.
  *
- * Two ways in, both authenticated:
- *   - a signed-in platform super-admin (the human, pressing the button)
- *   - a caller holding CRON_SECRET (a scheduler, unattended)
+ * SUPER-ADMIN ONLY. An earlier draft also accepted CRON_SECRET so a scheduler
+ * could pull backups. That was dropped, for two reasons:
  *
- * There is no third way. This endpoint returns every row of every customer's
- * data in one file, so it is the single most sensitive route in the app — it
- * deserves more suspicion than any other, and it gets an explicit no-store so
- * no proxy or CDN ever holds a copy.
+ *  1. cronAuthorised() accepts the secret as a ?secret= QUERY PARAMETER. On a
+ *     cron route that is merely untidy. On this route the URL would become a
+ *     self-contained bearer credential that downloads every customer's data —
+ *     and URLs land in platform request logs, shell history, and the config of
+ *     whatever uptime monitor you paste it into. Long-lived secret, permanent
+ *     exposure.
+ *  2. CRON_SECRET already authorises three cron endpoints. Adding this one
+ *     would have widened the blast radius of a single leaked value from "sends
+ *     some emails early" to "exfiltrates the entire platform".
  *
- * ?meta=1 returns just the manifest, so a monitoring check can confirm the
- * backup still works without transferring the whole database.
+ * If unattended backups are wanted later, they should use a separate secret,
+ * accepted only via the Authorization header, and preferably push to storage
+ * rather than exposing a pull endpoint at all.
+ *
+ * ?meta=1 returns the manifest without the payload. Note this still performs
+ * the FULL export server-side and only skips the transfer — it is a way to
+ * inspect what a backup would contain, not a cheap health check.
  */
 export async function GET(req: Request) {
-  const authorised = (await isSuperAdmin()) || cronAuthorised(req);
-  if (!authorised) {
-    // Deliberately vague. This route's existence is not a secret, but which
-    // half of the check failed is not something an anonymous caller should learn.
+  if (!(await isSuperAdmin())) {
     return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 403 });
   }
 
+  const who = (await currentEmail()) || "unknown";
   const res = await createBackup();
+
+  // Record every export attempt. A full-database download is the one action
+  // where, if an operator account is ever compromised, you need evidence that
+  // it happened — and the absence of a record is indistinguishable from the
+  // absence of an incident.
+  try {
+    const sb = serviceClient();
+    if (sb) {
+      await sb.from("system_status").upsert(
+        {
+          key: "last_backup",
+          value: JSON.stringify({
+            at: new Date().toISOString(),
+            by: who,
+            ok: res.ok,
+            rows: res.ok ? res.manifest.totalRows : 0,
+            complete: res.ok ? res.manifest.complete : false,
+            error: res.ok ? undefined : res.error,
+          }),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" },
+      );
+    }
+  } catch { /* an audit write must never be the reason a backup fails */ }
+
   if (!res.ok) {
     return NextResponse.json({ ok: false, error: res.error }, { status: 500 });
   }
 
-  const metaOnly = new URL(req.url).searchParams.get("meta") === "1";
-  if (metaOnly) {
+  if (new URL(req.url).searchParams.get("meta") === "1") {
     return NextResponse.json(
       { ok: true, ...res.manifest, bytes: res.gz.length },
       { headers: { "Cache-Control": "no-store" } },

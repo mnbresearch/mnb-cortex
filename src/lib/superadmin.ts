@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient, serviceClient, hasSupabase } from "@/lib/supabase/server";
-import { SUPER_ADMINS, MY_BUSINESSES } from "@/lib/config";
+import { MY_BUSINESSES } from "@/lib/config";
+import { SUPER_ADMINS } from "@/lib/operators";
 
 /** Platform-level check: is the signed-in user an operator of the whole platform? */
 export async function isSuperAdmin(): Promise<boolean> {

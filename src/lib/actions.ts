@@ -1,7 +1,8 @@
 "use server";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { getUserAndOrg, getBusinessContext } from "@/lib/data";
-import { SUPER_ADMINS, seatLimit } from "@/lib/config";
+import { seatLimit } from "@/lib/config";
+import { SUPER_ADMINS } from "@/lib/operators";
 import { generateFor } from "@/lib/ai/cortex";
 import { sendEmail } from "@/lib/email";
 import { recomputeQuietly } from "@/lib/metrics";

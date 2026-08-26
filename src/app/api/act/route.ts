@@ -50,7 +50,14 @@ export async function POST(req: Request) {
       const html = `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:auto;font-size:15px;line-height:1.65;color:#111">
         ${body.split("\n").map((l) => `<p style="margin:0 0 10px">${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`).join("")}
       </div>`;
-      const res = await sendEmail(to, subject, html, { from: brandFrom(), replyTo: user.email || undefined });
+      // This is a customer emailing THEIR customer, so replies must go to them.
+      // `|| undefined` used to mean "no reply-to"; now that sendEmail defaults
+      // to our own mailbox, that same expression would quietly route a tenant's
+      // customer's reply to MNB Research. A signed-in Supabase user essentially
+      // always has an email, but "essentially always" is not a basis for
+      // routing someone else's correspondence, so it is explicit.
+      const senderReplyTo = user.email || null;
+      const res = await sendEmail(to, subject, html, { from: brandFrom(), replyTo: senderReplyTo });
       if (!res.sent) {
         if (gate.enforced) await refundForMode("act"); // nothing left the building — don't bill
         return NextResponse.json({ ok: false, error: res.reason || "Send failed. Check that email is configured (RESEND_API_KEY)." }, { status: 200 });

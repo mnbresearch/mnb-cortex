@@ -87,8 +87,8 @@ ${pre}
       <!-- Reply notice -->
       <tr><td style="padding:0 28px 18px">
         <div style="font-size:12px;color:#5b6b64;background:#f4f6f5;border:1px solid #e6ece9;border-radius:8px;padding:11px 13px;line-height:1.5">
-          Please don't reply to this email — it's sent from an unmonitored address.
-          To reach us, write to <a href="mailto:${BRAND.REPLY_TO}" style="color:${BRAND.COLOR_TO};font-weight:600;text-decoration:none">${esc(BRAND.REPLY_TO)}</a>.
+          You can reply to this email — it reaches a real person at
+          <a href="mailto:${BRAND.REPLY_TO}" style="color:${BRAND.COLOR_TO};font-weight:600;text-decoration:none">${esc(BRAND.REPLY_TO)}</a>.
         </div>
       </td></tr>
       <!-- Footer -->

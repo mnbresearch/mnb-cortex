@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { runVisibility, defaultPrompts } from "@/lib/ai/visibility";
 import { sendEmail } from "@/lib/email";
-import { ADMIN_EMAIL } from "@/lib/config";
+import { ADMIN_EMAIL } from "@/lib/operators";
 import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
 import { createClient, hasSupabase } from "@/lib/supabase/server";
 import { clientIp, enforce, visibilityLimits } from "@/lib/ratelimit";

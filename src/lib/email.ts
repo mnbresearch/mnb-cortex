@@ -28,13 +28,19 @@ export async function sendEmail(
   to: string,
   subject: string,
   html: string,
-  opts?: { from?: string; replyTo?: string },
+  /**
+   * `replyTo: null` means "send with NO reply-to header". That distinction
+   * matters: on the one path where a customer emails their own customer, an
+   * absent reply-to must not silently become ours, or we would receive
+   * another company's correspondence.
+   */
+  opts?: { from?: string; replyTo?: string | null },
 ): Promise<{ sent: boolean; reason?: string; providerId?: string }> {
   const key = envKey("RESEND_API_KEY");
   if (!key || !to) return { sent: false, reason: "no RESEND_API_KEY" };
   try {
     const from = opts?.from || process.env.EMAIL_FROM || brandFrom();
-    const replyTo = opts?.replyTo || brandReplyTo();
+    const replyTo = opts?.replyTo === null ? "" : (opts?.replyTo || brandReplyTo());
     const payload: any = { from, to: [to], subject, html };
     if (replyTo) payload.reply_to = replyTo;
     const r = await fetch("https://api.resend.com/emails", {

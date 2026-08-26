@@ -2,7 +2,7 @@
 import { PLANS } from "@/lib/config";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Building2, Check, Loader2, Coins, CalendarPlus, Save, UserPlus } from "lucide-react";
+import { Building2, Check, Loader2, Coins, CalendarPlus, Save, UserPlus, Download } from "lucide-react";
 
 type Org = { id: string; name: string };
 
@@ -253,6 +253,77 @@ export function OrgManager({ org }: { org: ManagedOrg }) {
         </Button>
         {msg && <span className="text-xs text-muted-foreground">{msg}</span>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Take a backup, now, to a file on your own machine.
+ *
+ * Deliberately a button and not just a URL. A backup procedure that depends on
+ * remembering an undocumented endpoint is the kind that turns out to be three
+ * weeks stale on the day it matters.
+ *
+ * The download is driven through fetch rather than a plain link so that the
+ * X-Backup-Complete header can be read and surfaced. A partial backup that
+ * looks identical to a good one is worse than an obvious failure, because you
+ * will find out which it was at the worst possible moment.
+ */
+export function BackupButton() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [warn, setWarn] = useState(false);
+
+  async function go() {
+    setBusy(true); setMsg("Reading every table… this can take a minute."); setWarn(false);
+    try {
+      const r = await fetch("/api/admin/backup");
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({} as any));
+        setWarn(true);
+        setMsg(j?.error || `Backup failed (HTTP ${r.status}).`);
+        return;
+      }
+
+      const complete = r.headers.get("X-Backup-Complete") === "true";
+      const rows = Number(r.headers.get("X-Backup-Rows") || 0);
+      const blob = await r.blob();
+
+      const name = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "")?.[1]
+        || `cortex-backup-${new Date().toISOString().slice(0, 10)}.json.gz`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      // Revoking immediately can cancel the download in some browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+
+      const size = blob.size < 1_048_576
+        ? `${Math.max(1, Math.round(blob.size / 1024))} KB`
+        : `${(blob.size / 1_048_576).toFixed(1)} MB`;
+
+      setWarn(!complete);
+      setMsg(complete
+        ? `Saved ${name} — ${rows.toLocaleString()} rows, ${size}.`
+        : `Saved ${name}, but it is INCOMPLETE (${rows.toLocaleString()} rows). Some tables were capped or unreadable — open the manifest inside the file before relying on it.`);
+    } catch (e: any) {
+      setWarn(true);
+      setMsg(e?.message || "Backup failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <Button onClick={go} disabled={busy} variant="outline">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+        {busy ? "Backing up…" : "Download a backup now"}
+      </Button>
+      {msg && (
+        <p className={`text-xs mt-2 ${warn ? "text-danger" : "text-muted-foreground"}`}>{msg}</p>
+      )}
     </div>
   );
 }

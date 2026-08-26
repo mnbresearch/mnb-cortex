@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendEmail } from "@/lib/email";
-import { ADMIN_EMAIL } from "@/lib/config";
+import { ADMIN_EMAIL } from "@/lib/operators";
 import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
 import { createClient, hasSupabase } from "@/lib/supabase/server";
 import { clientIp, contactFormLimits, enforce } from "@/lib/ratelimit";
