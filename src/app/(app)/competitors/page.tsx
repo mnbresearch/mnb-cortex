@@ -7,6 +7,8 @@ import { AIPanel } from "@/components/ai-panel";
 
 export const dynamic = "force-dynamic";
 
+// Illustrative, not observed. Presenting these under "Competitive threats on
+// your radar" implied Cortex was monitoring real rivals and had found these.
 const watch = [
   { name: "Entry-tier rival", move: "Cut prices 8%", threat: "High", note: "Targeting your Value-Tier volume" },
   { name: "Regional challenger", move: "Expanding in West", threat: "Medium", note: "Your strongest region — defend accounts" },
@@ -24,7 +26,7 @@ export default function Competitors() {
     <>
       <Topbar title="Competitor Intelligence" subtitle="Know their next move before they make it" />
       <PageShell>
-        <Section title="Watchlist" desc="Competitive threats on your radar">
+        <Section title="Watchlist" desc="Example threats — describe your own rivals below and Cortex will build a real battlecard">
           <div className="space-y-2">
             {watch.map((w) => (
               <Card key={w.name} className="p-4 flex items-center gap-3">

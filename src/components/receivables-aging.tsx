@@ -7,11 +7,15 @@ import { inr } from "@/lib/utils";
 
 type Inv = { id: string; client: string; amount: number; days: number };
 
+// Placeholder rows shown only until the workspace has real invoices. These
+// were named "Reliance Retail" and "Tata Croma" — real, trademarked companies
+// presented as this customer's debtors, which is both misleading and a
+// needless legal exposure.
 const SEED: Inv[] = [
-  { id: "i1", client: "Reliance Retail", amount: 850000, days: 12 },
-  { id: "i2", client: "Tata Croma", amount: 420000, days: 38 },
-  { id: "i3", client: "Local Distributor", amount: 260000, days: 74 },
-  { id: "i4", client: "Kirana Chain", amount: 180000, days: 105 },
+  { id: "i1", client: "Example retailer", amount: 850000, days: 12 },
+  { id: "i2", client: "Example electronics chain", amount: 420000, days: 38 },
+  { id: "i3", client: "Example distributor", amount: 260000, days: 74 },
+  { id: "i4", client: "Example kirana chain", amount: 180000, days: 105 },
 ];
 
 const BUCKETS = [

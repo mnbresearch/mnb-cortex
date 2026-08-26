@@ -22,7 +22,12 @@ export default async function Finance() {
   const insights = await getInsights("finance");
   const { rows, live } = await getInvoices();
   const fin = await getFinanceSeries();
-  const chartData = fin.live && fin.series ? fin.series : pl;
+  // A signed-in workspace with an empty ledger used to get `pl` — a smooth
+  // invented ramp from ₹3.0 Cr to ₹4.21 Cr, labelled "Trailing 12 months", with
+  // no disclaimer. The dashboard already handled this correctly; this page was
+  // missed. Signed in and no data now means an empty chart, which is the truth.
+  const chartData = fin.live && fin.series ? fin.series : (signedIn ? [] : pl);
+  const showingSample = !signedIn && !fin.live;
   // Plot only the series with real numbers (see getFinanceSeries).
   const FIN_KEYS = [{ k: "revenue", label: "Revenue", color: "hsl(var(--primary))" }, { k: "profit", label: "Net profit", color: "hsl(var(--success))" }];
   return (
@@ -71,7 +76,7 @@ export default async function Finance() {
             <Stat label="EBITDA" value="₹62.0 L" hint="14.6% margin" />
           </div>
         )}
-        <Section title="Revenue vs net profit" desc="Trailing 12 months (₹ Cr)">
+        <Section title="Revenue vs net profit" desc={showingSample ? "Sample data — trailing 12 months (₹ Cr)" : "Trailing 12 months (₹ Cr)"}>
           <TrendChart
             data={chartData}
             keys={fin.live ? FIN_KEYS.filter((s) => fin.keys.includes(s.k)) : FIN_KEYS}

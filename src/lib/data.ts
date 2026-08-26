@@ -131,6 +131,10 @@ export const getInvoices = () => fetchRows("invoices", "created_at");
 export const getInventory = () => fetchRows("inventory_items", "created_at");
 export const getEmployees = () => fetchRows("employees", "created_at");
 export const getPurchaseOrders = () => fetchRows("purchase_orders", "created_at");
+// production_runs has existed with real columns (oee, downtime_min, reject_qty,
+// planned/actual qty) since the first schema, but nothing ever read it — the
+// Production page printed four hardcoded percentages instead.
+export const getProductionRuns = () => fetchRows("production_runs", "run_date");
 
 export async function getBusinessContext(): Promise<string> {
   const m = await getMetrics();

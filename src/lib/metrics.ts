@@ -1,5 +1,6 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
+import { deriveInsights } from "@/lib/insights";
 import { emitQuietly } from "@/lib/webhooks";
 
 /**
@@ -65,13 +66,17 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
 
   const since = monthStart(MONTHS - 1);
 
-  let orders: Row[] = [], invoices: Row[] = [], items: Row[] = [], staff: Row[] = [], ledger: Row[] = [];
+  let orders: Row[] = [], invoices: Row[] = [], items: Row[] = [], staff: Row[] = [], pos: Row[] = [], ledger: Row[] = [];
   try {
-    const [so, iv, it, em, fl] = await Promise.all([
+    const [so, iv, it, em, po, fl] = await Promise.all([
       svc.from("sales_orders").select("amount,status,order_date,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
       svc.from("invoices").select("amount,status,type,due_date,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
       svc.from("inventory_items").select("on_hand,unit_cost,daily_consumption,reorder_level").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
       svc.from("employees").select("performance,attendance_pct,attrition_risk,monthly_ctc").eq("org_id", orgId).order("created_at", { ascending: false }).limit(5000),
+      // Approved purchase orders are money owed. Payables were computed only
+      // from invoices, so a ₹14 L PO never reached Working Capital and
+      // disappeared from Approvals the moment it was approved.
+      svc.from("purchase_orders").select("amount,status,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
       // Written by the bank-statement and GST readers — columns this function
       // does not own, but does derive metrics from.
       // Newest first, then reversed: the ledger grows a row per month forever,
@@ -79,7 +84,8 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
       svc.from("finance_ledger").select("*").eq("org_id", orgId).order("period", { ascending: false }).limit(24),
     ]);
     orders = (so.data as Row[]) || []; invoices = (iv.data as Row[]) || [];
-    items = (it.data as Row[]) || []; staff = (em.data as Row[]) || []; ledger = (((fl.data as Row[]) || []).slice().reverse());
+    items = (it.data as Row[]) || []; staff = (em.data as Row[]) || []; pos = (po.data as Row[]) || [];
+    ledger = (((fl.data as Row[]) || []).slice().reverse());
   } catch (e: any) {
     return { ok: false, metrics: 0, months: 0, reason: e?.message };
   }
@@ -88,6 +94,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   const hasInvoices = invoices.length > 0;
   const hasStock = items.length > 0;
   const hasStaff = staff.length > 0;
+  const hasPOs = pos.length > 0;
   const cashRows = ledger.filter((r) => r.cash_balance !== null && r.cash_balance !== undefined);
   const gstRows = ledger.filter((r) => r.gst_turnover !== null && r.gst_turnover !== undefined);
   const hasBank = cashRows.length > 0;
@@ -95,7 +102,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
 
   // Nothing to work from — clear the KPIs so a workspace that deleted its data
   // returns to an honest empty state instead of keeping stale numbers.
-  if (!hasSales && !hasInvoices && !hasStock && !hasStaff && !hasBank && !hasGst) {
+  if (!hasSales && !hasInvoices && !hasStock && !hasStaff && !hasPOs && !hasBank && !hasGst) {
     try { await svc.from("health_metrics").delete().eq("org_id", orgId); } catch { /* best effort */ }
     // The ledger rows are NOT deleted — bank and GST readings live there and
     // aren't ours to destroy — but the columns this function owns must be
@@ -116,6 +123,10 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   const revenueByMonth = new Map<string, number>(buckets.map((b) => [b, 0]));
   const ordersByMonth = new Map<string, number>(buckets.map((b) => [b, 0]));
 
+  // Counted so the workspace can be TOLD why revenue looks low. Silently
+  // dropping these from revenue is correct; leaving the owner to guess why
+  // "Orders (MTD): 500" sits beside "Revenue (MTD): ₹0" is not.
+  let ordersUnset = 0;
   for (const o of orders) {
     // No explicit status = counted, but NOT as realised revenue. An imported
     // CSV with a blank status column must never inflate the revenue figure.
@@ -124,6 +135,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     const k = monthKey(o.order_date || o.created_at);
     if (!k || !revenueByMonth.has(k)) continue;
     if (status === "won") revenueByMonth.set(k, revenueByMonth.get(k)! + num(o.amount));
+    else if (!status) ordersUnset++;
     ordersByMonth.set(k, ordersByMonth.get(k)! + 1);
   }
 
@@ -144,6 +156,14 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     if (type === "payable") { openPay += amt; continue; }
     openRecv += amt;
     if (status === "overdue" || (inv.due_date && String(inv.due_date) < today)) overdueRecv += amt;
+  }
+
+  // A purchase order that has been sent or received is a commitment to pay,
+  // whether or not the supplier's invoice has arrived yet. Drafts are not:
+  // they are a suggestion the owner has not acted on.
+  for (const po of pos) {
+    const st = String(po.status || "").toLowerCase();
+    if (st === "sent" || st === "received" || st === "approved") openPay += num(po.amount);
   }
 
   // ---- Inventory --------------------------------------------------------------
@@ -207,7 +227,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     });
   }
 
-  if (hasInvoices || hasStock) {
+  if (hasInvoices || hasStock || hasPOs) {
     const wc = openRecv + stockValue - openPay;
     metrics.push({
       metric_key: "working_capital", label: "Working Capital", value: +wc.toFixed(0), unit: "INR",
@@ -306,6 +326,45 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   } catch (e: any) {
     return { ok: false, metrics: 0, months: 0, reason: e?.message };
   }
+
+  // ---- Write ai_insights --------------------------------------------------------
+  // Same insert-then-delete-stale ordering as health_metrics above, for the same
+  // reason: a delete-first leaves a window where the dashboard panel and the AI
+  // context both see zero insights.
+  try {
+    const cashLatest = hasBank ? num(cashRows[cashRows.length - 1].cash_balance) : 0;
+    const nets = hasBank ? cashRows.slice(-3).map((r) => num(r.net_profit)) : [];
+    const avgNet = nets.length ? nets.reduce((a, b) => a + b, 0) / nets.length : 0;
+
+    const derived = deriveInsights({
+      hasSales, hasInvoices, hasStock, hasStaff, hasBank,
+      revenueNow, revenuePrev,
+      ordersNow: ordersByMonth.get(thisMonth) || 0,
+      ordersUnset,
+      openRecv, overdueRecv, openPay,
+      itemCount: items.length, belowReorder, coverDays, stockValue,
+      avgAttrition, avgAttend, payroll,
+      cashClosing: cashLatest, avgNet,
+    });
+
+    const istamp = new Date().toISOString();
+    if (derived.length) {
+      await svc.from("ai_insights").insert(derived.map((d) => ({
+        org_id: orgId,
+        module: d.module,
+        severity: d.severity,
+        title: d.title,
+        detail: d.detail,
+        confidence: d.confidence,
+        recommended_actions: d.recommended_actions,
+        created_at: istamp,
+      })));
+    }
+    // Clear the previous generation whether or not there are new ones — a
+    // workspace that fixed everything should end up with an empty panel, not
+    // last week's warnings.
+    await svc.from("ai_insights").delete().eq("org_id", orgId).lt("created_at", istamp);
+  } catch { /* insights are advisory; never fail a save over them */ }
 
   // ---- Write finance_ledger ----------------------------------------------------
   // UPSERT on (org_id, period) with ONLY the columns this function owns. The

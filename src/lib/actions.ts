@@ -153,6 +153,10 @@ export async function generatePO() {
     qty, amount: Math.round(qty * Number(low.unit_cost || 0)), status: "draft", created_by_ai: true });
   if (error) throw new Error(error.message);
   await logActivity(orgId, "ai", `AI drafted purchase order for ${low.sku || low.name} (${qty} units)`);
+  // Every other writer recomputes; this one did not, so a drafted PO never
+  // reached Working Capital until something else happened to trigger a rebuild.
+  await recomputeQuietly(orgId);
+  revalidatePath("/dashboard");
   revalidatePath("/inventory"); revalidatePath("/approvals");
 }
 
@@ -365,6 +369,14 @@ export async function importRows(fd: FormData): Promise<{ inserted: number; erro
         if (r[c] === undefined || r[c] === "") continue;
         o[c] = spec.nums.includes(c) ? (parseFloat(String(r[c]).replace(/[^0-9.-]/g, "")) || 0) : String(r[c]);
       }
+      /*
+        An imported sales order with no status contributes ZERO revenue, because
+        metrics.ts only counts status === "won". The manual "Add sales order"
+        form defaults to "won"; the importer did not, so importing 500 orders
+        produced "Orders (MTD): 500" beside "Revenue (MTD): \u20b90" and nothing
+        anywhere explained why. The two paths now agree.
+      */
+      if (table === "sales_orders" && !o.status) o.status = "won";
       return o;
     });
     const sb = createClient();
@@ -455,6 +467,52 @@ async function logActivity(orgId: string, type: string, message: string) {
   try { await createClient().from("activity").insert({ org_id: orgId, type, message }); } catch {}
 }
 
+// ---- Production ----
+/**
+ * Log a shift. `production_runs` has existed since the first schema and nothing
+ * ever wrote to it, so the Production page had no choice but to show literals.
+ *
+ * OEE is computed when the operator leaves it blank, because most shop floors
+ * track quantities and downtime but not the composite — and an OEE they had to
+ * calculate by hand is an OEE that will be left empty.
+ */
+export async function addProductionRun(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = createClient();
+
+  const planned = num(fd.get("planned_qty"));
+  const actual = num(fd.get("actual_qty"));
+  const reject = num(fd.get("reject_qty"));
+  const downtime = num(fd.get("downtime_min"));
+  const givenOee = str(fd.get("oee"));
+
+  // Availability × Performance × Quality, over a nominal 8-hour shift.
+  // Only computed when the inputs genuinely support it — a guessed OEE is
+  // worse than a blank one, because it will be trended.
+  let oee: number | null = givenOee ? num(fd.get("oee")) : null;
+  if (oee === null && planned > 0 && actual >= 0) {
+    const shiftMin = 480;
+    const availability = Math.max(0, Math.min(1, (shiftMin - downtime) / shiftMin));
+    const performance = Math.max(0, Math.min(1, actual / planned));
+    const quality = actual + reject > 0 ? actual / (actual + reject) : 1;
+    oee = +(availability * performance * quality * 100).toFixed(1);
+  }
+
+  const { error } = await sb.from("production_runs").insert({
+    org_id: orgId,
+    machine: str(fd.get("machine")),
+    shift: str(fd.get("shift")) || null,
+    run_date: str(fd.get("run_date")) || new Date().toISOString().slice(0, 10),
+    planned_qty: planned, actual_qty: actual, reject_qty: reject,
+    downtime_min: downtime,
+    oee,
+  });
+  if (error) throw new Error(error.message);
+  await logActivity(orgId, "crud", `Logged production run on ${str(fd.get("machine"))}`);
+  await recomputeQuietly(orgId);
+  revalidatePath("/production");
+  revalidatePath("/dashboard");
+}
+
 // ---- CRM: customers ----
 export async function addCustomer(fd: FormData) {
   const orgId = await requireWriteOrg(); const sb = createClient();
@@ -536,8 +594,45 @@ export async function addDeal(fd: FormData) {
 }
 export async function moveDeal(fd: FormData) {
   const orgId = await requireWriteOrg(); const sb = createClient();
-  const { error } = await sb.from("sales_pipeline").update({ stage: str(fd.get("stage")) }).eq("id", str(fd.get("id"))).eq("org_id", orgId);
+  const id = str(fd.get("id"));
+  const stage = str(fd.get("stage"));
+
+  const { data: before } = await sb.from("sales_pipeline").select("*").eq("id", id).eq("org_id", orgId).maybeSingle();
+
+  const { error } = await sb.from("sales_pipeline").update({ stage }).eq("id", id).eq("org_id", orgId);
   if (error) throw new Error(error.message);
+
+  /*
+    Winning a deal used to change one word in one table and nothing else. The
+    pipeline showed a weighted forecast in crores that never reached revenue,
+    the dashboard, the AI's context or any report — so a founder could close
+    their biggest deal of the year and watch the dashboard not move.
+
+    A won deal now becomes a sales order, which is what every KPI is actually
+    computed from. Guarded against double-writing when a deal is dragged back
+    and forth across the "won" column.
+  */
+  if (before && stage.toLowerCase() === "won" && String(before.stage || "").toLowerCase() !== "won") {
+    const { data: existing } = await sb.from("sales_orders")
+      .select("id").eq("org_id", orgId).eq("source_deal_id", id).limit(1);
+    if (!existing?.length) {
+      await sb.from("sales_orders").insert({
+        org_id: orgId,
+        order_no: "SO-" + seqSuffix(),
+        customer_name: before.customer_name || before.deal_name || "Won deal",
+        product: before.deal_name || null,
+        amount: Number(before.value || 0),
+        status: "won",
+        order_date: new Date().toISOString().slice(0, 10),
+        source_deal_id: id,
+      });
+      await logActivity(orgId, "crud", `Deal won — created a sales order for ${before.customer_name || before.deal_name || "the deal"}`);
+    }
+    await recomputeQuietly(orgId);
+    revalidatePath("/dashboard");
+    revalidatePath("/sales");
+    revalidatePath("/finance");
+  }
   revalidatePath("/pipeline");
 }
 

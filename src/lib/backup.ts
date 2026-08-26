@@ -55,6 +55,13 @@ export const BACKUP_TABLES = [
   "subscriptions", "payments", "credit_ledger", "renewal_notices",
   "customers", "leads", "sales_pipeline", "sales_orders", "purchase_orders",
   "invoices", "finance_ledger", "inventory_items", "employees", "meetings",
+  "production_runs",
+  // The customer's own conversation history with the AI. Omitted from the first
+  // version of this list because it was built by grepping .from("…") in the app
+  // code and these are reached through a different path — which is exactly the
+  // failure mode the "explicit list" comment above warns about. Losing a year of
+  // a founder's questions and answers is not a small loss.
+  "chat_threads", "chat_messages",
   "health_metrics", "alerts", "activity", "ai_insights",
   "documents", "strategy_docs", "market_reports", "report_links",
   "memories", "memory_entities", "memory_links", "memory_profile",
@@ -64,6 +71,14 @@ export const BACKUP_TABLES = [
   "email_optouts", "weekly_email_sends", "scheduled_reports",
   "app_settings", "system_status",
 ];
+
+/**
+ * Deliberately NOT backed up, so the omission is a decision on the record
+ * rather than something nobody noticed:
+ *   rate_limits — transient counters, rebuilt in minutes, and high-churn enough
+ *                 to bloat every snapshot for no recovery value.
+ */
+export const DELIBERATELY_EXCLUDED = ["rate_limits"];
 
 /**
  * Columns blanked on the way out. integrations.credentials_encrypted is NOT

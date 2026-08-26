@@ -8,12 +8,15 @@ import { inviteMember, cancelInvite } from "@/lib/actions";
 import { UserPlus, Plug, Mail, X } from "lucide-react";
 
 export const dynamic = "force-dynamic";
-const sampleMembers = [ { id: "s1", name: "You (Owner)", role: "owner" }, { id: "s2", name: "Sneha Iyer", role: "manager" }, { id: "s3", name: "Priya Nair", role: "analyst" } ];
+// Shown only to a logged-OUT visitor. A signed-in workspace whose member
+// query returned empty used to see two invented colleagues, "Sneha Iyer" and
+// "Priya Nair", under the heading "Live members of your workspace".
+const sampleMembers = [ { id: "s1", name: "You (Owner)", role: "owner" }, { id: "s2", name: "Example manager", role: "manager" }, { id: "s3", name: "Example analyst", role: "analyst" } ];
 
 export default async function Admin() {
   const { rows: members, live } = await getMembers();
   const { rows: invites } = await getInvites();
-  const list = live && members.length ? members : sampleMembers;
+  const list = live ? members : sampleMembers;
   const inp = "rounded-lg border bg-background px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
     <>

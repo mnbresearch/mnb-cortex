@@ -92,9 +92,17 @@ export default async function Sales() {
             </div>
           </>
         )}
-        <Section title="Lead funnel vs wins" desc="Trailing 12 months">
-          <TrendChart data={funnel} keys={[{ k: "leads", label: "Leads", color: "hsl(var(--primary))" }, { k: "won", label: "Won", color: "hsl(var(--success))" }]} />
-        </Section>
+        {/*
+          This chart sat OUTSIDE the signedIn ternary that gates every other
+          fixture on this page, so a real workspace saw an invented funnel
+          (80→124 leads, 18→29 won) labelled "Trailing 12 months" with no
+          "Sample data" note, while the two charts directly above it carried one.
+        */}
+        {!signedIn && (
+          <Section title="Lead funnel vs wins" desc="Sample data — trailing 12 months">
+            <TrendChart data={funnel} keys={[{ k: "leads", label: "Leads", color: "hsl(var(--primary))" }, { k: "won", label: "Won", color: "hsl(var(--success))" }]} />
+          </Section>
+        )}
 
         <CollapsibleForm title="Add sales order" action={addSalesOrder}>
           <Field name="customer_name" label="Customer" required />

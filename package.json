@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test:entitlement": "node scripts/test-entitlement.mjs",
     "rehearse:restore": "node scripts/rehearse-restore.mjs",
-    "dump:schema": "bash scripts/dump-schema.sh"
+    "dump:schema": "bash scripts/dump-schema.sh",
+    "test:insights": "node scripts/test-insights.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
