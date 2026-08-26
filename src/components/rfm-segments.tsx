@@ -29,8 +29,10 @@ function segment(r: number, f: number, m: number): { name: string; tone: string 
   return { name: "Needs attention", tone: "bg-warning/10 text-warning border-warning/20" };
 }
 
-export function RfmSegments() {
-  const [rows, setRows] = useState<Cust[]>(SEED);
+/** `seed` is the workspace's REAL customers, scored from their own orders. */
+export function RfmSegments({ seed }: { seed?: Cust[] } = {}) {
+  const isReal = Boolean(seed && seed.length);
+  const [rows, setRows] = useState<Cust[]>(isReal ? seed! : SEED);
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
 
   const scored = useMemo(() => rows.map((c) => {
@@ -58,6 +60,11 @@ export function RfmSegments() {
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
     <div className="space-y-4">
+      {!isReal && (
+        <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          These are <b>example customers</b>, not yours — add customers and sales orders and this page will segment your real book.
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         {Object.entries(counts).map(([k, v]) => <Badge key={k} className="border-border">{k}: <b className="ml-1">{v}</b></Badge>)}
       </div>

@@ -12,8 +12,10 @@ const SEED: Band[] = [
   { id: "b4", label: "Below", count: 6, avg: 38000, hike: 3 },
 ];
 
-export function AppraisalPlanner() {
-  const [bands, setBands] = useState<Band[]>(SEED);
+/** `seed` is the workspace's REAL staff, banded by their recorded performance. */
+export function AppraisalPlanner({ seed }: { seed?: Band[] } = {}) {
+  const isReal = Boolean(seed && seed.length);
+  const [bands, setBands] = useState<Band[]>(isReal ? seed! : SEED);
   const [budgetPct, setBudgetPct] = useState(9);
 
   const m = useMemo(() => {
@@ -35,6 +37,11 @@ export function AppraisalPlanner() {
 
   return (
     <div className="space-y-4">
+      {!isReal && (
+        <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          These are <b>example bands</b>, not your team — add employees with a performance rating and this page will band your real payroll.
+        </div>
+      )}
       <Card className="p-5 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="font-semibold">Appraisal bands</div>

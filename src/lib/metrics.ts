@@ -56,6 +56,49 @@ function band(value: number, warn: number, bad: number, higherIsBetter = true): 
   return value <= warn ? "green" : value <= bad ? "yellow" : "red";
 }
 
+/** What cortex_aggregate() returns. Mirrors the SQL exactly. */
+type Aggregate = {
+  series: { period: string; revenue: number; orders: number }[];
+  ordersUnset: number; salesCount: number;
+  openRecv: number; overdueRecv: number; openPay: number;
+  invoiceCount: number; poCount: number;
+  stockValue: number; totalDaily: number; totalOnHand: number; belowReorder: number; itemCount: number;
+  avgPerf: number; avgAttend: number; avgAttrition: number; payroll: number; staffCount: number;
+};
+
+/**
+ * Try the in-database aggregate. Returns null when the function does not exist
+ * (migration not run) or errors, so the caller falls back to reading rows.
+ *
+ * Deliberately silent about a MISSING function and loud about anything else:
+ * "not migrated yet" is an expected deployment state, while a genuine SQL error
+ * would otherwise hide behind the fallback and never be noticed.
+ */
+async function tryAggregate(svc: any, orgId: string): Promise<Aggregate | null> {
+  try {
+    const { data, error } = await svc.rpc("cortex_aggregate", { p_org: orgId });
+    if (error) {
+      const missing = /could not find the function|does not exist|schema cache/i.test(error.message || "");
+      if (!missing) console.error("[metrics] cortex_aggregate failed, using the slow path:", error.message);
+      return null;
+    }
+    if (!data || typeof data !== "object") return null;
+    const a = data as any;
+    return {
+      series: Array.isArray(a.series) ? a.series.map((r: any) => ({
+        period: String(r.period), revenue: num(r.revenue), orders: num(r.orders),
+      })) : [],
+      ordersUnset: num(a.ordersUnset), salesCount: num(a.salesCount),
+      openRecv: num(a.openRecv), overdueRecv: num(a.overdueRecv), openPay: num(a.openPay),
+      invoiceCount: num(a.invoiceCount), poCount: num(a.poCount),
+      stockValue: num(a.stockValue), totalDaily: num(a.totalDaily), totalOnHand: num(a.totalOnHand),
+      belowReorder: num(a.belowReorder), itemCount: num(a.itemCount),
+      avgPerf: num(a.avgPerf), avgAttend: num(a.avgAttend), avgAttrition: num(a.avgAttrition),
+      payroll: num(a.payroll), staffCount: num(a.staffCount),
+    };
+  } catch { return null; }
+}
+
 /**
  * Recompute `health_metrics` and `finance_ledger` for one workspace from its
  * real rows. Safe to call repeatedly; it fully replaces both tables for the org.
@@ -67,17 +110,31 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
 
   const since = monthStart(MONTHS - 1);
 
+  /*
+    FAST PATH. cortex_aggregate() does all the summing inside Postgres and
+    returns a few hundred bytes. The slow path below pulls up to 20,000 rows per
+    table into this process — on EVERY write — which is O(total rows) work to
+    record one new invoice, and O(n²) bytes when a customer adds rows one at a
+    time through the UI.
+
+    The slow path is kept, not deleted: a database that has not run
+    2026_tenancy_aggregate.sql yet must keep working exactly as before rather
+    than silently producing no metrics. scripts/test-aggregate.mjs checks the
+    two agree.
+  */
+  const agg = await tryAggregate(svc, orgId);
+
   let orders: Row[] = [], invoices: Row[] = [], items: Row[] = [], staff: Row[] = [], pos: Row[] = [], ledger: Row[] = [];
   try {
     const [so, iv, it, em, po, fl] = await Promise.all([
-      svc.from("sales_orders").select("amount,status,order_date,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
-      svc.from("invoices").select("amount,status,type,due_date,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
-      svc.from("inventory_items").select("on_hand,unit_cost,daily_consumption,reorder_level").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
-      svc.from("employees").select("performance,attendance_pct,attrition_risk,monthly_ctc").eq("org_id", orgId).order("created_at", { ascending: false }).limit(5000),
+      agg ? Promise.resolve({ data: [] as Row[] }) : svc.from("sales_orders").select("amount,status,order_date,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
+      agg ? Promise.resolve({ data: [] as Row[] }) : svc.from("invoices").select("amount,status,type,due_date,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
+      agg ? Promise.resolve({ data: [] as Row[] }) : svc.from("inventory_items").select("on_hand,unit_cost,daily_consumption,reorder_level").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
+      agg ? Promise.resolve({ data: [] as Row[] }) : svc.from("employees").select("performance,attendance_pct,attrition_risk,monthly_ctc").eq("org_id", orgId).order("created_at", { ascending: false }).limit(5000),
       // Approved purchase orders are money owed. Payables were computed only
       // from invoices, so a ₹14 L PO never reached Working Capital and
       // disappeared from Approvals the moment it was approved.
-      svc.from("purchase_orders").select("amount,status,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
+      agg ? Promise.resolve({ data: [] as Row[] }) : svc.from("purchase_orders").select("amount,status,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
       // Written by the bank-statement and GST readers — columns this function
       // does not own, but does derive metrics from.
       // Newest first, then reversed: the ledger grows a row per month forever,
@@ -91,11 +148,11 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     return { ok: false, metrics: 0, months: 0, reason: e?.message };
   }
 
-  const hasSales = orders.length > 0;
-  const hasInvoices = invoices.length > 0;
-  const hasStock = items.length > 0;
-  const hasStaff = staff.length > 0;
-  const hasPOs = pos.length > 0;
+  const hasSales = agg ? agg.salesCount > 0 : orders.length > 0;
+  const hasInvoices = agg ? agg.invoiceCount > 0 : invoices.length > 0;
+  const hasStock = agg ? agg.itemCount > 0 : items.length > 0;
+  const hasStaff = agg ? agg.staffCount > 0 : staff.length > 0;
+  const hasPOs = agg ? agg.poCount > 0 : pos.length > 0;
   const cashRows = ledger.filter((r) => r.cash_balance !== null && r.cash_balance !== undefined);
   const gstRows = ledger.filter((r) => r.gst_turnover !== null && r.gst_turnover !== undefined);
   const hasBank = cashRows.length > 0;
@@ -128,6 +185,16 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   // dropping these from revenue is correct; leaving the owner to guess why
   // "Orders (MTD): 500" sits beside "Revenue (MTD): ₹0" is not.
   let ordersUnset = 0;
+
+  if (agg) {
+    for (const r of agg.series) {
+      if (revenueByMonth.has(r.period)) {
+        revenueByMonth.set(r.period, r.revenue);
+        ordersByMonth.set(r.period, r.orders);
+      }
+    }
+    ordersUnset = agg.ordersUnset;
+  } else
   for (const o of orders) {
     // No explicit status = counted, but NOT as realised revenue. An imported
     // CSV with a blank status column must never inflate the revenue figure.
@@ -149,6 +216,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   // ---- Receivables / payables from invoices ----------------------------------
   const today = new Date().toISOString().slice(0, 10);
   let overdueRecv = 0, openRecv = 0, openPay = 0;
+  if (agg) { overdueRecv = agg.overdueRecv; openRecv = agg.openRecv; openPay = agg.openPay; } else
   for (const inv of invoices) {
     const amt = num(inv.amount);
     const status = String(inv.status || "pending").toLowerCase();
@@ -162,13 +230,17 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   // A purchase order that has been sent or received is a commitment to pay,
   // whether or not the supplier's invoice has arrived yet. Drafts are not:
   // they are a suggestion the owner has not acted on.
-  for (const po of pos) {
+  if (!agg) for (const po of pos) {
     const st = String(po.status || "").toLowerCase();
     if (st === "sent" || st === "received" || st === "approved") openPay += num(po.amount);
   }
 
   // ---- Inventory --------------------------------------------------------------
   let stockValue = 0, totalDaily = 0, totalOnHand = 0, belowReorder = 0;
+  if (agg) {
+    stockValue = agg.stockValue; totalDaily = agg.totalDaily;
+    totalOnHand = agg.totalOnHand; belowReorder = agg.belowReorder;
+  } else
   for (const it of items) {
     const onHand = num(it.on_hand);
     stockValue += onHand * num(it.unit_cost);
@@ -177,12 +249,13 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     if (num(it.reorder_level) > 0 && onHand < num(it.reorder_level)) belowReorder++;
   }
   const coverDays = totalDaily > 0 ? +(totalOnHand / totalDaily).toFixed(1) : null;
+  const itemCount = agg ? agg.itemCount : items.length;
 
   // ---- People -----------------------------------------------------------------
-  const avgPerf = hasStaff ? staff.reduce((a, e) => a + num(e.performance), 0) / staff.length : 0;
-  const avgAttend = hasStaff ? staff.reduce((a, e) => a + num(e.attendance_pct), 0) / staff.length : 0;
-  const avgAttrition = hasStaff ? staff.reduce((a, e) => a + num(e.attrition_risk), 0) / staff.length : 0;
-  const payroll = staff.reduce((a, e) => a + num(e.monthly_ctc), 0);
+  const avgPerf = agg ? agg.avgPerf : (hasStaff ? staff.reduce((a, e) => a + num(e.performance), 0) / staff.length : 0);
+  const avgAttend = agg ? agg.avgAttend : (hasStaff ? staff.reduce((a, e) => a + num(e.attendance_pct), 0) / staff.length : 0);
+  const avgAttrition = agg ? agg.avgAttrition : (hasStaff ? staff.reduce((a, e) => a + num(e.attrition_risk), 0) / staff.length : 0);
+  const payroll = agg ? agg.payroll : staff.reduce((a, e) => a + num(e.monthly_ctc), 0);
 
   // ---- Assemble only the metrics we can honestly compute ----------------------
   const metrics: Metric[] = [];
@@ -301,7 +374,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   // least one component is measurable, and the label says what fed it.
   const riskParts: number[] = [];
   if (openRecv > 0) riskParts.push(Math.min(100, (overdueRecv / openRecv) * 100));
-  if (items.length) riskParts.push(Math.min(100, (belowReorder / items.length) * 100));
+  if (itemCount) riskParts.push(Math.min(100, (belowReorder / itemCount) * 100));
   if (hasStaff) riskParts.push(Math.min(100, avgAttrition * 100));
   if (riskParts.length) {
     const risk = +(riskParts.reduce((a, b) => a + b, 0) / riskParts.length).toFixed(0);
@@ -419,7 +492,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
       ordersNow: ordersByMonth.get(thisMonth) || 0,
       ordersUnset,
       openRecv, overdueRecv, openPay,
-      itemCount: items.length, belowReorder, coverDays, stockValue,
+      itemCount, belowReorder, coverDays, stockValue,
       avgAttrition, avgAttend, payroll,
       cashClosing: cashLatest, avgNet,
     });
@@ -448,25 +521,52 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   // bank reader owns cash_balance/net_profit and the GST reader owns
   // gst_turnover/gst_tax — a delete-and-reinsert here would silently destroy a
   // paid analysis the customer had already run.
-  const rows = buckets.map((period) => ({
+  /*
+    Receivables, payables and opex are point-in-time positions — we know what is
+    outstanding NOW, not what was outstanding last March. Writing a hard 0 for
+    the other eleven months was destroying that history on every single save:
+    March's genuine receivables snapshot was overwritten with 0 the next time
+    anyone added a row, for ever.
+
+    Not currently visible (the chart reads revenue/net_profit/cash_balance), but
+    it silently made a receivables or payables trend impossible to ever build —
+    the data was being erased before it could accumulate.
+
+    Two separate upserts rather than one array with different keys per row:
+    PostgREST takes the UNION of keys across the payload and fills the missing
+    ones with null, so a heterogeneous array would have replaced "wiped to 0"
+    with "wiped to null" — the same bug wearing a different hat.
+  */
+
+  // 1. Revenue, for all twelve months. This IS recomputed every time, because it
+  //    is derived from orders that can be edited or deleted.
+  const revenueRows = buckets.map((period) => ({
     org_id: orgId,
     period,
     revenue: +(revenueByMonth.get(period) || 0).toFixed(0),
-    receivables: period === thisMonth ? +openRecv.toFixed(0) : 0,
-    payables: period === thisMonth ? +openPay.toFixed(0) : 0,
-    opex: period === thisMonth ? +payroll.toFixed(0) : 0,
   }));
+
+  // 2. The point-in-time positions, for the current month only. Past months keep
+  //    whatever was true when they were current.
+  const positionRow = {
+    org_id: orgId,
+    period: thisMonth,
+    receivables: +openRecv.toFixed(0),
+    payables: +openPay.toFixed(0),
+    opex: +payroll.toFixed(0),
+  };
 
   // Written UNCONDITIONALLY. Guarding this on `hasSales || hasInvoices` meant a
   // workspace that deleted its sales orders kept the old revenue in the ledger
   // for ever, so the trend chart went on plotting figures nothing else in the
-  // app still believed. `rows` already carries zeros in that case, and the
-  // upsert only touches the columns this function owns, so a bank or GST
+  // app still believed. `revenueRows` already carries zeros in that case, and
+  // the upsert only touches the columns this function owns, so a bank or GST
   // analysis is unaffected either way.
   let months = 0;
   try {
-    const { error } = await svc.from("finance_ledger").upsert(rows, { onConflict: "org_id,period" });
-    if (!error) months = rows.length;
+    const { error } = await svc.from("finance_ledger").upsert(revenueRows, { onConflict: "org_id,period" });
+    if (!error) months = revenueRows.length;
+    await svc.from("finance_ledger").upsert([positionRow], { onConflict: "org_id,period" });
   } catch { /* the chart is secondary to the KPIs — don't fail the recompute */ }
 
   emitQuietly(orgId, "metrics.recomputed", {

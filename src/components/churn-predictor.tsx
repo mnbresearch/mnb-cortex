@@ -27,8 +27,10 @@ function tone(n: number) {
   return n >= 65 ? "bg-danger/10 text-danger border-danger/20" : n >= 40 ? "bg-warning/10 text-warning border-warning/20" : "bg-success/10 text-success border-success/20";
 }
 
-export function ChurnPredictor() {
-  const [rows, setRows] = useState<Cust[]>(DEFAULTS);
+/** `seed` is the workspace's REAL customers, with days-since from their orders. */
+export function ChurnPredictor({ seed }: { seed?: Cust[] } = {}) {
+  const isReal = Boolean(seed && seed.length);
+  const [rows, setRows] = useState<Cust[]>(isReal ? seed! : DEFAULTS);
   const [out, setOut] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -55,6 +57,11 @@ export function ChurnPredictor() {
 
   return (
     <Card className="p-5 space-y-4">
+      {!isReal && (
+        <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          These are <b>example customers</b>, not yours — add customers and orders and this page will score your real ones.
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-warning" /> Churn risk model</div>
         <Badge className={revenueAtRisk > 0 ? "bg-danger/10 text-danger border-danger/20" : "border-border text-muted-foreground"}>
