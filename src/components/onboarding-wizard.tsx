@@ -51,9 +51,21 @@ export function OnboardingWizard() {
       {step === 1 && (
         <div className="space-y-3 text-center">
           <h2 className="text-lg font-semibold flex items-center justify-center gap-2"><Database className="h-5 w-5 text-primary" /> Add your data</h2>
-          <p className="text-sm text-muted-foreground">Load a realistic demo dataset to explore everything instantly, or import your own.</p>
-          <Button onClick={loadDemo} disabled={busy} className="w-full"><Sparkles className="h-4 w-4" /> {busy ? "Loading…" : "Load demo data"}</Button>
-          <Link href="/import" className="block text-sm text-primary">Import my own data →</Link>
+          <p className="text-sm text-muted-foreground">Cortex is only as useful as the numbers you give it. Bring your own in, or load a sample set to look around first.</p>
+          {/*
+            "Load demo data" used to be the PRIMARY button here, with importing
+            demoted to a text link — so the fastest path through onboarding
+            filled the workspace with another company's figures. Real data is
+            now the primary action, and the demo set is clearly labelled and
+            removable in one click from Settings.
+          */}
+          <Link href="/import" className="block">
+            <Button className="w-full"><Database className="h-4 w-4" /> Import my own data</Button>
+          </Link>
+          <Button onClick={loadDemo} disabled={busy} variant="outline" className="w-full">
+            <Sparkles className="h-4 w-4" /> {busy ? "Loading…" : "Load a sample dataset instead"}
+          </Button>
+          <p className="text-xs text-muted-foreground">Sample rows are tagged, never mixed into your figures permanently, and can be removed from Settings at any time.</p>
           <button onClick={() => setStep(2)} className="text-xs text-muted-foreground">Skip for now</button>
         </div>
       )}

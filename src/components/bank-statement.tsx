@@ -1,4 +1,5 @@
 "use client";
+import { refreshDerivedPages } from "@/lib/refresh";
 import { useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,7 +86,14 @@ export function BankStatementPanel() {
     try {
       const r = await fetch("/api/bank/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
       const j = await r.json();
-      if (!j.ok) setErr(j.error || "Analysis failed."); else setA(j.analysis);
+      if (!j.ok) setErr(j.error || "Analysis failed.");
+      else {
+        setA(j.analysis);
+        // This wrote finance_ledger and recomputed health_metrics. Without
+        // this call, clicking "Dashboard" within ~30s shows the numbers from
+        // BEFORE the upload — Next's client Router Cache still holds them.
+        try { await refreshDerivedPages(); } catch { /* cosmetic only */ }
+      }
     } catch { setErr("Network error reaching the AI."); }
     finally { setLoading(false); }
   }

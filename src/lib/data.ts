@@ -114,8 +114,20 @@ export async function getAlerts(): Promise<Alert[]> {
   const org = await currentOrg();
   if (!org) return demoAlerts;
   const sb = createClient();
-  const { data } = await sb.from("alerts").select("*").eq("org_id", org).order("created_at", { ascending: false });
+  // Unread only. The dashboard bell should say what is wrong NOW; a resolved
+  // problem staying on the list for ever is how people learn to ignore it.
+  const { data } = await sb.from("alerts").select("*").eq("org_id", org).eq("is_read", false)
+    .order("created_at", { ascending: false }).limit(50);
   return (data as any) || [];
+}
+
+/** Threshold rules this workspace has set. */
+export async function getAlertRules() {
+  const org = await currentOrg();
+  if (!org) return { rows: [] as any[], live: false };
+  const sb = createClient();
+  const { data } = await sb.from("alert_rules").select("*").eq("org_id", org).order("created_at", { ascending: true });
+  return { rows: (data as any[]) || [], live: true };
 }
 
 // ---- entity fetchers (return real rows when logged in; [] otherwise) ----

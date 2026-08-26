@@ -12,7 +12,9 @@
     "test:entitlement": "node scripts/test-entitlement.mjs",
     "rehearse:restore": "node scripts/rehearse-restore.mjs",
     "dump:schema": "bash scripts/dump-schema.sh",
-    "test:insights": "node scripts/test-insights.mjs"
+    "test:insights": "node scripts/test-insights.mjs",
+    "test:alerts": "node scripts/test-alert-rules.mjs",
+    "test": "npm run test:entitlement && npm run test:insights && npm run test:alerts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

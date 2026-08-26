@@ -1,6 +1,7 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { deriveInsights } from "@/lib/insights";
+import { evaluateRules } from "@/lib/alert-rules";
 import { emitQuietly } from "@/lib/webhooks";
 
 /**
@@ -326,6 +327,49 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   } catch (e: any) {
     return { ok: false, metrics: 0, months: 0, reason: e?.message };
   }
+
+  // ---- Evaluate the workspace's alert rules ------------------------------------
+  // This runs here, rather than in the browser, because that is the difference
+  // between "warned the moment a number crosses your line" and "warned if you
+  // happen to have the alerts tab open in the browser that holds the rule".
+  try {
+    const { data: ruleRows } = await svc.from("alert_rules").select("*").eq("org_id", orgId).eq("enabled", true);
+    const rules = (ruleRows as any[]) || [];
+    if (rules.length) {
+      const breaches = evaluateRules(
+        rules.map((r) => ({ id: r.id, metric_key: r.metric_key, op: r.op, threshold: Number(r.threshold), enabled: r.enabled })),
+        metrics.map((m) => ({ metric_key: m.metric_key, label: m.label, value: Number(m.value), unit: m.unit })),
+      );
+
+      // One OPEN alert per rule. Without this, a rule that stays breached would
+      // mint a fresh alert on every single save — and a customer who saved
+      // twenty rows would find twenty identical warnings and stop reading them.
+      const { data: openRows } = await svc.from("alerts")
+        .select("rule_id").eq("org_id", orgId).eq("is_read", false).not("rule_id", "is", null);
+      const alreadyOpen = new Set(((openRows as any[]) || []).map((a) => String(a.rule_id)));
+
+      const fresh = breaches.filter((b) => !alreadyOpen.has(String(b.rule.id)));
+      if (fresh.length) {
+        await svc.from("alerts").insert(fresh.map((b) => ({
+          org_id: orgId,
+          rule_id: b.rule.id,
+          severity: b.severity,
+          title: b.title,
+          body: b.body,
+          module: "kpi",
+        })));
+      }
+
+      // A rule that is no longer breached closes its own alert, so the bell
+      // reflects what is true now rather than everything that ever went wrong.
+      const stillBreached = new Set(breaches.map((b) => String(b.rule.id)));
+      const toClose = [...alreadyOpen].filter((id) => !stillBreached.has(id));
+      if (toClose.length) {
+        await svc.from("alerts").update({ is_read: true })
+          .eq("org_id", orgId).eq("is_read", false).in("rule_id", toClose);
+      }
+    }
+  } catch { /* alerting must never break the save that triggered it */ }
 
   // ---- Write ai_insights --------------------------------------------------------
   // Same insert-then-delete-stale ordering as health_metrics above, for the same

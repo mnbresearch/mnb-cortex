@@ -28,12 +28,64 @@ async function requireWriteOrg() {
 const num = (v: FormDataEntryValue | null) => { const n = parseFloat(String(v ?? "")); return isNaN(n) ? 0 : n; };
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
+/** Tables the demo seeder writes into, in child-before-parent order. */
+const DEMO_TABLES = [
+  "health_metrics", "ai_insights", "alerts", "finance_ledger",
+  "sales_orders", "sales_pipeline", "production_runs", "inventory_items",
+  "purchase_orders", "employees", "invoices", "market_reports",
+  "workflows", "meetings", "documents",
+];
+
+const DEMO_PATHS = [
+  "/dashboard", "/sales", "/finance", "/inventory", "/hr", "/production",
+  "/settings", "/alerts", "/reorder", "/receivables", "/payables", "/pipeline",
+];
+
 export async function seedDemoData() {
   const orgId = await requireWriteOrg();
   const sb = createClient();
   const { error } = await sb.rpc("seed_demo_data", { p_org: orgId });
   if (error) throw new Error(error.message);
-  ["/dashboard","/sales","/finance","/inventory","/hr","/settings"].forEach(p=>revalidatePath(p));
+  await recomputeQuietly(orgId);
+  DEMO_PATHS.forEach((p) => revalidatePath(p));
+}
+
+/**
+ * Remove every demo row, leaving real data untouched.
+ *
+ * This was previously impossible. The seeder wrote cash_balance, net_profit and
+ * ebitda into finance_ledger; recomputeMetrics owns only revenue/receivables/
+ * payables/opex (the bank and GST readers own the rest and it must not destroy
+ * a paid analysis). So demo cash outlived every recompute and sat on the
+ * dashboard beside genuinely-derived real revenue for ever.
+ *
+ * Now that seeded rows carry is_demo, they can simply be deleted.
+ */
+export async function clearDemoData() {
+  const orgId = await requireWriteOrg();
+  const sb = createClient();
+  for (const t of DEMO_TABLES) {
+    const { error } = await sb.from(t).delete().eq("org_id", orgId).eq("is_demo", true);
+    // Keep going: one table failing must not strand the rest as demo data.
+    if (error && !/column .*is_demo.* does not exist/i.test(error.message)) {
+      throw new Error(`Could not clear demo ${t}: ${error.message}`);
+    }
+  }
+  await recomputeQuietly(orgId);
+  DEMO_PATHS.forEach((p) => revalidatePath(p));
+}
+
+/** Whether this workspace currently holds any demo rows. */
+export async function hasDemoData(): Promise<boolean> {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return false;
+  const sb = createClient();
+  for (const t of ["sales_orders", "finance_ledger", "inventory_items"]) {
+    const { count } = await sb.from(t).select("id", { count: "exact", head: true })
+      .eq("org_id", orgId).eq("is_demo", true);
+    if ((count || 0) > 0) return true;
+  }
+  return false;
 }
 
 export async function updateOrgProfile(fd: FormData) {
@@ -200,7 +252,10 @@ export async function sendReminderAI() {
   }
   const { error } = await sb.from("alerts").insert({ org_id: orgId, severity: "yellow", module: "finance", title: "Overdue receivables", body: note });
   if (error) throw new Error(error.message);
-  ["/dashboard", "/finance"].forEach((p) => revalidatePath(p));
+  // /alerts is where these land — it was not revalidated, so a reminder
+  // raised an alert the alerts page would not show until something else
+  // happened to invalidate it.
+  ["/dashboard", "/finance", "/alerts"].forEach((p) => revalidatePath(p));
 }
 
 export async function signOut() {
@@ -523,6 +578,8 @@ export async function addCustomer(fd: FormData) {
   if (error) throw new Error(error.message);
   await logActivity(orgId, "crud", `Added customer ${str(fd.get("name"))}`);
   revalidatePath("/customers");
+  // /usage counts customers, and the AI's memory reads them.
+  revalidatePath("/usage");
 }
 
 // ---- Team invites ----
@@ -659,7 +716,7 @@ export async function runAutopilot() {
   const sb = createClient();
   await sb.from("alerts").insert({ org_id: orgId, severity: "yellow", module: "autopilot", title: "Autopilot analysis", body: text.slice(0, 400) });
   await logActivity(orgId, "ai", "Autopilot ran a business analysis and posted findings");
-  ["/autopilot", "/dashboard", "/activity"].forEach((p) => revalidatePath(p));
+  ["/autopilot", "/dashboard", "/activity", "/alerts"].forEach((p) => revalidatePath(p));
 }
 
 // ---- Shareable public report links ----
@@ -750,4 +807,52 @@ export async function syncIntegration(fd: FormData) {
   await logActivity(orgId, "integration",
     `Synced ${provider} — ${r.salesOrders} orders, ${r.invoices} invoices, ${r.customers} customers`);
   ["/integrations", "/dashboard", "/sales", "/finance"].forEach((p) => revalidatePath(p));
+}
+
+// ---- KPI alert rules ----
+/**
+ * Rules used to live in localStorage. That meant they vanished on another
+ * device, were invisible to teammates, and — the part that made the feature a
+ * fiction — were never evaluated anywhere except inside the open browser tab
+ * that happened to hold them. No alert could ever fire.
+ *
+ * They now live with the workspace and are evaluated in recomputeMetrics, which
+ * already runs after every write.
+ */
+export async function saveAlertRule(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = createClient();
+  const metric_key = str(fd.get("metric_key"));
+  const op = str(fd.get("op")) === ">" ? ">" : "<";
+  const threshold = num(fd.get("threshold"));
+  if (!metric_key) throw new Error("Pick which number to watch.");
+
+  const { error } = await sb.from("alert_rules")
+    .upsert({ org_id: orgId, metric_key, op, threshold, enabled: true }, { onConflict: "org_id,metric_key,op" });
+  if (error) throw new Error(error.message);
+
+  // Evaluate immediately, so saving a rule that is ALREADY breached warns you
+  // now rather than the next time something else happens to be saved.
+  await recomputeQuietly(orgId);
+  revalidatePath("/alerts");
+  revalidatePath("/dashboard");
+}
+
+export async function deleteAlertRule(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = createClient();
+  const id = str(fd.get("id"));
+  const { error } = await sb.from("alert_rules").delete().eq("id", id).eq("org_id", orgId);
+  if (error) throw new Error(error.message);
+  // Close anything that rule had opened — a deleted rule must not leave a
+  // warning behind that nothing can ever clear.
+  try { await sb.from("alerts").update({ is_read: true }).eq("org_id", orgId).eq("rule_id", id); } catch { /* best effort */ }
+  revalidatePath("/alerts");
+  revalidatePath("/dashboard");
+}
+
+export async function dismissAlert(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = createClient();
+  const { error } = await sb.from("alerts").update({ is_read: true }).eq("id", str(fd.get("id"))).eq("org_id", orgId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/alerts");
+  revalidatePath("/dashboard");
 }

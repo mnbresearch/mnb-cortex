@@ -6,7 +6,7 @@ import { hasRole } from "@/lib/roles";
 import { Card } from "@/components/ui/card";
 import { Field, ActionForm } from "@/components/forms";
 import { getOrgProfile, getUserAndOrg } from "@/lib/data";
-import { updateOrgProfile, seedDemoData, signOut } from "@/lib/actions";
+import { updateOrgProfile, seedDemoData, clearDemoData, hasDemoData, signOut } from "@/lib/actions";
 import { APP_VERSION } from "@/lib/config";
 import { INDUSTRIES as AGENT_INDUSTRIES } from "@/lib/agents/catalog";
 import { BackupButton } from "@/components/backup-button";
@@ -21,6 +21,7 @@ export default async function Settings() {
   const canEditAi = await hasRole("admin");
   const { user } = await getUserAndOrg();
   const profile = await getOrgProfile();
+  const demoPresent = await hasDemoData();
   const inp = "rounded-lg border bg-background px-3 h-9 text-sm w-full outline-none focus:ring-2 focus:ring-ring";
   const btn = "inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90";
 
@@ -71,10 +72,23 @@ export default async function Settings() {
               </form>
             </Section>
 
-            <Section title="Workspace data" desc="Load a full set of realistic demo data into your workspace so every module comes alive">
-              <div className="flex flex-wrap items-center gap-3">
-                <ActionForm action={seedDemoData} label="Load demo data into my workspace" primary />
-                <span className="text-xs text-muted-foreground">Safe to re-run — it resets demo rows for your org only.</span>
+            <Section title="Sample data" desc="Fill every module with a realistic example business so you can see how Cortex behaves">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <ActionForm action={seedDemoData} label={demoPresent ? "Reload the sample dataset" : "Load a sample dataset"} />
+                  {demoPresent && <ActionForm action={clearDemoData} label="Remove sample data" primary />}
+                </div>
+                {demoPresent ? (
+                  <p className="text-sm text-warning">
+                    This workspace currently contains sample rows. They are tagged as samples and are
+                    counted in your KPIs while present — remove them before reading your dashboard as fact.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Sample rows are tagged, so loading them will not touch data you have entered or imported,
+                    and removing them later takes one click.
+                  </p>
+                )}
               </div>
             </Section>
 

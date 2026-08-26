@@ -1,4 +1,5 @@
 "use client";
+import { refreshDerivedPages } from "@/lib/refresh";
 import { useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,12 @@ export function GstReturnPanel() {
     setLoading(true); setErr(""); setA(null); setSaved("idle");
     try {
       const r = await fetch("/api/gst/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-      const j = await r.json(); if (!j.ok) setErr(j.error || "Analysis failed."); else setA(j.analysis);
+      const j = await r.json();
+      if (!j.ok) setErr(j.error || "Analysis failed.");
+      else {
+        setA(j.analysis);
+        try { await refreshDerivedPages(); } catch { /* cosmetic only */ }
+      }
     } catch { setErr("Network error reaching the AI."); }
     finally { setLoading(false); }
   }
