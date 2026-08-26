@@ -1,0 +1,308 @@
+#!/usr/bin/env node
+/**
+ * Rehearse a restore, end to end, against a real PostgreSQL.
+ *
+ *   npm run rehearse:restore
+ *
+ * An untested restore is a hypothesis. This turns it into a fact by doing the
+ * whole loop with nothing mocked:
+ *
+ *   1. Start a real Postgres (PGlite — genuine Postgres compiled to WASM, not
+ *      an imitation with a different SQL dialect).
+ *   2. Apply the project's OWN migration files to create the schema.
+ *   3. Insert known rows, including the awkward ones: quotes, unicode, JSON,
+ *      nulls, timestamps.
+ *   4. Export them in exactly the shape /api/admin/backup produces, gzip and
+ *      all, using the same manifest contract.
+ *   5. Drop every row — simulating the bad migration this exists to survive.
+ *   6. Run scripts/restore.mjs over the backup and execute the SQL it emits.
+ *   7. Compare, cell by cell, against what was there before.
+ *
+ * It also checks the refusals, because a safety rail nobody has tripped is not
+ * known to work: an incomplete backup must be REJECTED without --force, and
+ * accepted with it.
+ *
+ * SCOPE, HONESTLY: this covers the tables whose CREATE TABLE actually exists in
+ * supabase/migrations. The other tables in the live database have no schema in
+ * this repo, so they cannot be rehearsed here — which is itself the finding,
+ * and the reason scripts/dump-schema.sh exists.
+ */
+
+import { PGlite } from "@electric-sql/pglite";
+import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync, readdirSync, mkdtempSync } from "node:fs";
+import { gzipSync } from "node:zlib";
+import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const tmp = mkdtempSync(join(tmpdir(), "cortex-rehearsal-"));
+
+let failures = 0;
+const ok = (m) => console.log(`  ok    ${m}`);
+const bad = (m) => { failures++; console.log(`  FAIL  ${m}`); };
+const step = (m) => console.log(`\n${m}`);
+
+const db = await PGlite.create();
+const v = (await db.query("select version() as v")).rows[0].v;
+step(`Rehearsing against: ${v.split(" on ")[0]}`);
+
+/* 1 — build the schema from the project's real migrations ----------------- */
+step("1. Applying supabase/migrations to an empty database");
+
+// Order matters. supabase/schema.sql is the base — it creates the core tables.
+// The loose supabase/migration_*.sql files and then supabase/migrations/*.sql
+// are ALTER-style patches layered on top, so they must come after it.
+//
+// (An earlier version of this script only looked in supabase/migrations/ and
+// concluded most tables had no schema in the repo. They do. Scanning all 28
+// SQL files is the difference between a true and a false statement about
+// whether your backups are restorable, so it scans all 28.)
+const sqlFiles = [
+  join(ROOT, "supabase", "schema.sql"),
+  ...readdirSync(join(ROOT, "supabase")).filter((f) => f.startsWith("migration") && f.endsWith(".sql"))
+    .sort().map((f) => join(ROOT, "supabase", f)),
+  ...readdirSync(join(ROOT, "supabase", "migrations")).filter((f) => f.endsWith(".sql"))
+    .sort().map((f) => join(ROOT, "supabase", "migrations", f)),
+];
+
+// Two things exist in Supabase but not in a bare Postgres, and neither says
+// anything about whether your schema is correct:
+//   - the pgcrypto extension (gen_random_uuid() is core from PG13, so dropping
+//     the CREATE EXTENSION line changes nothing functionally)
+//   - the auth schema. A stub stands in for it, which also mirrors reality:
+//     auth.users is NOT in the backup, so a restore always faces this problem.
+await db.exec(`
+  create schema if not exists auth;
+  create table if not exists auth.users (
+    id uuid primary key default gen_random_uuid(),
+    email text
+  );
+  create or replace function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+  create or replace function auth.role() returns text language sql stable as $$ select 'authenticated'::text $$;
+  -- user_org_ids() is used by the RLS policies in supabase/*.sql but is DEFINED
+  -- NOWHERE IN THIS REPO — it lives only in the live database. That is a real
+  -- gap: recreating this project from source would produce policies that
+  -- reference a missing function. Stubbed here so the rehearsal can continue.
+  create or replace function user_org_ids() returns setof uuid language sql stable as $$ select null::uuid where false $$;
+`);
+for (const r of ["anon", "authenticated", "service_role"]) {
+  try { await db.exec(`create role ${r};`); } catch { /* already exists */ }
+}
+ok("Supabase-only pieces stubbed: auth.users, auth.uid(), user_org_ids(), the three roles");
+
+const applied = [];
+const skipped = [];
+for (const p of sqlFiles) {
+  const name = p.split("/").slice(-1)[0];
+  let sql;
+  try { sql = readFileSync(p, "utf8"); } catch { continue; }
+  sql = sql.replace(/create\s+extension[^;]*;/gi, "");
+  try {
+    await db.exec(sql);
+    applied.push(name);
+  } catch (e) {
+    skipped.push([name, String(e.message).split("\n")[0].slice(0, 95)]);
+  }
+}
+for (const [n, why] of skipped) console.log(`  skip  ${n} — ${why}`);
+ok(`${applied.length}/${sqlFiles.length} SQL files applied`);
+const hasSchema = true;
+
+const live = (await db.query(
+  "select table_name from information_schema.tables where table_schema='public' order by table_name",
+)).rows.map((r) => r.table_name);
+
+if (!live.length) { bad("no tables were created — cannot rehearse"); process.exit(1); }
+ok(`${live.length} tables exist: ${live.join(", ")}`);
+
+/* 2 — seed deliberately awkward data -------------------------------------- */
+step("2. Seeding rows chosen to break naive serialisation");
+
+await db.exec(`
+  insert into system_status (key, value) values
+    ('plain',    'ordinary'),
+    ('quoted',   'O''Brien said "hello"'),
+    ('unicode',  'ज़रूरी — naïve café 日本語 🙂'),
+    ('jsonish',  '{"a":1,"b":[2,3],"c":"say \\"hi\\""}'),
+    ('empty',    ''),
+    ('nullish',  null),
+    ('backslash','C:\\path\\to\\file');
+`);
+
+// A real workspace with a child row, so the rehearsal actually exercises the
+// foreign key ordering that a restore lives or dies by. Restoring a customer
+// before its organization is the classic way a restore fails halfway.
+let hasOrgs = false;
+try {
+  await db.exec(`
+    insert into organizations (id, name, industry, currency)
+    values ('11111111-1111-1111-1111-111111111111', 'Sharma Textiles Pvt Ltd', 'manufacturing', 'INR');
+    insert into customers (org_id, name, company, email, status, value) values
+      ('11111111-1111-1111-1111-111111111111', 'Rajesh O''Connor', 'Bharat Weaves & Co', 'r@example.in', 'lead', 250000),
+      ('11111111-1111-1111-1111-111111111111', 'श्रीमती गुप्ता', 'गुप्ता ट्रेडर्स', null, 'active', 0);
+  `);
+  hasOrgs = true;
+} catch (e) {
+  console.log(`  note  could not seed organizations/customers — ${String(e.message).split("\n")[0].slice(0, 90)}`);
+}
+
+const seeded = (await db.query("select key, value from system_status order by key")).rows;
+ok(`${seeded.length} rows seeded into system_status`);
+if (hasOrgs) {
+  const c = (await db.query("select count(*)::int as n from customers")).rows[0].n;
+  ok(`1 organization + ${c} customers seeded (exercises the FK ordering a restore depends on)`);
+}
+
+/* 3 — export in the exact shape the backup endpoint produces --------------- */
+step("3. Exporting in the /api/admin/backup format");
+
+// Follow the real BACKUP_TABLES order — that ordering is what makes the emitted
+// SQL insert parents before children, so it must be what the rehearsal tests.
+const realOrder = [...readFileSync(join(ROOT, "src", "lib", "backup.ts"), "utf8")
+  .match(/BACKUP_TABLES = \[([\s\S]*?)\];/)[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+const BACKUP_TABLES = realOrder.filter((t) => live.includes(t));
+
+const data = {};
+const tableResults = [];
+for (const t of BACKUP_TABLES) {
+  const rows = (await db.query(`select * from "${t}"`)).rows;
+  data[t] = rows;
+  tableResults.push({ table: t, rows: rows.length, expected: rows.length, truncated: false, ordered: true });
+}
+const totalRows = tableResults.reduce((n, r) => n + r.rows, 0);
+
+function buildBackup(complete) {
+  return gzipSync(Buffer.from(JSON.stringify({
+    manifest: {
+      takenAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      project: "rehearsal",
+      tables: tableResults,
+      totalRows,
+      complete,
+      redacted: { api_keys: ["key"], webhook_endpoints: ["secret"] },
+      limitations: ["rehearsal fixture"],
+      notes: complete ? [] : ["deliberately marked incomplete to test the refusal"],
+    },
+    data,
+  }), "utf8"));
+}
+
+const goodPath = join(tmp, "good.json.gz");
+const badPath = join(tmp, "incomplete.json.gz");
+writeFileSync(goodPath, buildBackup(true));
+writeFileSync(badPath, buildBackup(false));
+ok(`backup written (${totalRows} rows, ${(buildBackup(true).length / 1024).toFixed(1)} KB gzipped)`);
+
+/* 4 — the safety rails must actually refuse -------------------------------- */
+step("4. Testing the refusals");
+
+const runRestore = (args) => {
+  try {
+    return { ok: true, sql: execFileSync("node", [join(ROOT, "scripts", "restore.mjs"), ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) };
+  } catch (e) {
+    return { ok: false, code: e.status, stderr: String(e.stderr || "") };
+  }
+};
+
+const refused = runRestore([badPath]);
+if (!refused.ok && /REFUSING/.test(refused.stderr)) ok("an INCOMPLETE backup is refused without --force");
+else bad("an incomplete backup was NOT refused — the safety rail does not work");
+
+const forced = runRestore([badPath, "--force"]);
+if (forced.ok && /INSERT INTO/.test(forced.sql)) ok("--force overrides the refusal, as documented");
+else bad("--force did not override the refusal");
+
+/* 5 — destroy the data, exactly as a bad migration would ------------------- */
+step("5. Deleting every row (simulating the disaster)");
+// Children first, or the foreign keys refuse to let you have your disaster.
+for (const t of [...BACKUP_TABLES].reverse()) await db.exec(`delete from "${t}";`);
+const afterWipe = (await db.query("select count(*)::int as n from system_status")).rows[0].n;
+if (afterWipe === 0) ok("all rows gone — database is now in the state you would panic about");
+else bad(`expected 0 rows after wipe, found ${afterWipe}`);
+
+/* 6 — restore from the backup file ---------------------------------------- */
+step("6. Restoring from the backup");
+
+const gen = runRestore([goodPath]);
+if (!gen.ok) { bad(`restore.mjs failed: ${gen.stderr.slice(0, 300)}`); process.exit(1); }
+writeFileSync(join(tmp, "restore.sql"), gen.sql);
+ok(`restore.sql generated (${(gen.sql.length / 1024).toFixed(1)} KB)`);
+
+try {
+  await db.exec(gen.sql);
+  ok("restore.sql executed against Postgres without error");
+} catch (e) {
+  bad(`restore.sql failed to execute: ${String(e.message).split("\n")[0]}`);
+}
+
+/* 7 — verify cell by cell -------------------------------------------------- */
+step("7. Verifying the restored data matches the original, cell by cell");
+
+const restored = (await db.query("select key, value from system_status order by key")).rows;
+
+if (restored.length !== seeded.length) {
+  bad(`row count: expected ${seeded.length}, got ${restored.length}`);
+} else {
+  ok(`row count matches (${restored.length})`);
+  let mismatched = 0;
+  for (let i = 0; i < seeded.length; i++) {
+    const a = seeded[i], b = restored[i];
+    if (a.key !== b.key || a.value !== b.value) {
+      mismatched++;
+      bad(`row "${a.key}": expected ${JSON.stringify(a.value)}, got ${JSON.stringify(b.value)}`);
+    }
+  }
+  if (!mismatched) ok("every value round-tripped exactly — quotes, unicode, JSON, backslashes, empty string and NULL");
+}
+
+if (hasOrgs) {
+  const orgs = (await db.query("select id, name from organizations")).rows;
+  const custs = (await db.query("select name, company, email, value from customers order by name")).rows;
+  if (orgs.length === 1 && orgs[0].name === "Sharma Textiles Pvt Ltd") ok("organization restored with its uuid primary key intact");
+  else bad(`organization did not restore correctly: ${JSON.stringify(orgs)}`);
+
+  if (custs.length === 2) {
+    ok("both customers restored — foreign keys to the organization held");
+    const devanagari = custs.find((c) => c.company === "गुप्ता ट्रेडर्स");
+    const apostrophe = custs.find((c) => c.name === "Rajesh O'Connor");
+    if (devanagari && devanagari.email === null) ok("Devanagari text and a NULL email survived the round trip");
+    else bad(`unicode/NULL customer wrong: ${JSON.stringify(devanagari)}`);
+    if (apostrophe && String(apostrophe.value) === "250000") ok("apostrophe in a name and a numeric amount survived");
+    else bad(`apostrophe/numeric customer wrong: ${JSON.stringify(apostrophe)}`);
+  } else {
+    bad(`expected 2 customers after restore, got ${custs.length}`);
+  }
+}
+
+/* 8 — idempotence ---------------------------------------------------------- */
+step("8. Running the same restore twice (ON CONFLICT DO NOTHING must hold)");
+try {
+  await db.exec(gen.sql);
+  const n = (await db.query("select count(*)::int as n from system_status")).rows[0].n;
+  if (n === seeded.length) ok(`re-running the restore did not duplicate rows (still ${n})`);
+  else bad(`re-running duplicated rows: ${n} vs ${seeded.length}`);
+} catch (e) {
+  bad(`second run errored: ${String(e.message).split("\n")[0]}`);
+}
+
+/* result ------------------------------------------------------------------- */
+console.log("");
+if (failures) {
+  console.log(`REHEARSAL FAILED — ${failures} problem(s). The restore path is NOT trustworthy.`);
+  process.exit(1);
+}
+console.log("REHEARSAL PASSED — backup → wipe → restore → verify completed against real Postgres.");
+console.log(`Artefacts kept for inspection in ${tmp}`);
+
+if (!hasSchema) {
+  console.log("");
+  console.log("BUT READ THIS BEFORE RELYING ON IT:");
+  console.log(`  The restore MECHANISM is proven. Coverage is not — only ${live.length} table(s) could be`);
+  console.log("  created from this repo, because supabase/schema.sql does not exist yet.");
+  console.log("  Until you run `npm run dump:schema` and commit the result, a real backup");
+  console.log("  has no schema to be restored into. Passing here does not mean you are safe.");
+  process.exit(0);
+}

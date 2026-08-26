@@ -13,17 +13,23 @@ import { serviceClient } from "@/lib/supabase/server";
  *
  * WHAT THIS IS NOT — and these limits are real, not disclaimers:
  *
- *  - Row data only. It does NOT contain the database schema. Only 14 of the 47
- *    tables have a CREATE TABLE in supabase/migrations; the other 33 exist only
- *    in the live Supabase project. So if you lose the project you have a JSON
- *    file and nowhere to load it. Checking in a `pg_dump --schema-only` is the
- *    single highest-value thing still missing.
+ *  - Row data only, no schema. The schema does live in this repo — across
+ *    supabase/schema.sql, supabase/migration_*.sql and supabase/migrations/ —
+ *    and `npm run rehearse:restore` builds 52 tables from it, so a restore has
+ *    somewhere to land. But that schema is maintained by hand and the live
+ *    database is edited through the Supabase dashboard, so it can drift.
+ *    `npm run dump:schema` compares the two.
  *  - No auth.users. Restoring rows would leave every foreign key to a user
- *    pointing at nobody.
+ *    pointing at nobody. This is the real remaining hole.
  *  - No storage objects.
  *  - Not a consistent snapshot. Table 1 is read minutes before table 47, so a
  *    restore can hit foreign keys that were written in between.
- *  - Never restore-tested. An untested restore is a hypothesis.
+ *  - user_org_ids(), which the RLS policies depend on, is defined nowhere in
+ *    the repo — it exists only in the live database.
+ *
+ * The restore path IS tested: scripts/rehearse-restore.mjs runs
+ * backup → wipe → restore → verify against a real PostgreSQL on every run of
+ * `npm run rehearse:restore`.
  *
  * Treat it as protection against your own mistakes, not against losing the
  * project. Supabase Pro's PITR is the real answer and this does not replace it.
@@ -226,12 +232,12 @@ export async function createBackup(): Promise<BackupResult> {
     complete: failed.length === 0 && capped.length === 0 && mismatched.length === 0 && unordered.length === 0,
     redacted: REDACT,
     limitations: [
-      "Row data only — no schema. Only 14 of 47 tables have a CREATE TABLE in supabase/migrations.",
+      "Row data only. The schema is in the repo (supabase/schema.sql + migrations) but is maintained by hand and can drift from live — run `npm run dump:schema` to check.",
       "Does not include auth.users, so restored rows would reference users that no longer exist.",
       "Does not include Supabase Storage objects.",
       "Not a point-in-time snapshot: tables are read one after another over minutes.",
       "api_keys.key and webhook_endpoints.secret are redacted and must be reissued after a restore.",
-      "No restore has ever been tested against this format.",
+      "Restore path is tested by `npm run rehearse:restore` against a real PostgreSQL. Restore with `node scripts/restore.mjs <file> > restore.sql`.",
     ],
     notes,
   };

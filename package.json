@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:entitlement": "node scripts/test-entitlement.mjs"
+    "test:entitlement": "node scripts/test-entitlement.mjs",
+    "rehearse:restore": "node scripts/rehearse-restore.mjs",
+    "dump:schema": "bash scripts/dump-schema.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -27,6 +29,7 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.7",
     "@types/node": "^20.16.5",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",

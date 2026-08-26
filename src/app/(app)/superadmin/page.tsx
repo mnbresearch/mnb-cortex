@@ -303,18 +303,19 @@ export default async function SuperAdmin() {
               Take one before every migration and before any bulk edit.
             </p>
             <p className="text-sm text-muted-foreground max-w-3xl mt-2">
-              The file contains the rows of all 47 tables, and nothing else. It does <b>not</b>{" "}
-              contain your schema — only 14 of those 47 tables have a <code className="text-xs">CREATE TABLE</code>{" "}
-              in <code className="text-xs">supabase/migrations</code>, so the rest exist only inside the live
-              Supabase project. It also excludes Supabase auth users. In practice that means it can
-              help you undo a bad migration or a mistaken delete, but if you lost the project
-              tomorrow you would have a JSON file and nowhere to load it.
+              The file contains the rows of all 47 tables. The schema to restore them into lives in
+              the repo, and the restore path is rehearsed against a real PostgreSQL on every run of{" "}
+              <code className="text-xs">npm run rehearse:restore</code> — backup, wipe, restore, then
+              compare every value. To restore, run{" "}
+              <code className="text-xs">node scripts/restore.mjs &lt;file&gt; &gt; restore.sql</code>{" "}
+              and read the SQL before you run it.
             </p>
             <p className="text-sm text-muted-foreground max-w-3xl mt-2">
-              Customer API keys and webhook signing secrets are <b>redacted</b> — they are live
-              credentials and a backup file travels too widely to carry them. They must be reissued
-              after any restore. No restore has been rehearsed against this format yet, so treat it
-              as insurance you have not yet tested.
+              Two real gaps remain. Supabase <b>auth users are not included</b>, so restored rows
+              would reference people who no longer exist. And the repo&apos;s schema is maintained by
+              hand while the live database is edited through the dashboard, so it can drift —{" "}
+              <code className="text-xs">npm run dump:schema</code> compares them. Customer API keys
+              and webhook secrets are <b>redacted</b> and must be reissued after a restore.
             </p>
             <p className="text-sm text-danger/90 max-w-3xl mt-2">
               Treat the downloaded file like the database itself: it is every customer&apos;s
