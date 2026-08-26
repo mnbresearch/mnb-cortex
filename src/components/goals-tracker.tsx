@@ -1,25 +1,44 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Plus, Trash2, Target } from "lucide-react";
+import { Sparkles, Plus, Trash2, Target, Link2 } from "lucide-react";
 import { mdToHtml } from "@/lib/utils";
+import { saveGoal, deleteGoal } from "@/lib/actions";
 
-type Goal = { id: string; name: string; current: number; target: number; unit: string };
+/**
+ * Quarterly targets, measured against the workspace's real KPIs.
+ *
+ * This used to seed four DEMO-COMPANY figures — gross margin 31→33%, monthly
+ * revenue ₹4.25→5.0 Cr, receivables overdue ₹72→30 L, cash runway 5→9 months —
+ * into localStorage, where they became sticky and indistinguishable from goals
+ * the owner had actually set. The page meanwhile claimed OKRs were "wired to
+ * your live data" and that "Cortex measures progress against your live
+ * numbers". It measured progress against another company's.
+ *
+ * Goals now live on the workspace. When a goal is linked to a metric_key, its
+ * CURRENT value is read from health_metrics on every render, so it cannot drift
+ * out of date — which is the only version of this feature worth having.
+ */
 
-const DEFAULTS: Goal[] = [
-  { id: "g1", name: "Gross margin", current: 31, target: 33, unit: "%" },
-  { id: "g2", name: "Monthly revenue", current: 4.25, target: 5.0, unit: "Cr" },
-  { id: "g3", name: "Receivables overdue", current: 72, target: 30, unit: "L" },
-  { id: "g4", name: "Cash runway", current: 5, target: 9, unit: "mo" },
-];
+export type SavedGoal = {
+  id: string;
+  name: string;
+  metric_key: string | null;
+  current: number;      // resolved server-side: live KPI when linked, stored otherwise
+  target: number;
+  unit: string;
+  lowerIsBetter: boolean;
+  linked: boolean;      // true when `current` came from a live KPI
+};
 
-function progress(g: Goal): number {
-  const lowerBetter = g.name.toLowerCase().match(/overdue|cost|churn|attrition|debt/);
+export type GoalMetricOption = { key: string; label: string; value: number; unit: string; lowerBad: boolean };
+
+function progress(g: SavedGoal): number {
   let p: number;
-  if (lowerBetter) p = g.current <= g.target ? 100 : (g.target / (g.current || 1)) * 100;
+  if (g.lowerIsBetter) p = g.current <= g.target ? 100 : (g.target / (g.current || 1)) * 100;
   else p = (g.current / (g.target || 1)) * 100;
-  return Math.max(0, Math.min(100, p));
+  return Math.max(0, Math.min(100, Number.isFinite(p) ? p : 0));
 }
 
 function Ring({ value }: { value: number }) {
@@ -35,29 +54,22 @@ function Ring({ value }: { value: number }) {
   );
 }
 
-export function GoalsTracker() {
-  const [goals, setGoals] = useState<Goal[]>(DEFAULTS);
+const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, ""));
+
+export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]; metrics?: GoalMetricOption[] }) {
   const [out, setOut] = useState("");
   const [loading, setLoading] = useState(false);
+  const [adding, setAdding] = useState(false);
 
-  useEffect(() => {
-    try { const s = localStorage.getItem("cortex_goals"); if (s) setGoals(JSON.parse(s)); } catch {}
-  }, []);
-  useEffect(() => {
-    try { localStorage.setItem("cortex_goals", JSON.stringify(goals)); } catch {}
-  }, [goals]);
-
-  function update(id: string, field: keyof Goal, v: string) {
-    setGoals((gs) => gs.map((g) => g.id === id ? { ...g, [field]: field === "name" || field === "unit" ? v : Number(v) } : g));
-  }
-  function add() {
-    setGoals((gs) => [...gs, { id: "g" + Date.now(), name: "New goal", current: 0, target: 100, unit: "%" }]);
-  }
-  function remove(id: string) { setGoals((gs) => gs.filter((g) => g.id !== id)); }
+  const [draftKey, setDraftKey] = useState(metrics[0]?.key ?? "");
+  const [draftName, setDraftName] = useState(metrics[0]?.label ?? "");
+  const [draftTarget, setDraftTarget] = useState("0");
 
   async function advise() {
     setLoading(true); setOut("");
-    const input = "Owner's quarterly goals (OKRs):\n" + goals.map((g) => `- ${g.name}: currently ${g.current}${g.unit}, target ${g.target}${g.unit}`).join("\n") + "\nFor each goal, give the single highest-leverage move to close the gap, tied to our live numbers.";
+    const input = "Owner's quarterly goals (OKRs):\n"
+      + goals.map((g) => `- ${g.name}: currently ${fmt(g.current)}${g.unit}, target ${fmt(g.target)}${g.unit}${g.lowerIsBetter ? " (lower is better)" : ""}`).join("\n")
+      + "\nFor each goal, give the single highest-leverage move to close the gap, tied to our live numbers.";
     try {
       const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "strategy", input }) });
       const j = await r.json(); setOut(j.text || "No response.");
@@ -69,31 +81,105 @@ export function GoalsTracker() {
     <Card className="p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div className="font-semibold flex items-center gap-2"><Target className="h-4 w-4 text-primary" /> Quarterly OKRs</div>
-        <Button variant="outline" size="sm" onClick={add}><Plus className="h-4 w-4" /> Add goal</Button>
+        <Button variant="outline" size="sm" onClick={() => setAdding((v) => !v)}>
+          <Plus className="h-4 w-4" /> {adding ? "Cancel" : "Add goal"}
+        </Button>
       </div>
+
+      {adding && (
+        <form action={saveGoal} className="rounded-lg border border-dashed p-3 space-y-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs text-muted-foreground">
+              Track
+              <select
+                name="metric_key" value={draftKey}
+                onChange={(e) => {
+                  setDraftKey(e.target.value);
+                  const m = metrics.find((x) => x.key === e.target.value);
+                  if (m) { setDraftName(m.label); setDraftTarget(String(Math.round(m.value))); }
+                }}
+                className="ml-2 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                {metrics.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                <option value="">Something else (I'll track it myself)</option>
+              </select>
+            </label>
+            <label className="text-xs text-muted-foreground">
+              Name
+              <input name="name" value={draftName} onChange={(e) => setDraftName(e.target.value)}
+                className="ml-2 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" required />
+            </label>
+            <label className="text-xs text-muted-foreground">
+              Target
+              <input name="target_val" type="number" step="any" value={draftTarget} onChange={(e) => setDraftTarget(e.target.value)}
+                className="ml-2 w-24 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" required />
+            </label>
+            <label className="text-xs text-muted-foreground">
+              Unit
+              <input name="unit" defaultValue={metrics.find((m) => m.key === draftKey)?.unit ?? ""}
+                className="ml-2 w-20 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            </label>
+            {!draftKey && (
+              <label className="text-xs text-muted-foreground">
+                Current
+                <input name="current_val" type="number" step="any" defaultValue="0"
+                  className="ml-2 w-24 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              </label>
+            )}
+            <label className="text-xs text-muted-foreground inline-flex items-center gap-1">
+              <input type="checkbox" name="lower_is_better" value="1"
+                defaultChecked={metrics.find((m) => m.key === draftKey)?.lowerBad ?? false} />
+              Lower is better
+            </label>
+            <Button type="submit" size="sm" className="ml-auto">Save goal</Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Linking a goal to one of your KPIs means Cortex reads the current value from your own data — you never
+            have to update it by hand, and it can never go stale.
+          </p>
+        </form>
+      )}
+
       <div className="space-y-2">
         {goals.map((g) => (
           <div key={g.id} className="flex items-center gap-3 rounded-lg border p-3">
             <Ring value={progress(g)} />
-            <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
-              <input value={g.name} onChange={(e) => update(g.id, "name", e.target.value)}
-                className="col-span-2 sm:col-span-1 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring font-medium" />
-              <label className="text-xs text-muted-foreground flex items-center gap-1">Now
-                <input type="number" value={g.current} onChange={(e) => update(g.id, "current", e.target.value)}
-                  className="w-16 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" /></label>
-              <label className="text-xs text-muted-foreground flex items-center gap-1">Target
-                <input type="number" value={g.target} onChange={(e) => update(g.id, "target", e.target.value)}
-                  className="w-16 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" /></label>
-              <input value={g.unit} onChange={(e) => update(g.id, "unit", e.target.value)}
-                className="w-14 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            <div className="min-w-0 flex-1">
+              <div className="font-medium text-sm flex items-center gap-1.5">
+                {g.name}
+                {g.linked && <span title="Current value read from your live KPI"><Link2 className="h-3.5 w-3.5 text-primary" /></span>}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                now <b className="text-foreground">{fmt(g.current)}{g.unit ? ` ${g.unit}` : ""}</b>
+                {" → "}target <b className="text-foreground">{fmt(g.target)}{g.unit ? ` ${g.unit}` : ""}</b>
+                {g.lowerIsBetter && <span className="ml-1 text-xs">(lower is better)</span>}
+              </div>
+              {!g.linked && (
+                <div className="text-xs text-muted-foreground mt-0.5">Tracked by hand — not linked to a KPI.</div>
+              )}
             </div>
-            <button onClick={() => remove(g.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-4 w-4" /></button>
+            <form action={deleteGoal}>
+              <input type="hidden" name="id" value={g.id} />
+              <button type="submit" className="text-muted-foreground hover:text-danger" aria-label="Delete goal"><Trash2 className="h-4 w-4" /></button>
+            </form>
           </div>
         ))}
+        {!goals.length && (
+          <p className="text-sm text-muted-foreground">
+            No goals yet. Add one above — link it to a KPI and Cortex will track your progress against your own numbers.
+          </p>
+        )}
       </div>
-      <Button onClick={advise} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Thinking…" : "Ask the AI COO how to hit these"}</Button>
+
+      {goals.length > 0 && (
+        <Button onClick={advise} disabled={loading}>
+          <Sparkles className="h-4 w-4" /> {loading ? "Thinking…" : "Ask the AI COO how to hit these"}
+        </Button>
+      )}
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
-      <p className="text-xs text-muted-foreground">Goals are saved to this device automatically.</p>
+      <p className="text-xs text-muted-foreground">
+        Goals are saved to your workspace, so your team sees the same targets and they follow you between devices.
+      </p>
     </Card>
   );
 }

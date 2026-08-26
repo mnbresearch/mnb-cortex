@@ -121,6 +121,39 @@ export async function getAlerts(): Promise<Alert[]> {
   return (data as any) || [];
 }
 
+/**
+ * Goals, with `current` resolved from live KPIs where the goal is linked.
+ *
+ * Resolving here rather than storing is the whole point: a goal whose current
+ * value is typed in once is out of date by the following week, which is how
+ * the previous localStorage version ended up showing another company's numbers
+ * under the words "your live data".
+ */
+export async function getGoals() {
+  const org = await currentOrg();
+  if (!org) return { rows: [] as any[], live: false };
+  const sb = createClient();
+  const [{ data: goals }, metrics] = await Promise.all([
+    sb.from("goals").select("*").eq("org_id", org).order("created_at", { ascending: true }),
+    getMetrics(),
+  ]);
+  const byKey = new Map(metrics.map((m) => [m.metric_key, m]));
+  const rows = ((goals as any[]) || []).map((g) => {
+    const m = g.metric_key ? byKey.get(g.metric_key) : undefined;
+    return {
+      id: String(g.id),
+      name: String(g.name),
+      metric_key: g.metric_key ?? null,
+      current: m ? Number(m.value) || 0 : Number(g.current_val) || 0,
+      target: Number(g.target_val) || 0,
+      unit: String(g.unit || (m?.unit === "INR" ? "" : m?.unit || "")),
+      lowerIsBetter: Boolean(g.lower_is_better),
+      linked: Boolean(m),
+    };
+  });
+  return { rows, live: true };
+}
+
 /** Threshold rules this workspace has set. */
 export async function getAlertRules() {
   const org = await currentOrg();

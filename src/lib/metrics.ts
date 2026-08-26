@@ -483,5 +483,61 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
  */
 export async function recomputeQuietly(orgId: string | null | undefined): Promise<void> {
   if (!orgId) return;
-  try { await recomputeMetrics(orgId); } catch { /* swept nightly */ }
+  try {
+    const res = await recomputeMetrics(orgId);
+    // Swallowing the reason is right for the CALLER — a failed recompute must
+    // not break the import or save that triggered it. But swallowing it
+    // everywhere is how a misconfigured service role became invisible: the
+    // customer added rows, the KPIs never moved, and nothing anywhere said
+    // why. Recording it lets /api/health and the dashboard tell the truth.
+    if (!res.ok) await noteRecomputeFailure(orgId, res.reason || "unknown");
+    else await clearRecomputeFailure(orgId);
+  } catch (e: any) {
+    await noteRecomputeFailure(orgId, e?.message || "unknown");
+  }
+}
+
+/**
+ * Last aggregation failure for a workspace, so the UI can explain an empty
+ * dashboard instead of implying the customer has no data.
+ *
+ * Stored in app_settings rather than thrown, because the write that triggered
+ * the recompute genuinely did succeed — the row is saved, it is only the
+ * derived numbers that are missing.
+ */
+const RECOMPUTE_KEY = "recompute_error";
+
+async function noteRecomputeFailure(orgId: string, reason: string): Promise<void> {
+  try {
+    const svc = serviceClient();
+    if (!svc) return;   // nowhere to record it; /api/health reports this case
+    await svc.from("app_settings").upsert(
+      { org_id: orgId, key: RECOMPUTE_KEY, value: JSON.stringify({ at: new Date().toISOString(), reason }) },
+      { onConflict: "org_id,key" },
+    );
+  } catch { /* never let the diagnostic itself break a save */ }
+}
+
+async function clearRecomputeFailure(orgId: string): Promise<void> {
+  try {
+    const svc = serviceClient();
+    if (!svc) return;
+    await svc.from("app_settings").delete().eq("org_id", orgId).eq("key", RECOMPUTE_KEY);
+  } catch { /* best effort */ }
+}
+
+/** What the dashboard should warn about, if anything. Null when healthy. */
+export async function getRecomputeFailure(orgId: string | null | undefined): Promise<{ at: string; reason: string } | null> {
+  if (!orgId) return null;
+  try {
+    const svc = serviceClient();
+    // No service role at all is itself the most common cause, and it is the one
+    // case we cannot have recorded — so report it directly.
+    if (!svc) return { at: new Date().toISOString(), reason: "service role not configured" };
+    const { data } = await svc.from("app_settings").select("value")
+      .eq("org_id", orgId).eq("key", RECOMPUTE_KEY).maybeSingle();
+    if (!data?.value) return null;
+    const parsed = JSON.parse(String((data as any).value));
+    return { at: String(parsed.at || ""), reason: String(parsed.reason || "unknown") };
+  } catch { return null; }
 }

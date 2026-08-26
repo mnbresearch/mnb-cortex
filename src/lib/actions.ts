@@ -352,6 +352,12 @@ const IMPORT_COLS: Record<string, { cols: string[]; nums: string[] }> = {
   invoices: { cols: ["invoice_no", "party", "amount", "due_date", "status", "type"], nums: ["amount"] },
   inventory_items: { cols: ["sku", "name", "category", "on_hand", "reorder_level", "unit_cost", "supplier"], nums: ["on_hand", "reorder_level", "unit_cost"] },
   employees: { cols: ["name", "department", "role", "monthly_ctc", "performance"], nums: ["monthly_ctc", "performance"] },
+  // Leads were not importable, and no code path could create one belonging to a
+  // customer's workspace at all — so /leads was permanently empty for every
+  // paying customer while telling them to "share your pricing page".
+  leads: { cols: ["name", "email", "phone", "plan", "source"], nums: [] },
+  production_runs: { cols: ["machine", "shift", "run_date", "planned_qty", "actual_qty", "reject_qty", "downtime_min", "oee"], nums: ["planned_qty", "actual_qty", "reject_qty", "downtime_min", "oee"] },
+  customers: { cols: ["name", "company", "email", "phone", "status", "value"], nums: ["value"] },
 };
 
 /**
@@ -830,6 +836,94 @@ export async function syncIntegration(fd: FormData) {
   await logActivity(orgId, "integration",
     `Synced ${provider} — ${r.salesOrders} orders, ${r.invoices} invoices, ${r.customers} customers`);
   ["/integrations", "/dashboard", "/sales", "/finance"].forEach((p) => revalidatePath(p));
+}
+
+// ---- Leads ----
+/**
+ * Add a lead to THIS workspace.
+ *
+ * The three existing lead writers are MNB's own marketing forms and correctly
+ * insert with org_id = null, so the platform console can see them and tenants
+ * cannot. That left customers with a Leads module nothing could ever fill.
+ */
+export async function addLead(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = createClient();
+  const name = str(fd.get("name"));
+  const email = str(fd.get("email"));
+  if (!name && !email) throw new Error("A lead needs at least a name or an email address.");
+  const { error } = await sb.from("leads").insert({
+    org_id: orgId,
+    name: name || null,
+    email: email || null,
+    phone: str(fd.get("phone")) || null,
+    plan: str(fd.get("plan")) || null,
+    source: str(fd.get("source")) || "manual",
+  });
+  if (error) throw new Error(error.message);
+  await logActivity(orgId, "crud", `Added lead ${name || email}`);
+  revalidatePath("/leads");
+}
+
+/**
+ * Turn a lead into a customer, keeping the lead as the record of where they
+ * came from. There was no path between the two tables at all — `customers`
+ * even has a "lead" status that had no relationship to the `leads` table.
+ */
+export async function convertLead(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = createClient();
+  const id = str(fd.get("id"));
+
+  const { data: lead, error: readErr } = await sb.from("leads")
+    .select("*").eq("id", id).eq("org_id", orgId).maybeSingle();
+  if (readErr) throw new Error(readErr.message);
+  if (!lead) throw new Error("That lead no longer exists.");
+
+  const { error } = await sb.from("customers").insert({
+    org_id: orgId,
+    name: (lead as any).name || (lead as any).email || "Unnamed",
+    email: (lead as any).email || null,
+    phone: (lead as any).phone || null,
+    status: "active",
+    value: 0,
+  });
+  if (error) throw new Error(error.message);
+
+  await sb.from("leads").update({ source: `${(lead as any).source || "lead"} · converted` }).eq("id", id).eq("org_id", orgId);
+  await logActivity(orgId, "crud", `Converted lead ${(lead as any).name || (lead as any).email} to a customer`);
+  await recomputeQuietly(orgId);
+  revalidatePath("/leads");
+  revalidatePath("/customers");
+}
+
+// ---- Goals / OKRs ----
+export async function saveGoal(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = createClient();
+  const name = str(fd.get("name"));
+  if (!name) throw new Error("Give the goal a name.");
+  const metricKey = str(fd.get("metric_key"));
+  const { error } = await sb.from("goals").insert({
+    org_id: orgId,
+    name,
+    // Empty means "I'll track this myself" — a legitimate choice, and the only
+    // case where current_val is stored rather than derived.
+    metric_key: metricKey || null,
+    current_val: metricKey ? 0 : num(fd.get("current_val")),
+    target_val: num(fd.get("target_val")),
+    unit: str(fd.get("unit")) || "",
+    lower_is_better: str(fd.get("lower_is_better")) === "1",
+  });
+  if (error) throw new Error(error.message);
+  await logActivity(orgId, "crud", `Set a goal: ${name}`);
+  revalidatePath("/goals");
+}
+
+export async function deleteGoal(fd: FormData) {
+  // Deletes need manager+ at the database layer; gating lower would silently
+  // remove zero rows and report success.
+  const { orgId } = await requireRole("manager"); const sb = createClient();
+  const { error } = await sb.from("goals").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/goals");
 }
 
 // ---- KPI alert rules ----

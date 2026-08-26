@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, statusBg } from "@/lib/utils";
 import { getMetrics, getInsights, getAlerts, getFinanceSeries, getUserAndOrg, getOrgProfile } from "@/lib/data";
+import { getRecomputeFailure } from "@/lib/metrics";
 import { demoRevenueSeries } from "@/lib/demo";
 import { Landmark, ReceiptText, Upload as UploadIcon } from "lucide-react";
 import { AlertTriangle, Sparkles } from "lucide-react";
@@ -28,6 +29,8 @@ export default async function Dashboard() {
   const [metrics, insights, alerts, fin, profile] = await Promise.all([getMetrics(), getInsights(), getAlerts(), getFinanceSeries(), getOrgProfile()]);
   const isReal = Boolean(orgId);                 // signed-in workspace vs public demo preview
   const hasMetrics = metrics.length > 0;
+  // Only looked up when there is nothing to show — the healthy path pays nothing.
+  const recomputeFailure = isReal && !hasMetrics ? await getRecomputeFailure(orgId) : null;
   const chartData = fin.live && fin.series ? fin.series : (isReal ? [] : demoRevenueSeries);
   // Only plot the series that actually carry data. A derived ledger has real
   // revenue but no profit/cash until costs are known, and a flat zero line would
@@ -98,11 +101,40 @@ export default async function Dashboard() {
             {metrics.map((m, i) => <KpiCard key={m.id} m={m} i={i} />)}
           </div>
         ) : isReal ? (
-          <Card className="p-8 text-center">
-            <Landmark className="h-8 w-8 text-primary mx-auto" />
-            <p className="mt-3 font-medium">No business data yet</p>
-            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">Connect your real numbers and your whole dashboard, AI chat and reports come alive. It takes under a minute.</p>
-          </Card>
+          /*
+            "No business data yet" was shown for TWO different situations: the
+            workspace genuinely has no rows, and the aggregation is failing (a
+            missing service-role key being the usual cause). In the second case
+            the customer had imported hundreds of rows, saw this message, and
+            had no way to know the problem was ours. Now they are told apart.
+          */
+          recomputeFailure ? (
+            <Card className="p-6 border-danger/30 bg-danger/5">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-danger mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium text-danger">Your data is saved, but Cortex could not calculate your KPIs</p>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+                    This is a problem on our side, not with anything you entered — your rows are safe.
+                    Nothing on this page is missing because of you.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2 font-mono">
+                    {recomputeFailure.reason}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Please contact support and quote that message. You can check live status on the{" "}
+                    <Link href="/status" className="text-primary">status page</Link>.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            <Card className="p-8 text-center">
+              <Landmark className="h-8 w-8 text-primary mx-auto" />
+              <p className="mt-3 font-medium">No business data yet</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">Connect your real numbers and your whole dashboard, AI chat and reports come alive. It takes under a minute.</p>
+            </Card>
+          )
         ) : null}
 
         <div className="grid lg:grid-cols-3 gap-6">

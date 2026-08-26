@@ -25,9 +25,16 @@ export async function POST(req: Request) {
     }
     // Persist the filed turnover so it reaches the dashboard and the AI context.
     const { orgId } = await getUserAndOrg();
-    const saved = await persistGstAnalysis(orgId, analysis);
+    const persisted = await persistGstAnalysis(orgId, analysis);
 
-    return NextResponse.json({ ok: true, analysis, saved, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
+    // Same rule as the bank reader: if the save was OUR failure, refund and say
+    // so rather than billing for a result that never reached the workspace.
+    if (!persisted.ok) {
+      if (gate.enforced) await refundForMode("gst");
+      return NextResponse.json({ ok: false, error: persisted.error, analysis }, { status: 200 });
+    }
+
+    return NextResponse.json({ ok: true, analysis, saved: persisted.saved, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || "Analysis failed — check the AI key." }, { status: 200 });
   }

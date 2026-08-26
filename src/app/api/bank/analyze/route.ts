@@ -27,9 +27,18 @@ export async function POST(req: Request) {
     // Persist the cash position so the dashboard, the runway KPI and the AI's
     // business context all reflect what the customer just paid to analyse.
     const { orgId } = await getUserAndOrg();
-    const saved = await persistBankAnalysis(orgId, analysis);
+    const persisted = await persistBankAnalysis(orgId, analysis);
 
-    return NextResponse.json({ ok: true, analysis, saved, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
+    // The analysis succeeded but WE could not store it. The customer must not
+    // pay for a result that vanished, and must not be left wondering why the
+    // dashboard did not move. Previously this returned ok:true with saved:0
+    // and charged in full.
+    if (!persisted.ok) {
+      if (gate.enforced) await refundForMode("bankstatement");
+      return NextResponse.json({ ok: false, error: persisted.error, analysis }, { status: 200 });
+    }
+
+    return NextResponse.json({ ok: true, analysis, saved: persisted.saved, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || "Analysis failed — check the AI key." }, { status: 200 });
   }

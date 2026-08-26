@@ -15,14 +15,14 @@ import { serviceClient } from "@/lib/supabase/server";
  *
  *  - Row data only, no schema. The schema does live in this repo — across
  *    supabase/schema.sql, supabase/migration_*.sql and supabase/migrations/ —
- *    and `npm run rehearse:restore` builds 52 tables from it, so a restore has
+ *    and `npm run rehearse:restore` builds every one of them from it, so a restore has
  *    somewhere to land. But that schema is maintained by hand and the live
  *    database is edited through the Supabase dashboard, so it can drift.
  *    `npm run dump:schema` compares the two.
  *  - No auth.users. Restoring rows would leave every foreign key to a user
  *    pointing at nobody. This is the real remaining hole.
  *  - No storage objects.
- *  - Not a consistent snapshot. Table 1 is read minutes before table 47, so a
+ *  - Not a consistent snapshot. The first table is read minutes before the last, so a
  *    restore can hit foreign keys that were written in between.
  *  - user_org_ids(), which the RLS policies depend on, is defined nowhere in
  *    the repo — it exists only in the live database.
@@ -70,6 +70,10 @@ export const BACKUP_TABLES = [
   "email_campaigns", "campaign_recipients", "email_templates", "email_replies",
   "email_optouts", "weekly_email_sends", "scheduled_reports",
   "app_settings", "system_status",
+  // Added with the features that created them. Forgetting this is how a table
+  // ends up outside the backup for months — it already happened once with
+  // production_runs and chat_*, so it is now part of adding a table.
+  "alert_rules", "goals",
 ];
 
 /**
@@ -98,7 +102,7 @@ const PAGE = 1000;
 /** Per-table ceiling. */
 const MAX_ROWS_PER_TABLE = 50_000;
 
-/** Global ceiling. The per-table cap alone permits 47 × 50,000 = 2.35M rows,
+/** Global ceiling. The per-table cap alone permits fifty-odd tables × 50,000 rows,
  *  which would exhaust a serverless function's memory long before it was hit —
  *  everything is held as parsed objects, then a JSON string, then a Buffer,
  *  then gzip output, all at once. Stopping deliberately and saying so beats
