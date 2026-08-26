@@ -11,7 +11,7 @@
 # from grepping only supabase/migrations/ and missing supabase/schema.sql plus
 # eleven supabase/migration_*.sql files — 28 SQL files in total. All 47 backed-up
 # tables do have a CREATE TABLE in this repo, and `npm run rehearse:restore`
-# now builds 52 tables from source and restores real rows into them.
+# now builds every table from source and restores real rows into them.
 #
 # So the schema is not missing. The open question is whether it has DRIFTED.
 # The live database has been edited by hand through the Supabase dashboard, and

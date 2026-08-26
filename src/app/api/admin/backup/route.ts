@@ -5,7 +5,7 @@ import { createBackup } from "@/lib/backup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// The export walks 47 tables sequentially. A shorter limit would cut it off
+// The export walks every table Cortex uses sequentially. A shorter limit would cut it off
 // partway and hand back a file that looks fine and isn't.
 export const maxDuration = 300;
 

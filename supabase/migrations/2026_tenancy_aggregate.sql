@@ -27,6 +27,14 @@ language sql
 stable
 security definer
 set search_path = public
+-- Pinned. order_date is a `date` and created_at a `timestamptz`, so
+-- coalesce() yields timestamptz and date_trunc()/::date would otherwise run in
+-- the SESSION timezone. Under Asia/Kolkata an order created at 20:00 UTC on the
+-- 31st buckets into the NEXT month, falls outside the twelve-month window, and
+-- vanishes from both revenue and the order count — while the TypeScript
+-- fallback, which is unconditionally UTC, keeps it. The two paths must not
+-- disagree on which month a row belongs to.
+set timezone = 'UTC'
 as $$
 with
   -- Twelve month-start dates, oldest first. Matches monthStart() in metrics.ts,
@@ -118,7 +126,13 @@ select jsonb_build_object(
   'openPay',     (select coalesce(sum(amount), 0) from inv where status <> 'paid' and type = 'payable')
                  + (select coalesce(sum(amount), 0) from po),
   'invoiceCount',(select count(*) from inv),
-  'poCount',     (select count(*) from po),
+  -- ALL purchase orders, not just the committed ones. The TS fallback sets
+  -- hasPOs from pos.length over every row, and this feeds the "no source data"
+  -- branch — which DELETES health_metrics and zeroes the ledger. A workspace
+  -- whose only data was draft POs would have been wiped on the aggregate path
+  -- and left alone on the fallback path. `openPay` above is separately filtered
+  -- to sent/received/approved, which is where the filtering belongs.
+  'poCount',     (select count(*) from purchase_orders where org_id = p_org),
 
   'stockValue',   (select coalesce(sum(on_hand * unit_cost), 0) from stock),
   'totalDaily',   (select coalesce(sum(daily_consumption), 0) from stock),
@@ -134,12 +148,28 @@ select jsonb_build_object(
 );
 $$;
 
--- Called with the service role only (recomputeMetrics), but granting to
--- authenticated costs nothing and keeps it usable from a future client path.
--- security definer + the p_org argument means it can only ever aggregate the
--- org it is asked about, and the caller has already been authorised.
-revoke execute on function public.cortex_aggregate(uuid) from public, anon;
-grant execute on function public.cortex_aggregate(uuid) to authenticated, service_role;
+-- SERVICE ROLE ONLY.
+--
+-- An earlier version of this file granted EXECUTE to `authenticated` with a
+-- comment claiming that "security definer + the p_org argument means it can
+-- only ever aggregate the org it is asked about, and the caller has already
+-- been authorised". The second half of that sentence was true of
+-- recomputeMetrics (service role) and false of the grant, which created a
+-- second caller that nothing authorised.
+--
+-- The function is `security definer`, so it bypasses RLS on sales_orders,
+-- invoices, employees, inventory_items and purchase_orders. Granted to
+-- `authenticated`, PostgREST exposes it at /rest/v1/rpc/cortex_aggregate to any
+-- signed-up user — who, knowing only another workspace's UUID, would receive
+-- twelve months of revenue, receivables, payables, stock value, headcount and
+-- TOTAL MONTHLY PAYROLL. That is a competitor's entire P&L shape, and org ids
+-- do circulate (the workspace switcher takes one as a request parameter).
+--
+-- An unguessable identifier is not an access control. The grant is removed.
+-- Compare user_org_rank in 2026_tenancy.sql, which reasons correctly precisely
+-- because it discloses only the CALLER'S OWN rank.
+revoke execute on function public.cortex_aggregate(uuid) from public, anon, authenticated;
+grant execute on function public.cortex_aggregate(uuid) to service_role;
 
 -- The aggregate scans by org. These make it cheap at any size.
 create index if not exists idx_sales_orders_org_date on sales_orders (org_id, order_date);

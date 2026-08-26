@@ -189,6 +189,41 @@ check("receivables is 0, not null", e2.openRecv, 0);
 check("averages are 0, not null", e2.avgPerf, 0);
 check("still returns twelve buckets", e2.series.length, 12);
 
+/* --- the alert-insert regression ---------------------------------------- */
+/*
+  This shipped broken and survived a full review: metrics.ts used
+  `upsert(..., { onConflict: "org_id,rule_id" })`, but the only matching index
+  is PARTIAL. Postgres cannot infer a partial index as an ON CONFLICT arbiter,
+  supabase-js returns that as { error } rather than throwing, and the result was
+  discarded — so no alert was ever raised, silently, by the very feature written
+  to make alerts fire.
+
+  Asserted directly against Postgres so it cannot come back.
+*/
+console.log("\nAlert raising (the bug that shipped silently)");
+{
+  const rule = "33333333-3333-3333-3333-333333333333";
+  await db.query("insert into alert_rules (id, org_id, metric_key, op, threshold) values ($1,$2,'cash','<',6)", [rule, org]);
+
+  let upsertFailed = false;
+  try {
+    await db.query(`insert into alerts (org_id, rule_id, title) values ($1,$2,'x')
+                    on conflict (org_id, rule_id) do nothing`, [org, rule]);
+  } catch { upsertFailed = true; }
+  check("ON CONFLICT against the partial index is still rejected by Postgres", upsertFailed ? 1 : 0, 1);
+
+  await db.query("insert into alerts (org_id, rule_id, title, is_read) values ($1,$2,'first',false)", [org, rule]);
+  let dupRejected = false;
+  try { await db.query("insert into alerts (org_id, rule_id, title, is_read) values ($1,$2,'dup',false)", [org, rule]); }
+  catch { dupRejected = true; }
+  check("a plain INSERT raises the alert, and a duplicate open one is rejected", dupRejected ? 1 : 0, 1);
+
+  await db.query("update alerts set is_read = true where org_id = $1", [org]);
+  await db.query("insert into alerts (org_id, rule_id, title, is_read) values ($1,$2,'again',false)", [org, rule]);
+  const n2 = (await db.query("select count(*)::int n from alerts where org_id = $1", [org])).rows[0].n;
+  check("once resolved, the same rule can raise again", n2, 2);
+}
+
 console.log("");
 if (fail) { console.log(`${fail} FAILED, ${pass} passed — the database and the app DISAGREE.`); process.exit(1); }
 console.log(`all ${pass} passed — the in-database aggregate matches the TypeScript exactly.`);

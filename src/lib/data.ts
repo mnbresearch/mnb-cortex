@@ -140,6 +140,22 @@ export async function getGoals() {
   const byKey = new Map(metrics.map((m) => [m.metric_key, m]));
   const rows = ((goals as any[]) || []).map((g) => {
     const m = g.metric_key ? byKey.get(g.metric_key) : undefined;
+    /*
+      Three states, not two. A goal can be:
+        linked and resolved   — current comes from the live KPI
+        not linked            — the owner tracks it by hand
+        linked but UNRESOLVED — the KPI stopped being emitted
+
+      The third is real: `receivables` only exists while there are invoices,
+      `risk` only when a component is measurable, `inventory` only when there is
+      daily consumption. Treating it as the second was actively harmful: a
+      linked goal stores current_val = 0, so a "receivables overdue below ₹30 L"
+      goal whose KPI disappeared fell back to 0, and lower-is-better scored
+      0 <= target as 100% — a full green ring reading "achieved" for a number
+      nobody was measuring, labelled "tracked by hand" when it was not.
+    */
+    const linked = Boolean(g.metric_key);
+    const resolved = Boolean(m);
     return {
       id: String(g.id),
       name: String(g.name),
@@ -148,7 +164,8 @@ export async function getGoals() {
       target: Number(g.target_val) || 0,
       unit: String(g.unit || (m?.unit === "INR" ? "" : m?.unit || "")),
       lowerIsBetter: Boolean(g.lower_is_better),
-      linked: Boolean(m),
+      linked: resolved,
+      awaitingMetric: linked && !resolved,
     };
   });
   return { rows, live: true };

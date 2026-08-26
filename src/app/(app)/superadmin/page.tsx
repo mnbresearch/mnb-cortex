@@ -303,7 +303,7 @@ export default async function SuperAdmin() {
               Take one before every migration and before any bulk edit.
             </p>
             <p className="text-sm text-muted-foreground max-w-3xl mt-2">
-              The file contains the rows of all 47 tables. The schema to restore them into lives in
+              The file contains the rows of every table Cortex uses. The schema to restore them into lives in
               the repo, and the restore path is rehearsed against a real PostgreSQL on every run of{" "}
               <code className="text-xs">npm run rehearse:restore</code> — backup, wipe, restore, then
               compare every value. To restore, run{" "}

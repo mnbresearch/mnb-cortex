@@ -29,7 +29,8 @@ export type SavedGoal = {
   target: number;
   unit: string;
   lowerIsBetter: boolean;
-  linked: boolean;      // true when `current` came from a live KPI
+  linked: boolean;          // true when `current` came from a live KPI
+  awaitingMetric?: boolean; // linked to a KPI that is not currently being computed
 };
 
 export type GoalMetricOption = { key: string; label: string; value: number; unit: string; lowerBad: boolean };
@@ -68,7 +69,9 @@ export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]
   async function advise() {
     setLoading(true); setOut("");
     const input = "Owner's quarterly goals (OKRs):\n"
-      + goals.map((g) => `- ${g.name}: currently ${fmt(g.current)}${g.unit}, target ${fmt(g.target)}${g.unit}${g.lowerIsBetter ? " (lower is better)" : ""}`).join("\n")
+      + goals.map((g) => g.awaitingMetric
+        ? `- ${g.name}: target ${fmt(g.target)}${g.unit} (current value unknown — the KPI is not being computed)`
+        : `- ${g.name}: currently ${fmt(g.current)}${g.unit}, target ${fmt(g.target)}${g.unit}${g.lowerIsBetter ? " (lower is better)" : ""}`).join("\n")
       + "\nFor each goal, give the single highest-leverage move to close the gap, tied to our live numbers.";
     try {
       const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "strategy", input }) });
@@ -143,18 +146,30 @@ export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]
       <div className="space-y-2">
         {goals.map((g) => (
           <div key={g.id} className="flex items-center gap-3 rounded-lg border p-3">
-            <Ring value={progress(g)} />
+            {/* No ring when the KPI is missing: drawing one would assert a
+                progress figure we cannot compute. */}
+            {g.awaitingMetric
+              ? <div className="h-[52px] w-[52px] shrink-0 rounded-full border-2 border-dashed border-border" />
+              : <Ring value={progress(g)} />}
             <div className="min-w-0 flex-1">
               <div className="font-medium text-sm flex items-center gap-1.5">
                 {g.name}
                 {g.linked && <span title="Current value read from your live KPI"><Link2 className="h-3.5 w-3.5 text-primary" /></span>}
               </div>
               <div className="text-sm text-muted-foreground">
-                now <b className="text-foreground">{fmt(g.current)}{g.unit ? ` ${g.unit}` : ""}</b>
-                {" → "}target <b className="text-foreground">{fmt(g.target)}{g.unit ? ` ${g.unit}` : ""}</b>
+                {g.awaitingMetric
+                  ? <>target <b className="text-foreground">{fmt(g.target)}{g.unit ? ` ${g.unit}` : ""}</b></>
+                  : <>now <b className="text-foreground">{fmt(g.current)}{g.unit ? ` ${g.unit}` : ""}</b>
+                    {" → "}target <b className="text-foreground">{fmt(g.target)}{g.unit ? ` ${g.unit}` : ""}</b></>}
                 {g.lowerIsBetter && <span className="ml-1 text-xs">(lower is better)</span>}
               </div>
-              {!g.linked && (
+              {g.awaitingMetric && (
+                <div className="text-xs text-warning mt-0.5">
+                  Cortex is not currently computing <b>{g.metric_key}</b> for this workspace, so there is no
+                  progress to show — add the data it needs and this starts tracking again.
+                </div>
+              )}
+              {!g.linked && !g.awaitingMetric && (
                 <div className="text-xs text-muted-foreground mt-0.5">Tracked by hand — not linked to a KPI.</div>
               )}
             </div>

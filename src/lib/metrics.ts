@@ -169,9 +169,16 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     // deleted orders, because clearing health_metrics doesn't touch the chart's
     // source.
     try {
+      // Revenue IS derived from orders, so a workspace that deleted them must
+      // see it go to zero everywhere. The point-in-time positions are NOT
+      // derived — last March's receivables really were what they were — so
+      // only the current month is cleared. Zeroing all twelve here contradicted
+      // the history-preserving split further down and erased the same data by
+      // another route.
+      await svc.from("finance_ledger").update({ revenue: 0 }).eq("org_id", orgId);
       await svc.from("finance_ledger")
-        .update({ revenue: 0, receivables: 0, payables: 0, opex: 0 })
-        .eq("org_id", orgId);
+        .update({ receivables: 0, payables: 0, opex: 0 })
+        .eq("org_id", orgId).eq("period", monthStart(0));
     } catch { /* best effort */ }
     return { ok: true, metrics: 0, months: 0, reason: "no source data" };
   }
@@ -443,19 +450,40 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
       const dismissed = new Set(all.filter((a) => a.dismissed_at).map((a) => String(a.rule_id)));
 
       const fresh = breaches.filter((b) => !alreadyOpen.has(String(b.rule.id)) && !dismissed.has(String(b.rule.id)));
-      if (fresh.length) {
-        // Upsert, not insert: two concurrent saves could both find nothing
-        // open and both write. The partial unique index on
-        // (org_id, rule_id) where is_read = false turns that race into a
-        // no-op instead of two identical warnings.
-        await svc.from("alerts").upsert(fresh.map((b) => ({
+      /*
+        PLAIN INSERT, one row at a time.
+
+        This was an upsert with onConflict "org_id,rule_id" — which Postgres
+        CANNOT accept, because the only matching index is PARTIAL
+        (`where rule_id is not null and is_read = false`) and an ON CONFLICT
+        arbiter cannot infer a partial index unless the statement repeats its
+        predicate, which PostgREST never emits. It failed with "there is no
+        unique or exclusion constraint matching the ON CONFLICT specification",
+        supabase-js returned that as { error } rather than throwing, and the
+        result was discarded inside the surrounding try/catch.
+
+        Net effect: NO ALERT WAS EVER INSERTED, silently — the exact failure the
+        alerts work was written to fix, reintroduced by the index meant to make
+        it safe. Verified against a real Postgres before changing it.
+
+        A plain insert is rejected by that same partial index when an open alert
+        already exists, which is precisely the concurrency guard wanted. One
+        statement per row so a single conflict cannot discard the others, and a
+        conflict is expected rather than logged.
+      */
+      for (const b of fresh) {
+        const { error } = await svc.from("alerts").insert({
           org_id: orgId,
           rule_id: b.rule.id,
           severity: b.severity,
           title: b.title,
           body: b.body,
           module: "kpi",
-        })), { onConflict: "org_id,rule_id", ignoreDuplicates: true });
+        });
+        // 23505 = another save won the race and opened this alert first.
+        if (error && !/duplicate key|23505/i.test(error.message || "")) {
+          console.error("[metrics] could not raise alert:", error.message);
+        }
       }
 
       // A rule that is no longer breached closes its own alert, so the bell

@@ -74,6 +74,9 @@ export const BACKUP_TABLES = [
   // ends up outside the backup for months — it already happened once with
   // production_runs and chat_*, so it is now part of adding a table.
   "alert_rules", "goals",
+  // A billing audit trail — exactly the kind of record you want after an
+  // argument about what a customer was charged.
+  "org_billing_log",
 ];
 
 /**
@@ -318,7 +321,7 @@ export async function createBackup(): Promise<BackupResult> {
     complete: failed.length === 0 && capped.length === 0 && mismatched.length === 0 && unordered.length === 0,
     redacted: REDACT,
     limitations: [
-      "Row data only. The schema is in the repo (schema.sql, rls.sql and the migrations, all 34 of which apply to an empty database) but is maintained by hand and can drift from live — run `npm run dump:schema` to check.",
+      "Row data only. The schema is in the repo (schema.sql, rls.sql and the migrations, all of which apply to an empty database — see `npm run rehearse:restore`) but is maintained by hand and can drift from live; `npm run dump:schema` compares them.",
       "auth.users IS included (as auth_users), read through the Supabase Admin API — but WITHOUT passwords, which that API does not return. Restoring means recreating the accounts; people sign in again by magic link or Google.",
       "Does not include Supabase Storage objects.",
       "Not a point-in-time snapshot: tables are read one after another over minutes.",
