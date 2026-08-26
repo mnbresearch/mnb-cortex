@@ -319,11 +319,21 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   const stamp = new Date().toISOString();
   try {
     if (metrics.length) {
+      // UPSERT, because 2026_alert_dismiss.sql adds a unique index on
+      // (org_id, metric_key) to stop concurrent recomputes duplicating KPI
+      // cards. A plain insert would now fail on every recompute after the
+      // first. created_at is refreshed to `stamp`, so the stale-delete below
+      // still removes only metrics this run did not produce.
       const { error } = await svc.from("health_metrics")
-        .insert(metrics.map((m) => ({ ...m, org_id: orgId, as_of: today, created_at: stamp })));
+        .upsert(metrics.map((m) => ({ ...m, org_id: orgId, as_of: today, created_at: stamp })),
+                { onConflict: "org_id,metric_key" });
       if (error) return { ok: false, metrics: 0, months: 0, reason: error.message };
     }
-    await svc.from("health_metrics").delete().eq("org_id", orgId).lt("created_at", stamp);
+    // Leave demo rows alone. seedDemoData writes a curated set of KPIs
+    // (including csat, net_profit and gross_margin, which this function never
+    // derives) and then recomputes — so without this the sample data destroyed
+    // its own headline numbers inside the same request that created them.
+    await svc.from("health_metrics").delete().eq("org_id", orgId).lt("created_at", stamp).eq("is_demo", false);
   } catch (e: any) {
     return { ok: false, metrics: 0, months: 0, reason: e?.message };
   }
@@ -344,20 +354,35 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
       // One OPEN alert per rule. Without this, a rule that stays breached would
       // mint a fresh alert on every single save — and a customer who saved
       // twenty rows would find twenty identical warnings and stop reading them.
-      const { data: openRows } = await svc.from("alerts")
-        .select("rule_id").eq("org_id", orgId).eq("is_read", false).not("rule_id", "is", null);
-      const alreadyOpen = new Set(((openRows as any[]) || []).map((a) => String(a.rule_id)));
+      // One read, not two. This block runs after EVERY write, so each extra
+      // serial round trip is paid on every row a customer saves.
+      const { data: alertRows } = await svc.from("alerts")
+        .select("rule_id,is_read,dismissed_at").eq("org_id", orgId).not("rule_id", "is", null);
+      const all = (alertRows as any[]) || [];
 
-      const fresh = breaches.filter((b) => !alreadyOpen.has(String(b.rule.id)));
+      const alreadyOpen = new Set(all.filter((a) => !a.is_read).map((a) => String(a.rule_id)));
+
+      // A rule the human has DISMISSED while it is still breached must stay
+      // quiet. Reading only is_read=false made a dismissed alert look absent,
+      // so the very next save re-raised it — indistinguishable, from the
+      // owner's side, from a Dismiss button that does not work. It stays
+      // suppressed until the rule recovers and breaches again.
+      const dismissed = new Set(all.filter((a) => a.dismissed_at).map((a) => String(a.rule_id)));
+
+      const fresh = breaches.filter((b) => !alreadyOpen.has(String(b.rule.id)) && !dismissed.has(String(b.rule.id)));
       if (fresh.length) {
-        await svc.from("alerts").insert(fresh.map((b) => ({
+        // Upsert, not insert: two concurrent saves could both find nothing
+        // open and both write. The partial unique index on
+        // (org_id, rule_id) where is_read = false turns that race into a
+        // no-op instead of two identical warnings.
+        await svc.from("alerts").upsert(fresh.map((b) => ({
           org_id: orgId,
           rule_id: b.rule.id,
           severity: b.severity,
           title: b.title,
           body: b.body,
           module: "kpi",
-        })));
+        })), { onConflict: "org_id,rule_id", ignoreDuplicates: true });
       }
 
       // A rule that is no longer breached closes its own alert, so the bell
@@ -367,6 +392,14 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
       if (toClose.length) {
         await svc.from("alerts").update({ is_read: true })
           .eq("org_id", orgId).eq("is_read", false).in("rule_id", toClose);
+      }
+      // Recovery also clears the dismissal, so if the number goes bad again
+      // later the owner is told — a dismissal silences THIS episode, not the
+      // metric for ever.
+      const recovered = [...dismissed].filter((id) => !stillBreached.has(id));
+      if (recovered.length) {
+        await svc.from("alerts").update({ dismissed_at: null, is_read: true })
+          .eq("org_id", orgId).in("rule_id", recovered);
       }
     }
   } catch { /* alerting must never break the save that triggered it */ }
@@ -407,7 +440,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     // Clear the previous generation whether or not there are new ones — a
     // workspace that fixed everything should end up with an empty panel, not
     // last week's warnings.
-    await svc.from("ai_insights").delete().eq("org_id", orgId).lt("created_at", istamp);
+    await svc.from("ai_insights").delete().eq("org_id", orgId).lt("created_at", istamp).eq("is_demo", false);
   } catch { /* insights are advisory; never fail a save over them */ }
 
   // ---- Write finance_ledger ----------------------------------------------------

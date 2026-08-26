@@ -62,7 +62,11 @@ export async function seedDemoData() {
  * Now that seeded rows carry is_demo, they can simply be deleted.
  */
 export async function clearDemoData() {
-  const orgId = await requireWriteOrg();
+  // Deleting rows requires manager+ at the database level (2026_tenancy.sql).
+  // Gating this at analyst meant RLS filtered the deletes to zero rows and
+  // returned SUCCESS — the page reloaded, the warning was still there, and
+  // nothing said why.
+  const { orgId } = await requireRole("manager");
   const sb = createClient();
   for (const t of DEMO_TABLES) {
     const { error } = await sb.from(t).delete().eq("org_id", orgId).eq("is_demo", true);
@@ -670,10 +674,16 @@ export async function moveDeal(fd: FormData) {
     and forth across the "won" column.
   */
   if (before && stage.toLowerCase() === "won" && String(before.stage || "").toLowerCase() !== "won") {
-    const { data: existing } = await sb.from("sales_orders")
+    // Both of these used to discard their error. On a database where the
+    // migration had not run yet, the select failed, `existing` came back
+    // undefined, the insert ran, the insert failed — and the whole
+    // won-deal-becomes-revenue feature was a silent no-op with nothing in the
+    // logs. A feature that quietly does nothing is worse than one that breaks.
+    const { data: existing, error: lookupErr } = await sb.from("sales_orders")
       .select("id").eq("org_id", orgId).eq("source_deal_id", id).limit(1);
+    if (lookupErr) throw new Error(`Deal moved, but the sales order could not be checked: ${lookupErr.message}`);
     if (!existing?.length) {
-      await sb.from("sales_orders").insert({
+      const { error: soErr } = await sb.from("sales_orders").insert({
         org_id: orgId,
         order_no: "SO-" + seqSuffix(),
         customer_name: before.customer_name || before.deal_name || "Won deal",
@@ -682,9 +692,22 @@ export async function moveDeal(fd: FormData) {
         status: "won",
         order_date: new Date().toISOString().slice(0, 10),
         source_deal_id: id,
+        // Winning a DEMO deal must not leave a permanent real order behind
+        // that "Remove sample data" cannot clear.
+        is_demo: Boolean(before.is_demo),
       });
+      if (soErr) throw new Error(`Deal moved to won, but the sales order could not be created: ${soErr.message}`);
       await logActivity(orgId, "crud", `Deal won — created a sales order for ${before.customer_name || before.deal_name || "the deal"}`);
     }
+    await recomputeQuietly(orgId);
+    revalidatePath("/dashboard");
+    revalidatePath("/sales");
+    revalidatePath("/finance");
+  } else if (before && String(before.stage || "").toLowerCase() === "won" && stage.toLowerCase() !== "won") {
+    // Dragged back OUT of won. Without this the sales order stayed "won" for
+    // ever, so the pipeline and the revenue figure permanently disagreed and
+    // nothing recomputed to reveal it.
+    await sb.from("sales_orders").update({ status: "open" }).eq("org_id", orgId).eq("source_deal_id", id);
     await recomputeQuietly(orgId);
     revalidatePath("/dashboard");
     revalidatePath("/sales");
@@ -851,7 +874,12 @@ export async function deleteAlertRule(fd: FormData) {
 
 export async function dismissAlert(fd: FormData) {
   const orgId = await requireWriteOrg(); const sb = createClient();
-  const { error } = await sb.from("alerts").update({ is_read: true }).eq("id", str(fd.get("id"))).eq("org_id", orgId);
+  // dismissed_at, not just is_read. recomputeMetrics uses is_read to mean "the
+  // rule recovered"; if a dismissal looked the same, the next save would raise
+  // the alert again and the button would appear broken.
+  const { error } = await sb.from("alerts")
+    .update({ is_read: true, dismissed_at: new Date().toISOString() })
+    .eq("id", str(fd.get("id"))).eq("org_id", orgId);
   if (error) throw new Error(error.message);
   revalidatePath("/alerts");
   revalidatePath("/dashboard");

@@ -13,10 +13,12 @@ const SEED: Rep[] = [
   { id: "s3", name: "Amit", quota: 2_500_000, sales: 2_500_000 },
 ];
 
-export function CommissionCalc() {
+/** `seed` is the workspace's REAL sales staff. */
+export function CommissionCalc({ seed }: { seed?: Rep[] } = {}) {
+  const isReal = Boolean(seed && seed.length);
   const [baseRate, setBaseRate] = useState(3);      // % up to quota
   const [accelRate, setAccelRate] = useState(6);    // % above quota
-  const [reps, setReps] = useState<Rep[]>(SEED);
+  const [reps, setReps] = useState<Rep[]>(isReal ? seed! : SEED);
 
   const calc = useMemo(() => {
     const people = reps.map((r) => {
@@ -37,6 +39,11 @@ export function CommissionCalc() {
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
     <Card className="p-5 space-y-4">
+      {!isReal && (
+        <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          These are <b>example reps</b>, not yours — add employees in the Sales department and their names will appear here.
+        </div>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap gap-3">
           <label className="text-sm"><span className="text-muted-foreground block mb-1">Base rate (to quota)</span><span><input className={I + " w-16"} type="number" value={baseRate} onChange={(e) => setBaseRate(Number(e.target.value))} /> %</span></label>

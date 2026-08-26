@@ -3,7 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { AIPanel } from "@/components/ai-panel";
-import { getMetrics } from "@/lib/data";
+import { getMetrics, getUserAndOrg } from "@/lib/data";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,12 @@ const PEERS: { key: string; metric: string; peer: string; higherIsBetter: boolea
 ];
 
 export default async function Benchmarks() {
-  const metrics = await getMetrics();
+  // getMetrics() returns the DEMO snapshot to a logged-out visitor, so without
+  // this the "You" column would show another company's numbers under text
+  // saying it is computed from your own data.
+  const { orgId } = await getUserAndOrg();
+  const signedIn = Boolean(orgId);
+  const metrics = signedIn ? await getMetrics() : [];
   const byKey = Object.fromEntries(metrics.map((m) => [m.metric_key, m]));
 
   const rows = PEERS.map((p) => {
@@ -77,7 +82,8 @@ export default async function Benchmarks() {
           <p className="text-xs text-muted-foreground mt-3">
             Your column is computed from your own data. The peer column is a directional estimate for
             Indian manufacturing SMEs, not an audited figure.
-            {missing > 0 && <> {missing} row{missing === 1 ? " shows" : "s show"} an em dash because Cortex does not yet have the data to compute it — <Link href="/import" className="text-primary">import your records</Link> to fill them in.</>}
+            {signedIn && missing > 0 && <> {missing} row{missing === 1 ? " shows" : "s show"} an em dash because Cortex does not yet have the data to compute it — <Link href="/import" className="text-primary">import your records</Link> to fill them in.</>}
+            {!signedIn && <> Sign in to see your own figures in the You column.</>}
           </p>
         </Section>
 

@@ -18,8 +18,10 @@ const SEED: Item[] = [
   { id: "i7", name: "Legacy-SKU", value: 60_000 },
 ];
 
-export function AbcAnalysis() {
-  const [items, setItems] = useState<Item[]>(SEED);
+/** `seed` is the workspace's REAL inventory, valued at on_hand x unit_cost. */
+export function AbcAnalysis({ seed }: { seed?: Item[] } = {}) {
+  const isReal = Boolean(seed && seed.length);
+  const [items, setItems] = useState<Item[]>(isReal ? seed! : SEED);
 
   const calc = useMemo(() => {
     const sorted = [...items].sort((a, b) => b.value - a.value);
@@ -43,6 +45,11 @@ export function AbcAnalysis() {
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
     <Card className="p-5 space-y-4">
+      {!isReal && (
+        <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          These are <b>example items</b>, not yours — add inventory and this page will class your real SKUs by value.
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex flex-wrap gap-2">
           <Badge className={tone.A}>A: {calc.counts.A} items · top 80% value</Badge>

@@ -66,7 +66,19 @@ begin
     values (p_org, (date_trunc('month', current_date) - ((11-m) || ' months')::interval)::date,
       30000000 + m*1100000, 19000000 + m*820000, 6000000 + m*120000,
       11000000 + m*280000, 4200000 + m*90000, 22000000 - m*250000,
-      4800000 + m*220000, 6200000 + m*90000, 5200000 + m*120000, true);
+      4800000 + m*220000, 6200000 + m*90000, 5200000 + m*120000, true)
+    -- finance_ledger is UNIQUE on (org_id, period), and recomputeMetrics writes
+    -- rows for those same twelve month-starts from real sales orders. A plain
+    -- INSERT therefore collided the moment any workspace with real data loaded
+    -- the sample set — aborting the whole function with a raw 23505 in the
+    -- customer's face. Which is precisely the person this rewrite was meant to
+    -- protect.
+    on conflict (org_id, period) do update set
+      revenue = excluded.revenue, cogs = excluded.cogs, opex = excluded.opex,
+      gross_profit = excluded.gross_profit, net_profit = excluded.net_profit,
+      cash_balance = excluded.cash_balance, receivables = excluded.receivables,
+      payables = excluded.payables, ebitda = excluded.ebitda,
+      is_demo = true;
   end loop;
 
   -- Sales orders
@@ -141,11 +153,14 @@ begin
     (p_org,'GST_Return_May.pdf','pdf','GSTR-3B for May. Net tax ₹4.1L. Filed on time.','[]', true);
 end $$;
 
--- Optional: seed every existing org once (safe to re-run).
-do $$
-declare o uuid;
-begin
-  for o in select id from organizations loop
-    perform public.seed_demo_data(o);
-  end loop;
-end $$;
+-- DELIBERATELY NOT RUN.
+--
+-- This file used to end by looping over EVERY organization in the database and
+-- seeding each one. On a live multi-tenant install that injects one company's
+-- sample figures into every real customer's workspace. It was described as
+-- "safe to re-run"; it was never safe to run once.
+--
+-- The function above is what the product calls, for one workspace, when its
+-- owner asks for it. To seed a specific org by hand:
+--
+--   select public.seed_demo_data('<org-uuid>');

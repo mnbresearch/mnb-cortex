@@ -13,9 +13,17 @@ const SEED: Bill[] = [
   { id: "b3", vendor: "Logistics partner", amount: 95000, days: 15 },
 ];
 
-export function PayablesDpo() {
-  const [bills, setBills] = useState<Bill[]>(SEED);
-  const [purchases, setPurchases] = useState(5_000_000);
+/**
+ * `seed` is the workspace's REAL unpaid payables (supplier invoices and
+ * committed purchase orders), passed from the server. The sample below is used
+ * only when there is nothing real to show, and is labelled as such — this page
+ * is headed "What you owe, how long you take, and when to pay early", which is
+ * a claim about the reader's own money.
+ */
+export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesHint?: number } = {}) {
+  const isReal = Boolean(seed && seed.length);
+  const [bills, setBills] = useState<Bill[]>(isReal ? seed! : SEED);
+  const [purchases, setPurchases] = useState(purchasesHint && purchasesHint > 0 ? purchasesHint : 5_000_000);
   // early payment discount terms
   const [discPct, setDiscPct] = useState(2);
   const [discDays, setDiscDays] = useState(10);
@@ -38,6 +46,11 @@ export function PayablesDpo() {
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
     <div className="space-y-4">
+      {!isReal && (
+        <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          These are <b>example bills</b>, not yours — add payable invoices or purchase orders and this page will compute your real DPO.
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <Stat label="Total payable" value={inr(m.total)} />
         <Stat label="DPO" value={`${m.dpo.toFixed(0)} days`} highlight />

@@ -25,9 +25,20 @@ const BUCKETS = [
   { label: "90+", test: (d: number) => d > 90, tone: "text-danger" },
 ];
 
-export function ReceivablesAging() {
-  const [invs, setInvs] = useState<Inv[]>(SEED);
-  const [creditSales, setCreditSales] = useState(6_000_000);
+/**
+ * `seed` is the workspace's REAL unpaid receivables, passed from the server.
+ *
+ * This component previously always started from SEED — four invented invoices
+ * — under the page heading "Who owes you, how old it is, and who to chase
+ * first". A customer with a hundred real invoices in Cortex saw none of them
+ * here, and the totals, DSO and "chase first" list all described a fiction.
+ * The sample now appears only when there is genuinely nothing to show, and
+ * says so.
+ */
+export function ReceivablesAging({ seed, creditSalesHint }: { seed?: Inv[]; creditSalesHint?: number } = {}) {
+  const isReal = Boolean(seed && seed.length);
+  const [invs, setInvs] = useState<Inv[]>(isReal ? seed! : SEED);
+  const [creditSales, setCreditSales] = useState(creditSalesHint && creditSalesHint > 0 ? creditSalesHint : 6_000_000);
 
   const m = useMemo(() => {
     const total = invs.reduce((s, i) => s + i.amount, 0);
@@ -46,6 +57,12 @@ export function ReceivablesAging() {
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
     <div className="space-y-4">
+      {!isReal && (
+        <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          These are <b>example invoices</b>, not yours — add invoices in Finance or import them and this
+          page will age your real book, work out your DSO, and tell you who to chase first.
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Total receivable" value={inr(m.total)} />
         <Stat label="Overdue (30+)" value={inr(m.overdue)} cls={m.overdue > 0 ? "text-danger" : "text-success"} />
