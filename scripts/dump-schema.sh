@@ -19,10 +19,12 @@
 # day you tried to restore into a table that was subtly the wrong shape. This
 # script exists to catch that, and should be run after any dashboard change.
 #
-# Known gaps this will also reveal, both currently real:
-#   - user_org_ids() is referenced by the RLS policies in supabase/*.sql but is
-#     defined nowhere in the repo. It exists only in the live database.
-#   - supabase/migrations/2026_tenancy.sql depends on auth.jwt().
+# A correction: an earlier version of this comment claimed user_org_ids() was
+# "defined nowhere in the repo". It is defined in supabase/rls.sql line 8. The
+# rehearsal harness simply was not applying rls.sql, and the stub it used
+# instead made the omission look like evidence of a missing function. Every SQL
+# file now applies, so the only thing the repo genuinely cannot rebuild is
+# auth.users, which belongs to Supabase.
 #
 # ---------------------------------------------------------------------------
 # CREDENTIALS: nothing is passed as an argument, because arguments end up in

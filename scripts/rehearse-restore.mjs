@@ -22,13 +22,14 @@
  * known to work: an incomplete backup must be REJECTED without --force, and
  * accepted with it.
  *
- * SCOPE, HONESTLY: this covers the tables whose CREATE TABLE actually exists in
- * supabase/migrations. The other tables in the live database have no schema in
- * this repo, so they cannot be rehearsed here — which is itself the finding,
- * and the reason scripts/dump-schema.sh exists.
+ * SCOPE: every SQL file in supabase/ is applied — schema.sql, rls.sql, the
+ * loose migration_*.sql files and supabase/migrations/. All 34 apply cleanly to
+ * an empty database, so the repo really can rebuild itself. What it cannot
+ * rebuild is auth.users, which lives in Supabase's own schema; see
+ * scripts/backup-auth-users.md.
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, readdirSync, mkdtempSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { join, dirname } from "node:path";
@@ -69,12 +70,22 @@ step("1. Applying supabase/migrations to an empty database");
 // The loose supabase/migration_*.sql files and then supabase/migrations/*.sql
 // are ALTER-style patches layered on top, so they must come after it.
 //
-// (An earlier version of this script only looked in supabase/migrations/ and
-// concluded most tables had no schema in the repo. They do. Scanning all 28
-// SQL files is the difference between a true and a false statement about
-// whether your backups are restorable, so it scans all 28.)
+// (An earlier version only looked in supabase/migrations/ and concluded most
+// tables had no schema in the repo. They do. Scanning every SQL file is the
+// difference between a true and a false statement about whether your backups
+// are restorable.)
 const sqlFiles = [
   join(ROOT, "supabase", "schema.sql"),
+  // rls.sql was MISSING from this list, and its absence produced a false
+  // conclusion I then repeated in three places: that user_org_ids() is "defined
+  // nowhere in the repo". It is defined here, at rls.sql:8. The harness simply
+  // never applied the file, because the glob only matched schema.sql and
+  // migration*.sql — so the function was stubbed, and the stub made the gap
+  // invisible while looking like evidence of one.
+  //
+  // seed.sql is excluded on purpose: it defines seed_demo_data() and is
+  // exercised separately, not as part of building the schema.
+  join(ROOT, "supabase", "rls.sql"),
   ...readdirSync(join(ROOT, "supabase")).filter((f) => f.startsWith("migration") && f.endsWith(".sql"))
     .sort().map((f) => join(ROOT, "supabase", f)),
   ...readdirSync(join(ROOT, "supabase", "migrations")).filter((f) => f.endsWith(".sql"))
@@ -99,16 +110,15 @@ await db.exec(`
   -- so user_org_rank() was never created, so every later migration that uses it
   -- failed too. One missing stub made three files look like ordering bugs.
   create or replace function auth.jwt() returns jsonb language sql stable as $$ select null::jsonb $$;
-  -- user_org_ids() is used by the RLS policies in supabase/*.sql but is DEFINED
-  -- NOWHERE IN THIS REPO — it lives only in the live database. That is a real
-  -- gap: recreating this project from source would produce policies that
-  -- reference a missing function. Stubbed here so the rehearsal can continue.
-  create or replace function user_org_ids() returns setof uuid language sql stable as $$ select null::uuid where false $$;
 `);
+// NOTE: user_org_ids() is deliberately NOT stubbed. It is defined for real in
+// supabase/rls.sql, and stubbing it here previously hid that fact — the stub
+// satisfied every policy, so nothing ever revealed that the file was not being
+// applied at all. If it is missing now, that is a genuine finding.
 for (const r of ["anon", "authenticated", "service_role"]) {
   try { await db.exec(`create role ${r};`); } catch { /* already exists */ }
 }
-ok("Supabase-only pieces stubbed: auth.users, auth.uid(), user_org_ids(), the three roles");
+ok("Supabase-only pieces stubbed: auth.users, auth.uid(), auth.jwt(), auth.role(), the three roles");
 
 const applied = [];
 const skipped = [];
@@ -212,6 +222,14 @@ for (const t of BACKUP_TABLES) {
 }
 const totalRows = tableResults.reduce((n, r) => n + r.rows, 0);
 
+// auth.users is captured through the Admin API, not PostgREST, so the fixture
+// includes it the way a real backup would — and the restore must EXCLUDE it
+// from the SQL while still telling the operator the accounts are in the file.
+const authFixture = [
+  { id: "aaaaaaaa-0000-0000-0000-000000000001", email: "owner@example.in", providers: ["email"], user_metadata: {} },
+  { id: "aaaaaaaa-0000-0000-0000-000000000002", email: "analyst@example.in", providers: ["google"], user_metadata: {} },
+];
+
 function buildBackup(complete) {
   return gzipSync(Buffer.from(JSON.stringify({
     manifest: {
@@ -225,7 +243,7 @@ function buildBackup(complete) {
       limitations: ["rehearsal fixture"],
       notes: complete ? [] : ["deliberately marked incomplete to test the refusal"],
     },
-    data,
+    data: { ...data, auth_users: authFixture },
   }), "utf8"));
 }
 
@@ -240,7 +258,9 @@ step("4. Testing the refusals");
 
 const runRestore = (args) => {
   try {
-    return { ok: true, sql: execFileSync("node", [join(ROOT, "scripts", "restore.mjs"), ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) };
+    const res = spawnSync("node", [join(ROOT, "scripts", "restore.mjs"), ...args], { encoding: "utf8" });
+    if (res.status !== 0) return { ok: false, code: res.status, stderr: String(res.stderr || "") };
+    return { ok: true, sql: String(res.stdout || ""), stderrText: String(res.stderr || "") };
   } catch (e) {
     return { ok: false, code: e.status, stderr: String(e.stderr || "") };
   }
@@ -269,6 +289,17 @@ const gen = runRestore([goodPath]);
 if (!gen.ok) { bad(`restore.mjs failed: ${gen.stderr.slice(0, 300)}`); process.exit(1); }
 writeFileSync(join(tmp, "restore.sql"), gen.sql);
 ok(`restore.sql generated (${(gen.sql.length / 1024).toFixed(1)} KB)`);
+
+// Supabase owns the auth schema. Emitting an INSERT for it would fail the whole
+// transaction on the single most important statement of a restore.
+if (/INSERT INTO "?auth_users/i.test(gen.sql)) bad("restore.sql tries to INSERT into auth_users — that is not a table");
+else ok("auth accounts are correctly kept OUT of the SQL");
+{
+  const report = runRestore([goodPath, "--check"]);
+  const text = report.ok ? String(report.stderrText || "") : String(report.stderr || "");
+  if (/AUTH ACCOUNTS: 2 user/.test(text)) ok("…but the operator IS told the 2 accounts are in the file, with their ids");
+  else bad(`the restore did not report the auth accounts. Saw: ${text.slice(0, 200)}`);
+}
 
 try {
   await db.exec(gen.sql);

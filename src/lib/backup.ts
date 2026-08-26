@@ -19,13 +19,13 @@ import { serviceClient } from "@/lib/supabase/server";
  *    somewhere to land. But that schema is maintained by hand and the live
  *    database is edited through the Supabase dashboard, so it can drift.
  *    `npm run dump:schema` compares the two.
- *  - No auth.users. Restoring rows would leave every foreign key to a user
- *    pointing at nobody. This is the real remaining hole.
+ *  - auth.users IS captured, via the Admin API, because every tenant table keys
+ *    off a user id and a restore without it rebuilds a database nobody can sign
+ *    in to. Passwords are NOT included and cannot be — which is right: a backup
+ *    file should not be a password database.
  *  - No storage objects.
  *  - Not a consistent snapshot. The first table is read minutes before the last, so a
  *    restore can hit foreign keys that were written in between.
- *  - user_org_ids(), which the RLS policies depend on, is defined nowhere in
- *    the repo — it exists only in the live database.
  *
  * The restore path IS tested: scripts/rehearse-restore.mjs runs
  * backup → wipe → restore → verify against a real PostgreSQL on every run of
@@ -135,6 +135,67 @@ export type BackupResult =
   | { ok: true; manifest: BackupManifest; gz: Buffer; filename: string }
   | { ok: false; error: string };
 
+/**
+ * Export the Supabase auth users.
+ *
+ * THE HOLE THIS CLOSES. Every tenant table keys off a user id: memberships,
+ * profiles, invites, activity, and the RLS policies themselves through
+ * auth.uid(). auth.users lives in Supabase's own schema, so PostgREST does not
+ * expose it and no amount of `.from("...")` could reach it. Restoring the row
+ * data without it would rebuild a database in which every workspace belonged to
+ * somebody who no longer exists — the memberships would be orphaned, and nobody
+ * could sign in to a single one of them.
+ *
+ * It is read through the Admin API instead, which the service role can call.
+ *
+ * PASSWORDS ARE NOT INCLUDED and cannot be — Supabase does not return the
+ * encrypted_password over this API. That is a feature, not a shortcoming: a
+ * backup file must not be a password database. Restoring these users means
+ * recreating them and having people sign in again (magic link or Google), which
+ * is a much better failure mode than a stolen backup containing hashes.
+ */
+async function dumpAuthUsers(): Promise<{ rows: any[]; result: TableResult }> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const table = "auth_users";
+  if (!url || !key) return { rows: [], result: { table, rows: 0, expected: null, truncated: false, ordered: true, error: "no service role" } };
+
+  const rows: any[] = [];
+  const PER = 200;
+  try {
+    for (let page = 1; page <= 50; page++) {
+      const r = await fetch(`${url}/auth/v1/admin/users?page=${page}&per_page=${PER}`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+        cache: "no-store",
+      });
+      if (!r.ok) {
+        return { rows, result: { table, rows: rows.length, expected: null, truncated: false, ordered: true, error: `admin API ${r.status}` } };
+      }
+      const body: any = await r.json();
+      const batch: any[] = Array.isArray(body?.users) ? body.users : [];
+      // Only the fields needed to recreate the account and re-link it to its
+      // workspace. Deliberately narrow: this is the most sensitive list in the
+      // file, so it carries nothing that is not required.
+      for (const u of batch) {
+        rows.push({
+          id: u.id,
+          email: u.email ?? null,
+          phone: u.phone ?? null,
+          created_at: u.created_at ?? null,
+          last_sign_in_at: u.last_sign_in_at ?? null,
+          email_confirmed_at: u.email_confirmed_at ?? null,
+          providers: u.app_metadata?.providers ?? [],
+          user_metadata: u.user_metadata ?? {},
+        });
+      }
+      if (batch.length < PER) break;
+    }
+    return { rows, result: { table, rows: rows.length, expected: rows.length, truncated: false, ordered: true } };
+  } catch (e: any) {
+    return { rows, result: { table, rows: rows.length, expected: null, truncated: false, ordered: true, error: e?.message || "unknown error" } };
+  }
+}
+
 function scrub(table: string, rows: any[]): any[] {
   const cols = REDACT[table];
   if (!cols?.length) return rows;
@@ -227,6 +288,12 @@ export async function createBackup(): Promise<BackupResult> {
     used += rows.length;
   }
 
+  // auth.users last, and through a different door — it is not a PostgREST table.
+  const auth = await dumpAuthUsers();
+  data.auth_users = auth.rows;
+  results.push(auth.result);
+  used += auth.rows.length;
+
   const totalRows = used;
   const failed = results.filter((r) => r.error);
   const capped = results.filter((r) => r.truncated);
@@ -251,8 +318,8 @@ export async function createBackup(): Promise<BackupResult> {
     complete: failed.length === 0 && capped.length === 0 && mismatched.length === 0 && unordered.length === 0,
     redacted: REDACT,
     limitations: [
-      "Row data only. The schema is in the repo (supabase/schema.sql + migrations) but is maintained by hand and can drift from live — run `npm run dump:schema` to check.",
-      "Does not include auth.users, so restored rows would reference users that no longer exist.",
+      "Row data only. The schema is in the repo (schema.sql, rls.sql and the migrations, all 34 of which apply to an empty database) but is maintained by hand and can drift from live — run `npm run dump:schema` to check.",
+      "auth.users IS included (as auth_users), read through the Supabase Admin API — but WITHOUT passwords, which that API does not return. Restoring means recreating the accounts; people sign in again by magic link or Google.",
       "Does not include Supabase Storage objects.",
       "Not a point-in-time snapshot: tables are read one after another over minutes.",
       "api_keys.key and webhook_endpoints.secret are redacted and must be reissued after a restore.",

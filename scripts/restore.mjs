@@ -92,7 +92,20 @@ function lit(v) {
 // Restore order matters: a child row whose parent does not exist yet fails on
 // the foreign key. BACKUP_TABLES is already ordered parents-first, and the
 // backup preserves that ordering, so we simply follow it.
-const tables = Object.keys(data).filter((t) => !only.length || only.includes(t));
+/*
+  auth_users is NOT a table. It is the Supabase auth schema, captured through the
+  Admin API, and it cannot be restored with an INSERT — Supabase owns that schema
+  and the export deliberately carries no passwords. Emitting SQL for it would
+  produce a file that fails halfway through, on the most important statement in
+  the restore.
+
+  It is reported here instead, so whoever is running the restore knows the
+  accounts exist in the file and how to bring them back.
+*/
+const authUsers = Array.isArray(data.auth_users) ? data.auth_users : null;
+const tables = Object.keys(data)
+  .filter((t) => t !== "auth_users")
+  .filter((t) => !only.length || only.includes(t));
 
 let statements = 0;
 let rowsOut = 0;
@@ -108,8 +121,10 @@ out.push("-- Inserts use ON CONFLICT DO NOTHING, so existing rows are left alone
 out.push("-- intend to REPLACE a table, delete from it explicitly first, in your own");
 out.push("-- statement, having thought about it.");
 out.push("--");
-out.push("-- NOT restored: database schema, auth.users, storage objects, and the redacted");
-out.push("-- columns below. Create the schema first or every statement here will fail.");
+out.push("-- NOT restored by this file: the database schema, Supabase auth accounts,");
+out.push("-- storage objects, and the redacted columns below. Create the schema first");
+out.push("-- (supabase/schema.sql, rls.sql, then the migrations) or every statement here");
+out.push("-- will fail.");
 for (const [t, cols] of Object.entries(manifest.redacted || {})) {
   out.push(`--   redacted: ${t}.${cols.join(", ")}  (reissue these after restoring)`);
 }
@@ -143,6 +158,18 @@ for (const table of tables) {
 
 out.push("COMMIT;");
 out.push("");
+
+if (authUsers) {
+  say("");
+  say(`AUTH ACCOUNTS: ${authUsers.length} user(s) are in this backup but are NOT in the SQL.`);
+  say("  Supabase owns the auth schema, and the export carries no passwords by design.");
+  say("  To bring people back, recreate them with the Admin API and let them sign in");
+  say("  again by magic link or Google. Their ids are preserved in the file, so every");
+  say("  membership, profile and activity row will re-link correctly if you reuse them:");
+  for (const u of authUsers.slice(0, 5)) say(`    ${u.id}  ${u.email || "(no email)"}`);
+  if (authUsers.length > 5) say(`    …and ${authUsers.length - 5} more (see auth_users in the JSON).`);
+  say("");
+}
 
 say(`Tables:     ${tables.length}`);
 say(`Rows:       ${rowsOut.toLocaleString()}`);
