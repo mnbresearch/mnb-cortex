@@ -66,7 +66,10 @@ export type PlatformEconomics = {
   watchlist: { org_id: string; name: string; plan: string; cost30d: number; monthly: number }[];
   /** The actual rows behind the revenue figure — a total you cannot drill into
    *  is a number you cannot trust. Newest first. */
-  recentPayments: { order_id: string; org: string; kind: string; ref: string; amount: number; when: string }[];
+  recentPayments: { order_id: string; org: string; kind: string; ref: string; amount: number; when: string; unattributed: boolean }[];
+  /** Payments that activated no workspace — money in, nothing granted. */
+  unattributedCount: number;
+  unattributedAmount: number;
 };
 
 const DAY = 86_400_000;
@@ -75,7 +78,7 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
   const empty: PlatformEconomics = {
     live: false, revenueTotal: 0, revenue30d: 0, mrr: 0, payingOrgs: 0,
     totalOrgs: 0, activeOrgs: 0, paygOrgs: 0, cogs30d: 0, grossMargin30d: null,
-    usage: [], watchlist: [], recentPayments: [],
+    usage: [], watchlist: [], recentPayments: [], unattributedCount: 0, unattributedAmount: 0,
   };
   const sb = serviceClient();
   if (!sb) return { ...empty, reason: "SUPABASE_SERVICE_ROLE_KEY not set" };
@@ -143,6 +146,17 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
       .sort((a, b) => b.cost30d - a.cost30d)
       .slice(0, 10);
 
+    /*
+      A payment with no org_id is money received that activated nobody. Every
+      writer in the current code sets it, so these are legacy or hand-inserted
+      rows — but they still count into the revenue figure above, and if any of
+      them is a real customer then that customer paid and got nothing.
+
+      Flagged rather than hidden, and the order_id is carried through so the
+      payment can actually be found in Cashfree. Before this the row showed
+      "— / — / ₹3.0K", which is unactionable: the section promises to surface
+      exactly this case and could not identify a single one.
+    */
     const recentPayments = payments.slice(0, 15).map((p: any) => ({
       order_id: String(p.order_id || "—"),
       org: orgName.get(p.org_id)?.name || "—",
@@ -150,11 +164,17 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
       ref: String(p.ref || "—"),
       amount: Number(p.amount) || 0,
       when: p.created_at,
+      unattributed: !p.org_id || !orgName.get(p.org_id),
     }));
+
+    const unattributedCount = payments.filter((p: any) => !p.org_id || !orgName.get(p.org_id)).length;
+    const unattributedAmount = payments
+      .filter((p: any) => !p.org_id || !orgName.get(p.org_id))
+      .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
     return {
       live: true,
-      recentPayments,
+      recentPayments, unattributedCount, unattributedAmount,
       revenueTotal, revenue30d, mrr, payingOrgs,
       totalOrgs: orgs.length, activeOrgs, paygOrgs,
       cogs30d,

@@ -153,15 +153,24 @@ export default async function SuperAdmin() {
                 <div className="mt-4">
                   <div className="text-sm font-medium mb-2">Recent payments</div>
                   <p className="text-xs text-muted-foreground mb-2">
-                    The rows behind the revenue figure. If a workspace paid but isn't on an active plan,
+                    The rows behind the revenue figure. If a workspace paid but isn&apos;t on an active plan,
                     that shows up here as a payment with no matching subscription — worth checking before
                     it becomes a support ticket.
                   </p>
+                  {econ.unattributedCount > 0 && (
+                    <div className="rounded-lg border border-danger/30 bg-danger/5 p-3 mb-2 text-sm">
+                      <b className="text-danger">{econ.unattributedCount} payment{econ.unattributedCount === 1 ? "" : "s"} totalling {inr(econ.unattributedAmount)} activated no workspace.</b>{" "}
+                      Money was received and nothing was granted. If any of these is a real customer, they
+                      paid and got nothing. Take the order id below into Cashfree → Orders to see who paid,
+                      then use “Manage customers” to put them on the right plan.
+                    </div>
+                  )}
                   <div className="rounded-xl border overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/40 text-muted-foreground">
                         <tr>
                           <th className="text-left px-3 py-2 font-medium">When</th>
+                          <th className="text-left px-3 py-2 font-medium">Order</th>
                           <th className="text-left px-3 py-2 font-medium">Workspace</th>
                           <th className="text-left px-3 py-2 font-medium">For</th>
                           <th className="text-right px-3 py-2 font-medium">Amount</th>
@@ -169,9 +178,14 @@ export default async function SuperAdmin() {
                       </thead>
                       <tbody>
                         {econ.recentPayments.map((p) => (
-                          <tr key={p.order_id} className="border-t">
+                          <tr key={p.order_id} className={`border-t ${p.unattributed ? "bg-danger/5" : ""}`}>
                             <td className="px-3 py-2 whitespace-nowrap">{new Date(p.when).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" })}</td>
-                            <td className="px-3 py-2 truncate max-w-[180px]">{p.org}</td>
+                            {/* The order id is the only handle that leads back to Cashfree.
+                                Without it an unattributed payment cannot be chased at all. */}
+                            <td className="px-3 py-2 font-mono text-xs truncate max-w-[200px]" title={p.order_id}>{p.order_id}</td>
+                            <td className="px-3 py-2 truncate max-w-[180px]">
+                              {p.unattributed ? <span className="text-danger">not linked</span> : p.org}
+                            </td>
                             <td className="px-3 py-2 text-muted-foreground">{p.kind}{p.ref && p.ref !== "—" ? ` · ${p.ref}` : ""}</td>
                             <td className="px-3 py-2 text-right tabular">{inr(p.amount)}</td>
                           </tr>
