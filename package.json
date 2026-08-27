@@ -2,7 +2,7 @@
   "name": "mnb-cortex",
   "version": "1.0.0",
   "private": true,
-  "description": "MNB Cortex — The AI COO for SMEs",
+  "description": "MNB Cortex \u2014 The AI COO for SMEs",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -14,10 +14,11 @@
     "dump:schema": "bash scripts/dump-schema.sh",
     "test:insights": "node scripts/test-insights.mjs",
     "test:alerts": "node scripts/test-alert-rules.mjs",
-    "test": "npm run test:entitlement && npm run test:insights && npm run test:alerts && npm run test:aggregate && npm run test:cashfree && npm run test:contrast",
+    "test": "npm run test:entitlement && npm run test:insights && npm run test:alerts && npm run test:aggregate && npm run test:cashfree && npm run test:contrast && npm run test:customer-match",
     "test:aggregate": "node scripts/test-aggregate.mjs",
     "test:cashfree": "node scripts/test-cashfree-webhook.mjs",
-    "test:contrast": "node scripts/test-contrast.mjs"
+    "test:contrast": "node scripts/test-contrast.mjs",
+    "test:customer-match": "node scripts/test-customer-match.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
