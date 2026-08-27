@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 import { settleOrder } from "@/lib/pay/settle";
+import { verifyCashfreeWebhook } from "@/lib/pay/cashfree-webhook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,26 +9,44 @@ export const dynamic = "force-dynamic";
  * Cashfree Payment Gateway webhook — the RELIABLE activation path.
  *
  * Cashfree signs each webhook: signature = base64(HMAC-SHA256(timestamp + rawBody, SECRET)).
- * We verify it against CASHFREE_SECRET_KEY before trusting anything, then settle the
- * order idempotently. Set this URL in the Cashfree dashboard → Developers → Webhooks:
+ * Verification lives in @/lib/pay/cashfree-webhook so it can be tested against a
+ * genuine 13-digit millisecond timestamp — see scripts/test-cashfree-webhook.mjs.
+ * Set this URL in the Cashfree dashboard → Developers → Webhooks:
  *   https://cortex.mnbresearch.com/api/pay/cashfree/webhook
  */
 export async function POST(req: Request) {
   const secret = process.env.CASHFREE_SECRET_KEY || "";
   if (!secret) return NextResponse.json({ ok: false, error: "not configured" }, { status: 503 });
 
+  // req.text() gives the RAW body. It must not be parsed and re-serialised
+  // anywhere before the HMAC — JSON.parse → JSON.stringify changes whitespace
+  // and key order, and the signature can then never match.
   const raw = await req.text();
   const signature = req.headers.get("x-webhook-signature") || "";
   const timestamp = req.headers.get("x-webhook-timestamp") || "";
 
-  // Verify signature (constant-time). Reject anything that doesn't match.
-  let valid = false;
-  try {
-    const expected = crypto.createHmac("sha256", secret).update(timestamp + raw).digest("base64");
-    valid = signature.length === expected.length &&
-      crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-  } catch { valid = false; }
-  if (!valid) return NextResponse.json({ ok: false, error: "invalid signature" }, { status: 401 });
+  const check = verifyCashfreeWebhook({ rawBody: raw, signature, timestamp, secret });
+  if (!check.ok) {
+    /*
+      This used to return a bare "invalid signature" and log nothing, so a
+      production rejection was a dead end: wrong secret, missing header,
+      re-serialised body and a clock skew all looked identical, and real money
+      went unfulfilled while somebody guessed between them.
+
+      The reason is logged (never the secret) so the NEXT real delivery
+      diagnoses itself. The response body stays deliberately vague — an
+      unauthenticated caller learns nothing about why it failed.
+    */
+    console.error("[cashfree-webhook] rejected:", check.reason, JSON.stringify(check.detail || {}), {
+      hasSignatureHeader: Boolean(signature),
+      hasTimestampHeader: Boolean(timestamp),
+      timestampDigits: timestamp.length,
+      bodyBytes: raw.length,
+      secretLength: secret.length,
+      secretHadWhitespace: secret !== secret.trim(),
+    });
+    return NextResponse.json({ ok: false, error: "invalid signature" }, { status: 401 });
+  }
 
   let body: any = {};
   try { body = JSON.parse(raw); } catch { /* ignore */ }
