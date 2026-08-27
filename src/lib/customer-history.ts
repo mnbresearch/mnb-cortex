@@ -64,14 +64,37 @@ export async function getCustomerHistory(): Promise<CustomerHistory> {
 
   const sb = createClient();
   const CAP = 20000;
-  const [{ data: custData }, { data: orderData }] = await Promise.all([
+
+  /*
+    DEPLOY ORDERING. This selects customer_id, which only exists after
+    2026_sales_order_customer_link.sql has been applied. If the code ships
+    before the migration runs, PostgREST rejects the whole select for an
+    unknown column — and the natural `data || []` would then turn that into
+    "nobody has any orders", i.e. every customer silently scored at zero and
+    dumped into Lost. That is the exact failure this file exists to remove, so
+    it must not be reintroduced by the deploy window itself.
+
+    Fall back to the pre-migration shape and keep working on names alone.
+  */
+  const orderCols = "customer_id,customer_name,amount,status,order_date,created_at";
+  const [{ data: custData }, ordersRes] = await Promise.all([
     sb.from("customers").select("id,name,value,created_at").eq("org_id", orgId).limit(2000),
-    sb.from("sales_orders").select("customer_id,customer_name,amount,status,order_date,created_at")
-      .eq("org_id", orgId).eq("status", "won").limit(CAP),
+    sb.from("sales_orders").select(orderCols).eq("org_id", orgId).eq("status", "won").limit(CAP),
   ]);
 
+  let orderRows = (ordersRes.data as any[]) || [];
+  if (ordersRes.error) {
+    const legacy = await sb.from("sales_orders")
+      .select("customer_name,amount,status,order_date,created_at")
+      .eq("org_id", orgId).eq("status", "won").limit(CAP);
+    orderRows = (legacy.data as any[]) || [];
+    if (!legacy.error) {
+      console.warn("[customer-history] sales_orders.customer_id is missing — apply 2026_sales_order_customer_link.sql. Matching by name only until then.");
+    }
+  }
+
   const customers = (custData as any[]) || [];
-  const orders = (orderData as any[]) || [];
+  const orders = orderRows;
 
   // Which normalised names are shared by more than one customer? Those cannot
   // be resolved by name, so their unlinked orders are left unattributed and
