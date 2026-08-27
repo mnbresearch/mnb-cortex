@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { Moon, Sun, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Notifications } from "@/components/notifications";
+import { UserMenu } from "@/components/user-menu";
 
 export function Topbar({ title, subtitle }: { title: string; subtitle?: string }) {
   const { theme, setTheme } = useTheme();
@@ -31,7 +32,7 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
         <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           <Sun className="h-4 w-4 dark:hidden" /><Moon className="hidden h-4 w-4 dark:block" />
         </Button>
-        <div className="h-8 w-8 rounded-full brand-gradient ring-2 ring-background shadow-sm" />
+        <UserMenu />
       </div>
     </header>
   );
