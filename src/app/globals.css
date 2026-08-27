@@ -7,54 +7,85 @@
    Graphite × Champagne Gold: money, trust, premium
    (deliberately not the generic AI teal/emerald)
    ============================================================ */
+/* ------------------------------------------------------------------
+   COLOUR TOKENS — every pair here is contrast-checked by
+   scripts/test-contrast.mjs, which PARSES this file. If you change a
+   value below, run `npm run test:contrast` before committing.
+
+   The semantic colours (success/warning/danger) are used as TEXT about
+   450 times across the app and as a solid fill only ~33 times, so they
+   are tuned to pass AA as text on the page background. That is why they
+   are darker in light mode than a "pretty swatch" instinct suggests:
+   the old --warning was amber 46% and scored 2.68:1, which made 104
+   usages of status text barely readable on ivory.
+   ------------------------------------------------------------------ */
 :root {
   --background: 42 30% 97%;      /* warm ivory */
   --foreground: 40 14% 11%;      /* ink */
   --card: 40 40% 99%;
   --card-foreground: 40 14% 11%;
-  --primary: 40 60% 44%;         /* deep champagne gold (contrast on light) */
+  /* Gold deep enough to be legible as body text (4.55:1). Saturation is
+     raised as lightness drops so it still reads gold, not brown. */
+  --primary: 40 70% 34%;
   --primary-foreground: 40 40% 98%;
   --secondary: 42 24% 93%;
   --secondary-foreground: 40 14% 11%;
   --muted: 42 24% 93%;
   --muted-foreground: 40 8% 40%;
   --accent: 42 46% 90%;          /* warm gold tint */
-  --accent-foreground: 40 58% 30%;
-  --border: 42 20% 87%;
-  --input: 42 20% 87%;
-  --ring: 40 60% 44%;
-  --success: 152 40% 38%;        /* muted, refined green — semantic only */
+  --accent-foreground: 40 58% 28%;
+  --border: 42 20% 84%;
+  --input: 42 20% 84%;
+  --ring: 40 70% 34%;
+  --success: 152 48% 33%;        /* muted, refined green — semantic only */
   --success-foreground: 0 0% 100%;
-  --warning: 34 90% 46%;
+  --warning: 30 95% 34%;
   --warning-foreground: 0 0% 100%;
   --danger: 356 70% 50%;
   --danger-foreground: 0 0% 100%;
-  --brand-2: 44 72% 56%;   /* bright gold */
+  --brand-2: 44 72% 56%;   /* bright gold — gradient fills only, never text */
   --brand-3: 32 48% 55%;   /* warm bronze/amber */
   --radius: 0.9rem;
   --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui;
 }
+/* ------------------------------------------------------------------
+   DARK — retuned for SURFACE SEPARATION, which was the real defect.
+   Text contrast was already fine (body scored 16:1); the problem was
+   that --card sat 3 lightness points above --background (1.07:1) and
+   --border was dimmer than the card it was meant to outline (1.23:1),
+   so cards, inputs and the sidebar all melted into one flat slab.
+   Dark UIs cannot lean on drop shadows the way light ones do, so the
+   border has to carry the edge.
+   ------------------------------------------------------------------ */
 .dark {
-  --background: 220 14% 7%;      /* graphite ink */
-  --foreground: 40 24% 92%;      /* warm bone */
-  --card: 220 13% 10%;
-  --card-foreground: 40 24% 92%;
-  --primary: 41 58% 55%;         /* champagne gold */
+  --background: 222 18% 5%;      /* graphite ink, pushed down for contrast */
+  --foreground: 40 24% 93%;      /* warm bone */
+  --card: 222 15% 13%;           /* lifted well clear of the background */
+  --card-foreground: 40 24% 93%;
+  --primary: 41 60% 58%;         /* champagne gold */
   --primary-foreground: 40 30% 8%;
-  --secondary: 220 10% 15%;
-  --secondary-foreground: 40 24% 92%;
-  --muted: 220 10% 15%;
-  --muted-foreground: 220 8% 60%;
-  --accent: 41 30% 16%;          /* deep warm gold tint */
-  --accent-foreground: 41 62% 74%;
-  --border: 220 9% 17%;
-  --input: 220 9% 17%;
-  --ring: 41 58% 55%;
-  --success: 152 40% 48%;
-  --warning: 36 88% 56%;
-  --danger: 356 72% 62%;
-  --brand-2: 44 64% 62%;   /* lighter gold */
-  --brand-3: 32 48% 58%;   /* amber/bronze */
+  --secondary: 222 13% 18%;
+  --secondary-foreground: 40 24% 93%;
+  --muted: 222 13% 18%;
+  --muted-foreground: 220 10% 68%;
+  --accent: 41 32% 18%;          /* deep warm gold tint */
+  --accent-foreground: 41 66% 78%;
+  --border: 222 12% 26%;         /* now actually visible against the card */
+  --input: 222 12% 30%;          /* inputs read as inputs, not as flat blocks */
+  --ring: 41 60% 58%;
+  --success: 152 46% 54%;
+  --warning: 36 90% 62%;
+  --danger: 356 76% 66%;
+  /* The semantic fills INVERT between themes: they are dark on light, and light
+     on dark. The -foreground tokens must invert with them, and previously did
+     not — dark mode inherited `0 0% 100%` from :root, so every solid badge
+     (bg-success / bg-warning / bg-danger, ~33 of them) rendered white text on a
+     light fill. Amber was the worst at 1.88:1, i.e. effectively unreadable. */
+  --success-foreground: 152 45% 8%;
+  --warning-foreground: 36 60% 9%;
+  --danger-foreground: 356 55% 10%;
+  --brand-2: 44 66% 64%;   /* lighter gold */
+  --brand-3: 32 50% 60%;   /* amber/bronze */
 }
 
 * { border-color: hsl(var(--border)); }
@@ -69,6 +100,14 @@ body {
 .glass {
   background: hsl(var(--card) / 0.72);
   backdrop-filter: blur(14px) saturate(1.4);
+}
+/* At 72% opacity over a near-identical background, a dark "glass" surface
+   dissolves into the page and the sticky topbar stops looking like a bar at
+   all. Dark mode gets a more opaque fill plus a lit top edge to hold the
+   boundary while keeping the blur. */
+.dark .glass {
+  background: hsl(var(--card) / 0.88);
+  box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.05);
 }
 
 .gradient-text {
@@ -96,6 +135,14 @@ body {
   background: linear-gradient(180deg, hsl(var(--card) / 0.9), hsl(var(--card) / 0.55));
   backdrop-filter: blur(8px);
 }
+/* The 0.55 bottom stop faded the sidebar into the canvas in dark mode, so the
+   navigation had no left-hand edge and the whole window read as one sheet.
+   Keep the gradient (it still gives the surface life) but well above the
+   background, and draw the divider explicitly. */
+.dark .sidebar-surface {
+  background: linear-gradient(180deg, hsl(var(--card)), hsl(var(--card) / 0.82));
+  box-shadow: inset -1px 0 0 0 hsl(var(--border));
+}
 /* Premium nav item: soft tint + left accent bar instead of a heavy fill. */
 .nav-item { position: relative; transition: background-color .18s ease, color .18s ease; }
 .nav-item::before {
@@ -110,6 +157,16 @@ body {
 /* Soft elevated card shadow used app-wide. */
 .card-elevated {
   box-shadow: 0 1px 2px -1px hsl(35 24% 10% / 0.07), 0 12px 34px -20px hsl(35 24% 10% / 0.20);
+}
+/* A dark shadow on a dark background is invisible, so in dark mode this class
+   was doing nothing at all and every "elevated" card sat perfectly flat. Real
+   dark-mode elevation comes from a lit top edge (as if light falls from above)
+   over a deeper, wider shadow that separates the card from the canvas. */
+.dark .card-elevated {
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.06),
+    0 1px 2px -1px hsl(0 0% 0% / 0.6),
+    0 16px 40px -24px hsl(0 0% 0% / 0.85);
 }
 /* Gentle per-card entrance used by grids. */
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
