@@ -180,6 +180,34 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
         .update({ receivables: 0, payables: 0, opex: 0 })
         .eq("org_id", orgId).eq("period", monthStart(0));
     } catch { /* best effort */ }
+
+    /*
+      The SAME BUG as the ledger one above, by a different route, and it was
+      live in production: this early return skips the ai_insights and alerts
+      cleanup that lives at the end of this function, so both survive the loss
+      of the data they were derived from.
+
+      Observed on an emptied workspace: the dashboard printed "I don't have
+      your numbers yet, so I won't guess" and "No finance data yet", and then
+      directly underneath, at 99% confidence:
+
+          "₹42.00 L of receivables is past its due date
+           That is 58% of the ₹72.00 L you are owed"
+
+      — with recommended actions, about a workspace holding no invoices at all.
+      Those figures came from sample data that had since been removed. Loading
+      the sample dataset generates real (is_demo = false) insights from it, and
+      "Remove sample data" only deletes is_demo = true rows, so the derived
+      conclusions outlived their inputs.
+
+      Insights and alerts are DERIVED, never authored, so clearing them here
+      costs nothing: the next recompute with real data regenerates them. The
+      is_demo filter matches the cleanup at the end of this function, which
+      leaves seeded demo rows to be removed by clearDemoData instead.
+    */
+    try { await svc.from("ai_insights").delete().eq("org_id", orgId).eq("is_demo", false); } catch { /* best effort */ }
+    try { await svc.from("alerts").delete().eq("org_id", orgId).eq("is_demo", false); } catch { /* best effort */ }
+
     return { ok: true, metrics: 0, months: 0, reason: "no source data" };
   }
 
