@@ -66,6 +66,14 @@ const files = [
   join(ROOT, "supabase", "rls.sql"),
   ...readdirSync(join(ROOT, "supabase")).filter((f) => f.startsWith("migration") && f.endsWith(".sql")).sort().map((f) => join(ROOT, "supabase", f)),
   ...readdirSync(join(ROOT, "supabase", "migrations")).filter((f) => f.endsWith(".sql")).sort().map((f) => join(ROOT, "supabase", "migrations", f)),
+  /*
+    seed.sql is NOT picked up by the `migration*` glob above, so until now it
+    was never applied by any harness — meaning seed_demo_data(), which the
+    "Load a sample dataset" button calls over RPC, went entirely untested. It
+    holds only a function definition and comments (no top-level inserts), so
+    applying it last is safe and every table it writes to already exists.
+  */
+  join(ROOT, "supabase", "seed.sql"),
 ];
 const skipped = [];
 for (const f of files) {
@@ -274,6 +282,67 @@ console.log("\nresolveCustomerId reports ambiguity instead of returning a winner
   check("an unknown name resolves to none", resolveCustomerId(idx, "Someone Else").status === "none");
   check("a blank name resolves to none, never to a blank-named customer",
     resolveCustomerId(idx, "   ").status === "none");
+}
+
+/* ======================================================================== */
+console.log("\nSAMPLE DATASET: the button promises to fill EVERY module");
+/* ======================================================================== */
+{
+  /*
+    seed_demo_data created 60 orders naming six buyers and zero customer rows,
+    so /customers, /rfm and /churn stayed empty behind a button whose text is
+    "Fill every module with a realistic example business" — three of the
+    modules a prospect is most likely to open. The sample data also contradicted
+    itself, naming buyers that existed nowhere as contacts.
+  */
+  const demoOrg = "77777777-7777-7777-7777-777777777777";
+  await db.query("insert into organizations (id,name) values ($1,$2)", [demoOrg, "Demo Co"]);
+
+  let seeded = true;
+  try {
+    await db.query("select seed_demo_data($1::uuid)", [demoOrg]);
+    await db.query("select seed_demo_customers($1::uuid)", [demoOrg]);
+  } catch (e) {
+    seeded = false;
+    console.log(`  FAIL  the sample dataset could not be seeded — ${String(e.message).split("\n")[0].slice(0, 90)}`);
+    fail++;
+  }
+
+  if (seeded) {
+    const cust = await db.query("select count(*)::int n from customers where org_id=$1 and is_demo", [demoOrg]);
+    check("the sample dataset now creates customer records at all", cust.rows[0].n > 0);
+
+    const orders = await db.query("select count(*)::int n from sales_orders where org_id=$1 and is_demo", [demoOrg]);
+    const linked = await db.query("select count(*)::int n from sales_orders where org_id=$1 and is_demo and customer_id is not null", [demoOrg]);
+    check("the sample orders were created", orders.rows[0].n > 0);
+    check("...and EVERY one is attached to a sample customer", linked.rows[0].n === orders.rows[0].n);
+
+    // The demo doubles as a live test of the matcher: "M/s Metro Mart" is how
+    // an Indian invoice writes it, and must still find orders booked as
+    // "Metro Mart".
+    const metro = await db.query(`
+      select count(*)::int n from sales_orders o
+        join customers c on c.id = o.customer_id
+       where o.org_id = $1 and c.name = 'M/s Metro Mart' and o.customer_name = 'Metro Mart'`, [demoOrg]);
+    check("'M/s Metro Mart' picks up orders booked as 'Metro Mart'", metro.rows[0].n > 0);
+
+    // Every sample row must be removable, or the seeder leaves permanent
+    // contamination — the bug 2026_demo_isolation.sql exists to prevent, which
+    // customers was originally left out of.
+    const notDemo = await db.query("select count(*)::int n from customers where org_id=$1 and not is_demo", [demoOrg]);
+    check("no sample customer is left untagged (so 'Remove sample data' can clear it)", notDemo.rows[0].n === 0);
+
+    await db.query("delete from sales_orders where org_id=$1 and is_demo", [demoOrg]);
+    await db.query("delete from customers where org_id=$1 and is_demo", [demoOrg]);
+    const after = await db.query("select count(*)::int n from customers where org_id=$1", [demoOrg]);
+    check("removing the sample data leaves no customers behind", after.rows[0].n === 0);
+
+    // Re-seeding must replace, not duplicate.
+    await db.query("select seed_demo_customers($1::uuid)", [demoOrg]);
+    await db.query("select seed_demo_customers($1::uuid)", [demoOrg]);
+    const twice = await db.query("select count(*)::int n from customers where org_id=$1 and is_demo", [demoOrg]);
+    check("seeding twice replaces rather than duplicates", twice.rows[0].n === 6);
+  }
 }
 
 console.log("");

@@ -28,10 +28,12 @@ async function requireWriteOrg() {
 const num = (v: FormDataEntryValue | null) => { const n = parseFloat(String(v ?? "")); return isNaN(n) ? 0 : n; };
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
-/** Tables the demo seeder writes into, in child-before-parent order. */
+/** Tables the demo seeder writes into, in child-before-parent order.
+ *  `customers` is listed AFTER sales_orders on purpose: orders carry a
+ *  customer_id foreign key, so the children go first. */
 const DEMO_TABLES = [
   "health_metrics", "ai_insights", "alerts", "finance_ledger",
-  "sales_orders", "sales_pipeline", "production_runs", "inventory_items",
+  "sales_orders", "customers", "sales_pipeline", "production_runs", "inventory_items",
   "purchase_orders", "employees", "invoices", "market_reports",
   "workflows", "meetings", "documents",
 ];
@@ -46,6 +48,28 @@ export async function seedDemoData() {
   const sb = createClient();
   const { error } = await sb.rpc("seed_demo_data", { p_org: orgId });
   if (error) throw new Error(error.message);
+
+  /*
+    The sample orders name six buyers who did not exist as contacts, so
+    /customers, /rfm and /churn all stayed empty behind a button promising to
+    "fill every module". seed_demo_customers adds them.
+
+    Called as a companion rather than folded into seed_demo_data because that
+    function is ~150 lines in supabase/seed.sql, and copying it into a migration
+    to add ten lines would leave two definitions to drift apart — the exact
+    problem that already required a parity test for cortex_norm_name.
+
+    Ordered AFTER the orders exist so the customers_adopt_orders trigger links
+    the sample history on insert.
+
+    A missing function is tolerated: a workspace that has not run
+    2026_seed_demo_customers.sql yet should still get the rest of the sample
+    data rather than an error, exactly as before this shipped.
+  */
+  const { error: custErr } = await sb.rpc("seed_demo_customers", { p_org: orgId });
+  if (custErr && !/could not find the function|does not exist/i.test(custErr.message || "")) {
+    throw new Error(custErr.message);
+  }
   await recomputeQuietly(orgId);
   DEMO_PATHS.forEach((p) => revalidatePath(p));
 }

@@ -42,7 +42,7 @@ begin
     (p_org,'risk','Risk Score', 38, 'score', 5.0, 'yellow', array[28,30,31,33,35,37,38], true),
     (p_org,'csat','Customer Satisfaction', 4.4, '/5', 2.0, 'green', array[4.2,4.2,4.3,4.3,4.4,4.4,4.4], true),
     (p_org,'working_capital','Working Capital', 18900000, 'INR', -4.0, 'yellow', array[21,20.5,20,19.6,19.3,19,18.9], true),
-    (p_org,'receivables','Receivables Overdue', 7200000, 'INR', 14.0, 'red', array[4.8,5.2,5.8,6.2,6.6,7.0,7.2], true),
+    (p_org,'receivables','Receivables past due', 7200000, 'INR', 14.0, 'red', array[4.8,5.2,5.8,6.2,6.6,7.0,7.2], true),
     (p_org,'gross_margin','Gross Margin', 31, '%', -2.0, 'yellow', array[34,33.5,33,32.5,32,31.5,31], true);
 
   -- AI insights

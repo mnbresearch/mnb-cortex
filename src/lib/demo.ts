@@ -11,7 +11,7 @@ export const demoMetrics: HealthMetric[] = [
   { id:"8", metric_key:"risk", label:"Risk Score", value:38, unit:"score", delta_pct:5, status:"yellow", trend:[28,30,31,33,35,37,38] },
   { id:"9", metric_key:"csat", label:"Customer Sat.", value:4.4, unit:"/5", delta_pct:2, status:"green", trend:[4.2,4.2,4.3,4.3,4.4,4.4,4.4] },
   { id:"10", metric_key:"working_capital", label:"Working Capital", value:18900000, unit:"INR", delta_pct:-4, status:"yellow", trend:[21,20.5,20,19.6,19.3,19,18.9] },
-  { id:"11", metric_key:"receivables", label:"Receivables Overdue", value:7200000, unit:"INR", delta_pct:14, status:"red", trend:[4.8,5.2,5.8,6.2,6.6,7,7.2] },
+  { id:"11", metric_key:"receivables", label:"Receivables past due", value:7200000, unit:"INR", delta_pct:14, status:"red", trend:[4.8,5.2,5.8,6.2,6.6,7,7.2] },
   { id:"12", metric_key:"gross_margin", label:"Gross Margin", value:31, unit:"%", delta_pct:-2, status:"yellow", trend:[34,33.5,33,32.5,32,31.5,31] },
 ];
 

@@ -329,7 +329,18 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
 
   if (hasInvoices) {
     metrics.push({
-      metric_key: "receivables", label: "Receivables Overdue", value: +overdueRecv.toFixed(0), unit: "INR",
+      /*
+        Labelled with its WINDOW, because two different "overdue" figures are
+        shown in two places and they legitimately differ:
+
+          here          anything past its due date        (₹42 L on sample data)
+          /receivables  "Overdue (30+)", i.e. 30+ days    (₹18 L on the same data)
+
+        Both are correct and both were simply called "overdue", so the dashboard
+        and the receivables page appeared to contradict each other with no way
+        to tell which to believe.
+      */
+      metric_key: "receivables", label: "Receivables past due", value: +overdueRecv.toFixed(0), unit: "INR",
       delta_pct: 0,
       status: openRecv > 0 ? band((overdueRecv / openRecv) * 100, 10, 30, false) : "green",
       trend: [],

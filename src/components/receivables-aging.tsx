@@ -65,9 +65,9 @@ export function ReceivablesAging({ seed, creditSalesHint }: { seed?: Inv[]; cred
       )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Total receivable" value={inr(m.total)} />
-        <Stat label="Overdue (30+)" value={inr(m.overdue)} cls={m.overdue > 0 ? "text-danger" : "text-success"} />
+        <Stat label="Overdue 30+ days" value={inr(m.overdue)} cls={m.overdue > 0 ? "text-danger" : "text-success"} />
         <Stat label="DSO" value={`${m.dso.toFixed(0)} days`} highlight />
-        <Stat label="Overdue share" value={m.total ? `${((m.overdue / m.total) * 100).toFixed(0)}%` : "0%"} />
+        <Stat label="Overdue 30+ share" value={m.total ? `${((m.overdue / m.total) * 100).toFixed(0)}%` : "0%"} />
       </div>
 
       <Card className="p-5 space-y-3">

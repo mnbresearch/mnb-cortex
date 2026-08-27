@@ -83,8 +83,13 @@ const sqlFiles = [
   // migration*.sql — so the function was stubbed, and the stub made the gap
   // invisible while looking like evidence of one.
   //
-  // seed.sql is excluded on purpose: it defines seed_demo_data() and is
-  // exercised separately, not as part of building the schema.
+  // seed.sql is excluded on purpose: it defines seed_demo_data() and is not
+  // part of building the schema. That claim used to be half true — nothing
+  // exercised it anywhere, because every harness globs `migration*` and seed.sql
+  // does not match, so the function behind "Load a sample dataset" was untested
+  // in its entirety. It is now applied and called by
+  // scripts/test-customer-match.mjs, which asserts the sample data actually
+  // populates the CRM and links to its orders.
   join(ROOT, "supabase", "rls.sql"),
   ...readdirSync(join(ROOT, "supabase")).filter((f) => f.startsWith("migration") && f.endsWith(".sql"))
     .sort().map((f) => join(ROOT, "supabase", f)),
