@@ -74,9 +74,6 @@ export const BACKUP_TABLES = [
   // ends up outside the backup for months — it already happened once with
   // production_runs and chat_*, so it is now part of adding a table.
   "alert_rules", "goals",
-  // A billing audit trail — exactly the kind of record you want after an
-  // argument about what a customer was charged.
-  "org_billing_log",
 ];
 
 /**
@@ -85,7 +82,19 @@ export const BACKUP_TABLES = [
  *   rate_limits — transient counters, rebuilt in minutes, and high-churn enough
  *                 to bloat every snapshot for no recovery value.
  */
-export const DELIBERATELY_EXCLUDED = ["rate_limits"];
+export const DELIBERATELY_EXCLUDED = [
+  // Transient counters, rebuilt in minutes, high-churn enough to bloat every
+  // snapshot for no recovery value.
+  "rate_limits",
+  // Defined in 2026_credits.sql but never applied to production, and read or
+  // written by nothing in src/. I briefly added it here on the reasoning that a
+  // billing audit trail belongs in a backup — which is true of a table that
+  // exists. Listing a table that does not means dumpTable records a read error,
+  // `complete` goes false on EVERY backup, and restore.mjs then refuses to run
+  // without --force. One dead table would have disabled the restore path for
+  // every real one. If it is ever created and used, add it back then.
+  "org_billing_log",
+];
 
 /**
  * Columns blanked on the way out. integrations.credentials_encrypted is NOT

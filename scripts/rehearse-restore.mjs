@@ -166,6 +166,23 @@ const live = (await db.query(
 if (!live.length) { bad("no tables were created — cannot rehearse"); process.exit(1); }
 ok(`${live.length} tables exist: ${live.join(", ")}`);
 
+/* 1b — every table in BACKUP_TABLES must actually exist -------------------- */
+/*
+  A table listed in the backup that does not exist makes dumpTable record a read
+  error, which sets `complete: false` on EVERY backup, which makes restore.mjs
+  refuse to run without --force. One dead table would disable the restore path
+  for every real one — so this is checked rather than assumed. (It nearly
+  happened: org_billing_log is defined in a migration, used by nothing, and was
+  never applied to production.)
+*/
+{
+  const backupSrc = readFileSync(join(ROOT, "src", "lib", "backup.ts"), "utf8");
+  const listed = [...backupSrc.match(/BACKUP_TABLES = \[([\s\S]*?)\];/)[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+  const missing = listed.filter((t) => !live.includes(t));
+  if (missing.length) bad(`BACKUP_TABLES lists ${missing.length} table(s) that do not exist: ${missing.join(", ")} — every backup would report itself incomplete`);
+  else ok(`all ${listed.length} tables in BACKUP_TABLES exist in the schema`);
+}
+
 /* 2 — seed deliberately awkward data -------------------------------------- */
 step("2. Seeding rows chosen to break naive serialisation");
 
