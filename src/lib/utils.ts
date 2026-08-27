@@ -53,8 +53,36 @@ export function scoreTone(n: number): string {
   return n >= 70 ? "bg-success/10 text-success border-success/20" : n >= 45 ? "bg-warning/10 text-warning border-warning/20" : "bg-danger/10 text-danger border-danger/20";
 }
 
-export const ACCENTS: Record<string, string> = {
-  gold: "40 60% 44%", emerald: "158 74% 38%", cyan: "190 85% 40%",
-  indigo: "244 75% 59%", violet: "271 76% 53%", rose: "347 77% 50%",
-  amber: "34 94% 48%", sky: "199 89% 48%",
+/**
+ * Workspace brand accents, as a LIGHT/DARK PAIR per colour.
+ *
+ * These used to be a single value applied to both themes, and every one of the
+ * eight failed WCAG AA as text in one theme or the other — because a colour
+ * legible on ivory is by definition close to invisible on graphite, and vice
+ * versa. The dark-leaning accents were the worst of it: indigo scored 2.68:1
+ * on a dark card and violet 2.78:1, so a workspace that picked either had a
+ * near-unreadable accent throughout dark mode. That is a big part of why dark
+ * mode was reported as bad, and it is invisible to any check that only looks
+ * at globals.css, because Branding overwrites --primary at runtime.
+ *
+ * Each pair keeps the hue (so the brand still reads as "indigo") and moves
+ * lightness until it clears AA against the background of the theme it serves,
+ * nudging saturation up as lightness drops so the darker light-mode variants
+ * stay vivid rather than going muddy.
+ *
+ * Verified in both themes by scripts/test-contrast.mjs.
+ */
+export type AccentPair = { light: string; dark: string };
+export const ACCENTS: Record<string, AccentPair> = {
+  gold:    { light: "40 74% 33%",  dark: "40 54% 45%" },
+  emerald: { light: "158 93% 26%", dark: "158 67% 45%" },
+  cyan:    { light: "190 95% 29%", dark: "190 77% 45%" },
+  indigo:  { light: "244 75% 50%", dark: "244 68% 69%" },
+  violet:  { light: "271 76% 50%", dark: "271 68% 66%" },
+  rose:    { light: "347 79% 48%", dark: "347 69% 62%" },
+  amber:   { light: "34 95% 33%",  dark: "34 85% 45%" },
+  sky:     { light: "199 95% 34%", dark: "199 80% 45%" },
 };
+/** The accents offered in Settings. Derived so the picker cannot drift from
+ *  the palette — it previously hardcoded a list that silently omitted cyan. */
+export const ACCENT_NAMES = Object.keys(ACCENTS);

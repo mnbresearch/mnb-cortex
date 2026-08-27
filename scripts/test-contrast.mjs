@@ -134,6 +134,49 @@ expect("border is visible against background", dark, "border", "background", EDG
 expect("input is visible against card", dark, "input", "card", EDGE, "visible edge");
 expect("muted surface is distinct from card", dark, "muted", "card", 1.10, "surface separation");
 
+/*
+  ---- Workspace brand accents ------------------------------------------------
+
+  Branding.tsx OVERWRITES --primary and --ring with the workspace's chosen
+  accent, so checking globals.css alone proves nothing about what a customer
+  actually sees. When these were a single value shared by both themes, all
+  eight failed AA in one theme or the other, and the dark-leaning ones were
+  severe: indigo scored 2.68:1 on a dark card, violet 2.78:1. A workspace on
+  either had a near-invisible accent across the whole of dark mode.
+
+  Parsed out of lib/utils.ts for the same reason the tokens are parsed out of
+  globals.css: the test must read what ships, not a copy of it.
+*/
+const UTILS = readFileSync(join(ROOT, "src", "lib", "utils.ts"), "utf8");
+const accents = {};
+{
+  const m = UTILS.match(/export const ACCENTS[^{]*\{([\s\S]*?)\n\};/);
+  if (!m) throw new Error("Could not find the ACCENTS map in src/lib/utils.ts");
+  const re = /(\w+)\s*:\s*\{\s*light:\s*"([^"]+)"\s*,\s*dark:\s*"([^"]+)"\s*\}/g;
+  let g;
+  while ((g = re.exec(m[1]))) {
+    const hsl = (s) => s.match(/([\d.]+)\s+([\d.]+)%\s+([\d.]+)%/).slice(1, 4).map(Number);
+    accents[g[1]] = { light: hsl(g[2]), dark: hsl(g[3]) };
+  }
+  if (!Object.keys(accents).length) throw new Error("Parsed ACCENTS but found no light/dark pairs");
+}
+
+console.log("\nBRAND ACCENTS — each must clear AA in the theme it serves");
+for (const [name, pair] of Object.entries(accents)) {
+  // Light mode: the page background is the stricter of background/card for a
+  // dark accent. Dark mode: the raised card is the stricter for a light one.
+  for (const [themeName, tokens, key, against] of [
+    ["light", light, "light", "background"],
+    ["dark", dark, "dark", "card"],
+  ]) {
+    const r = contrast(pair[key], tokens[against]);
+    const ok = r >= AA;
+    const label = `${name} on ${themeName} ${against}`;
+    if (ok) { pass++; console.log(`  ok    ${label.padEnd(40)} ${r.toFixed(2)}`); }
+    else { fail++; console.log(`  FAIL  ${label.padEnd(40)} ${r.toFixed(2)}  (need ${AA} — WCAG AA)`); }
+  }
+}
+
 console.log("");
 if (fail) { console.log(`${fail} FAILED, ${pass} passed\n`); process.exit(1); }
 console.log(`all ${pass} passed\n`);

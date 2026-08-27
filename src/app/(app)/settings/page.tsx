@@ -8,6 +8,7 @@ import { Field, ActionForm } from "@/components/forms";
 import { getOrgProfile, getUserAndOrg } from "@/lib/data";
 import { updateOrgProfile, seedDemoData, clearDemoData, hasDemoData, signOut } from "@/lib/actions";
 import { APP_VERSION } from "@/lib/config";
+import { ACCENT_NAMES } from "@/lib/utils";
 import { INDUSTRIES as AGENT_INDUSTRIES } from "@/lib/agents/catalog";
 import { BackupButton } from "@/components/backup-button";
 import { Database, LogOut, Building2 } from "lucide-react";
@@ -62,7 +63,7 @@ export default async function Settings() {
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">Brand accent
                   <select className={inp} name="accent" defaultValue={profile?.accent || "gold"}>
-                    {["gold","indigo","violet","emerald","rose","amber","sky"].map((c)=> <option key={c} value={c}>{c}</option>)}
+                    {ACCENT_NAMES.map((c)=> <option key={c} value={c}>{c}</option>)}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-3">Logo URL (white-label)
