@@ -6,6 +6,19 @@ import { chargeForMode } from "@/lib/credits";
 import { recallContext } from "@/lib/memory";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/*
+ * The busiest AI route in the product: the dashboard pulse, every 'ask the
+ * AI COO' button, RFM advice and churn plans all land here. Measured at ~28s
+ * against a real workspace.
+ *
+ * Every other AI route in this app sets an explicit budget (30-300s); these
+ * seven did not, so they silently inherited whatever the platform default
+ * happens to be. That default is not ours to control and has changed between
+ * Vercel plans and runtimes, which is a poor thing to hang the product's
+ * headline feature on: the failure mode is a 504 with no log line, and the
+ * user just sees a button that did nothing.
+ */
+export const maxDuration = 60;
 export async function POST(req: Request) {
   try {
     const { mode, input } = await req.json();
