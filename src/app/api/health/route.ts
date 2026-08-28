@@ -26,15 +26,48 @@ type Check = { name: string; status: "operational" | "degraded" | "down"; detail
 
 const TIMEOUT = 6000;
 
+/*
+  A language model is not a database and must not be timed like one.
+
+  This check reported the AI engine "down — no response in 6000ms" on eight
+  consecutive polls while the product was working perfectly: a real
+  /api/ai call returned a correct, data-grounded answer in the same window.
+  Because the AI engine is `critical: true`, that false negative dragged the
+  WHOLE status page to "down" over a service that was merely slow.
+
+  The comment further down this file already warns about precisely this — that
+  a false alarm "erodes trust in the check as surely as a missed one" — and the
+  check was committing it. A model round trip against a real workspace measured
+  27.9s and 38.9s; expecting even a one-token ping inside 6s was never realistic.
+
+  So model checks get their own, generous budget, and slowness is reported as
+  DEGRADED with the measured latency rather than as an outage. "Down" is now
+  reserved for a model that actually refuses: a bad key, a missing model, a
+  network failure, or no answer at all within a budget no working model exceeds.
+*/
+const MODEL_TIMEOUT = 20000;
+/** Above this a model is answering, but slowly enough that users will feel it. */
+const MODEL_SLOW = 6000;
+
 /** fetch with a hard timeout — a hung dependency must not hang the health check. */
-async function ping(url: string, init?: RequestInit): Promise<{ ok: boolean; status: number; error?: string }> {
+async function ping(
+  url: string,
+  init?: RequestInit,
+  timeout: number = TIMEOUT,
+): Promise<{ ok: boolean; status: number; error?: string; ms: number }> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT);
+  const t = setTimeout(() => ctrl.abort(), timeout);
+  const started = Date.now();
   try {
     const r = await fetch(url, { ...init, signal: ctrl.signal });
-    return { ok: r.ok, status: r.status };
+    return { ok: r.ok, status: r.status, ms: Date.now() - started };
   } catch (e: any) {
-    return { ok: false, status: 0, error: e?.name === "AbortError" ? `no response in ${TIMEOUT}ms` : (e?.message || "network error") };
+    return {
+      ok: false,
+      status: 0,
+      ms: Date.now() - started,
+      error: e?.name === "AbortError" ? `no response in ${timeout}ms` : (e?.message || "network error"),
+    };
   } finally {
     clearTimeout(t);
   }
@@ -75,15 +108,20 @@ async function checkAI(): Promise<Check> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }], generationConfig: { maxOutputTokens: 1 } }),
-      });
+      }, MODEL_TIMEOUT);
       if (r.ok) {
         const fellBack = model !== candidates[0];
+        const slow = r.ms > MODEL_SLOW;
+        // A model that answers is not down. Report the latency so a genuine
+        // slowdown is visible without being mistaken for an outage.
         return {
           name: "AI engine",
-          status: fellBack ? "degraded" : "operational",
+          status: fellBack || slow ? "degraded" : "operational",
           detail: fellBack
             ? `gemini · ${model} — preferred ${candidates[0]} is unavailable (${tried.join(", ")}), so every call pays an extra failed request. Pin GEMINI_MODEL.`
-            : `gemini · ${model}`,
+            : slow
+              ? `gemini · ${model} — answering, but slowly (${(r.ms / 1000).toFixed(1)}s to first token). Users will feel this on every AI action.`
+              : `gemini · ${model}`,
           critical: true,
         };
       }
