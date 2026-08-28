@@ -14,11 +14,12 @@
     "dump:schema": "bash scripts/dump-schema.sh",
     "test:insights": "node scripts/test-insights.mjs",
     "test:alerts": "node scripts/test-alert-rules.mjs",
-    "test": "npm run test:entitlement && npm run test:insights && npm run test:alerts && npm run test:aggregate && npm run test:cashfree && npm run test:contrast && npm run test:customer-match",
+    "test": "npm run test:entitlement && npm run test:insights && npm run test:alerts && npm run test:aggregate && npm run test:cashfree && npm run test:contrast && npm run test:customer-match && npm run test:rfm",
     "test:aggregate": "node scripts/test-aggregate.mjs",
     "test:cashfree": "node scripts/test-cashfree-webhook.mjs",
     "test:contrast": "node scripts/test-contrast.mjs",
-    "test:customer-match": "node scripts/test-customer-match.mjs"
+    "test:customer-match": "node scripts/test-customer-match.mjs",
+    "test:rfm": "node scripts/test-rfm.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

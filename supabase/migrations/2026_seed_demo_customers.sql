@@ -54,7 +54,15 @@ begin
     (p_org, 'Nova Distributors', 'Nova Distributors',       'orders@novadist.example',        '+91 98200 33445', 'active',  2210000, current_date - 14, 'Reliable mid-size distributor.', true),
     (p_org, 'M/s Metro Mart',    'Metro Mart',              'purchase@metromart.example',     '+91 98200 44556', 'active',  1980000, current_date - 21, 'Annual contract under proposal. Invoice INV-2215 outstanding.', true),
     (p_org, 'Gulf Imports',      'Gulf Imports FZE',        'imports@gulfimports.example',    '+971 50 123 4567','active',  1760000, current_date - 34, 'Export account. UAE pilot in progress.', true),
-    (p_org, 'Pioneer Exports',   'Pioneer Exports',         'contact@pioneerexports.example', '+91 98200 55667', 'churned', 1540000, current_date - 96, 'No order in three months — win-back candidate.', true);
+    /*
+      Deliberately NOT marked churned with a "no order in three months" note.
+      seed_demo_data spreads orders for every one of these buyers across the
+      last 60 days, so such a note would be contradicted by the customer's own
+      order history the moment the linking trigger attaches it — /churn would
+      show "6 days idle" beside a churned badge. Sample data that argues with
+      itself is exactly the defect this file was written to remove.
+    */
+    (p_org, 'Pioneer Exports',   'Pioneer Exports',         'contact@pioneerexports.example', '+91 98200 55667', 'active',  1540000, current_date - 6,  'Highest order value of the book. Export documentation runs long — watch the payment lag.', true);
 end
 $$;
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Plus, Trash2 } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
+import { scoreBook, SEGMENT_TONE } from "@/lib/rfm";
 
 type Cust = { id: string; name: string; recency: number; frequency: number; monetary: number };
 
@@ -16,18 +17,6 @@ const SEED: Cust[] = [
   { id: "c5", name: "Customer B", recency: 150, frequency: 2, monetary: 120000 },
 ];
 
-const rScore = (d: number) => d <= 15 ? 5 : d <= 30 ? 4 : d <= 60 ? 3 : d <= 90 ? 2 : 1;
-const fScore = (f: number) => f >= 12 ? 5 : f >= 8 ? 4 : f >= 4 ? 3 : f >= 2 ? 2 : 1;
-const mScore = (m: number) => m >= 1000000 ? 5 : m >= 500000 ? 4 : m >= 200000 ? 3 : m >= 50000 ? 2 : 1;
-
-function segment(r: number, f: number, m: number): { name: string; tone: string } {
-  if (r >= 4 && f >= 4 && m >= 4) return { name: "Champion", tone: "bg-success/10 text-success border-success/20" };
-  if (f >= 4 && m >= 3) return { name: "Loyal", tone: "bg-success/10 text-success border-success/20" };
-  if (r <= 2 && (f >= 3 || m >= 4)) return { name: "At risk", tone: "bg-danger/10 text-danger border-danger/20" };
-  if (r <= 2 && f <= 2) return { name: "Lost", tone: "bg-muted text-muted-foreground border-border" };
-  if (r >= 4 && f <= 2) return { name: "New / promising", tone: "bg-primary/10 text-primary border-primary/20" };
-  return { name: "Needs attention", tone: "bg-warning/10 text-warning border-warning/20" };
-}
 
 /** `seed` is the workspace's REAL customers, scored from their own orders. */
 export function RfmSegments({ seed }: { seed?: Cust[] } = {}) {
@@ -35,10 +24,14 @@ export function RfmSegments({ seed }: { seed?: Cust[] } = {}) {
   const [rows, setRows] = useState<Cust[]>(isReal ? seed! : SEED);
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
 
-  const scored = useMemo(() => rows.map((c) => {
-    const r = rScore(c.recency), f = fScore(c.frequency), m = mScore(c.monetary);
-    return { ...c, r, f, m, seg: segment(r, f, m) };
-  }), [rows]);
+  // Scored as a BOOK, not row by row: frequency and monetary are ranked against
+  // this workspace's own customers as well as against absolute bands, so the
+  // segments work for a wholesaler booking 6 orders a year and for a kirana
+  // with 40,000-rupee customers. See src/lib/rfm.ts for why.
+  const scored = useMemo(
+    () => scoreBook(rows).map((c) => ({ ...c, seg: { name: c.segment, tone: SEGMENT_TONE[c.segment] } })),
+    [rows],
+  );
 
   const counts = useMemo(() => {
     const map: Record<string, number> = {};
