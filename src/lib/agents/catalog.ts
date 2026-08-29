@@ -32,7 +32,9 @@ export const INDUSTRIES: Industry[] = [
   { id: "travel", name: "Travel & Hospitality", emoji: "✈️", blurb: "Itineraries, packages & reviews." },
   { id: "logistics", name: "Logistics & Transport", emoji: "🚚", blurb: "Quotes, SLAs & notices." },
   { id: "agri", name: "Agriculture", emoji: "🌾", blurb: "Advisory, listings & buyer outreach." },
-  { id: "services", name: "Professional Services", emoji: "💼", blurb: "Proposals, engagement & updates." },
+  { id: "services", name: "Services & Agencies", emoji: "💼", blurb: "Proposals, projects & client updates." },
+  { id: "professional-services", name: "Professional Services (CA, legal, consulting)", emoji: "⚖️", blurb: "Engagements, advisories & billing." },
+  { id: "distribution", name: "Distribution & Wholesale", emoji: "📦", blurb: "Dealer networks, credit & stock." },
   { id: "pharmacy", name: "Pharmacy & Wellness", emoji: "💊", blurb: "OTC info, store promos & comms." },
   { id: "electronics", name: "Electronics & Appliances", emoji: "📱", blurb: "Listings, specs & comparisons." },
   { id: "furniture", name: "Furniture & Decor", emoji: "🛋️", blurb: "Catalogues, room styling & offers." },
@@ -76,6 +78,113 @@ function commonAgents(ind: Industry): Agent[] {
 
 // Industry-specific reasoning agents.
 const SPECIAL: Record<string, Agent[]> = {
+  /*
+    These eight industries shipped with only the generic agent set. A kirana
+    store and a signage printer were being offered the same six tools with their
+    industry's name substituted in, which is the "generic dashboard" the product
+    positions itself against. The agents below are the ones each trade actually
+    runs on — size curves for footwear, substrate specs for printing, recall
+    lists for a clinic.
+  */
+  retail: [
+    A("retail", "marketplace", "Marketplace Listing Optimiser", "Rewrite a listing to rank and convert on Amazon / Flipkart / Meesho.",
+      [{ key: "product", label: "Product + key specs", type: "textarea" }, { key: "platform", label: "Platform(s)", type: "text", placeholder: "Amazon, Flipkart, Meesho" }, { key: "competitors", label: "What competitors charge (optional)", type: "text" }],
+      `You are an Indian marketplace listing specialist. Rewrite the product below for {{platform}}. Return: a title within each platform's character limit, 5 bullet points leading with benefit then spec, a 150-word description, backend search terms, and the 8 highest-intent keywords. Flag any claim that would breach marketplace policy. Note where the listing must differ per platform. Product: {{product}}. Competitor pricing: {{competitors}}.`),
+    A("retail", "returns", "Return-Rate Reducer", "Find why items come back and what to change.",
+      [{ key: "returns", label: "Returns: SKU, reason, count (one per line)", type: "textarea" }, { key: "margin", label: "Average margin % ", type: "text" }],
+      `Act as a D2C operations analyst. Group the returns below by root cause (size/fit, quality, wrong expectation from the listing, damage in transit, buyer's remorse). For each cause give the SKUs affected, the cost of those returns at {{margin}} margin including reverse logistics, and one specific fix — a listing change, a size chart, packaging, or a QC check. Rank the fixes by rupees recovered per unit of effort. Returns:\n{{returns}}`),
+  ],
+  healthcare: [
+    A("healthcare", "recall", "Patient Recall Campaign", "Bring due patients back for follow-ups and check-ups.",
+      [{ key: "cohort", label: "Who is due (treatment type + how overdue)", type: "textarea" }, { key: "channel", label: "Channels", type: "text", placeholder: "WhatsApp, SMS, call" }],
+      `Write a patient recall campaign for an Indian clinic. This is ADMINISTRATIVE outreach only — never give clinical advice, never suggest a diagnosis, and never imply urgency about a specific person's condition. Cohort: {{cohort}}. Channels: {{channel}}. Provide: a respectful WhatsApp message under 60 words, an SMS under 160 characters, a short call script with two objection responses, the best send window, and a follow-up cadence. Include an opt-out line in every message. Keep language neutral and non-alarming.`),
+    A("healthcare", "packages", "Treatment Package Pricing", "Structure and price service packages for a practice.",
+      [{ key: "services", label: "Services + cost & duration each", type: "textarea" }, { key: "goal", label: "Goal", type: "text", placeholder: "raise utilisation, smooth revenue" }],
+      `Act as a practice-management consultant for an Indian clinic. This is a BUSINESS pricing exercise, not clinical guidance. From the services below, build 3 package tiers. For each: what is included, chair/room time required, cost to deliver, price, gross margin %, and the patient it suits. Goal: {{goal}}. Add the utilisation needed to break even, and flag any package that would be loss-making at under 60% utilisation. Services:\n{{services}}`),
+  ],
+  grocery: [
+    A("grocery", "combo", "Combo & Basket Builder", "Design combos that lift basket size without cutting margin.",
+      [{ key: "items", label: "Items: name, MRP, your cost, monthly units", type: "textarea" }, { key: "occasion", label: "Occasion / theme (optional)", type: "text" }],
+      `You are a kirana merchandising planner. From the items below, design 5 combos that raise basket value. For each: contents, individual total, combo price, blended margin %, and why the pairing works (staple + impulse, festival, replenishment cycle). Never let a combo drop below 8% blended margin — say so if one would. Add a WhatsApp broadcast message in Hindi-English for the best two. Occasion: {{occasion}}. Items:\n{{items}}`),
+    A("grocery", "shelf", "Shelf & Fast-Mover Plan", "Put the right stock where hands reach first.",
+      [{ key: "sales", label: "Items with monthly units + margin", type: "textarea" }, { key: "space", label: "Shelf/space constraints", type: "text" }],
+      `Act as a retail shelf-space planner for an Indian grocery store. Rank the items below by units and by margin, then classify each: fast-mover high-margin (eye level), fast-mover low-margin (traffic driver, keep accessible), slow-mover high-margin (impulse zone near billing), slow-mover low-margin (delist candidate). Give a specific placement plan for the space described, the items to stop stocking, and the working capital that frees. Space: {{space}}. Sales:\n{{sales}}`),
+  ],
+  furniture: [
+    A("furniture", "roomset", "Room-Set Merchandising", "Sell the room, not the single piece.",
+      [{ key: "pieces", label: "Pieces available + prices", type: "textarea" }, { key: "style", label: "Style / target home", type: "text" }],
+      `You are a furniture visual merchandiser. Build 4 room sets from the pieces below for a {{style}} home. For each: the pieces, total ticket, a suggested bundle price, the margin impact, a 40-word showroom story, and the one add-on most likely to be accepted at the till. Note which sets work in a compact Indian flat versus a larger home. Pieces:\n{{pieces}}`),
+    A("furniture", "customquote", "Custom Order Quote Builder", "Quote bespoke work without losing money on it.",
+      [{ key: "brief", label: "Customer brief + dimensions", type: "textarea" }, { key: "rates", label: "Material & labour rates", type: "text" }],
+      `Act as a bespoke furniture estimator. From the brief below produce: a materials list with quantities and wastage allowance, labour hours by skill, finishing and hardware, delivery and installation, subtotal, contingency for custom work, GST, and the final quote with margin %. State the lead time and list the three things most likely to cause a cost overrun on this specific job. Brief: {{brief}}. Rates: {{rates}}.`),
+  ],
+  printing: [
+    A("printing", "jobquote", "Print Job Estimator", "Quote a print or signage job accurately.",
+      [{ key: "job", label: "Job: size, quantity, substrate, finish", type: "textarea" }, { key: "rates", label: "Your rates (per sq ft / per sheet, ink, labour)", type: "text" }],
+      `Act as a print and signage estimator for an Indian print shop. For the job below compute: material area including bleed and wastage, substrate cost, ink/consumable cost, machine time, finishing (lamination, eyelets, mounting, cutting), labour, delivery, and installation if applicable. Show the per-unit cost, the quantity break points where per-unit cost drops, GST, and a quote with margin %. Flag anything in the spec that will slow the job or risk a reprint. Job: {{job}}. Rates: {{rates}}.`),
+    A("printing", "spec", "Substrate & Finish Advisor", "Pick the right material for where the sign will live.",
+      [{ key: "use", label: "Where it will be used + how long", type: "textarea" }, { key: "budget", label: "Budget band", type: "text" }],
+      `You are a signage production advisor. For the application below, recommend 3 substrate + finish combinations at different price points within {{budget}}. For each: material, thickness/GSM, print method, lamination or coating, expected outdoor life in Indian sun and monsoon, mounting method, and relative cost. State clearly which you would not use and why. Application: {{use}}.`),
+  ],
+  footwear: [
+    A("footwear", "sizecurve", "Size Curve Buying Plan", "Buy the sizes that actually sell.",
+      [{ key: "history", label: "Past sales by size (one per line)", type: "textarea" }, { key: "order", label: "Total units to buy + style", type: "text" }],
+      `Act as a footwear buying planner for the Indian market. From the size-wise history below, compute the size curve as a percentage of sales, apply it to an order of {{order}}, and return a size-wise buy quantity. Flag sizes over-bought last season versus their sell-through, the sizes that stock out first and cost you full-price sales, and the broken-size risk if the curve is followed too literally. Give the recommended buy plus a small buffer on the two fastest sizes. History:\n{{history}}`),
+    A("footwear", "seasonplan", "Season & Markdown Plan", "Clear stock on a schedule instead of panicking.",
+      [{ key: "stock", label: "Styles: units, cost, current price, weeks on floor", type: "textarea" }, { key: "season", label: "Season / end date", type: "text" }],
+      `You are a footwear merchandise planner. For the styles below, compute weeks of cover and sell-through rate. Build a markdown ladder to clear seasonal stock by {{season}}: when to take the first markdown, the depth, and the second and final markdown. Show the margin given up at each step versus the carrying cost of holding the stock. Name the styles to mark down now and the ones to hold at full price. Stock:\n{{stock}}`),
+  ],
+  photography: [
+    A("photography", "packages", "Shoot Package & Pricing", "Price shoots by what they actually cost you.",
+      [{ key: "shoot", label: "Shoot type, hours, deliverables", type: "textarea" }, { key: "costs", label: "Your costs: gear, assistant, editing hours, travel", type: "text" }],
+      `Act as a photography business consultant in India. For the shoot below compute the true cost: shoot hours, editing hours at a realistic rate per image, assistant, gear depreciation, travel, and storage. Build 3 packages (essential / standard / premium) with deliverable counts, turnaround, price and margin %. State the effective hourly rate for each and flag any package where editing time makes it a loss. Shoot: {{shoot}}. Costs: {{costs}}.`),
+    A("photography", "shotlist", "Shot List & Call Sheet", "Turn up knowing exactly what you are shooting.",
+      [{ key: "brief", label: "Client brief / event", type: "textarea" }, { key: "hours", label: "Time available + team", type: "text" }],
+      `Create a shot list and call sheet for the shoot below. Shot list: grouped by scene or segment, each with framing, lens suggestion, lighting note, and whether it is a must-have or nice-to-have. Call sheet: timings across {{hours}}, crew roles, kit checklist, location notes, and buffer time. Add the 5 shots clients most often ask for afterwards and regret not having. Brief: {{brief}}.`),
+  ],
+  petcare: [
+    A("petcare", "plans", "Service Plan & Subscription Builder", "Turn one-off visits into recurring revenue.",
+      [{ key: "services", label: "Services + price & duration", type: "textarea" }, { key: "goal", label: "Goal", type: "text", placeholder: "steady monthly revenue, fill weekdays" }],
+      `Act as a pet-care business consultant. From the services below, design 3 subscription plans (monthly grooming, wellness, or day-care bundles). For each: what is included, frequency, price, the discount versus paying per visit, margin %, and the break-even number of subscribers. Goal: {{goal}}. Add the cancellation risk for each plan and one way to reduce it. Services:\n{{services}}`),
+    A("petcare", "retention", "Pet Parent Retention Campaign", "Bring pet parents back on the right cycle.",
+      [{ key: "lapsed", label: "Lapsed customers: pet, service, last visit", type: "textarea" }, { key: "offer", label: "Offer you can make", type: "text" }],
+      `Write a retention campaign for an Indian pet-care business. For the lapsed customers below, segment by how overdue they are against the natural cycle for their service (grooming roughly 4-8 weeks, wellness checks quarterly). For each segment: a warm WhatsApp message under 50 words using the pet's name, the best day and time to send, and whether to lead with the offer or the pet's care schedule. Offer available: {{offer}}. Customers:\n{{lapsed}}`),
+  ],
+  /*
+    Distribution & Wholesale and Professional Services both had a full playbook
+    in lib/industries.ts and no way to select them: neither id existed in this
+    list, which is what Settings renders. The distribution playbook — dealer
+    credit exposure, razor-thin SKU margins, cash trapped in the working-capital
+    cycle — was written, maintained, and unreachable by every customer.
+
+    "services" was separately doing double duty: it was LABELLED "Professional
+    Services" here while resolving to the Services & Agencies playbook, so a CA
+    or law firm picked their industry and got agency content about pitching
+    proposals. The two are now distinct, and the existing "services" id is
+    untouched so saved workspaces keep working.
+  */
+  distribution: [
+    A("distribution", "dealercredit", "Dealer Credit Review", "Assess credit exposure across your dealer network.",
+      [{ key: "dealers", label: "Dealers with outstanding + days (one per line)", type: "textarea", placeholder: "Sharma Traders, 8,40,000, 62 days" }, { key: "terms", label: "Your standard credit terms", type: "text", placeholder: "30 days, 2% early-pay" }],
+      `You are a credit controller for an Indian distribution business. For each dealer below, assess credit risk using outstanding amount and ageing against the stated terms. Output a table: dealer, outstanding (INR), days, risk band (low/watch/high), and a specific action. Then give: total exposure, the concentration risk if any single dealer is more than 15% of it, and a prioritised collection sequence for this week. Terms: {{terms}}. Dealers:\n{{dealers}}`),
+    A("distribution", "skumargin", "SKU Margin Triage", "Find which of your many SKUs actually make money.",
+      [{ key: "skus", label: "SKUs: name, buy price, sell price, monthly units", type: "textarea" }, { key: "overheads", label: "Monthly overheads to cover (INR)", type: "text" }],
+      `Act as a distribution margin analyst. For each SKU below compute gross margin per unit, margin %, and monthly gross profit. Rank them, identify the SKUs that contribute under 5% of profit while consuming working capital, and name any sold at or below cost. Recommend which to delist, which to renegotiate with the supplier, and which to push. Cover overheads of {{overheads}} and state the break-even volume. SKUs:\n{{skus}}`),
+    A("distribution", "schemeplan", "Dealer Scheme Designer", "Design a trade scheme that moves stock without giving away margin.",
+      [{ key: "goal", label: "Goal", type: "text", placeholder: "clear slow-moving stock, grow a region" }, { key: "margin", label: "Current margin % and stock at risk", type: "text" }],
+      `Design a dealer/trade scheme for an Indian wholesale distributor. Goal: {{goal}}. Margin position: {{margin}}. Give: the scheme mechanic (slab, QPS, free-goods or credit-period based), exact slabs with payout %, the margin impact per slab, the volume needed to stay profit-neutral, a dealer-facing announcement in plain Hindi-English, and the single biggest way dealers might game it.`),
+  ],
+  "professional-services": [
+    A("professional-services", "engagement", "Engagement Letter Draft", "Draft a scoped engagement letter that resists scope creep.",
+      [{ key: "client", label: "Client & work", type: "text" }, { key: "scope", label: "Scope, deliverables & timeline", type: "textarea" }, { key: "fee", label: "Fee basis", type: "text", placeholder: "retainer, hourly, fixed" }],
+      `Draft a professional-services engagement letter for an Indian firm (CA / legal / consulting). Client and work: {{client}}. Scope: {{scope}}. Fee basis: {{fee}}. Include: scope in and OUT of scope stated explicitly, deliverables with dates, fee and billing schedule, a change-control clause for out-of-scope requests, client responsibilities, and confidentiality. Flag anything in the scope that is vague enough to invite scope creep.`),
+    A("professional-services", "realisation", "Realisation & Utilisation Review", "Find the gap between hours worked and fees billed.",
+      [{ key: "matters", label: "Matters: name, hours, billed (one per line)", type: "textarea" }, { key: "rate", label: "Standard charge-out rate (INR/hr)", type: "text" }],
+      `Act as a practice-management analyst for a professional-services firm. For each matter below compute: notional value at the standard rate, actual billed, realisation %, and effective rate per hour. Identify the matters bleeding value, quantify the total write-off, and name the likely cause for each (under-scoping, scope creep, junior time on senior work, or unbilled admin). Recommend three specific changes. Standard rate: {{rate}}. Matters:\n{{matters}}`),
+    A("professional-services", "advisory", "Client Advisory Note", "Turn a regulatory or financial change into a client-ready note.",
+      [{ key: "change", label: "The change / update", type: "textarea" }, { key: "segment", label: "Which clients it affects", type: "text" }],
+      `Write a client advisory note from an Indian professional-services firm. Change: {{change}}. Affected clients: {{segment}}. Structure: what changed, from when, who it affects, what it means in rupee terms with a worked example, what the client must do and by when, and how the firm can help. Plain language, no jargon, under 400 words. End with a one-line confidence note if anything awaits clarification.`),
+  ],
   jewellery: [
     A("jewellery", "merch", "Merchandising Brief (sketch → spec)", "Interpret a sketch into a full design & manufacturing brief.",
       [{ key: "sketch", label: "Describe / annotate the sketch", type: "textarea", placeholder: "Solitaire ring, oval centre, halo, tapered band…" }, { key: "constraints", label: "Constraints (metal, budget, size)", type: "text" }],
