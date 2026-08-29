@@ -28,8 +28,13 @@ export async function POST(req: Request) {
       const d = creditDenial(gate, "This action");
       return NextResponse.json({ ...d.body, text: d.body.error }, { status: d.status });
     }
-    const context = await getBusinessContext();
-    const { orgId } = await getUserAndOrg();
+    /*
+      These two were awaited one after the other, and neither depends on the
+      other — the request paid two sequential database round trips before the
+      model was even asked anything. Only the memory recall genuinely has to
+      wait, because it needs the org id.
+    */
+    const [context, { orgId }] = await Promise.all([getBusinessContext(), getUserAndOrg()]);
     const mem = await recallContext(orgId, String(input || m), 8);
     const fullContext = mem ? `${context}\n\n${mem}` : context;
     const text = await generateFor(m, String(input || ""), fullContext);

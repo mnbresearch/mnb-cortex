@@ -18,6 +18,72 @@ Rules:
 type Msg = { role: "user" | "assistant"; content: string };
 
 /**
+ * Set once if a Gemini model rejects thinkingConfig, so the whole process stops
+ * sending a field that model will not accept. See the 400 handling in runOnce().
+ */
+let thinkingUnsupported = false;
+
+/* ---------------------------------------------------------------------------
+   GENERATION PROFILES — why the AI took 28-39 seconds to write three sentences.
+
+   Measured against a real workspace, the dashboard pulse took 27.9s and 38.9s.
+   The prompt for it asks for "a 3-sentence executive pulse". Three sentences.
+
+   The cause is that current Gemini Flash models THINK before they answer, and
+   nothing here told them not to. Every call — a three-sentence pulse and a
+   full strategic deep dive alike — was sent with the same config and an
+   unbounded thinking budget, so the model reasoned at length before emitting a
+   word the user would ever see.
+
+   Two things follow, and the second is a correctness bug rather than a speed
+   one:
+
+   1. THINKING TOKENS ARE BILLED AGAINST maxOutputTokens. With the old cap of
+      1024, a model that thinks for 1024 tokens has nothing left and returns an
+      EMPTY response. That is a documented failure mode of Gemini 2.5/3 Flash,
+      not a theoretical one, and it would present as the AI silently returning
+      nothing on exactly the hardest questions — the ones worth thinking about.
+      The caps below are raised so the answer always has room after the
+      thinking is paid for.
+
+   2. Not every question deserves the same deliberation. A pulse wants speed; a
+      deep dive or a scenario stress-test genuinely benefits from reasoning.
+      So the budget is per-mode instead of one setting for everything.
+
+   NOTE ON thinkingBudget = 0: Gemini 3 Flash and Flash-Lite do NOT support
+   turning thinking off completely, so the fast profile asks for a small budget
+   rather than zero. Asking for zero on a model that refuses it would be a 400
+   on every call — see the fallback in runOnce().
+   --------------------------------------------------------------------------- */
+export type GenProfile = { maxOutputTokens: number; thinkingBudget: number };
+
+/** Short, factual, wanted now. */
+const FAST: GenProfile = { maxOutputTokens: 2048, thinkingBudget: 128 };
+/** The default: a considered answer without an essay's worth of deliberation. */
+const STANDARD: GenProfile = { maxOutputTokens: 3072, thinkingBudget: 512 };
+/** Multi-step reasoning where the thinking IS the value. */
+const DEEP: GenProfile = { maxOutputTokens: 4096, thinkingBudget: 2048 };
+
+const MODE_PROFILE: Record<string, GenProfile> = {
+  pulse: FAST,          // 3 sentences on the dashboard — the one users wait on
+  actions: FAST,
+  brief: FAST,
+  critique: FAST,
+  account: FAST,
+  outreach: FAST,
+  scenario: DEEP,       // stress-testing a decision
+  forecast: DEEP,
+  strategy: DEEP,
+  investor: DEEP,
+  board: DEEP,
+  valuation: DEEP,
+};
+
+export function profileFor(mode: string): GenProfile {
+  return MODE_PROFILE[mode] || STANDARD;
+}
+
+/**
  * Every configured provider, best first — not just the first match.
  *
  * This used to return ONE provider and there was no failover, so a GROQ_API_KEY
@@ -71,7 +137,7 @@ export function hasAIKey(): boolean {
  * Providers rate-limit under bursty load; without this the app silently returned
  * an off-topic canned answer, which is worse than an honest "try again".
  */
-export async function runCortex(messages: Msg[], context: string): Promise<string> {
+export async function runCortex(messages: Msg[], context: string, profile: GenProfile = STANDARD): Promise<string> {
   if (!hasAIKey()) return fallback(messages); // genuinely unconfigured — show the setup hint
 
   // The workspace's own instructions, resolved HERE because every AI feature in
@@ -101,7 +167,7 @@ export async function runCortex(messages: Msg[], context: string): Promise<strin
     // three cases the right move is to hand over to the next provider at once.
     const attempts = 3;
     for (let i = 0; i < attempts; i++) {
-      const out = await runOnce(provider, messages, context2);
+      const out = await runOnce(provider, messages, context2, profile);
       if (out !== null) return out;
 
       const st = lastFailure?.status;
@@ -116,25 +182,63 @@ export async function runCortex(messages: Msg[], context: string): Promise<strin
 }
 
 /** One model call. Returns null on a transient/failed call so the caller can retry. */
-async function runOnce(provider: string, messages: Msg[], context: string): Promise<string | null> {
+async function runOnce(provider: string, messages: Msg[], context: string, profile: GenProfile): Promise<string | null> {
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
   try {
     // ---- Google Gemini (FREE: aistudio.google.com) ----
     if (provider === "gemini" && envKey("GEMINI_API_KEY")) {
-      const body = JSON.stringify({
+      const buildBody = (withThinking: boolean) => JSON.stringify({
         system_instruction: { parts: [{ text: sys }] },
         contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
-        generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: profile.maxOutputTokens,
+          ...(withThinking ? { thinkingConfig: { thinkingBudget: profile.thinkingBudget } } : {}),
+        },
       });
       // Walk the candidate models: a 404 means that name was retired, so try
       // the next one rather than taking the whole product down.
       for (const model of geminiTextModels()) {
-        const r = await fetch(geminiUrl(model, process.env.GEMINI_API_KEY!), {
-          method: "POST", headers: { "Content-Type": "application/json" }, body,
+        let r = await fetch(geminiUrl(model, process.env.GEMINI_API_KEY!), {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: buildBody(!thinkingUnsupported),
         });
+
+        /*
+          thinkingConfig is not accepted by every Gemini model, and Gemini
+          rejects unknown generationConfig fields outright rather than ignoring
+          them. Sending it blindly would therefore turn a latency optimisation
+          into a total AI outage on any model that does not support it.
+
+          So a 400 that names the field is treated as "this model does not take
+          that setting" and retried once without it. The result is remembered
+          for the life of the process, so the product pays this probe at most
+          once rather than on every single call.
+        */
+        if (r.status === 400 && !thinkingUnsupported) {
+          const detail = await r.clone().text().catch(() => "");
+          if (/thinking|unknown name|invalid json payload|unrecognized/i.test(detail)) {
+            console.warn(`[cortex] ${model} rejected thinkingConfig; retrying without it and disabling for this process.`);
+            thinkingUnsupported = true;
+            r = await fetch(geminiUrl(model, process.env.GEMINI_API_KEY!), {
+              method: "POST", headers: { "Content-Type": "application/json" }, body: buildBody(false),
+            });
+          }
+        }
+
         if (r.ok) {
           const j = await r.json();
-          return j?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+          const text = j?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+          /*
+            An OK response with no text is the thinking-ate-the-budget case:
+            the model spent maxOutputTokens reasoning and had none left to
+            answer with. Retrying the same call would just do it again, so say
+            so in the logs — silence here used to look like a network fault.
+          */
+          if (!text) {
+            const reason = j?.candidates?.[0]?.finishReason || "unknown";
+            console.error(`[cortex] ${model} returned no text (finishReason=${reason}, maxOutputTokens=${profile.maxOutputTokens}, thinkingBudget=${profile.thinkingBudget}).`);
+          }
+          return text;
         }
         await note(`gemini(${model})`, r);
         if (r.status !== 404) break; // a real error — don't burn the other models
@@ -469,7 +573,8 @@ Ground it in the BUSINESS SNAPSHOT where relevant. Customer details:`,
 export async function generateFor(mode: string, input: string, context: string): Promise<string> {
   const p = MODE_PROMPTS[mode] || MODE_PROMPTS.pulse;
   const user = mode === "pulse" ? p : `${p}\n\n${input}`;
-  return runCortex([{ role: "user", content: user }], context);
+  // Per-mode budget: a 3-sentence pulse must not deliberate like a deep dive.
+  return runCortex([{ role: "user", content: user }], context, profileFor(mode));
 }
 
 // ---- Cortex Deep Dive: a chained, multi-pass analysis (agentic) --------------
