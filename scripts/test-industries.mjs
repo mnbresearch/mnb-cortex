@@ -179,6 +179,43 @@ console.log("\nAliases must not point at playbooks that do not exist");
   } else { pass++; console.log(`  ok    all ${Object.keys(alias).length} aliases point at real playbooks`); }
 }
 
+/* ========================================================================= */
+console.log("\nMODULE DISCOVERY: /tools claims to list every capability");
+/* ========================================================================= */
+{
+  /*
+    The AI Tools page is subtitled "Every Cortex capability, organised by the job
+    it does for you" and listed FIFTEEN of a hundred and twenty-two modules.
+    Receivables, payables, P&L, forecasting, RFM, churn, reorder — the things
+    people go looking for — were all missing, and the page closed by telling the
+    reader to go hunt through the sidebar instead.
+
+    A discovery page that cannot discover is worse than not having one, because
+    the reader concludes the product is smaller than it is. It now renders the
+    complete index from NAV, which is also why this test checks the SOURCE of
+    the list rather than counting cards: a hand-maintained list would drift the
+    first time somebody shipped a module in a hurry.
+  */
+  const nav = readFileSync(join(ROOT, "src", "lib", "nav.ts"), "utf8");
+  const toolsPage = readFileSync(join(ROOT, "src", "app", "(app)", "tools", "page.tsx"), "utf8");
+
+  const navHrefs = [...nav.matchAll(/href:\s*"(\/[a-zA-Z0-9/_-]+)"/g)].map((m) => m[1]);
+  check(`the sidebar defines modules (${navHrefs.length})`, navHrefs.length > 100);
+
+  check("/tools builds its index from NAV rather than a hand-kept copy",
+    /import \{ NAV \} from "@\/lib\/nav"/.test(toolsPage) && /navGroups\.map/.test(toolsPage));
+
+  check("...so every sidebar module is listed on it",
+    /NAV\.reduce|for \(const n of NAV\)/.test(toolsPage));
+
+  check("the page no longer tells the reader to go hunt the sidebar",
+    !/There are 120\+ in the sidebar/.test(toolsPage));
+
+  // The headline count must come from the data, not a number typed in 2024.
+  check("the module count is derived, not hardcoded",
+    /\{NAV\.length\} modules/.test(toolsPage));
+}
+
 console.log("");
 if (fail) { console.log(`${fail} FAILED, ${pass} passed\n`); process.exit(1); }
 console.log(`all ${pass} passed\n`);

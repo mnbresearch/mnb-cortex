@@ -3,6 +3,7 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Card } from "@/components/ui/card";
 import { CREDIT_COSTS } from "@/lib/config";
+import { NAV } from "@/lib/nav";
 import {
   Landmark, ReceiptText, Upload, Database, Telescope, MessageSquare, Brain, LineChart,
   FileBarChart, Megaphone, Radio, Bot, Radar, BrainCircuit, ArrowRight, Zap, Sparkles,
@@ -65,6 +66,19 @@ function Badge({ cost }: { cost: number | null }) {
 
 export default function ToolsHub() {
   const total = GROUPS.reduce((s, g) => s + g.tools.length, 0);
+
+  // Grouped in the sidebar's own order, so the page reads the way the app is
+  // organised rather than inventing a second taxonomy to keep in sync.
+  // NAV is inferred as a readonly tuple, so group by its ELEMENT type rather
+  // than by `typeof NAV` — the tuple type would demand all 122 entries per group.
+  type NavItem = (typeof NAV)[number];
+  const byGroup = new Map<string, NavItem[]>();
+  for (const n of NAV) {
+    const list = byGroup.get(n.group);
+    if (list) list.push(n);
+    else byGroup.set(n.group, [n]);
+  }
+  const navGroups = Array.from(byGroup);
   return (
     <>
       <Topbar title="AI Tools" subtitle="Every Cortex capability, organised by the job it does for you." />
@@ -72,7 +86,7 @@ export default function ToolsHub() {
         {/* Hero */}
         <Card className="p-6 brand-gradient text-white overflow-hidden relative">
           <div className="relative z-10 max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 text-xs font-medium bg-white/15 rounded-full px-2.5 py-1"><Sparkles className="h-3.5 w-3.5" /> {total} flagship tools · 120+ modules</div>
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium bg-white/15 rounded-full px-2.5 py-1"><Sparkles className="h-3.5 w-3.5" /> {total} flagship tools · {NAV.length} modules</div>
             <h2 className="mt-3 text-2xl font-display font-semibold tracking-tight">One brain, many hands.</h2>
             <p className="mt-1.5 text-white/85 text-sm leading-6">
               MNB Cortex isn't a chatbot bolted onto a dashboard. It reads your real data, reasons over it, acts on your behalf and remembers everything —
@@ -108,8 +122,58 @@ export default function ToolsHub() {
           </section>
         ))}
 
+        {/*
+          THE COMPLETE INDEX.
+
+          This page is titled "Every Cortex capability" and listed fifteen of a
+          hundred and twenty-two modules. Receivables, payables, P&L, forecasting,
+          RFM, churn and reorder — the things people actually come looking for —
+          were all absent, and the page closed by telling the reader to go hunt
+          through the sidebar instead. A discovery page that cannot discover is
+          worse than none, because the reader concludes the product is smaller
+          than it is.
+
+          Generated from NAV rather than hand-listed, so it cannot drift: add a
+          module to the sidebar and it appears here the same day. The curated
+          cards above stay, because a flagship tool deserves a paragraph and a
+          hundred and twenty do not.
+        */}
+        <section>
+          <div className="mb-3">
+            <h3 className="text-lg font-semibold tracking-tight">Every module, A–Z</h3>
+            <p className="text-sm text-muted-foreground">
+              All {NAV.length} modules in Cortex, grouped the way the sidebar groups them. Everything here is included in your plan unless a credit cost is shown above.
+            </p>
+          </div>
+          <div className="space-y-4">
+            {navGroups.map(([group, items]) => (
+              <Card key={group} className="p-4">
+                <div className="flex items-baseline justify-between gap-2 mb-2.5">
+                  <h4 className="font-semibold text-sm">{group}</h4>
+                  <span className="text-xs text-muted-foreground">{items.length} modules</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {items.map((n) => {
+                    const Icon = n.icon;
+                    return (
+                      <Link
+                        key={n.href}
+                        href={n.href}
+                        className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 h-8 text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-accent transition-colors"
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        {n.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
+
         <Card className="p-5 flex items-center justify-between gap-3 flex-wrap">
-          <div className="text-sm text-muted-foreground">Looking for a specific calculator or module? There are 120+ in the sidebar — or ask the AI CEO Chat to take you there.</div>
+          <div className="text-sm text-muted-foreground">Not sure which one you need? Describe the problem and Cortex will take you straight there.</div>
           <Link href="/chat" className="inline-flex items-center gap-1.5 rounded-lg brand-gradient text-white px-4 h-9 text-sm font-medium">Ask Cortex <ArrowRight className="h-4 w-4" /></Link>
         </Card>
       </PageShell>
