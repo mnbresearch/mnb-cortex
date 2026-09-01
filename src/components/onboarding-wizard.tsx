@@ -1,6 +1,15 @@
 "use client";
 import { useState } from "react";
-import { INDUSTRIES } from "@/lib/industries";
+/*
+  The CATALOG list, not lib/industries. Settings writes catalog ids ("retail",
+  "beauty") while this wizard was writing playbook slugs ("retail-d2c",
+  "beauty-salon") into the same organizations.industry column — two value spaces
+  for one field, differing purely by which screen the user happened to set it
+  from. The playbook resolver tolerates both through its alias map, but the
+  agents console keys off catalog ids, so the two paths did not behave alike.
+  One list, one set of ids, grouped the same way in both places.
+*/
+import { INDUSTRIES, SECTORS } from "@/lib/agents/catalog";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,7 +38,17 @@ export function OnboardingWizard() {
         <div className="animate-float"><Logo size={52} /></div>
         <div className="text-center">
           <div className="font-semibold tracking-tight">Welcome to MNB Cortex</div>
-          <div className="text-xs text-muted-foreground">Let's set up your AI COO in three quick steps</div>
+          {/*
+            The old copy went straight to "let's set up your AI COO in three
+            steps", which assumes the reader already knows what that means. A
+            first-time user needs one plain sentence about what the product
+            actually does before being asked to configure it.
+          */}
+          <div className="text-sm text-muted-foreground mt-1 max-w-sm">
+            Cortex reads your business numbers, tells you what is going wrong and what to do about it —
+            like a COO who has already been through all your data.
+          </div>
+          <div className="text-xs text-muted-foreground/80 mt-2">Two minutes to set up. You can change any of it later.</div>
         </div>
       </div>
       <div className="flex items-center gap-2 mb-6">
@@ -40,8 +59,19 @@ export function OnboardingWizard() {
           <h2 className="text-lg font-semibold flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /> Tell us about your company</h2>
           <input className={inp} placeholder="Company name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <select className={inp} value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })}>
-            {INDUSTRIES.map((o) => <option key={o.slug} value={o.slug}>{o.name}</option>)}
+            {SECTORS.map((sec) => {
+              const inSector = INDUSTRIES.filter((o) => o.sector === sec);
+              if (!inSector.length) return null;
+              return (
+                <optgroup key={sec} label={sec}>
+                  {inSector.map((o) => <option key={o.id} value={o.id}>{o.emoji} {o.name}</option>)}
+                </optgroup>
+              );
+            })}
           </select>
+          <p className="text-xs text-muted-foreground">
+            This decides which problems Cortex watches for you and which tools it puts on your dashboard.
+          </p>
           <select className={inp} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
             {["INR", "USD", "EUR", "GBP", "AED", "SGD"].map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
