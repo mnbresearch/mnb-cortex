@@ -6,7 +6,10 @@ import { Card } from "@/components/ui/card";
 import { UsagePanel } from "@/components/usage-panel";
 import { getCreditState, getLedger } from "@/lib/credits";
 import { getUserAndOrg } from "@/lib/data";
-import { CREDIT_COSTS, CREDIT_PACKS } from "@/lib/config";
+// creditCost() applies DEFAULT_CREDIT_COST for anything unlisted. This page
+// hardcoded `?? 2`, which was the OLD default and would have shown a price the
+// product no longer charges.
+import { CREDIT_COSTS, CREDIT_PACKS, creditCost } from "@/lib/config";
 import { Coins, Infinity as InfinityIcon, Sparkles, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -96,7 +99,7 @@ export default async function Usage() {
               {COST_SHOWCASE.map(([label, key]) => (
                 <div key={key} className="flex items-center justify-between border-b last:border-0 py-1">
                   <span className="text-muted-foreground">{label}</span>
-                  <span className="font-medium tabular-nums">{CREDIT_COSTS[key] ?? 2} cr</span>
+                  <span className="font-medium tabular-nums">{creditCost(key)} cr</span>
                 </div>
               ))}
             </div>

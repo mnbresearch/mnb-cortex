@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy, Check, Sparkles, Loader2, AlertTriangle } from "lucide-react";
-import { GBP_KINDS, limitFor, type GbpKind } from "@/lib/gbp";
+import { GBP_KINDS, limitFor, type GbpKind } from "@/lib/gbp-shared";
 
 /**
  * Google Business Profile studio.

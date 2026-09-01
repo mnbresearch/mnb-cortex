@@ -1,5 +1,15 @@
 import "server-only";
 
+/*
+  The limits, the kind list and the GbpKind type live in gbp-shared.ts so the
+  studio UI can import them without pulling this server-only module (and the
+  prompt text below) into the browser bundle. Re-exported here so server code
+  still has one import.
+*/
+import { GBP_LIMITS, type GbpInput, type GbpKind } from "@/lib/gbp-shared";
+export { GBP_LIMITS, GBP_KINDS, limitFor } from "@/lib/gbp-shared";
+export type { GbpKind, GbpInput } from "@/lib/gbp-shared";
+
 /**
  * Google Business Profile content engine.
  *
@@ -21,40 +31,6 @@ import "server-only";
  * description over 750 characters or a post over 1,500 is rejected at
  * publication, after the owner has already written it.
  */
-
-export const GBP_LIMITS = {
-  /** Business description field. */
-  description: 750,
-  /** Post body. Google truncates the preview at roughly 80 characters. */
-  post: 1500,
-  postPreview: 80,
-  /** Q&A answer. */
-  answer: 440,
-  /** Review reply. */
-  reviewReply: 4096,
-  /** Service description. */
-  service: 300,
-} as const;
-
-export type GbpKind =
-  | "description"
-  | "post_update"
-  | "post_offer"
-  | "post_event"
-  | "services"
-  | "qanda"
-  | "review_reply";
-
-export type GbpInput = {
-  kind: GbpKind;
-  business: string;
-  industry?: string | null;
-  city?: string | null;
-  /** Free-text: the offer, the event, the review being replied to, etc. */
-  detail?: string;
-  /** For review replies: the star rating, so the tone can match. */
-  rating?: number;
-};
 
 /*
   Google's content policy, compressed to the rules that actually get posts
@@ -131,21 +107,3 @@ Never offer compensation, refunds or discounts unless the owner supplied that in
   return [who, detail, bodies[i.kind], VOICE, POLICY].filter(Boolean).join("\n\n");
 }
 
-/** Character budget for a given kind, for client-side counters. */
-export function limitFor(kind: GbpKind): number {
-  if (kind === "description") return GBP_LIMITS.description;
-  if (kind === "services") return GBP_LIMITS.service;
-  if (kind === "qanda") return GBP_LIMITS.answer;
-  if (kind === "review_reply") return GBP_LIMITS.reviewReply;
-  return GBP_LIMITS.post;
-}
-
-export const GBP_KINDS: { id: GbpKind; label: string; blurb: string; needsDetail?: string }[] = [
-  { id: "description", label: "Business description", blurb: "The 750-character 'from the business' section." },
-  { id: "post_update", label: "What's new post", blurb: "A regular update post with a call to action." },
-  { id: "post_offer", label: "Offer post", blurb: "A discount or promotion, with its terms.", needsDetail: "The offer, and its dates" },
-  { id: "post_event", label: "Event post", blurb: "An event with date, time and details.", needsDetail: "The event, date and time" },
-  { id: "services", label: "Services list", blurb: "6-10 services with descriptions, ready to paste." },
-  { id: "qanda", label: "Questions & answers", blurb: "8 questions customers actually ask, pre-answered." },
-  { id: "review_reply", label: "Review reply", blurb: "A reply that fits the rating.", needsDetail: "Paste the review" },
-];

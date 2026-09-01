@@ -141,9 +141,15 @@ export const CREDIT_COSTS: Record<string, number> = {
 
 // Weekly image-generation caps by state. Trial = a small taste; paid tiers get more.
 export const IMAGE_WEEKLY: Record<string, number> = {
-  // `payg` = no subscription, but a bought credit balance. The credits already
-  // carry the margin (every action is priced at ~4x the floor), so the weekly
-  // cap here is only a runaway guard, not a commercial lever.
+  /*
+    `payg` = no subscription, but a bought credit balance. The credits already
+    carry the margin — every action is priced for 85% at the ₹0.90 floor — so
+    these weekly caps are a runaway guard, not a commercial lever.
+
+    Enterprise is a real number rather than -1 for the same reason its credit
+    allowance is: an uncapped tier has unbounded COGS against a fixed
+    negotiated price.
+  */
   payg: 50,
   starter: 0, growth: 120, business: 500, aicoo: 2000, enterprise: 5000,
   // legacy ids kept so an existing workspace never falls through to a default
