@@ -145,7 +145,7 @@ export const IMAGE_WEEKLY: Record<string, number> = {
   // carry the margin (every action is priced at ~4x the floor), so the weekly
   // cap here is only a runaway guard, not a commercial lever.
   payg: 50,
-  starter: 0, growth: 120, business: 500, aicoo: 2000, enterprise: -1,
+  starter: 0, growth: 120, business: 500, aicoo: 2000, enterprise: 5000,
   // legacy ids kept so an existing workspace never falls through to a default
   solo: 0, premium: 500, trial: 0,
 };
@@ -157,7 +157,7 @@ export const IMAGE_WEEKLY: Record<string, number> = {
  */
 export const VIDEO_WEEKLY: Record<string, number> = {
   payg: 10,
-  starter: 0, growth: 5, business: 20, aicoo: 60, enterprise: -1,
+  starter: 0, growth: 5, business: 20, aicoo: 60, enterprise: 200,
   solo: 0, premium: 20, trial: 0,
 };
 
@@ -191,7 +191,18 @@ export const PLAN_CREDITS: Record<string, number> = {
     Starter goes UP: at ₹1,499 for 1,000 credits it was selling at ₹1.50 and
     leaving money on the table.
   */
-  starter: 1350, growth: 4600, business: 13850, aicoo: 37000, enterprise: -1,
+  starter: 1350, growth: 4600, business: 13850, aicoo: 37000,
+  /*
+    A FAIR-USE CAP, not unlimited. "Unlimited" credits meant unbounded COGS
+    against a negotiated fixed price — one enterprise account generating a few
+    thousand videos at ₹77 of Veo billing each could cost more than its contract
+    was worth, and nothing in the product would have stopped it or reported it.
+
+    At ₹0.90 a credit this allowance implies a price floor of ₹1,35,000 a month.
+    An enterprise deal signed below that is sold under cost; see
+    ENTERPRISE_MIN_MONTHLY_INR.
+  */
+  enterprise: 150000,
   // legacy ids — an old row must still resolve to something sane
   solo: 1350, premium: 13850,
 };
@@ -315,7 +326,7 @@ export const PLANS: Plan[] = [
     cta: "Contact us",
     features: [
       "Unlimited users & workspaces",
-      "Unlimited AI credits, images & video",
+      "1,50,000 AI credits / month — fair use",
       "SSO / SAML",
       "Custom integrations (Tally, ERP, Shopify)",
       "On-prem / private cloud option",

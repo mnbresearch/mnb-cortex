@@ -36,6 +36,8 @@ const GEN = readFileSync(join(ROOT, "src", "lib", "ai", "generation.ts"), "utf8"
 
 /** The hard minimum. Prices target 85%, so there is headroom before this trips. */
 const MIN_MARGIN = 80;
+/** Plans are the commitment the business is sold on, so they are held higher. */
+const MIN_PLAN_MARGIN = 85;
 
 let pass = 0, fail = 0;
 const check = (label, cond) => {
@@ -54,11 +56,11 @@ const PROFILE_TOKENS = Object.fromEntries(
   [...PM.matchAll(/^\s{2}(FAST|STANDARD|DEEP|EXTRACT): (\d+),/gm)].map((m) => [m[1], Number(m[2])]),
 );
 const MODE_PROFILE = Object.fromEntries(
-  [...((PM.match(/MODE_PROFILE_NAME[^{]*\{([\s\S]*?)\n\};/) || ["", ""])[1]).matchAll(/(\w+): "(\w+)"/g)]
+  [...((PM.match(/export const MODE_PROFILE_NAME[^=]*= \{([\s\S]*?)\n\};/) || ["", ""])[1]).matchAll(/(\w+): "(\w+)"/g)]
     .map((m) => [m[1], m[2]]),
 );
 const FIXED = Object.fromEntries(
-  [...((PM.match(/FIXED_COGS_INR[^{]*\{([\s\S]*?)\n\};/) || ["", ""])[1]).matchAll(/(\w+): ([\d.]+),/g)]
+  [...((PM.match(/export const FIXED_COGS_INR: Record<string, number> = \{([\s\S]*?)\n\};/) || ["", ""])[1]).matchAll(/(\w+): ([\d.]+),/g)]
     .map((m) => [m[1], Number(m[2])]),
 );
 
@@ -89,13 +91,28 @@ console.log("\nThe cost model must mirror the real generation profiles");
 console.log("\nThe credit floor is computed from what customers can actually buy");
 const packs = [...CFG.matchAll(/credits: (\d+), price: (\d+)/g)].map((m) => ({ c: +m[1], p: +m[2] }));
 const planCredits = Object.fromEntries(
-  [...((CFG.match(/PLAN_CREDITS[^{]*\{([\s\S]*?)\n\};/) || ["", ""])[1]).matchAll(/(\w+): (-?\d+)/g)]
+  [...((CFG.match(/export const PLAN_CREDITS: Record<string, number> = \{([\s\S]*?)\n\};/) || ["", ""])[1]).matchAll(/(\w+): (-?\d+)/g)]
     .map((m) => [m[1], Number(m[2])]),
 );
 const plans = [...CFG.matchAll(/\{ id: "(\w+)", name: "[^"]*", monthly: (\d+), annual: (\d+)/g)]
   .map((m) => ({ id: m[1], mo: +m[2], yr: +m[3] }));
 
+/*
+  ANCHOR EVERY LOOKUP ON `export const`.
+
+  An earlier version of this file searched for /PLAN_CREDITS[^{]*\{/, which
+  matched the FIRST mention of that name — a reference inside a comment — and
+  then ran forward to the next brace, which belonged to IMAGE_WEEKLY. So the
+  suite read the weekly image caps (0/120/500/2000) as the plan credit
+  allowances, computed a floor from them, and PASSED. A margin test that passes
+  because it read the wrong constant is worse than no margin test, which is the
+  whole reason these files assert their own parses.
+*/
 check(`credit packs parsed (${packs.length})`, packs.length >= 3);
+check("plan allowances were read from PLAN_CREDITS, not another table",
+  planCredits.starter !== undefined && planCredits.starter >= 1000);
+check("...and they are the real allowances, not the weekly image caps",
+  planCredits.growth !== 120 && planCredits.business !== 500);
 check(`plans parsed (${plans.length})`, plans.length >= 3);
 
 let floor = { v: Infinity, src: "" };
@@ -198,6 +215,84 @@ console.log("\nAssumptions are pessimistic, so a wobble does not erase the margi
     OUT_USD >= 7.0);
   check("a conservative rupee", USD_INR >= 88);
   check("input tokens are counted, not assumed free", IN_TOK > 0 && IN_USD > 0);
+}
+
+
+/* ========================================================================= */
+console.log(`\nEVERY PLAN must clear ${MIN_PLAN_MARGIN}% if the customer spends every credit`);
+/* ========================================================================= */
+{
+  /*
+    Per-ACTION margin is not the same as per-PLAN margin. A plan's margin
+    depends on utilisation: the customer who burns their whole allowance on the
+    least efficient action is the one who decides whether the plan makes money.
+    So the worst COGS-per-credit across all actions is the honest assumption.
+  */
+  let worstPerCredit = 0, worstMode = "";
+  for (const [mode, credits] of Object.entries(costs)) {
+    const r = cogs(mode) / credits;
+    if (r > worstPerCredit) { worstPerCredit = r; worstMode = mode; }
+  }
+  console.log(`        worst COGS per credit: ₹${worstPerCredit.toFixed(4)} (all spend on ${worstMode})`);
+
+  const under = [];
+  for (const p of plans) {
+    const c = planCredits[p.id];
+    if (c === undefined) continue;
+
+    /*
+      An UNLIMITED allowance is an unbounded loss, not a generous plan. Every
+      video is ₹77 of Veo billing, so one enterprise account could spend more
+      than its contract is worth with nothing in the product to stop it. No plan
+      may be uncapped.
+    */
+    if (c < 0) { under.push(`${p.id} has UNLIMITED credits — unbounded COGS`); continue; }
+
+    for (const [label, mo] of [["monthly", p.mo], ["annual", p.yr / 12]]) {
+      if (!mo) continue;                       // custom-quoted; covered by the floor rule below
+      const margin = ((mo - c * worstPerCredit) / mo) * 100;
+      if (margin < MIN_PLAN_MARGIN) {
+        under.push(`${p.id} ${label}: ₹${mo.toFixed(0)}/mo for ${c} credits = ${margin.toFixed(1)}%`);
+      }
+    }
+  }
+
+  if (under.length) {
+    fail++;
+    console.log(`  FAIL  ${under.length} plan/cycle below ${MIN_PLAN_MARGIN}%:`);
+    for (const u of under) console.log(`          ${u}`);
+  } else {
+    pass++;
+    console.log(`  ok    every plan clears ${MIN_PLAN_MARGIN}% at full utilisation`);
+  }
+
+  check("no plan has an uncapped credit allowance",
+    plans.every((p) => (planCredits[p.id] ?? 0) >= 0));
+
+  /*
+    Enterprise is quoted by hand, so nothing in code stops a deal being signed
+    below cost. The floor is published as a constant so the number a
+    salesperson must not go under is written down somewhere.
+  */
+  const entCredits = planCredits.enterprise ?? 0;
+  const entFloor = num(PM, /ENTERPRISE_MIN_MONTHLY_INR = ([\d_]+)/) || 0;
+  check("a minimum enterprise price is documented", entFloor > 0 || /ENTERPRISE_MIN_MONTHLY_INR/.test(PM));
+  if (entCredits > 0) {
+    const implied = entCredits * PRICED_AGAINST;
+    check(`the enterprise floor matches its allowance (${entCredits} credits => ₹${implied.toLocaleString("en-IN")}/mo)`,
+      /150_000 \* 0\.90/.test(PM));
+  }
+
+  // Enterprise must also be metered, or the allowance is decorative.
+  const CRED = readFileSync(join(ROOT, "src", "lib", "credits.ts"), "utf8");
+  /*
+    Strip comments before grepping: the fix is DESCRIBED in a comment that
+    quotes the old code, and matching that would report the bug as still
+    present. Same trap as the "FY-agnostic" check in the statutory suite.
+  */
+  const credCode = CRED.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  check("enterprise is metered like every other plan, not exempted in code",
+    !/plan === "enterprise"/.test(credCode));
 }
 
 console.log("");

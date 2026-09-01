@@ -62,7 +62,9 @@ export async function getCreditState(): Promise<CreditState> {
     const plan = String((data as any).plan || "starter").toLowerCase();
     const status = statusOf(data);
     const allowance = planAllowance(plan, status, (data as any).credits_allowance);
-    const unlimited = superAdmin || plan === "enterprise" || allowance < 0;
+    // Enterprise is metered on its fair-use allowance like every other plan, so
+    // it is no longer treated as unlimited here either. Only super-admins are.
+    const unlimited = superAdmin || allowance < 0;
     let balance = Number((data as any).credits ?? 0);
     let resetAt: string | null = (data as any).credits_reset_at ?? null;
 
@@ -115,7 +117,21 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
     const override = (org as any)?.credits_allowance;
     const hasOverride = typeof override === "number" && override !== 0;
     const allowance = planAllowance(plan, status, override);
-    if (superAdmin || plan === "enterprise" || allowance < 0) return { ok: true, enforced: false, cost, balance: -1 };
+    /*
+      ENTERPRISE IS NO LONGER EXEMPT FROM METERING.
+
+      This used to read `plan === "enterprise"`, which skipped charging
+      entirely regardless of the allowance. Combined with PLAN_CREDITS.enterprise
+      being -1, an enterprise workspace had unbounded COGS against a negotiated
+      fixed price: every video is ₹77 of Veo billing, so a single enterprise
+      account generating a few thousand clips could spend more than the contract
+      was worth, with nothing in the product to stop it or even report it.
+
+      Enterprise now carries a large FAIR-USE allowance like every other plan, so
+      the margin is bounded by construction. Only super-admins — us, internally —
+      bypass metering.
+    */
+    if (superAdmin || allowance < 0) return { ok: true, enforced: false, cost, balance: -1 };
 
     // THE PAYWALL. Until now this status was computed and then ignored, and the
     // only thing standing between a lapsed workspace and the whole product was
@@ -210,7 +226,9 @@ async function generationGate(kind: "image" | "video"): Promise<ImageGate> {
     if (error) throw error;
     const plan = String((org as any)?.plan || "starter").toLowerCase();
     const status = statusOf(org);
-    if (superAdmin || plan === "enterprise") return { allowed: true, used: 0, limit: -1, plan, active: true };
+    // Same reasoning as chargeForMode: enterprise is metered, not exempt. Its
+    // weekly ceiling is set in IMAGE_WEEKLY/VIDEO_WEEKLY like any other plan.
+    if (superAdmin) return { allowed: true, used: 0, limit: -1, plan, active: true };
     // A workspace with no live plan but a bought credit balance is pay-as-you-go
     // and must still be able to spend what it paid for.
     const balance = Number((org as any)?.credits ?? 0);

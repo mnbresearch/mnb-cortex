@@ -101,6 +101,30 @@ export const FIXED_COGS_INR: Record<string, number> = {
   visibility: 12,
 };
 
+/**
+ * The lowest monthly price at which an enterprise deal is still profitable.
+ *
+ * Enterprise is quoted by hand, so no code path can stop a salesperson agreeing
+ * a number. This is the line: allowance x the floor. Below it, the contract is
+ * sold under cost from the day it is signed, and the better the customer adopts
+ * Cortex the worse it gets.
+ */
+export const ENTERPRISE_MIN_MONTHLY_INR = 150_000 * 0.90;
+
+/** Margin on a whole plan if the customer spends every credit they are given. */
+export function planMargin(monthlyPriceInr: number, monthlyCredits: number): number {
+  if (monthlyCredits <= 0 || monthlyPriceInr <= 0) return 100;
+  // A customer spends on whatever is least efficient for us, so the worst
+  // ratio across all actions is the honest assumption.
+  let worstCogsPerCredit = 0;
+  for (const [mode, credits] of Object.entries(CREDIT_COSTS)) {
+    const r = cogsInr(mode) / credits;
+    if (r > worstCogsPerCredit) worstCogsPerCredit = r;
+  }
+  const cogs = monthlyCredits * worstCogsPerCredit;
+  return ((monthlyPriceInr - cogs) / monthlyPriceInr) * 100;
+}
+
 /* -------------------------------------------------------------------------- */
 
 /** ₹ per credit, worst case, across every way a customer can obtain credits. */
