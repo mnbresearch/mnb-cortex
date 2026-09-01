@@ -13,6 +13,7 @@ import { PublicHeader, PublicFooter } from "@/components/public-chrome";
 import { ProductPreview } from "@/components/product-preview";
 import { AskCortexDemo } from "@/components/demo";
 import { IndustryPicker } from "@/components/industry-picker";
+import { HealthCheckClient } from "@/components/health-check-client";
 
 const FAQS = [
   { q: "How is this different from an ERP or CRM?", a: "ERPs and CRMs store data. MNB Cortex reads across all of it, diagnoses problems, predicts what's coming, recommends actions, and executes the busywork — like a COO, not a filing cabinet." },
@@ -247,10 +248,60 @@ export default function Home() {
         </div>
       </section>
 
+      {/*
+        ---------- FREE BUSINESS HEALTH CHECK (lead magnet) ----------
+
+        Placed here on purpose. The section directly above has just walked the
+        reader through the problems Cortex watches for; this is the moment they
+        are wondering how bad their own numbers are. Asking them to score
+        themselves at that point converts far better than a link in a footer.
+
+        This check already existed at /health-check and was reachable only from
+        a text link most visitors never scrolled to. Six questions, a score, and
+        a named list of their weak areas — the score is computed in the browser
+        so the visitor sees a real answer before being asked for anything.
+
+        The form then captures name, phone and email and posts to /api/inquiry,
+        which stores the lead and emails the operator with the score and the
+        specific weak areas attached, so the first call can open on their actual
+        problem instead of a pitch.
+      */}
+      <section id="health-check" className="px-5 lg:px-10 py-24 lg:py-28 border-t bg-secondary/20">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-16 items-start">
+          <div>
+            <SectionLabel n="02">Free · 60 seconds</SectionLabel>
+            <h2 className="font-display display-3 tracking-tightest mt-6 leading-[1.1]">
+              How healthy is <span className="text-primary">your</span> business, really?
+            </h2>
+            <p className="mt-5 text-muted-foreground leading-7 max-w-lg">
+              Six questions. No signup, no card, no sales call unless you ask for one. You get a Business Health
+              Score out of 100, the specific areas putting you at risk, and exactly what to do about each one.
+            </p>
+            <ul className="mt-7 space-y-3 text-sm">
+              {[
+                "Your score and risk band, instantly",
+                "The weak areas named, not hinted at",
+                "A fix plan mapped to the tools that solve it",
+                "The full report emailed to you",
+              ].map((t) => (
+                <li key={t} className="flex items-start gap-2.5">
+                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                  <span className="text-muted-foreground">{t}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-7 text-xs text-muted-foreground">
+              Used by owners across manufacturing, retail, distribution and services.
+            </p>
+          </div>
+          <HealthCheckClient />
+        </div>
+      </section>
+
       {/* ---------- STATEMENT ---------- */}
       <section className="px-5 lg:px-10 pb-24 lg:pb-32 border-t pt-24 lg:pt-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="02">What it is</SectionLabel>
+          <SectionLabel n="03">What it is</SectionLabel>
           <Reveal>
             <p className="font-display display-3 tracking-tightest mt-8 max-w-5xl leading-[1.15]">
               Dashboards store numbers. Chatbots forget you. <span className="text-primary">MNB Cortex remembers — and acts.</span> One operating
@@ -313,7 +364,7 @@ export default function Home() {
       {/* ---------- EVERYTHING YOU GET (full feature showcase) ---------- */}
       <section id="features" className="px-5 lg:px-10 py-24 border-t">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="03">Everything you get</SectionLabel>
+          <SectionLabel n="04">Everything you get</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Not one AI trick.<br />An operating system for your business.</h2>
           <p className="mt-4 text-muted-foreground max-w-2xl">120+ modules, 380+ agents and a permanent memory — organised into the jobs you actually need done. Here&rsquo;s the whole thing.</p>
 
@@ -349,7 +400,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-wrap items-end justify-between gap-6 mb-12">
             <div>
-              <SectionLabel n="04">Ten domains, one login</SectionLabel>
+              <SectionLabel n="05">Ten domains, one login</SectionLabel>
               <h2 className="font-display display-2 tracking-tightest mt-5 max-w-2xl">One login.<br />Your whole company.</h2>
             </div>
             <div className="max-w-sm">
@@ -377,7 +428,7 @@ export default function Home() {
       {/* ---------- THE LOOP ---------- */}
       <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="05">How it works</SectionLabel>
+          <SectionLabel n="06">How it works</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 mb-14 max-w-3xl">It doesn&rsquo;t just report. It runs the loop.</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-px bg-border rounded-2xl overflow-hidden border">
             {LOOP.map((x, i) => (
@@ -396,7 +447,7 @@ export default function Home() {
       {/* ---------- AUDIENCE ---------- */}
       <section className="px-5 lg:px-10 pb-24">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="06">Who it&rsquo;s for</SectionLabel>
+          <SectionLabel n="07">Who it&rsquo;s for</SectionLabel>
           <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border border rounded-2xl overflow-hidden">
             {AUDIENCE.map((a) => (
               <div key={a.t} className="bg-card p-7 hover:bg-accent/40 transition-colors">
@@ -411,7 +462,7 @@ export default function Home() {
       {/* ---------- COMPARISON ---------- */}
       <section className="px-5 lg:px-10 py-24 border-t">
         <div className="max-w-5xl mx-auto">
-          <SectionLabel n="07">Why not an ERP, CRM or ChatGPT?</SectionLabel>
+          <SectionLabel n="08">Why not an ERP, CRM or ChatGPT?</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-10 max-w-2xl">Those store or chat. Cortex acts on your data.</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
@@ -440,7 +491,7 @@ export default function Home() {
       {/* ---------- ROI ---------- */}
       <section className="px-5 lg:px-10 py-24">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="08">The math</SectionLabel>
+          <SectionLabel n="09">The math</SectionLabel>
           <div className="mt-8"><Reveal><RoiCalculator /></Reveal></div>
         </div>
       </section>
@@ -448,7 +499,7 @@ export default function Home() {
       {/* ---------- TESTIMONIALS ---------- */}
       <section className="px-5 lg:px-10 py-24 border-t">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="09">In the field</SectionLabel>
+          <SectionLabel n="10">In the field</SectionLabel>
           <div className="mt-12 grid md:grid-cols-3 gap-10">
             {TESTI.map((t, i) => (
               <Reveal key={i} delay={i * 90}>
@@ -465,7 +516,7 @@ export default function Home() {
       {/* ---------- FAQ ---------- */}
       <section className="px-5 lg:px-10 py-24 border-t">
         <div className="max-w-3xl mx-auto">
-          <SectionLabel n="10">Questions</SectionLabel>
+          <SectionLabel n="11">Questions</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">Good to know.</h2>
           <Faq items={FAQS} />
         </div>

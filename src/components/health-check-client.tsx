@@ -21,10 +21,12 @@ const QUESTIONS: Q[] = [
     opts: [{ label: "Data-driven", score: 100 }, { label: "A mix", score: 60 }, { label: "Mostly gut", score: 25 }] },
 ];
 
+const FIELD = "rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring";
+
 export function HealthCheckClient() {
   const [step, setStep] = useState(0); // 0..QUESTIONS.length-1, then results
   const [answers, setAnswers] = useState<Record<string, number>>({});
-  const [form, setForm] = useState({ name: "", email: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", company: "" });
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
 
   const done = step >= QUESTIONS.length;
@@ -36,14 +38,26 @@ export function HealthCheckClient() {
     setAnswers((a) => ({ ...a, [q.id]: opt.score }));
     setTimeout(() => setStep((s) => s + 1), 180);
   }
-  function reset() { setAnswers({}); setStep(0); setStatus("idle"); setForm({ name: "", email: "" }); }
+  function reset() { setAnswers({}); setStep(0); setStatus("idle"); setForm({ name: "", email: "", phone: "", company: "" }); }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name || !form.email) return;
+    if (!form.name || !form.email || !form.phone) return;
     setStatus("sending");
     try {
-      const note = `Business Health Score: ${score}/100 (${band.t}). Weak areas: ${risks.map((r) => r.area).join(", ") || "none"}.`;
+      /*
+        The note is what makes this lead worth calling. It carries the score,
+        the band, and — crucially — the specific areas the prospect just told us
+        are weak, so the first conversation can open on their actual problem
+        rather than a generic pitch.
+      */
+      const weak = risks.map((r) => `${r.area} (${answers[r.id] ?? 0}/100)`).join(", ") || "none";
+      const note = [
+        `Business Health Score: ${score}/100 — ${band.t}.`,
+        form.company ? `Business: ${form.company}.` : "",
+        `Weak areas: ${weak}.`,
+        `Answers: ${QUESTIONS.map((q) => `${q.area}=${answers[q.id] ?? "-"}`).join(", ")}.`,
+      ].filter(Boolean).join("\n");
       const r = await fetch("/api/inquiry", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, plan: "Health Check", source: "health-check", note }),
@@ -131,10 +145,15 @@ export function HealthCheckClient() {
             <div className="font-display text-xl tracking-tightest">Get your detailed report + a fix plan</div>
             <p className="text-sm text-muted-foreground mt-1">We&rsquo;ll email the full breakdown and show you what Cortex would do with your numbers.</p>
             <form onSubmit={submit} className="mt-4 grid sm:grid-cols-2 gap-3">
-              <input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
-              <input required type="email" placeholder="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              <input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={FIELD} />
+              <input required type="email" placeholder="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={FIELD} />
+              <input required type="tel" inputMode="tel" autoComplete="tel" placeholder="Phone / WhatsApp" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={FIELD} />
+              <input placeholder="Business name (optional)" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} className={FIELD} />
               {status === "error" && <p className="text-xs text-danger sm:col-span-2">Something went wrong — please try again.</p>}
               <button disabled={status === "sending"} className="sm:col-span-2 rounded-full btn-ink h-11 text-sm font-medium">{status === "sending" ? "Sending…" : "Email me the report"}</button>
+              <p className="text-[11px] text-muted-foreground sm:col-span-2">
+                We use your number to walk you through the report. No spam, and you can ask us to delete it at any time.
+              </p>
             </form>
           </>
         )}

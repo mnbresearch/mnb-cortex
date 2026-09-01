@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import { NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/logo";
-import { KeyRound, ShieldAlert, Mail, ChevronDown, Sun, Moon } from "lucide-react";
+import { KeyRound, ShieldAlert, Mail, ChevronDown, Sun, Moon, Search } from "lucide-react";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { useTheme } from "next-themes";
 
@@ -43,6 +43,25 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
       </div>
       <OrgSwitcher orgs={orgs} activeId={activeOrgId} />
 
+      {/*
+        A visible front door to the command palette. It already searched every
+        module, but only opened on Ctrl/Cmd-K — a shortcut a business owner has
+        no reason to guess, which is most of why 122 modules felt unfindable.
+        Typing the name of a tool is faster than remembering which of six
+        sections it lives under.
+      */}
+      <div className="px-3 pt-3">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("cortex:open-palette"))}
+          className="w-full flex items-center gap-2 rounded-lg border px-2.5 h-9 text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-accent/50 transition-colors"
+        >
+          <Search className="h-3.5 w-3.5 shrink-0" />
+          <span className="flex-1 text-left">Search modules…</span>
+          <kbd className="text-[10px] rounded border px-1 py-0.5 font-sans opacity-60">⌘K</kbd>
+        </button>
+      </div>
+
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
         {groups.map((g) => {
           const items = NAV.filter((n) => n.group === g);
@@ -62,11 +81,31 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
               </button>
               {isOpen && (
                 <div className="mt-0.5 mb-1 space-y-0.5">
-                  {items.map((n) => {
+                  {items.map((n, i) => {
                     const active = path === n.href;
                     const Icon = n.icon;
+                    /*
+                      Sub-headings inside the big groups. "Money" alone held 42
+                      modules — Cash Flow sat two pixels from Gratuity, and
+                      finding the TDS calculator meant reading all forty-two.
+                      A list that long is storage, not navigation.
+
+                      The heading is printed when the sub-section CHANGES rather
+                      than by grouping the array, so ordering stays exactly as
+                      nav.ts declares it and one label can never be silently
+                      dropped by a regroup.
+                    */
+                    const sub = (n as { sub?: string }).sub;
+                    const prevSub = i > 0 ? (items[i - 1] as { sub?: string }).sub : undefined;
+                    const heading = sub && sub !== prevSub ? sub : null;
                     return (
-                      <Link key={n.href} href={n.href}
+                      <div key={n.href}>
+                        {heading && (
+                          <div className="px-3 pt-3 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                            {heading}
+                          </div>
+                        )}
+                      <Link href={n.href}
                         className={cn("nav-item relative flex items-center gap-3 rounded-lg pl-3 pr-2.5 py-2 text-sm text-muted-foreground hover:text-foreground", active && "is-active")}>
                         {/* A single shared element that physically travels to the
                             newly-selected item rather than one highlight vanishing
@@ -84,6 +123,7 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
                         <Icon className="relative h-4 w-4 shrink-0" />
                         <span className="relative">{n.label}</span>
                       </Link>
+                      </div>
                     );
                   })}
                 </div>

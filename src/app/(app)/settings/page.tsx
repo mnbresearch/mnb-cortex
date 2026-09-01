@@ -9,7 +9,7 @@ import { getOrgProfile, getUserAndOrg } from "@/lib/data";
 import { updateOrgProfile, seedDemoData, clearDemoData, hasDemoData, signOut } from "@/lib/actions";
 import { APP_VERSION } from "@/lib/config";
 import { ACCENT_NAMES } from "@/lib/utils";
-import { INDUSTRIES as AGENT_INDUSTRIES } from "@/lib/agents/catalog";
+import { INDUSTRIES as AGENT_INDUSTRIES, SECTORS } from "@/lib/agents/catalog";
 import { BackupButton } from "@/components/backup-button";
 import { Database, LogOut, Building2 } from "lucide-react";
 
@@ -50,7 +50,17 @@ export default async function Settings() {
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">Industry
                   <select className={inp} name="industry" defaultValue={profile?.industry || "manufacturing"}>
-                    {AGENT_INDUSTRIES.map((o) => <option key={o.id} value={o.id}>{o.emoji} {o.name}</option>)}
+                    {/* Grouped by sector: 28 industries in one flat list is a wall
+                        of text to read past, and the one you want is never near the top. */}
+                    {SECTORS.map((sec) => {
+                      const inSector = AGENT_INDUSTRIES.filter((o) => o.sector === sec);
+                      if (!inSector.length) return null;
+                      return (
+                        <optgroup key={sec} label={sec}>
+                          {inSector.map((o) => <option key={o.id} value={o.id}>{o.emoji} {o.name}</option>)}
+                        </optgroup>
+                      );
+                    })}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">Annual revenue (Cr)

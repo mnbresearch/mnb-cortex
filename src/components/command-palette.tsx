@@ -16,7 +16,20 @@ export function CommandPalette() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setOpen((o) => !o); setQ(""); setI(0); setRecords([]); }
       if (e.key === "Escape") setOpen(false);
     };
-    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+    /*
+      The palette searches all 122 modules and was reachable ONLY by pressing
+      Ctrl/Cmd-K — a shortcut a business owner has no reason to guess. With a
+      nav this large, hiding search behind a keystroke is most of why the app
+      feels hard to navigate. The sidebar now shows a real control that fires
+      this event, so the same palette has a visible front door.
+    */
+    const openViaEvent = () => { setOpen(true); setQ(""); setI(0); setRecords([]); };
+    window.addEventListener("cortex:open-palette", openViaEvent);
+    window.addEventListener("keydown", h);
+    return () => {
+      window.removeEventListener("keydown", h);
+      window.removeEventListener("cortex:open-palette", openViaEvent);
+    };
   }, []);
 
   useEffect(() => {

@@ -59,14 +59,34 @@ await db.query("insert into organizations (id,name) values ($1,$2)", [org, "Aggr
 const thisMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString().slice(0, 10);
 const d = (daysAgo) => new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
 
+/*
+  Dates ANCHORED TO THE CURRENT MONTH, not "n days ago".
+
+  This suite used to date its orders d(1)..d(5) and compare the resulting
+  twelve-month total against the CURRENT MONTH's bucket. Those are different
+  quantities, and the comparison passed only because on most days of the month
+  "five days ago" happens to still be this month. Run it on the 1st — as
+  happened on 1 September — and the fixtures land in the previous month, the
+  current bucket is correctly 0, and the suite reports that "the database and
+  the app DISAGREE" when in fact the database was right and the test was
+  comparing the wrong two numbers.
+
+  A test that passes on 27 days out of 30 for a reason unrelated to what it
+  claims to check is worse than no test. Anchoring to day 1 of the current month
+  is valid on every calendar date, so the assertion means the same thing every
+  day of the year.
+*/
+const inThisMonth = (dayOffset = 0) =>
+  new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1 + dayOffset)).toISOString().slice(0, 10);
+
 /* --- sales orders, including every awkward case ------------------------- */
 const orders = [
-  { amount: 100000, status: "won",  order_date: d(1) },     // counts
-  { amount: 250000, status: "won",  order_date: d(2) },     // counts
-  { amount: 999999, status: "lost", order_date: d(3) },     // excluded entirely
-  { amount: 500000, status: "",     order_date: d(4) },     // counted as an order, NOT revenue
-  { amount: 400000, status: "open", order_date: d(5) },     // counted as an order, NOT revenue
-  { amount: 777777, status: "won",  order_date: d(500) },   // outside the 12-month window
+  { amount: 100000, status: "won",  order_date: inThisMonth(0) },  // counts
+  { amount: 250000, status: "won",  order_date: inThisMonth(0) },  // counts
+  { amount: 999999, status: "lost", order_date: inThisMonth(0) },  // excluded entirely
+  { amount: 500000, status: "",     order_date: inThisMonth(0) },  // an order, NOT revenue
+  { amount: 400000, status: "open", order_date: inThisMonth(0) },  // an order, NOT revenue
+  { amount: 777777, status: "won",  order_date: d(500) },          // outside the 12-month window
 ];
 for (const o of orders) {
   await db.query("insert into sales_orders (org_id, amount, status, order_date) values ($1,$2,$3,$4)",
@@ -128,8 +148,15 @@ const inWindow = (iso) => {
   return t >= new Date(new Date().setUTCMonth(new Date().getUTCMonth() - 11, 1)).setUTCHours(0, 0, 0, 0);
 };
 const windowed = orders.filter((o) => o.status !== "lost" && inWindow(o.order_date));
-const jsRevenue = windowed.filter((o) => o.status === "won").reduce((s, o) => s + o.amount, 0);
-const jsOrders = windowed.length;
+
+/*
+  Compared against the CURRENT MONTH bucket below, so it must be computed for
+  the current month too. Summing the whole twelve-month window here and calling
+  it "this month" is the bug this suite shipped with.
+*/
+const thisMonthOrders = windowed.filter((o) => o.order_date >= thisMonth);
+const jsRevenue = thisMonthOrders.filter((o) => o.status === "won").reduce((s, o) => s + o.amount, 0);
+const jsOrders = thisMonthOrders.length;
 const jsUnset = windowed.filter((o) => !o.status).length;
 
 const open = invoices.filter((i) => i.status !== "paid");

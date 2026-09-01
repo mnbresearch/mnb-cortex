@@ -15,37 +15,50 @@ export type Agent = {
   exports: string[];     // pdf | md | copy
 };
 
-export type Industry = { id: string; name: string; emoji: string; blurb: string };
+/** `sector` groups the picker: 28 industries in one flat dropdown is a wall of
+ *  text to scan. Used by Settings to render <optgroup> headings. */
+export type Industry = { id: string; name: string; emoji: string; blurb: string; sector: string };
+
+/** Sector display order for the picker. */
+export const SECTORS = [
+  "Manufacturing & trade",
+  "Retail & consumer",
+  "Food, travel & events",
+  "Services & professional",
+  "Health & wellness",
+  "Property, transport & agri",
+  "Other",
+] as const;
 
 export const INDUSTRIES: Industry[] = [
-  { id: "jewellery", name: "Jewellery", emoji: "💍", blurb: "Design, merchandise & sell fine jewellery." },
-  { id: "fashion", name: "Fashion & Apparel", emoji: "👗", blurb: "Collections, catalogues & lookbooks." },
-  { id: "restaurant", name: "Restaurant & F&B", emoji: "🍽️", blurb: "Menus, dishes & food marketing." },
-  { id: "realestate", name: "Real Estate", emoji: "🏠", blurb: "Listings, brochures & buyer outreach." },
-  { id: "retail", name: "Retail & D2C", emoji: "🛒", blurb: "Product listings, bundles & campaigns." },
-  { id: "beauty", name: "Beauty & Salon", emoji: "💅", blurb: "Services, packages & promos." },
-  { id: "automotive", name: "Automotive", emoji: "🚗", blurb: "Vehicle listings, finance & service." },
-  { id: "manufacturing", name: "Manufacturing", emoji: "🏭", blurb: "RFQs, specs & SOPs." },
-  { id: "healthcare", name: "Clinic & Healthcare", emoji: "🩺", blurb: "Patient comms & practice marketing." },
-  { id: "education", name: "Education & Coaching", emoji: "🎓", blurb: "Courses, lessons & assessments." },
-  { id: "fitness", name: "Fitness & Gym", emoji: "💪", blurb: "Plans, classes & transformations." },
-  { id: "travel", name: "Travel & Hospitality", emoji: "✈️", blurb: "Itineraries, packages & reviews." },
-  { id: "logistics", name: "Logistics & Transport", emoji: "🚚", blurb: "Quotes, SLAs & notices." },
-  { id: "agri", name: "Agriculture", emoji: "🌾", blurb: "Advisory, listings & buyer outreach." },
-  { id: "services", name: "Services & Agencies", emoji: "💼", blurb: "Proposals, projects & client updates." },
-  { id: "professional-services", name: "Professional Services (CA, legal, consulting)", emoji: "⚖️", blurb: "Engagements, advisories & billing." },
-  { id: "distribution", name: "Distribution & Wholesale", emoji: "📦", blurb: "Dealer networks, credit & stock." },
-  { id: "pharmacy", name: "Pharmacy & Wellness", emoji: "💊", blurb: "OTC info, store promos & comms." },
-  { id: "electronics", name: "Electronics & Appliances", emoji: "📱", blurb: "Listings, specs & comparisons." },
-  { id: "furniture", name: "Furniture & Decor", emoji: "🛋️", blurb: "Catalogues, room styling & offers." },
-  { id: "grocery", name: "Grocery & Kirana", emoji: "🥫", blurb: "Offers, combos & WhatsApp orders." },
-  { id: "events", name: "Events & Wedding", emoji: "🎉", blurb: "Packages, proposals & planning." },
-  { id: "photography", name: "Photography & Studio", emoji: "📷", blurb: "Packages, galleries & enquiries." },
-  { id: "petcare", name: "Pet Care", emoji: "🐾", blurb: "Services, products & reminders." },
-  { id: "interior", name: "Interior Design", emoji: "🎨", blurb: "Moodboards, proposals & pitches." },
-  { id: "printing", name: "Printing & Signage", emoji: "🖨️", blurb: "Quotes, product lists & artwork briefs." },
-  { id: "footwear", name: "Footwear", emoji: "👟", blurb: "Listings, sizing & campaigns." },
-  { id: "generic", name: "Any Business", emoji: "✨", blurb: "Works for every business type." },
+  { id: "jewellery", name: "Jewellery", emoji: "💍", blurb: "Design, merchandise & sell fine jewellery.", sector: "Manufacturing & trade" },
+  { id: "fashion", name: "Fashion & Apparel", emoji: "👗", blurb: "Collections, catalogues & lookbooks.", sector: "Manufacturing & trade" },
+  { id: "restaurant", name: "Restaurant & F&B", emoji: "🍽️", blurb: "Menus, dishes & food marketing.", sector: "Food, travel & events" },
+  { id: "realestate", name: "Real Estate", emoji: "🏠", blurb: "Listings, brochures & buyer outreach.", sector: "Property, transport & agri" },
+  { id: "retail", name: "Retail & D2C", emoji: "🛒", blurb: "Product listings, bundles & campaigns.", sector: "Retail & consumer" },
+  { id: "beauty", name: "Beauty & Salon", emoji: "💅", blurb: "Services, packages & promos.", sector: "Health & wellness" },
+  { id: "automotive", name: "Automotive", emoji: "🚗", blurb: "Vehicle listings, finance & service.", sector: "Property, transport & agri" },
+  { id: "manufacturing", name: "Manufacturing", emoji: "🏭", blurb: "RFQs, specs & SOPs.", sector: "Manufacturing & trade" },
+  { id: "healthcare", name: "Clinic & Healthcare", emoji: "🩺", blurb: "Patient comms & practice marketing.", sector: "Health & wellness" },
+  { id: "education", name: "Education & Coaching", emoji: "🎓", blurb: "Courses, lessons & assessments.", sector: "Services & professional" },
+  { id: "fitness", name: "Fitness & Gym", emoji: "💪", blurb: "Plans, classes & transformations.", sector: "Health & wellness" },
+  { id: "travel", name: "Travel & Hospitality", emoji: "✈️", blurb: "Itineraries, packages & reviews.", sector: "Food, travel & events" },
+  { id: "logistics", name: "Logistics & Transport", emoji: "🚚", blurb: "Quotes, SLAs & notices.", sector: "Property, transport & agri" },
+  { id: "agri", name: "Agriculture", emoji: "🌾", blurb: "Advisory, listings & buyer outreach.", sector: "Property, transport & agri" },
+  { id: "services", name: "Services & Agencies", emoji: "💼", blurb: "Proposals, projects & client updates.", sector: "Services & professional" },
+  { id: "professional-services", name: "Professional Services (CA, legal, consulting)", emoji: "⚖️", blurb: "Engagements, advisories & billing.", sector: "Services & professional" },
+  { id: "distribution", name: "Distribution & Wholesale", emoji: "📦", blurb: "Dealer networks, credit & stock.", sector: "Manufacturing & trade" },
+  { id: "pharmacy", name: "Pharmacy & Wellness", emoji: "💊", blurb: "OTC info, store promos & comms.", sector: "Retail & consumer" },
+  { id: "electronics", name: "Electronics & Appliances", emoji: "📱", blurb: "Listings, specs & comparisons.", sector: "Manufacturing & trade" },
+  { id: "furniture", name: "Furniture & Decor", emoji: "🛋️", blurb: "Catalogues, room styling & offers.", sector: "Manufacturing & trade" },
+  { id: "grocery", name: "Grocery & Kirana", emoji: "🥫", blurb: "Offers, combos & WhatsApp orders.", sector: "Retail & consumer" },
+  { id: "events", name: "Events & Wedding", emoji: "🎉", blurb: "Packages, proposals & planning.", sector: "Food, travel & events" },
+  { id: "photography", name: "Photography & Studio", emoji: "📷", blurb: "Packages, galleries & enquiries.", sector: "Services & professional" },
+  { id: "petcare", name: "Pet Care", emoji: "🐾", blurb: "Services, products & reminders.", sector: "Retail & consumer" },
+  { id: "interior", name: "Interior Design", emoji: "🎨", blurb: "Moodboards, proposals & pitches.", sector: "Services & professional" },
+  { id: "printing", name: "Printing & Signage", emoji: "🖨️", blurb: "Quotes, product lists & artwork briefs.", sector: "Manufacturing & trade" },
+  { id: "footwear", name: "Footwear", emoji: "👟", blurb: "Listings, sizing & campaigns.", sector: "Manufacturing & trade" },
+  { id: "generic", name: "Any Business", emoji: "✨", blurb: "Works for every business type.", sector: "Other" },
 ];
 
 const A = (industry: string, id: string, name: string, desc: string, inputs: AgentInput[], prompt: string, kind: AgentKind = "reasoning"): Agent =>
