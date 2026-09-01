@@ -3,6 +3,7 @@
 // brand (and competitors) get recommended, scores it, and drafts the fix.
 import "server-only";
 import { geminiTextModels } from "@/lib/ai/models";
+import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
 
 export type EngineResult = {
   prompt: string;
@@ -37,7 +38,7 @@ async function askEngine(prompt: string): Promise<{ answer: string; engine: stri
           system_instruction: { parts: [{ text: NEUTRAL_SYSTEM }] },
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           tools: [{ google_search: {} }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 900 },
+          generationConfig: generationConfig(STANDARD, { temperature: 0.3 }),
         }),
       });
       if (r.ok) {
@@ -134,7 +135,7 @@ A 3–4 sentence description of ${brand}, optimised to be quoted.
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ system_instruction: { parts: [{ text: sys }] }, contents: [{ role: "user", parts: [{ text: ask }] }], generationConfig: { temperature: 0.5, maxOutputTokens: 1200 } }),
+        body: JSON.stringify({ system_instruction: { parts: [{ text: sys }] }, contents: [{ role: "user", parts: [{ text: ask }] }], generationConfig: generationConfig(STANDARD, { temperature: 0.5 }) }),
       });
       if (r.ok) { const j = await r.json(); const t = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim(); if (t) return t; }
     } catch { /* fall through */ }

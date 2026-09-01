@@ -1,6 +1,7 @@
 // Act-on-your-behalf — Cortex drafts a ready-to-send message; the user approves & sends.
 import "server-only";
 import { geminiTextModels } from "@/lib/ai/models";
+import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
 
 export type Draft = { subject: string; body: string };
 
@@ -40,7 +41,7 @@ Return JSON: {"subject": "...", "body": "..."}`;
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ system_instruction: { parts: [{ text: SYS }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.6, maxOutputTokens: 900, responseMimeType: "application/json" } }),
+        body: JSON.stringify({ system_instruction: { parts: [{ text: SYS }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: generationConfig(FAST, { temperature: 0.6, responseMimeType: "application/json" }) }),
       });
       if (r.ok) { const j = await r.json(); const t = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(""); const p = safeJson(t); if (p?.body) return { subject: String(p.subject || "").slice(0, 200), body: String(p.body || "") }; }
     } catch { /* fall through */ }

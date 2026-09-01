@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { getUserAndOrg } from "@/lib/data";
+import { getUserAndOrg, getOrgProfile } from "@/lib/data";
 import { resolveAgent, fillPrompt, runReasoning, saveRun } from "@/lib/agents/runtime";
 import { recallContext } from "@/lib/memory";
 import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, imageGenGate } from "@/lib/credits";
 import { hasImageProvider, generateImages } from "@/lib/ai/image";
+import { buildImagePrompt } from "@/lib/ai/visual-prompts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,16 +21,22 @@ export const dynamic = "force-dynamic";
  */
 export const maxDuration = 60;
 
-function imagePrompt(name: string, id: string, inputs: Record<string, string>, hasInput: boolean): string {
+/*
+  Image prompts are now composed in lib/ai/visual-prompts.ts, which adds the
+  camera, lighting and composition language these models actually respond to,
+  and varies it by industry — a silver ring and a plate of biryani need opposite
+  treatments. The four one-line templates that used to live here produced the
+  model's default look: a flatly lit object on grey.
+*/
+function imagePrompt(agentId: string, inputs: Record<string, string>, hasInput: boolean, industry?: string | null, revision?: string): string {
   const brief = Object.values(inputs).filter(Boolean).join(". ");
-  const suffix = id.split(".").pop() || "";
-  const base: Record<string, string> = {
-    mockup3d: `Create a photorealistic 3D product mockup. ${brief}. Studio lighting, seamless background, sharp detail, e-commerce ready.`,
-    materialswap: `${hasInput ? "Edit the provided product image: " : ""}${brief}. Change only the material/metal/colour realistically; keep the shape, proportions and composition identical.`,
-    enhance: `${hasInput ? "Enhance the provided photo: " : ""}remove blur, fix lighting, boost clarity and detail while keeping it natural. ${brief}`,
-    cleanup: `${hasInput ? "Take the provided product photo and " : ""}remove the background, place the product on a clean ${brief || "white"} studio backdrop with soft shadow. Professional catalogue look.`,
-  };
-  return base[suffix] || `Produce a high-quality product image. ${brief}. Clean, professional, e-commerce ready.`;
+  return buildImagePrompt({
+    kind: agentId.split(".").pop() || "",
+    brief,
+    industry,
+    hasInputImage: hasInput,
+    revision,
+  });
 }
 
 export async function POST(req: Request) {
@@ -63,7 +70,9 @@ export async function POST(req: Request) {
     }
     const gate = await chargeForMode("agent_image");
     if (!gate.ok) { const d = creditDenial(gate, "Generating an image"); return NextResponse.json(d.body, { status: d.status }); }
-    const prompt = imagePrompt(agent.name, agent.id, inputs, Boolean(b.image)) + (b.reviseNote ? ` Revision: ${b.reviseNote}.` : "");
+    // The workspace's industry decides the lighting and styling direction.
+  const orgProfile = await getOrgProfile().catch(() => null);
+  const prompt = imagePrompt(agent.id, inputs, Boolean(b.image), (orgProfile as any)?.industry, b.reviseNote ? String(b.reviseNote) : undefined);
     const { images, note } = await generateImages(prompt, b.image ? String(b.image) : undefined);
     if (!images.length) {
       return NextResponse.json({ ok: false, error: note === "empty" ? "The image model returned no image — try a clearer brief, or set GEMINI_IMAGE_MODEL to a valid image model." : `Image provider error: ${note}` }, { status: 200 });

@@ -20,7 +20,7 @@ import {
   Award, AlarmClock, Radar,
   HeartHandshake, Umbrella, CalendarDays, Repeat2, House,
   Network, Telescope
-, KeyRound} from "lucide-react";
+, KeyRound, Store} from "lucide-react";
 
 export const NAV = [
   { href: "/dashboard", label: "Business Health", icon: LayoutDashboard, group: "Overview" },
@@ -42,6 +42,7 @@ export const NAV = [
   { href: "/hr", label: "HR", icon: Users, group: "Intelligence", sub: "Your data" },
   { href: "/market", label: "Market", icon: Globe, group: "Intelligence", sub: "Marketing" },
   { href: "/visibility", label: "AI Visibility", icon: Radar, group: "Intelligence", sub: "Marketing" },
+  { href: "/gbp", label: "Google Business Profile", icon: Store, group: "Intelligence", sub: "Marketing" },
   { href: "/customers", label: "Customers", icon: Contact, group: "Intelligence", sub: "Your data" },
   { href: "/accounts", label: "Account Plans", icon: UserSearch, group: "Intelligence", sub: "Customers & growth" },
   { href: "/funnel", label: "Marketing Funnel", icon: Filter, group: "Intelligence", sub: "Marketing" },

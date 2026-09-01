@@ -90,6 +90,11 @@ export const CREDIT_COSTS: Record<string, number> = {
   contract: 6, account: 5, critique: 3, playbook: 6,
   proposal: 6, valuation: 6, broadcast: 3, sop: 4, costs: 4, loan: 3, vendor: 3,
   deepdive: 12, visibility: 10, bankstatement: 8, gst: 8, act: 2,
+  // Google Business Profile content: a short single-pass generation on the FAST
+  // profile, so it costs us about what `brief` does and is priced to match.
+  // Deliberately cheap — it is the reason a shop owner opens Cortex weekly, and
+  // the habit is worth more than the three credits.
+  gbp: 3,
   // Generation is where real money is spent. See COGS above: an image costs us
   // about ₹3.74 and an 8-second Veo Fast clip about ₹77, so these two are
   // priced for a ~4.7x margin at the ₹0.90 credit floor. Video was 40 credits

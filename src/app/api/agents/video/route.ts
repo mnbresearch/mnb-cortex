@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { getUserAndOrg } from "@/lib/data";
+import { getUserAndOrg, getOrgProfile } from "@/lib/data";
 import { creditDenial, requireWorkspace } from "@/lib/api-guard";
 import { chargeForMode, refundForMode, videoGenGate } from "@/lib/credits";
 import { startVideo, pollVideo, fetchVideo, hasVideoProvider } from "@/lib/ai/video";
+import { buildVideoPrompt } from "@/lib/ai/visual-prompts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,11 +52,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Describe the video you want." }, { status: 200 });
   }
 
-  const started = await startVideo(
-    prompt,
-    b.image ? String(b.image) : undefined,
-    b.aspect === "9:16" ? "9:16" : "16:9",
-  );
+  /*
+    The user's sentence is a BRIEF, not a shot. Veo responds to camera, lens,
+    lighting and pacing language; handed a bare line it invents all four, which
+    is why untuned clips look like stock footage. buildVideoPrompt turns the
+    brief into a directed single-take shot, styled by the workspace's industry.
+  */
+  const aspect: "16:9" | "9:16" = b.aspect === "9:16" ? "9:16" : "16:9";
+  const orgProfile = await getOrgProfile().catch(() => null);
+  const directed = buildVideoPrompt({
+    brief: prompt,
+    industry: (orgProfile as any)?.industry,
+    aspect,
+    hasInputImage: Boolean(b.image),
+  });
+
+  const started = await startVideo(directed, b.image ? String(b.image) : undefined, aspect);
 
   if (!started.ok) {
     // Nothing was generated — never bill for it.

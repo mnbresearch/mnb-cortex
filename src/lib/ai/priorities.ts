@@ -1,5 +1,6 @@
 import "server-only";
 import { geminiTextModels } from "@/lib/ai/models";
+import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
 
 // "What should I do next?" — the guided command layer that turns 130+ tools into
 // the 3–5 that matter for THIS business right now. Grounded in the workspace's
@@ -61,7 +62,7 @@ async function callJson(prompt: string, sys: string): Promise<any[] | null> {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ system_instruction: { parts: [{ text: sys }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 1024, responseMimeType: "application/json" } }),
+        body: JSON.stringify({ system_instruction: { parts: [{ text: sys }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: generationConfig(FAST, { temperature: 0.2, responseMimeType: "application/json" }) }),
       });
       if (r.ok) { const j = await r.json(); const t = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(""); const parsed = safeArray(t); if (parsed) return parsed; }
     } catch { /* fall through */ }

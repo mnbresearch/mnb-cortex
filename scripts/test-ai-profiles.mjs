@@ -26,7 +26,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, mkdtempSync } from "node:fs";
+import { readFileSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,7 +39,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
   source rather than imported — this still tests what ships, and cannot drift,
   because a rename breaks the parse and fails the suite.
 */
-const SRC = readFileSync(join(ROOT, "src", "lib", "ai", "cortex.ts"), "utf8");
+const SRC = readFileSync(join(ROOT, "src", "lib", "ai", "generation.ts"), "utf8");
+const CORTEX = readFileSync(join(ROOT, "src", "lib", "ai", "cortex.ts"), "utf8");
 
 let pass = 0, fail = 0;
 const check = (label, cond) => {
@@ -115,17 +116,65 @@ check("profileFor defaults to STANDARD for an unlisted mode",
 
 console.log("\nThe 400 fallback that stops this becoming an outage");
 check("a rejected thinkingConfig is retried without it",
-  /thinkingUnsupported = true/.test(SRC) && /buildBody\(false\)/.test(SRC));
+  /thinkingUnsupported = true/.test(CORTEX) && /buildBody\(false\)/.test(CORTEX));
 check("the retry is remembered, so the probe is paid once not per call",
-  /let thinkingUnsupported = false/.test(SRC));
+  /let thinkingUnsupported = false/.test(CORTEX));
 check("an empty model response is logged with its finishReason",
-  /finishReason/.test(SRC));
+  /finishReason/.test(CORTEX) || /finishReason/.test(SRC));
 
 console.log("\nThe profile is actually threaded to the request");
-check("generateFor passes a per-mode profile", /runCortex\(\[\{ role: "user", content: user \}\], context, profileFor\(mode\)\)/.test(SRC));
-check("runOnce receives it", /runOnce\(provider: string, messages: Msg\[\], context: string, profile: GenProfile\)/.test(SRC));
-check("the Gemini body uses it", /maxOutputTokens: profile\.maxOutputTokens/.test(SRC));
+check("generateFor passes a per-mode profile", /runCortex\(\[\{ role: "user", content: user \}\], context, profileFor\(mode\)\)/.test(CORTEX));
+check("runOnce receives it", /runOnce\(provider: string, messages: Msg\[\], context: string, profile: GenProfile\)/.test(CORTEX));
+check("the Gemini body uses it", /generationConfig\(profile, \{ temperature/.test(CORTEX));
 check("thinkingConfig carries the profile's budget", /thinkingBudget: profile\.thinkingBudget/.test(SRC));
+
+/* ========================================================================= */
+console.log("\nEVERY Gemini call site must use the shared budget, not its own");
+/* ========================================================================= */
+{
+  /*
+    cortex.ts was fixed first, and SIX other files turned out to be making their
+    own Gemini requests with hand-written config and no thinking budget:
+    visibility (900 and 1200), act (900), priorities (1024), gst (2048),
+    bankstatement (4096).
+
+    visibility is the one that does real damage. It asks an answer engine
+    whether a business gets recommended and then looks for the brand in the
+    reply. An empty reply contains no brand, so the product reports "you are not
+    recommended" — a false negative on the number that feature exists to
+    produce, indistinguishable from a true one.
+  */
+  const dir = join(ROOT, "src", "lib", "ai");
+  const files = readdirSync(dir).filter((f) => f.endsWith(".ts") && f !== "generation.ts" && f !== "models.ts");
+  const offenders = [];
+  for (const f of files) {
+    const src = readFileSync(join(dir, f), "utf8");
+    if (!/generativelanguage\.googleapis\.com|geminiUrl/.test(src)) continue;   // not a Gemini caller
+    // A literal token cap means the call invented its own budget.
+    if (/maxOutputTokens:\s*\d+/.test(src)) offenders.push(f);
+  }
+  if (offenders.length) {
+    fail++;
+    console.log(`  FAIL  ${offenders.length} Gemini caller(s) still hand-roll their own budget:`);
+    for (const o of offenders) console.log(`          lib/ai/${o}`);
+  } else {
+    pass++;
+    console.log("  ok    no Gemini caller in lib/ai hand-rolls its own token budget");
+  }
+
+  const gen = SRC;
+  check("EXTRACT exists for document parsing, where output matters more than thinking",
+    /export const EXTRACT: GenProfile/.test(gen));
+  check("...and it leaves far more room to answer than to think",
+    (() => {
+      const m = gen.match(/EXTRACT: GenProfile = \{ maxOutputTokens: (\d+), thinkingBudget: (\d+) \}/);
+      return m && Number(m[1]) >= Number(m[2]) * 4;
+    })());
+  check("generationConfig always attaches a thinking budget",
+    /thinkingConfig: \{ thinkingBudget: profile\.thinkingBudget \}/.test(gen));
+  check("callers cannot override the budget away via `extra`",
+    /\.\.\.extra,\n\s*maxOutputTokens/.test(gen));
+}
 
 console.log("");
 if (fail) { console.log(`${fail} FAILED, ${pass} passed\n`); process.exit(1); }

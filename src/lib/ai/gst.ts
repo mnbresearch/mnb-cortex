@@ -2,6 +2,7 @@
 // Figures are extracted by the model; every ratio, split and check is computed in code.
 import "server-only";
 import { geminiTextModels } from "@/lib/ai/models";
+import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
 
 export type GstCheck = { label: string; ok: boolean };
 export type GstSignal = { label: string; tone: "good" | "warn" | "bad" | "info"; detail: string };
@@ -58,7 +59,7 @@ async function callJson(prompt: string): Promise<any | null> {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ system_instruction: { parts: [{ text: SYS }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 2048, responseMimeType: "application/json" } }),
+        body: JSON.stringify({ system_instruction: { parts: [{ text: SYS }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: generationConfig(EXTRACT, { temperature: 0.1, responseMimeType: "application/json" }) }),
       });
       if (r.ok) { const j = await r.json(); const t = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(""); const parsed = safeJson(t); if (parsed) return parsed; }
     } catch { /* fall through */ }

@@ -4,6 +4,7 @@
 import "server-only";
 import { anyEnvKey, envKey } from "@/lib/env";
 import { geminiTextModels, geminiUrl } from "@/lib/ai/models";
+import { generationConfig, profileFor, STANDARD, type GenProfile } from "@/lib/ai/generation";
 
 export const COO_SYSTEM = `You are MNB Cortex — the AI Chief Operating Officer for an SME owner.
 You are NOT a chatbot or a dashboard. You behave like a McKinsey/BCG-grade operator who has read all of the company's data.
@@ -23,65 +24,15 @@ type Msg = { role: "user" | "assistant"; content: string };
  */
 let thinkingUnsupported = false;
 
-/* ---------------------------------------------------------------------------
-   GENERATION PROFILES — why the AI took 28-39 seconds to write three sentences.
-
-   Measured against a real workspace, the dashboard pulse took 27.9s and 38.9s.
-   The prompt for it asks for "a 3-sentence executive pulse". Three sentences.
-
-   The cause is that current Gemini Flash models THINK before they answer, and
-   nothing here told them not to. Every call — a three-sentence pulse and a
-   full strategic deep dive alike — was sent with the same config and an
-   unbounded thinking budget, so the model reasoned at length before emitting a
-   word the user would ever see.
-
-   Two things follow, and the second is a correctness bug rather than a speed
-   one:
-
-   1. THINKING TOKENS ARE BILLED AGAINST maxOutputTokens. With the old cap of
-      1024, a model that thinks for 1024 tokens has nothing left and returns an
-      EMPTY response. That is a documented failure mode of Gemini 2.5/3 Flash,
-      not a theoretical one, and it would present as the AI silently returning
-      nothing on exactly the hardest questions — the ones worth thinking about.
-      The caps below are raised so the answer always has room after the
-      thinking is paid for.
-
-   2. Not every question deserves the same deliberation. A pulse wants speed; a
-      deep dive or a scenario stress-test genuinely benefits from reasoning.
-      So the budget is per-mode instead of one setting for everything.
-
-   NOTE ON thinkingBudget = 0: Gemini 3 Flash and Flash-Lite do NOT support
-   turning thinking off completely, so the fast profile asks for a small budget
-   rather than zero. Asking for zero on a model that refuses it would be a 400
-   on every call — see the fallback in runOnce().
-   --------------------------------------------------------------------------- */
-export type GenProfile = { maxOutputTokens: number; thinkingBudget: number };
-
-/** Short, factual, wanted now. */
-const FAST: GenProfile = { maxOutputTokens: 2048, thinkingBudget: 128 };
-/** The default: a considered answer without an essay's worth of deliberation. */
-const STANDARD: GenProfile = { maxOutputTokens: 3072, thinkingBudget: 512 };
-/** Multi-step reasoning where the thinking IS the value. */
-const DEEP: GenProfile = { maxOutputTokens: 4096, thinkingBudget: 2048 };
-
-const MODE_PROFILE: Record<string, GenProfile> = {
-  pulse: FAST,          // 3 sentences on the dashboard — the one users wait on
-  actions: FAST,
-  brief: FAST,
-  critique: FAST,
-  account: FAST,
-  outreach: FAST,
-  scenario: DEEP,       // stress-testing a decision
-  forecast: DEEP,
-  strategy: DEEP,
-  investor: DEEP,
-  board: DEEP,
-  valuation: DEEP,
-};
-
-export function profileFor(mode: string): GenProfile {
-  return MODE_PROFILE[mode] || STANDARD;
-}
+/*
+  The profiles moved to lib/ai/generation.ts. They were defined here first,
+  and then SIX other files turned out to be making their own Gemini calls with
+  their own hand-written config and no thinking budget at all — including
+  visibility.ts, where an empty response makes the product report that an answer
+  engine does not recommend the business. One definition, imported everywhere,
+  is the only version of this that stays true.
+*/
+export type { GenProfile } from "@/lib/ai/generation";
 
 /**
  * Every configured provider, best first — not just the first match.
@@ -190,11 +141,9 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
       const buildBody = (withThinking: boolean) => JSON.stringify({
         system_instruction: { parts: [{ text: sys }] },
         contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: profile.maxOutputTokens,
-          ...(withThinking ? { thinkingConfig: { thinkingBudget: profile.thinkingBudget } } : {}),
-        },
+        generationConfig: withThinking
+          ? generationConfig(profile, { temperature: 0.4 })
+          : { temperature: 0.4, maxOutputTokens: profile.maxOutputTokens },
       });
       // Walk the candidate models: a 404 means that name was retired, so try
       // the next one rather than taking the whole product down.

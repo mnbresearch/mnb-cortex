@@ -320,6 +320,13 @@ function visualAgents(ind: Industry): Agent[] {
     v("materialswap", "Material Swap", "Swap metals, colours or materials in a product image.", [{ key: "brief", label: "What to swap", type: "text" }], "image"),
     v("enhance", "Sharpen & Upscale", "Deblur and upscale a phone-shot product photo.", [{ key: "brief", label: "Notes (optional)", type: "text" }], "image"),
     v("cleanup", "Catalogue Photo Cleanup", "Auto background removal & clean catalogue shots.", [{ key: "brief", label: "Background style", type: "text" }], "image"),
+    /*
+      Posters are the thing a shop owner asks for most often and had no agent
+      for — festival offers, a new arrival, a weekend deal. The prompt builder
+      already understood a "poster" kind, styled by industry and with space
+      deliberately left for a headline; nothing was reaching it.
+    */
+    v("poster", "Offer Poster Designer", "Design a promo poster for an offer, festival or launch.", [{ key: "brief", label: "What is the poster for?", type: "textarea", placeholder: "Diwali offer, 20% off gold making charges, valid till 5 Nov" }], "image"),
     v("ugcvideo", "UGC Video Maker", "Turn a product into a short UGC video ad.", [{ key: "brief", label: "Ad concept / script", type: "textarea" }], "video"),
   ];
   // Visual-heavy industries get the full set; others get photo cleanup only.

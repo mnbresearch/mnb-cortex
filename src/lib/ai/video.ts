@@ -1,4 +1,5 @@
 import "server-only";
+import { veoParameters } from "@/lib/ai/visual-prompts";
 
 /**
  * Video generation via Google Veo, on the same GEMINI_API_KEY that already
@@ -65,7 +66,7 @@ export async function startVideo(prompt: string, imageDataUrl?: string, aspect: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instances: [instance],
-          parameters: { aspectRatio: aspect, personGeneration: "allow_adult" },
+          parameters: veoParameters(aspect),
         }),
       });
       const j = await r.json().catch(() => ({}));
