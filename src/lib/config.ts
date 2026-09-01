@@ -77,32 +77,66 @@ export function planPrice(p: Plan, cur: CurrencyCode, annual: boolean): number |
 // ---- AI credit metering ----------------------------------------------------
 // What each AI action costs, in credits. Heavier generations cost more.
 export const CREDIT_COSTS: Record<string, number> = {
-  // 2 credits, not 1. The 1-credit price assumed gemini-2.5-flash at ₹0.22 a
-  // call — but that model 404s on our key, so calls land on a model costing
-  // ₹0.40-0.88. At 1 credit (₹0.90 at the floor) chat was running at roughly
-  // break-even, and it is by far the highest-volume action. At 2 credits it
-  // clears 4x against the realistic model and stays positive even against the
-  // dearest one.
-  chat: 2, pulse: 1, ask: 2,
-  document: 5, meeting: 4, market: 5, strategy: 6,
-  report: 10, forecast: 8, board: 10, investor: 6, brief: 3,
-  marketing: 5, competitor: 5, negotiate: 4, hiring: 4,
-  contract: 6, account: 5, critique: 3, playbook: 6,
-  proposal: 6, valuation: 6, broadcast: 3, sop: 4, costs: 4, loan: 3, vendor: 3,
-  deepdive: 12, visibility: 10, bankstatement: 8, gst: 8, act: 2,
-  // Google Business Profile content: a short single-pass generation on the FAST
-  // profile, so it costs us about what `brief` does and is priced to match.
-  // Deliberately cheap — it is the reason a shop owner opens Cortex weekly, and
-  // the habit is worth more than the three credits.
-  gbp: 3,
-  // Generation is where real money is spent. See COGS above: an image costs us
-  // about ₹3.74 and an 8-second Veo Fast clip about ₹77, so these two are
-  // priced for a ~4.7x margin at the ₹0.90 credit floor. Video was 40 credits
-  // — roughly ₹36 of revenue against ₹306 of Veo Standard billing, a ₹270 loss
-  // on every single clip, and up to ₹3.4 lakh a month from one Business
-  // account. It is the one number in this file that could have bankrupted the
-  // product, so it does not get changed without redoing the arithmetic.
-  agent_image: 20, agent_video: 400,
+  /*
+    REPRICED against the TRUE credit floor. See lib/pricing-model.ts.
+
+    The previous numbers were computed at "the ₹0.90 credit floor", taking the
+    cheapest credit PACK as the worst case. But credits also arrive through
+    PLANS, and the plans were far cheaper per credit — AI COO annual worked out
+    at ₹0.556. Every margin in this file was therefore 1.62x too generous, and
+    measured properly, 18 of 35 actions were LOSS-MAKING on an AI COO annual
+    account: chat at -125%, the dashboard pulse at -227%, AI Visibility at -116%.
+    Those are the highest-volume actions in the product, sold to its largest
+    customer, below cost.
+
+    Two things were changed together, because changing either alone does not
+    work: PLAN_CREDITS was reduced so that no plan sells a credit below ₹0.90,
+    and these costs were set from measured COGS at that floor.
+
+    Each number is ceil(COGS / (1 - 0.85) / 0.90) — an 85% target, above the 80%
+    minimum the margin test enforces, so a modest change in model pricing or the
+    rupee does not immediately put an action underwater.
+
+    Worst-case COGS per call, at the POST-promotional model price:
+      FAST      2,048 output tokens   ₹1.81
+      STANDARD  3,072                 ₹2.51
+      DEEP      4,096                 ₹3.20
+      EXTRACT   8,192                 ₹5.96
+      image                           ₹3.74
+      video     8s Veo Fast           ₹77.00
+      visibility  several grounded searches  ₹12.00
+
+    Do not edit a number here by hand. Change the assumption in
+    pricing-model.ts and run `npm run test:margins`, which recomputes every
+    action and fails if any drops below 80%.
+  */
+
+  // FAST — short, single-pass, the user is waiting.
+  pulse: 14, actions: 14, brief: 14, critique: 14,
+  account: 14, outreach: 14, act: 14, gbp: 14,
+
+  // STANDARD — the default working answer.
+  chat: 19, ask: 19, document: 19, meeting: 19,
+  market: 19, marketing: 19, competitor: 19, negotiate: 19,
+  hiring: 19, contract: 19, playbook: 19, proposal: 19,
+  broadcast: 19, sop: 19, costs: 19, loan: 19,
+  vendor: 19,
+
+  // DEEP — multi-step reasoning, where the thinking is the value.
+  scenario: 24, forecast: 24, strategy: 24, investor: 24,
+  board: 24, valuation: 24, deepdive: 24, report: 24,
+
+  // EXTRACT — parsing a document; needs output room, not deliberation.
+  gst: 45, bankstatement: 45,
+
+  /*
+    Metered per call rather than per token. Video is the one number in this file
+    that could bankrupt the product: at 40 credits it was ₹36 of revenue against
+    ₹306 of Veo Standard billing, a ₹270 loss on every clip. It is now priced
+    against the Fast tier it actually uses, at the real floor.
+  */
+  visibility: 89,
+  agent_image: 28, agent_video: 571,
 };
 
 // Weekly image-generation caps by state. Trial = a small taste; paid tiers get more.
@@ -127,16 +161,39 @@ export const VIDEO_WEEKLY: Record<string, number> = {
   solo: 0, premium: 20, trial: 0,
 };
 
-export const DEFAULT_CREDIT_COST = 2;
+/*
+  The fallback for any mode not listed above. It was 2 — ₹1.80 of revenue at the
+  floor against ₹2.51 of COGS, so ANY action someone forgot to price lost money
+  by default. It is now the STANDARD price, which means a new action is
+  profitable from the moment it ships and is corrected downward later if it
+  turns out to be cheap, rather than the other way round.
+*/
+export const DEFAULT_CREDIT_COST = 19;
 export function creditCost(mode: string): number {
   return CREDIT_COSTS[String(mode || "").toLowerCase()] ?? DEFAULT_CREDIT_COST;
 }
 
 // Monthly included allowance per plan. -1 means unlimited.
 export const PLAN_CREDITS: Record<string, number> = {
-  starter: 1000, growth: 5000, business: 20000, aicoo: 60000, enterprise: -1,
+  /*
+    Set so that NO plan sells a credit below ₹0.90 — the floor every action in
+    CREDIT_COSTS is priced against. The old allowances broke that badly:
+
+      AI COO annual   ₹33,332/mo for 60,000 credits = ₹0.556 per credit
+      Business annual ₹12,499/mo for 20,000        = ₹0.625
+      AI COO monthly  ₹39,999/mo for 60,000        = ₹0.667
+
+    A plan that sells credits under cost turns the product's best customer into
+    its biggest loss, and does it silently — the more they use it, the worse it
+    gets. Each allowance is now floor(worst monthly price / ₹0.90), where the
+    worst case is the annual price divided by twelve.
+
+    Starter goes UP: at ₹1,499 for 1,000 credits it was selling at ₹1.50 and
+    leaving money on the table.
+  */
+  starter: 1350, growth: 4600, business: 13850, aicoo: 37000, enterprise: -1,
   // legacy ids — an old row must still resolve to something sane
-  solo: 1000, premium: 20000,
+  solo: 1350, premium: 13850,
 };
 
 /**
@@ -173,8 +230,17 @@ export function seatLimit(plan: string | null | undefined): number {
 // Buyable top-up packs (one-time). Price in INR.
 export type CreditPack = { id: string; label: string; credits: number; price: number; per: string };
 export const CREDIT_PACKS: CreditPack[] = [
-  // ₹0.90 is the FLOOR. Every credit cost above is sized for a ~4x margin at
-  // that price, so discounting past it quietly deletes the margin everywhere.
+  /*
+    ₹0.90 is THE FLOOR THE WHOLE PRODUCT IS PRICED AGAINST. Every entry in
+    CREDIT_COSTS is sized for an 85% margin at exactly this number, and
+    PLAN_CREDITS is set so no plan undercuts it either — that second half was
+    missing before, which is how AI COO annual came to sell credits at ₹0.556
+    and put 18 actions underwater.
+
+    Discounting past ₹0.90, by a cheaper pack OR by raising a plan's allowance,
+    silently deletes the margin on every action at once. npm run test:margins
+    recomputes the floor from this list and the plans, and fails if it moves.
+  */
   { id: "pack_100", label: "Taster", credits: 100, price: 149, per: "₹1.49 / credit" },
   { id: "pack_500", label: "Small", credits: 500, price: 599, per: "₹1.20 / credit" },
   { id: "pack_2k", label: "Standard", credits: 2000, price: 1999, per: "₹1.00 / credit" },
@@ -196,7 +262,7 @@ export const PLANS: Plan[] = [
     cta: "Choose Starter",
     features: [
       "1 user · 1 workspace",
-      "1,000 AI credits / month",
+      "1,350 AI credits / month",
       "Business Health Dashboard + Cortex Score",
       "AI CEO Chat grounded in your data",
       "Bank statement & GST return reader",
@@ -209,7 +275,7 @@ export const PLANS: Plan[] = [
     cta: "Choose Growth",
     features: [
       "Up to 5 users",
-      "5,000 AI credits / month",
+      "4,600 AI credits / month",
       "All 7 agent departments + 26 industries",
       "Workflow automation + approvals",
       "Cortex Memory — permanent business context",
@@ -223,7 +289,7 @@ export const PLANS: Plan[] = [
     cta: "Choose Business",
     features: [
       "Up to 20 users",
-      "20,000 AI credits / month",
+      "13,850 AI credits / month",
       "Everything in Growth",
       "Public API + outbound webhooks",
       "Custom dashboards & auto-reports",
@@ -236,7 +302,7 @@ export const PLANS: Plan[] = [
     cta: "Choose AI COO",
     features: [
       "Up to 75 users · multi-workspace",
-      "60,000 AI credits / month",
+      "37,000 AI credits / month",
       "Everything in Business",
       "WhatsApp execution (your Meta account)",
       "White-label & custom branding",

@@ -14,7 +14,7 @@
     "dump:schema": "bash scripts/dump-schema.sh",
     "test:insights": "node scripts/test-insights.mjs",
     "test:alerts": "node scripts/test-alert-rules.mjs",
-    "test": "npm run test:entitlement && npm run test:insights && npm run test:alerts && npm run test:aggregate && npm run test:cashfree && npm run test:contrast && npm run test:customer-match && npm run test:rfm && npm run test:routes && npm run test:ai-profiles && npm run test:industries && npm run test:statutory && npm run test:ux",
+    "test": "npm run test:entitlement && npm run test:insights && npm run test:alerts && npm run test:aggregate && npm run test:cashfree && npm run test:contrast && npm run test:customer-match && npm run test:rfm && npm run test:routes && npm run test:ai-profiles && npm run test:industries && npm run test:statutory && npm run test:ux && npm run test:margins",
     "test:aggregate": "node scripts/test-aggregate.mjs",
     "test:cashfree": "node scripts/test-cashfree-webhook.mjs",
     "test:contrast": "node scripts/test-contrast.mjs",
@@ -24,7 +24,8 @@
     "test:ai-profiles": "node scripts/test-ai-profiles.mjs",
     "test:industries": "node scripts/test-industries.mjs",
     "test:statutory": "node scripts/test-statutory.mjs",
-    "test:ux": "node scripts/test-ux.mjs"
+    "test:ux": "node scripts/test-ux.mjs",
+    "test:margins": "node scripts/test-margins.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
