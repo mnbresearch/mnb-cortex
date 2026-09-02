@@ -3,9 +3,7 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Brain } from "lucide-react";
 import { AIPanel } from "@/components/ai-panel";
 import { DataTable } from "@/components/data-table";
 import { getStrategyList } from "@/lib/data";
@@ -36,12 +34,9 @@ export default async function Strategy() {
         <AIPanel mode="strategy" placeholder="Why is revenue flat? Should we change pricing? How do we hit 30% growth?" cta="Build the analysis" saveMode="strategy" />
         <DataTable title="Saved analyses" rows={rows} live={live} table="strategy_docs" path="/strategy" cols={[{key:"question",label:"Question"},{key:"framework",label:"Type"},{key:"created_at",label:"Saved",kind:"date"}]} />
         <Card className="p-4">
-          <div className="flex items-center gap-2 rounded-lg border px-3 h-11">
-            <Brain className="h-4 w-4 text-muted-foreground" />
-            <input className="flex-1 bg-transparent text-sm outline-none" placeholder="Why is revenue flat? Should we change pricing?" />
-            <Button size="sm">Build analysis</Button>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-3">{frameworks.map((f) => <Badge key={f} className="border-border text-muted-foreground">{f}</Badge>)}</div>
+          <div className="text-sm font-medium">Frameworks Cortex can apply</div>
+          <div className="flex flex-wrap gap-2 mt-2">{frameworks.map((f) => <Badge key={f} className="border-border text-muted-foreground">{f}</Badge>)}</div>
+          <p className="text-xs text-muted-foreground mt-2">Name one in your question above and the analysis will use it.</p>
         </Card>
 
         <Section title="Issue tree — “Why is net profit down 7%?”" desc="MECE decomposition">
@@ -57,7 +52,7 @@ export default async function Strategy() {
           </div>
         </Section>
 
-        <Section title="SWOT" desc="Auto-generated from your live data">
+        <Section title="SWOT" desc="An example framework — run the AI panel to build this from your live data">
           <div className="grid sm:grid-cols-2 gap-3">
             {Object.entries(swot).map(([k, v]) => (
               <Card key={k} className="p-4"><div className="font-medium text-sm mb-2">{k}</div>

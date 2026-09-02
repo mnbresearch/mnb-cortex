@@ -1,5 +1,8 @@
 import "server-only";
 import { createClient, serviceClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { attachReferral } from "@/lib/referrals";
+import { REFERRAL_COOKIE } from "@/lib/referral-shared";
 import { grantCredits } from "@/lib/credits";
 import { TRIAL_CREDITS, TRIAL_DAYS } from "@/lib/config";
 
@@ -54,6 +57,22 @@ export async function ensureWorkspace(opts?: { name?: string; industry?: string 
     orgId = String((org as any).id);
     created = true;
     await svc.from("memberships").insert({ org_id: orgId, user_id: user.id, role: "owner" });
+
+    /*
+      Attach the referral, if this visitor arrived through someone's link.
+
+      Only on the `created` branch. A user JOINING an existing workspace was not
+      referred — that workspace already exists and may already have a referrer —
+      and crediting someone for it would pay out per invited colleague.
+
+      Nothing is granted here. This writes a 'pending' row; the payout happens
+      in settleOrder() when the workspace actually subscribes. Wrapped so a
+      referral problem can never fail a signup.
+    */
+    try {
+      const code = cookies().get(REFERRAL_COOKIE)?.value || null;
+      if (code) await attachReferral(orgId, code);
+    } catch { /* never block workspace creation */ }
   }
 
   // Rename a generic trigger-created workspace to the name the user actually typed.

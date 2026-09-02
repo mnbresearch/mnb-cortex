@@ -4,6 +4,7 @@ import { Topbar } from "@/components/topbar";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Send, User, Mic, BrainCircuit, Check } from "lucide-react";
 import type { ChatMessage } from "@/types";
+import { mdToHtml } from "@/lib/utils";
 
 const SUGGESTIONS = [
   "How is my business?",
@@ -87,10 +88,16 @@ export default function Chat() {
     } finally { setLoading(false); }
   }
 
-  const md = (s: string) => s
-    .replace(/^## (.*)$/gm, "<b class='block mt-2'>$1</b>")
-    .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
-    .replace(/_(.*?)_/g, "<i>$1</i>");
+  /*
+    Was a local copy of the markdown renderer with NO escaping, feeding
+    dangerouslySetInnerHTML below. Chat is the worst possible place for that:
+    it renders model output on every turn, and the auth cookies are readable
+    from JavaScript, so one `<img onerror>` here is an account takeover.
+
+    Now uses the shared mdToHtml, which escapes first. Keeping a second
+    renderer in sync by hand is how the unescaped one survived.
+  */
+  const md = mdToHtml;
 
   return (
     <>

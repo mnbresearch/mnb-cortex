@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { REFERRAL_COOKIE, REFERRAL_COOKIE_DAYS, normalizeCode } from "@/lib/referral-shared";
 
 /**
  * Refreshes the Supabase session cookie on each request.
@@ -43,6 +44,38 @@ const AUTH_REFRESH_TIMEOUT_MS = 3000;
 
 export async function middleware(req: NextRequest) {
   let res = NextResponse.next({ request: req });
+
+  /*
+    Referral capture.
+
+    Done here rather than on the landing page because a shared link can point
+    anywhere — /pricing, a resource article, the health check — and the
+    referrer should be credited wherever the recipient lands. Middleware sees
+    every one of those.
+
+    Deliberately BEFORE the Supabase config check: capture must still work in
+    demo mode, and it costs nothing. Also deliberately non-blocking — it only
+    ever sets a cookie, so it cannot contribute to the timeout failure mode
+    described at the top of this file.
+
+    First code wins: `if (!req.cookies.get(...))`. Otherwise the last link a
+    prospect happens to click reassigns the credit, which is unfair to whoever
+    actually introduced them and is trivially gameable by the referred party.
+  */
+  const ref = req.nextUrl.searchParams.get("ref");
+  if (ref && !req.cookies.get(REFERRAL_COOKIE)) {
+    const code = normalizeCode(ref);
+    if (code) {
+      res.cookies.set(REFERRAL_COOKIE, code, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: true,
+        path: "/",
+        maxAge: REFERRAL_COOKIE_DAYS * 86_400,
+      });
+    }
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return res; // demo mode — no auth configured

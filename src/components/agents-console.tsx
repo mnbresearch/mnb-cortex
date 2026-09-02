@@ -171,7 +171,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
                 </div>
               )}
               {isImage && quota && quota.limit >= 0 && (
-                <div className="text-xs text-muted-foreground">{quota.active ? `${quota.plan} plan` : "Free trial"} · {quota.left} of {quota.limit} image generations left this week</div>
+                <div className="text-xs text-muted-foreground">{quota.active ? `${quota.plan} plan` : "No active plan"} · {quota.left} of {quota.limit} image generations left this week</div>
               )}
               <Button onClick={() => run()} disabled={busy === "run"}>{busy === "run" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {output || images.length || videoUrl ? "Run again" : isImage ? "Generate" : isVideo ? "Generate video" : "Run agent"}</Button>
             </div>

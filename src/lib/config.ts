@@ -228,6 +228,29 @@ export const PLAN_CREDITS: Record<string, number> = {
  */
 export const TRIAL_DAYS = 0;
 
+/**
+ * Credits granted to BOTH sides when a referred workspace starts paying.
+ *
+ * THIS IS THE ONE NUMBER TO CHANGE IF THE PROGRAMME IS TOO GENEROUS OR TOO MEAN.
+ *
+ * The old /referrals page promised "you both get a free month". On the AI COO
+ * plan that is ₹39,999 of product per referral, twice — and this product was
+ * repriced so every plan clears 85%. One referral would have wiped out the
+ * margin on several months of a paying account.
+ *
+ * Credits bound the cost precisely instead. At 500 each:
+ *
+ *   retail value    500 × ₹0.90 floor          = ₹450 per side, ₹900 a referral
+ *   worst-case COGS 500 credits of the least
+ *                   efficient action (~15% of
+ *                   revenue at the 85% target) ≈ ₹68 per side, ₹135 a referral
+ *
+ * So a referral costs about ₹135 of real money and is only ever paid out after
+ * the referred business has actually subscribed. Raise it if conversion needs
+ * the push; the arithmetic above is the thing to redo, not a guess.
+ */
+export const REFERRAL_REWARD_CREDITS = 500;
+
 /** No free credits. A new workspace buys a pack or a plan. */
 export const TRIAL_CREDITS = 0;
 

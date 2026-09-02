@@ -4,6 +4,7 @@ import { serviceClient } from "@/lib/supabase/server";
 import { grantCredits } from "@/lib/credits";
 import { PLANS, CREDIT_PACKS } from "@/lib/config";
 import { emitQuietly } from "@/lib/webhooks";
+import { rewardReferral } from "@/lib/referrals";
 
 export type SettleResult = {
   ok: boolean;
@@ -136,6 +137,19 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       }
 
       try { await svc.from("subscriptions").insert({ org_id: orgId, plan: ref, status: "active", provider: "cashfree", amount: order.amount, reference: orderId }); } catch { /* audit only */ }
+
+      /*
+        Pay the referral, if this workspace was referred and has not been paid
+        for yet. Placed HERE — after the plan is confirmed active — because the
+        whole point of rewarding on qualification rather than signup is that a
+        throwaway account must not earn anybody credits.
+
+        Idempotent in SQL: cortex_reward_referral() locks the row and only acts
+        on a 'pending' one, so a duplicated Cashfree webhook, a retry, or next
+        month's renewal all return 0. Wrapped anyway — a referral must never be
+        the reason a customer who has paid does not get their plan.
+      */
+      try { await rewardReferral(orgId); } catch { /* never block activation */ }
       emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
       return { ok: true, kind: "plan", plan: ref, cycle, endsAt };
     }

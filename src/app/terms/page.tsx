@@ -15,7 +15,7 @@ export default function Terms() {
         &ldquo;Subscriber,&rdquo; &ldquo;you&rdquo;) and <strong>Abrobot Technologies Pvt Ltd</strong> (&ldquo;MNB Cortex,&rdquo;
         &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;), a company incorporated under the laws of India with its principal place of
         business in Delhi. MNB Cortex is our AI-COO software-as-a-service platform. By accessing or using the platform, creating a
-        workspace, starting a trial, or purchasing any plan — through our website, payment portal, or any other channel — you confirm
+        workspace or purchasing any plan — through our website, payment portal, or any other channel — you confirm
         that you have read, understood, and agree to be bound by these Terms. If you do not agree, you must discontinue use of the service.
       </P>
 

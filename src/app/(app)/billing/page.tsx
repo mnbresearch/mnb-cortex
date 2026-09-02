@@ -29,7 +29,7 @@ export default async function Billing() {
     ? { cls: "bg-success/10 text-success border-success/20", text: "Active" }
     : billing.status === "expired"
     ? { cls: "bg-danger/10 text-danger border-danger/20", text: "No active plan" }
-    : { cls: "bg-warning/10 text-warning border-warning/20", text: `Trial · ${billing.daysLeft} ${billing.daysLeft === 1 ? "day" : "days"} left` };
+    : { cls: "bg-warning/10 text-warning border-warning/20", text: billing.daysLeft > 0 ? `${billing.daysLeft} ${billing.daysLeft === 1 ? "day" : "days"} of access left` : "No active plan" };
   return (
     <>
       <Topbar title="Billing & Plan" subtitle="Manage your subscription" />
@@ -48,7 +48,7 @@ export default async function Billing() {
                       ? `Active · renews ${new Date(billing.subscriptionEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
                       : "Subscription active · thank you!")
                   : billing.status === "expired" ? "No active plan — choose one below to start using Cortex."
-                  : billing.trialEndsAt ? `Free trial ends ${new Date(billing.trialEndsAt).toLocaleDateString("en-IN")} · full access until then`
+                  : billing.trialEndsAt ? `Access until ${new Date(billing.trialEndsAt).toLocaleDateString("en-IN")} · choose a plan to continue after that`
                   : "No active plan"}
               </div>
             </div>

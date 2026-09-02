@@ -31,8 +31,40 @@ export const statusBg: Record<string, string> = {
   red: "bg-danger/10 text-danger border-danger/20",
 };
 
+/**
+ * Escape every character that can start markup, BEFORE any markdown runs.
+ *
+ * This function's output goes to `dangerouslySetInnerHTML` in 24 places. What
+ * flows through it is model output and, via Cortex Memory, text another member
+ * of the workspace typed. Without this pass, `<img src=x onerror=alert(1)>` in
+ * any of those reaches the DOM and executes.
+ *
+ * That is not a theoretical severity here. Supabase's SSR client sets the auth
+ * cookies with httpOnly:false — the access and refresh tokens are readable from
+ * `document.cookie` — so one XSS in this app is a full account takeover, not a
+ * defacement. Escaping at the source is the fix; the CSP added in
+ * next.config.mjs is only the second line.
+ *
+ * Order matters: `&` first, or the escapes below get double-escaped.
+ */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Minimal markdown -> HTML for AI answers.
+ *
+ * Safe by construction: the input is fully escaped first, so the ONLY tags in
+ * the output are the ones the replacements below put there. Markdown syntax
+ * (#, *, _, -) survives escaping untouched, so nothing is lost.
+ */
 export function mdToHtml(s: string): string {
-  return (s || "")
+  return escapeHtml(s || "")
     .replace(/^### (.*)$/gm, "<h3 class='font-semibold mt-4 mb-1'>$1</h3>")
     .replace(/^## (.*)$/gm, "<h2 class='text-base font-semibold mt-4 mb-1.5'>$1</h2>")
     .replace(/^# (.*)$/gm, "<h1 class='text-lg font-bold mt-4 mb-2'>$1</h1>")

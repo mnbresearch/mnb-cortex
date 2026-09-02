@@ -31,7 +31,20 @@ export default async function Forecast() {
             same analysis built from your own numbers.
           </Card>
         )}
-        <div className="grid sm:grid-cols-3 gap-3">
+        {/*
+          Labelled inline, not just prefaced by a disclaimer card.
+
+          These three are styled identically to the live KPI cards on
+          /dashboard, so a grey note above them does not stop someone reading
+          "₹13.6 Cr" as their own projection — especially on a second visit,
+          when the note has become furniture. The pattern used elsewhere in this
+          codebase (receivables-aging, abc-analysis) marks the block itself.
+        */}
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-warning/30 bg-warning/10 text-warning px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide">Example</span>
+          <span className="text-xs text-muted-foreground">Sample figures, not your business</span>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-3 opacity-90">
           <Card className="p-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><TrendingUp className="h-4 w-4 text-success" /> Projected revenue (90d)</div>
             <div className="text-2xl font-bold mt-1">₹13.6 Cr</div>

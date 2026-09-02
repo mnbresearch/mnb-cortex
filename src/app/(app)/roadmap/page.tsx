@@ -42,7 +42,7 @@ export default async function Roadmap() {
     { t: "Set up an alert or the Autopilot", desc: "Let Cortex watch your KPIs and brief you daily without being asked.", href: "/alerts", cta: "Set up alerts", done: Boolean(d && d.alerts > 0) },
     { t: "Invite your team", desc: "Bring in the people who'll run agents and act on the insights.", href: "/admin", cta: "Invite teammates", done: Boolean(d && d.members > 1) },
     { t: "Connect a tool", desc: "Wire in Tally, Razorpay, WhatsApp, Slack and more so data flows automatically.", href: "/integrations", cta: "Connect integrations", done: Boolean(d && d.integrations > 0) },
-    { t: "Upgrade to keep going", desc: "The trial is a taste. Pick a plan to unlock your full monthly credits and higher limits.", href: "/pricing", cta: "See plans", done: Boolean(d && d.sub === "active") },
+    { t: "Upgrade to keep going", desc: "Pick a plan to unlock your full monthly credits and higher limits.", href: "/pricing", cta: "See plans", done: Boolean(d && d.sub === "active") },
   ];
 
   const doneCount = steps.filter((s) => s.done).length;

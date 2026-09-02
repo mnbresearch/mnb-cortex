@@ -14,7 +14,7 @@
     "dump:schema": "bash scripts/dump-schema.sh",
     "test:insights": "node scripts/test-insights.mjs",
     "test:alerts": "node scripts/test-alert-rules.mjs",
-    "test": "npm run test:boundaries && npm run test:entitlement && npm run test:insights && npm run test:alerts && npm run test:aggregate && npm run test:cashfree && npm run test:contrast && npm run test:customer-match && npm run test:rfm && npm run test:routes && npm run test:ai-profiles && npm run test:industries && npm run test:statutory && npm run test:ux && npm run test:margins",
+    "test": "npm run test:xss && npm run test:billing-guard && npm run test:referrals && npm run test:boundaries && npm run test:entitlement && npm run test:insights && npm run test:alerts && npm run test:aggregate && npm run test:cashfree && npm run test:contrast && npm run test:customer-match && npm run test:rfm && npm run test:routes && npm run test:ai-profiles && npm run test:industries && npm run test:statutory && npm run test:ux && npm run test:margins",
     "test:aggregate": "node scripts/test-aggregate.mjs",
     "test:cashfree": "node scripts/test-cashfree-webhook.mjs",
     "test:contrast": "node scripts/test-contrast.mjs",
@@ -26,7 +26,10 @@
     "test:statutory": "node scripts/test-statutory.mjs",
     "test:ux": "node scripts/test-ux.mjs",
     "test:margins": "node scripts/test-margins.mjs",
-    "test:boundaries": "node scripts/test-boundaries.mjs"
+    "test:boundaries": "node scripts/test-boundaries.mjs",
+    "test:billing-guard": "node scripts/test-billing-guard.mjs",
+    "test:referrals": "node scripts/test-referrals.mjs",
+    "test:xss": "node scripts/test-xss.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

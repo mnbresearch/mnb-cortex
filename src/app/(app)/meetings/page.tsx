@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AIPanel } from "@/components/ai-panel";
 import { DataTable } from "@/components/data-table";
@@ -32,11 +31,15 @@ export default async function Meetings() {
             built from your own numbers.
           </Card>
         )}
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline"><Video className="h-4 w-4" /> Connect Google Meet</Button>
-          <Button variant="outline"><Video className="h-4 w-4" /> Connect Zoom</Button>
-          <Button variant="outline"><Video className="h-4 w-4" /> Connect Teams</Button>
-        </div>
+        <Card className="p-4 text-sm flex items-start gap-2.5">
+          <Video className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+          <div className="text-muted-foreground leading-6">
+            <span className="font-medium text-foreground">Paste, don&rsquo;t connect.</span>{" "}
+            Cortex does not join your calls. Copy the transcript or your rough notes out of Google Meet, Zoom or
+            Teams and paste them below — you get minutes, decisions and assigned actions back, saved to this
+            workspace.
+          </div>
+        </Card>
         <AIPanel mode="meeting" saveMode="meeting" multiline
           placeholder="Paste a meeting transcript or rough notes — the AI writes minutes, decisions and assigned action items."
           cta="Generate minutes & actions" />

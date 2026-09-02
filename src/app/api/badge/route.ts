@@ -1,5 +1,6 @@
 import { anyEnvKey, envKey } from "@/lib/env";
 import { hasSupabase } from "@/lib/supabase/server";
+import { getHealth } from "@/lib/health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,10 +9,16 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   // Was computed from Boolean(process.env.X): the badge said "operational"
   // while the AI was returning 404s. It now reflects the real health check.
+  /*
+    Reads the cached health snapshot directly. This used to fetch /api/health
+    over HTTP from inside the same deployment: a second lambda invocation per
+    badge render, each running the full provider fan-out. Since the badge is
+    meant to be embedded on other people's pages, that made an <img> tag on any
+    site a way to spend this account's Gemini and Resend quota.
+  */
   let value = "operational";
   try {
-    const r = await fetch(new URL("/api/health", req.url), { cache: "no-store" });
-    const j = await r.json().catch(() => ({} as any));
+    const j: any = await getHealth();
     value = j?.status === "down" ? "down" : j?.status === "degraded" ? "degraded" : "operational";
   } catch { value = "unknown"; }
 

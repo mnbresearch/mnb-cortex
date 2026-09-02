@@ -38,7 +38,7 @@ export default async function Risks() {
           </Card>
         )}
         <Card className="p-4 border-danger/30 bg-danger/5">
-          <div className="text-sm"><b className="text-danger">Biggest risk right now:</b> Line B stockout on RM-204 within ~9 days. It's high-likelihood and high-impact, and the fix (PO-4471) is already drafted and waiting for approval.</div>
+          <div className="text-sm"><b className="text-danger">Example — how Risk Radar reads a situation:</b> &ldquo;Line B stockout on RM-204 within ~9 days: high likelihood, high impact, and a replenishment PO should be raised now.&rdquo; Run the AI panel below to get this for your own operation.</div>
         </Card>
 
         <Section title="Risk matrix" desc="Likelihood × impact, with mitigations">

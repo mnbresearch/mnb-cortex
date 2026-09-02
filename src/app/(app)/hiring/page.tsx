@@ -30,7 +30,7 @@ export default async function Hiring() {
           </Card>
         )}
         <Card className="p-4 border-warning/30 bg-warning/5">
-          <div className="text-sm"><b className="text-warning">Cash-aware view:</b> runway is ~5 months, so fund roles that return cash fast (collections, sales) before overhead hires. Consider contractors for spiky work.</div>
+          <div className="text-sm"><b className="text-warning">Example — the cash-aware view:</b> where runway is around five months, fund roles that return cash fast (collections, sales) before overhead hires, and use contractors for spiky work. The AI panel below applies this to your actual runway.</div>
         </Card>
 
         <Section title="Highest-value roles right now" desc="Ranked by return, weighted against runway">
