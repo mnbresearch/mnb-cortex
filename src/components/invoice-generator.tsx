@@ -1,18 +1,34 @@
 "use client";
 import { useMemo, useState } from "react";
+import { saveInvoice, type SavedInvoice } from "@/lib/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Printer } from "lucide-react";
+import { Plus, Trash2, Printer, Save, Check, Loader2, AlertCircle } from "lucide-react";
 
 type Item = { id: string; desc: string; qty: number; rate: number; gst: number };
 const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
-export function InvoiceGenerator() {
+/**
+ * The invoice generator — now a record, not just a printout.
+ *
+ * It previously held everything in React state and called window.print(). The
+ * document existed until the tab closed, while receivables ageing, DSO, the
+ * cash conversion cycle, 13-week cash and the collections chase all read the
+ * `invoices` table and stayed empty for anyone billing here. The one weekly
+ * habit an owner already has was being thrown away.
+ *
+ * `saved` is fetched on the server and passed in so the list is populated in
+ * the first paint and reflects the workspace, not this browser.
+ */
+export function InvoiceGenerator({ saved = [] }: { saved?: SavedInvoice[] }) {
   const [seller, setSeller] = useState({ name: "Your Company Pvt Ltd", gstin: "27ABCDE1234F1Z5", addr: "Mumbai, Maharashtra" });
   const [buyer, setBuyer] = useState({ name: "Customer Name", gstin: "", addr: "" });
   const [meta, setMeta] = useState({ no: "INV-0001", date: new Date().toISOString().slice(0, 10) });
   const [intraState, setIntraState] = useState(true);
   const [items, setItems] = useState<Item[]>([{ id: "1", desc: "Product / service", qty: 1, rate: 1000, gst: 18 }]);
+  const [due, setDue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const totals = useMemo(() => {
     let sub = 0, tax = 0;
@@ -23,6 +39,32 @@ export function InvoiceGenerator() {
   function upd(id: string, f: keyof Item, v: string) { setItems((xs) => xs.map((i) => i.id === id ? { ...i, [f]: f === "desc" ? v : Number(v) } : i)); }
   function add() { setItems((xs) => [...xs, { id: Date.now() + "", desc: "Item", qty: 1, rate: 0, gst: 18 }]); }
   function del(id: string) { setItems((xs) => xs.filter((i) => i.id !== id)); }
+
+  async function save() {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const res = await saveInvoice({
+        invoice_no: meta.no,
+        party: buyer.name,
+        amount: totals.grand,
+        issue_date: meta.date || null,
+        due_date: due || null,
+        status: "pending",
+        /*
+          The whole document, so this invoice can be reopened and reprinted
+          identically months later. Saving only the total would still leave the
+          owner rebuilding it by hand for a customer who lost their copy.
+        */
+        meta: { seller, buyer, items, intraState, subtotal: totals.sub, tax: totals.tax },
+      });
+      setSaveMsg(res.ok
+        ? { ok: true, text: `Saved. ${meta.no} now appears in Receivables and counts towards your DSO.` }
+        : { ok: false, text: res.error || "Could not save." });
+    } catch {
+      setSaveMsg({ ok: false, text: "Could not reach the server. Your invoice is still on screen." });
+    } finally { setSaving(false); }
+  }
 
   function print() {
     const rows = items.map((it) => { const amt = it.qty * it.rate; return `<tr><td>${it.desc}</td><td style="text-align:right">${it.qty}</td><td style="text-align:right">${rupee(it.rate)}</td><td style="text-align:right">${it.gst}%</td><td style="text-align:right">${rupee(amt)}</td></tr>`; }).join("");
@@ -74,7 +116,12 @@ export function InvoiceGenerator() {
       </div>
       <div className="flex flex-wrap gap-3 items-center">
         <input className={I} value={meta.no} onChange={(e) => setMeta({ ...meta, no: e.target.value })} placeholder="Invoice #" />
-        <input className={I} type="date" value={meta.date} onChange={(e) => setMeta({ ...meta, date: e.target.value })} />
+        <label className="text-sm flex items-center gap-1.5"><span className="text-muted-foreground">Issued</span>
+          <input className={I} type="date" value={meta.date} onChange={(e) => setMeta({ ...meta, date: e.target.value })} /></label>
+        {/* Due date drives receivables ageing and DSO. Without it a saved
+            invoice cannot age, so it is asked for here rather than inferred. */}
+        <label className="text-sm flex items-center gap-1.5"><span className="text-muted-foreground">Due</span>
+          <input className={I} type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
         <label className="text-sm flex items-center gap-2"><input type="checkbox" checked={intraState} onChange={(e) => setIntraState(e.target.checked)} /> Same-state (CGST+SGST)</label>
       </div>
 
@@ -97,8 +144,44 @@ export function InvoiceGenerator() {
           <div className="text-muted-foreground">GST: <b className="text-foreground">{rupee(totals.tax)}</b></div>
           <div className="text-lg font-bold">Total: {rupee(totals.grand)}</div>
         </div>
-        <Button onClick={print}><Printer className="h-4 w-4" /> Preview & download PDF</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={print}><Printer className="h-4 w-4" /> Preview &amp; download PDF</Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? "Saving…" : "Save to workspace"}
+          </Button>
+        </div>
       </div>
+
+      {saveMsg && (
+        <div className={`rounded-lg border p-3 text-sm flex items-start gap-2 ${saveMsg.ok ? "bg-success/10 text-success border-success/20" : "bg-danger/10 text-danger border-danger/20"}`}>
+          {saveMsg.ok ? <Check className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}
+          <span>{saveMsg.text}</span>
+        </div>
+      )}
+
+      {saved.length > 0 && (
+        <div className="border-t pt-4">
+          <div className="text-sm font-medium mb-2">Saved invoices</div>
+          <div className="divide-y">
+            {saved.slice(0, 8).map((v) => (
+              <div key={v.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <span className="font-medium">{v.invoice_no || "—"}</span>
+                  <span className="text-muted-foreground"> · {v.party || "—"}</span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="tabular-nums">{rupee(v.amount)}</span>
+                  <span className={`text-xs rounded-full border px-2 py-0.5 ${v.status === "paid" ? "bg-success/10 text-success border-success/20" : "text-muted-foreground"}`}>{v.status || "pending"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Saving an invoice is what makes Receivables, DSO and the 13-week cash forecast reflect your real position.
+          </p>
+        </div>
+      )}
     </Card>
   );
 }

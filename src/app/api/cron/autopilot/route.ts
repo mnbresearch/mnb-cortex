@@ -21,6 +21,8 @@ function entitled(o: any): boolean {
 }
 
 export async function GET(req: Request) {
+  let scheduledWorkflows = 0;
+  let alertsEmailed = 0;
   if (!cronAuthorised(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const sb = serviceClient();
   if (!sb) return NextResponse.json({ ok: true, ran: 0, note: "add SUPABASE_SERVICE_ROLE_KEY to enable scheduled autopilot" });
@@ -52,7 +54,30 @@ export async function GET(req: Request) {
 
   // 1d. Retry any webhook delivery that hasn't landed yet.
   let webhooks: any = null;
-  try {
+      /*
+      Scheduled workflows. `workflows.trigger` has offered "schedule" since the
+      table existed and nothing honoured it — executeWorkflow had exactly one
+      caller, a Run button. Guarded by last_run with a claim-before-run, because
+      a workflow can email and WhatsApp the customer's own contacts and the
+      failure mode of running twice is not a blank screen.
+    */
+    try {
+      const { runScheduledWorkflows } = await import("@/lib/workflow-schedule");
+      const wf = await runScheduledWorkflows();
+      scheduledWorkflows = wf.ran;
+    } catch { /* never let this take the cron down */ }
+
+    /*
+      Deliver the alerts that were raised. Until now a KPI breach wrote a row
+      and waited to be noticed.
+    */
+    try {
+      const { deliverAlerts } = await import("@/lib/alert-delivery");
+      const d = await deliverAlerts(new URL(req.url).origin);
+      alertsEmailed = d.sent;
+    } catch { /* same */ }
+
+    try {
     const { retryPending } = await import("@/lib/webhooks");
     webhooks = await retryPending();
   } catch (e: any) { webhooks = { error: e?.message }; }
@@ -172,5 +197,5 @@ export async function GET(req: Request) {
     console.error("[cron] heartbeat threw —", e?.message);
   }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, heartbeat });
+  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, heartbeat, scheduledWorkflows, alertsEmailed });
 }

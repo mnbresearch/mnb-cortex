@@ -6,6 +6,7 @@ import { SUPER_ADMINS } from "@/lib/operators";
 import { generateFor } from "@/lib/ai/cortex";
 import { sendEmail } from "@/lib/email";
 import { recomputeQuietly } from "@/lib/metrics";
+import { resolveHeaders, applyMapping } from "@/lib/import-map";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -443,7 +444,10 @@ async function writeImported(sb: any, table: string, mapped: any[]): Promise<{ w
   return { written };
 }
 
-export async function importRows(fd: FormData): Promise<{ inserted: number; error?: string }> {
+export async function importRows(fd: FormData): Promise<{
+  inserted: number; error?: string;
+  matched?: number; totalCols?: number; missing?: string[];
+}> {
   try {
     const orgId = await requireWriteOrg();
     const table = str(fd.get("table"));
@@ -452,11 +456,36 @@ export async function importRows(fd: FormData): Promise<{ inserted: number; erro
     let rows: any[] = [];
     try { rows = JSON.parse(str(fd.get("rows"))); } catch { return { inserted: 0, error: "Invalid data" }; }
     if (!Array.isArray(rows) || !rows.length) return { inserted: 0, error: "No rows to import" };
+
+    /*
+      Resolve the customer's headers to our columns BEFORE mapping anything.
+
+      This used to read `r[c]` verbatim, so a file headed "Order No" / "Customer"
+      / "Amount" matched nothing, inserted blank rows, and reported success. That
+      is what most real exports look like — Tally, Vyapar, Busy, or a shop's own
+      Excel — so the primary onboarding action failed silently for almost
+      everyone, and the owner's fair conclusion was that the product was broken.
+
+      Refusing loudly is the other half of the fix: if we recognise nothing, say
+      so and import NOTHING, rather than writing empty records.
+    */
+    const headers = Object.keys(rows[0] || {});
+    const match = resolveHeaders(table, headers);
+    if (match.matched === 0) {
+      return {
+        inserted: 0,
+        error: `None of your columns were recognised (found: ${headers.slice(0, 6).join(", ")}${headers.length > 6 ? "…" : ""}). `
+          + `Expected something like: ${spec.cols.slice(0, 4).join(", ")}.`,
+      };
+    }
+
     const mapped = rows.slice(0, 1000).map((r) => {
       const o: any = { org_id: orgId };
+      const picked = applyMapping(r, match);
       for (const c of spec.cols) {
-        if (r[c] === undefined || r[c] === "") continue;
-        o[c] = spec.nums.includes(c) ? (parseFloat(String(r[c]).replace(/[^0-9.-]/g, "")) || 0) : String(r[c]);
+        const v = picked[c];
+        if (v === undefined || v === "") continue;
+        o[c] = spec.nums.includes(c) ? (parseFloat(String(v).replace(/[^0-9.-]/g, "")) || 0) : String(v);
       }
       /*
         An imported sales order with no status contributes ZERO revenue, because
@@ -481,7 +510,15 @@ export async function importRows(fd: FormData): Promise<{ inserted: number; erro
     await recomputeQuietly(orgId);
     await logActivity(orgId, "import", `Imported ${wrote.written} rows into ${table} (CSV)`);
     ["/sales", "/finance", "/inventory", "/hr", "/dashboard"].forEach((p) => revalidatePath(p));
-    return { inserted: wrote.written };
+    return {
+      inserted: wrote.written,
+      // Surfaced so a PARTIAL match is visible. Importing 500 rows while
+      // silently dropping the amount column is the failure that looks like
+      // success, and it is the one worth telling the user about.
+      matched: match.matched,
+      totalCols: match.total,
+      missing: match.missing,
+    };
   } catch (e: any) { return { inserted: 0, error: e?.message || "Import failed" }; }
 }
 
@@ -948,6 +985,159 @@ export async function deleteGoal(fd: FormData) {
   const { error } = await sb.from("goals").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   if (error) throw new Error(error.message);
   revalidatePath("/goals");
+}
+
+// ---- Invoices & quotes ------------------------------------------------------
+/*
+  These used to be printouts. The generator and the quote builder were React
+  state plus window.print(), so an invoice existed only until the tab closed —
+  while receivables ageing, DSO, the cash conversion cycle, 13-week cash, the
+  collections chase and global search all read the `invoices` table and sat
+  empty for anyone billing through Cortex's own tool.
+
+  Saving is an UPSERT on (org_id, invoice_no), which already carries a unique
+  index. That is deliberate: pressing Save twice, or a double-submit on a slow
+  connection, must not create two receivables for one bill. Getting this wrong
+  overstates money owed, which is worse than losing the invoice.
+*/
+
+export type InvoiceDoc = {
+  invoice_no: string;
+  party: string;
+  amount: number;
+  issue_date?: string | null;
+  due_date?: string | null;
+  status?: string;
+  meta?: any;
+};
+
+export type SavedInvoice = {
+  id: string; invoice_no: string | null; party: string | null;
+  amount: number; issue_date: string | null; due_date: string | null;
+  status: string | null; meta: any;
+};
+
+/** Statuses the invoices table understands. Anything else is coerced. */
+const INVOICE_STATUS = new Set(["pending", "paid", "overdue"]);
+
+export async function saveInvoice(doc: InvoiceDoc): Promise<{ ok: boolean; error?: string }> {
+  let orgId: string;
+  try { orgId = await requireWriteOrg(); }
+  catch { return { ok: false, error: "Sign in to save this invoice." }; }
+
+  const invoice_no = String(doc.invoice_no || "").trim().slice(0, 60);
+  const party = String(doc.party || "").trim().slice(0, 160);
+  const amount = Number(doc.amount) || 0;
+
+  // Validated here rather than trusted from the client: this row becomes a
+  // number in the customer's receivables.
+  if (!invoice_no) return { ok: false, error: "Give the invoice a number before saving." };
+  if (!party) return { ok: false, error: "Add the customer's name before saving." };
+  if (!(amount > 0)) return { ok: false, error: "The invoice total must be more than zero." };
+
+  const sb = createClient();
+  const { error } = await sb.from("invoices").upsert({
+    org_id: orgId,
+    invoice_no,
+    party,
+    amount,
+    issue_date: doc.issue_date || null,
+    due_date: doc.due_date || null,
+    status: INVOICE_STATUS.has(String(doc.status)) ? doc.status : "pending",
+    type: "receivable",
+    meta: doc.meta ?? null,
+  }, { onConflict: "org_id,invoice_no" });
+
+  if (error) {
+    /*
+      A missing `meta` column means this workspace's database has not had
+      2026_invoice_documents applied. Retry without it rather than refusing to
+      save: losing the reprintable copy is a far smaller harm than telling a
+      customer their invoice could not be saved at all.
+    */
+    const missingColumn = error.code === "PGRST204" || error.code === "42703"
+      || /column .* does not exist/i.test(error.message || "");
+    if (!missingColumn) return { ok: false, error: error.message };
+
+    const retry = await sb.from("invoices").upsert({
+      org_id: orgId, invoice_no, party, amount,
+      due_date: doc.due_date || null,
+      status: INVOICE_STATUS.has(String(doc.status)) ? doc.status : "pending",
+      type: "receivable",
+    }, { onConflict: "org_id,invoice_no" });
+    if (retry.error) return { ok: false, error: retry.error.message };
+  }
+
+  // The whole point of saving: the numbers that read this table must move.
+  await recomputeQuietly(orgId);
+  await logActivity(orgId, "crud", `Saved invoice ${invoice_no} for ${party}`);
+  for (const p of ["/invoice", "/receivables", "/cash13", "/ccc", "/data"]) revalidatePath(p);
+  return { ok: true };
+}
+
+export async function listInvoices(): Promise<SavedInvoice[]> {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return [];
+  const sb = createClient();
+  try {
+    const { data } = await sb.from("invoices")
+      .select("id,invoice_no,party,amount,issue_date,due_date,status,meta")
+      .eq("org_id", orgId).eq("type", "receivable")
+      .order("created_at", { ascending: false }).limit(50);
+    return (data as any[] || []).map((r) => ({ ...r, amount: Number(r.amount) || 0 }));
+  } catch {
+    // Column not migrated yet — fall back to what definitely exists.
+    try {
+      const { data } = await sb.from("invoices")
+        .select("id,invoice_no,party,amount,due_date,status")
+        .eq("org_id", orgId).order("created_at", { ascending: false }).limit(50);
+      return (data as any[] || []).map((r) => ({ ...r, amount: Number(r.amount) || 0, issue_date: null, meta: null }));
+    } catch { return []; }
+  }
+}
+
+export async function saveQuote(doc: {
+  quote_no: string; party: string; amount: number; valid_until?: string | null; meta?: any;
+}): Promise<{ ok: boolean; error?: string }> {
+  let orgId: string;
+  try { orgId = await requireWriteOrg(); }
+  catch { return { ok: false, error: "Sign in to save this quote." }; }
+
+  const quote_no = String(doc.quote_no || "").trim().slice(0, 60);
+  const party = String(doc.party || "").trim().slice(0, 160);
+  const amount = Number(doc.amount) || 0;
+  if (!quote_no) return { ok: false, error: "Give the quote a number before saving." };
+  if (!party) return { ok: false, error: "Add the customer's name before saving." };
+
+  const sb = createClient();
+  const { error } = await sb.from("quotes").upsert({
+    org_id: orgId, quote_no, party, amount,
+    valid_until: doc.valid_until || null,
+    meta: doc.meta ?? null,
+  }, { onConflict: "org_id,quote_no" });
+  if (error) return { ok: false, error: error.message };
+
+  /*
+    Note what is NOT done here: no recompute, and nothing written to `invoices`.
+    A quote is not money owed. Counting one as a receivable is how a pipeline
+    number ends up inside a cash forecast, which is the kind of error an owner
+    only discovers when the cash does not arrive.
+  */
+  await logActivity(orgId, "crud", `Saved quote ${quote_no} for ${party}`);
+  revalidatePath("/quote");
+  return { ok: true };
+}
+
+export async function listQuotes(): Promise<any[]> {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return [];
+  const sb = createClient();
+  try {
+    const { data } = await sb.from("quotes")
+      .select("id,quote_no,party,amount,valid_until,status,created_at")
+      .eq("org_id", orgId).order("created_at", { ascending: false }).limit(50);
+    return (data as any[]) || [];
+  } catch { return []; }
 }
 
 // ---- Action board -----------------------------------------------------------

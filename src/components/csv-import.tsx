@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload, CheckCircle2, Table } from "lucide-react";
 import { importRows, importFromUrl } from "@/lib/actions";
+// Same resolver the server uses, so the preview cannot disagree with the import.
+import { resolveHeaders } from "@/lib/import-map";
 import { parseCsv } from "@/lib/csv";
 
 const DATASETS = [
@@ -22,11 +24,25 @@ export function CsvImport() {
   const fileRef = useRef<HTMLInputElement>(null);
   const ds = DATASETS.find((d) => d.table === table)!;
 
+  /*
+    Show the column match BEFORE importing.
+
+    The old screen said "Expected columns: order_no, customer_name, …" and then
+    silently ignored anything else — a file headed "Order No"/"Customer" wrote
+    blank rows and reported success. Cortex now matches your headers to its
+    columns, but a PARTIAL match is the remaining trap: importing 500 rows while
+    quietly dropping the amount column looks exactly like success.
+
+    So the match is computed from the parsed file, with the same function the
+    server uses, and shown before the user commits.
+  */
+  const match = rows.length ? resolveHeaders(table, Object.keys(rows[0] || {})) : null;
+
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f) return;
     const text = await f.text();
     const parsed = parseCsv(text);
-    setRows(parsed); setMsg(`${parsed.length} rows detected. Review, then import.`);
+    setRows(parsed); setMsg(`${parsed.length} rows detected. Check the column match below, then import.`);
   }
 
   async function doImport() {
@@ -36,7 +52,13 @@ export function CsvImport() {
     const res = await importRows(fd);
     setLoading(false);
     if (res.error) setMsg(`Error: ${res.error}${/Sign in/.test(res.error) ? "" : ""}`);
-    else { setMsg(`✓ Imported ${res.inserted} rows into ${ds.label}.`); setRows([]); if (fileRef.current) fileRef.current.value = ""; }
+    else {
+      const dropped = (res.missing || []).length
+        ? ` Not found in your file: ${(res.missing || []).join(", ")} — those fields are blank.`
+        : "";
+      setMsg(`✓ Imported ${res.inserted} rows into ${ds.label}.${dropped}`);
+      setRows([]); if (fileRef.current) fileRef.current.value = "";
+    }
   }
 
   async function doUrlImport() {
@@ -60,7 +82,7 @@ export function CsvImport() {
             {DATASETS.map((d) => <option key={d.table} value={d.table}>{d.label}</option>)}
           </select>
         </label>
-        <div className="text-xs text-muted-foreground flex items-end pb-1">Expected columns: <span className="ml-1 text-foreground">{ds.cols}</span></div>
+        <div className="text-xs text-muted-foreground flex items-end pb-1">Cortex looks for: <span className="ml-1 text-foreground">{ds.cols}</span> &mdash; your own column names are matched automatically.</div>
       </div>
       <div className="flex items-center gap-2">
         <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
@@ -72,6 +94,48 @@ export function CsvImport() {
         <Button variant="outline" onClick={doUrlImport} disabled={!url.trim() || loading}>Import from URL</Button>
       </div>
       {msg && <p className="text-sm">{msg}</p>}
+
+      {/*
+        The column match, shown before the user commits.
+
+        Nothing recognised is a hard stop with the reason, because importing a
+        file we cannot read used to write blank rows and report success — the
+        single worst outcome, since the owner then believes their data is in.
+      */}
+      {match && (
+        <div className={`rounded-lg border p-3 text-sm ${match.matched === 0 ? "bg-danger/10 border-danger/20" : "bg-background"}`}>
+          <div className="font-medium mb-1.5">
+            {match.matched === 0
+              ? "None of your columns were recognised"
+              : `Matched ${match.matched} of ${match.total} columns`}
+          </div>
+          {match.matched > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
+              {Object.entries(match.map).map(([col, src]) => (
+                <span key={col} className="rounded-md border bg-success/10 text-success border-success/20 px-2 py-0.5 text-xs">
+                  {src} → {col}
+                </span>
+              ))}
+            </div>
+          )}
+          {match.missing.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              Not found: <span className="text-warning">{match.missing.join(", ")}</span>
+              {match.matched > 0 ? " — these will be left blank." : ""}
+            </div>
+          )}
+          {match.unused.length > 0 && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Ignored from your file: {match.unused.slice(0, 6).join(", ")}{match.unused.length > 6 ? "…" : ""}
+            </div>
+          )}
+          {match.matched === 0 && (
+            <div className="text-xs mt-1">
+              Rename a column to one Cortex knows, or pick a different dataset above.
+            </div>
+          )}
+        </div>
+      )}
       {preview.length > 0 && (
         <div className="overflow-x-auto rounded-lg border">
           <div className="text-xs text-muted-foreground px-3 py-2 border-b flex items-center gap-1.5"><Table className="h-3.5 w-3.5" /> Preview (first 5 rows)</div>

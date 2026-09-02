@@ -1,13 +1,25 @@
 "use client";
 import { useMemo, useState } from "react";
+import { saveQuote } from "@/lib/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Printer } from "lucide-react";
+import { Plus, Trash2, Printer, Save, Check, Loader2, AlertCircle } from "lucide-react";
 
 type Item = { id: string; desc: string; qty: number; rate: number };
 const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
-export function QuoteBuilder() {
+/**
+ * Quotes, now kept.
+ *
+ * Same problem as the invoice generator: state plus window.print(), so the
+ * quote vanished with the tab and nothing could ever ask "which quotes did we
+ * send and which came back?".
+ *
+ * Quotes are stored in their own table, NOT in `invoices`. A quote is not money
+ * owed, and putting one in the receivables table with a special status is how a
+ * pipeline number ends up inside a cash forecast.
+ */
+export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
   const [from, setFrom] = useState({ name: "Your Company Pvt Ltd", detail: "GSTIN · Mumbai · contact@company.com" });
   const [to, setTo] = useState({ name: "Client Name", detail: "" });
   const [meta, setMeta] = useState({ no: "QT-0001", date: new Date().toISOString().slice(0, 10), validity: 15 });
@@ -20,6 +32,28 @@ export function QuoteBuilder() {
     const tax = sub * gst / 100;
     return { sub, tax, grand: sub + tax };
   }, [items, gst]);
+
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function save() {
+    setSaving(true); setSaveMsg(null);
+    try {
+      // Validity is entered as a number of days; the table stores the date it
+      // actually lapses, so an expiry can be queried without re-deriving it.
+      const validUntil = new Date(new Date(meta.date || Date.now()).getTime() + (Number(meta.validity) || 0) * 86_400_000)
+        .toISOString().slice(0, 10);
+      const res = await saveQuote({
+        quote_no: meta.no, party: to.name, amount: totals.grand, valid_until: validUntil,
+        meta: { from, to, items, gst, notes, subtotal: totals.sub, tax: totals.tax },
+      });
+      setSaveMsg(res.ok
+        ? { ok: true, text: `Saved. ${meta.no} is kept in this workspace — it is not counted as money owed until you invoice it.` }
+        : { ok: false, text: res.error || "Could not save." });
+    } catch {
+      setSaveMsg({ ok: false, text: "Could not reach the server. Your quote is still on screen." });
+    } finally { setSaving(false); }
+  }
 
   function upd(id: string, f: keyof Item, v: string) { setItems((xs) => xs.map((i) => i.id === id ? { ...i, [f]: f === "desc" ? v : Number(v) } : i)); }
   function add() { setItems((xs) => [...xs, { id: Date.now() + "", desc: "Item", qty: 1, rate: 0 }]); }
@@ -74,8 +108,38 @@ export function QuoteBuilder() {
       <textarea className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Terms & notes" />
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
         <div className="text-sm"><div className="text-muted-foreground">Subtotal {rupee(totals.sub)} · GST {rupee(totals.tax)}</div><div className="text-lg font-bold">Total: {rupee(totals.grand)}</div></div>
-        <Button onClick={print}><Printer className="h-4 w-4" /> Preview & download PDF</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={print}><Printer className="h-4 w-4" /> Preview &amp; download PDF</Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? "Saving…" : "Save to workspace"}
+          </Button>
+        </div>
       </div>
+
+      {saveMsg && (
+        <div className={`rounded-lg border p-3 text-sm flex items-start gap-2 ${saveMsg.ok ? "bg-success/10 text-success border-success/20" : "bg-danger/10 text-danger border-danger/20"}`}>
+          {saveMsg.ok ? <Check className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}
+          <span>{saveMsg.text}</span>
+        </div>
+      )}
+
+      {saved.length > 0 && (
+        <div className="border-t pt-4">
+          <div className="text-sm font-medium mb-2">Saved quotes</div>
+          <div className="divide-y">
+            {saved.slice(0, 8).map((q: any) => (
+              <div key={q.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <div className="min-w-0"><span className="font-medium">{q.quote_no || "—"}</span><span className="text-muted-foreground"> · {q.party || "—"}</span></div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="tabular-nums">{rupee(Number(q.amount) || 0)}</span>
+                  <span className="text-xs text-muted-foreground">{q.valid_until ? `valid to ${q.valid_until}` : ""}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
