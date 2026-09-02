@@ -284,12 +284,29 @@ async function checkSchema(): Promise<Check> {
     than claiming it is fine. Never report a security control as present without
     having actually seen it.
   */
-  let guardMissing = false;
+  /*
+    Three outcomes, not two — and the first version of this collapsed two of
+    them into "fine", which is the exact failure this check exists to prevent.
+
+    It was written as: call the RPC, and only report a problem if it returns
+    false. So when the helper function was NOT INSTALLED the call errored, the
+    catch swallowed it, and the status page said "operational" — reporting a
+    security control as present on the strength of a check that never ran. That
+    is worse than having no check, because it actively reassures.
+
+    A control that cannot be verified is reported as unverified. Green has to
+    mean green.
+  */
   try {
     const { data, error } = await sb.rpc("cortex_has_billing_guard");
-    if (!error && data === false) guardMissing = true;
-  } catch { /* helper not installed; stay silent rather than cry wolf */ }
-  if (guardMissing) missing.push("2026_org_billing_guard");
+    if (error) {
+      missing.push("2026_org_billing_guard (cannot verify — helper not installed)");
+    } else if (data === false) {
+      missing.push("2026_org_billing_guard (TRIGGER MISSING — billing is bypassable)");
+    }
+  } catch {
+    missing.push("2026_org_billing_guard (cannot verify)");
+  }
 
   const uniq = Array.from(new Set(missing));
   return uniq.length
