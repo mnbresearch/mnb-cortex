@@ -141,3 +141,30 @@ create trigger cortex_org_billing_guard
   before update on organizations
   for each row
   execute function cortex_guard_org_billing();
+
+/*
+  A way for the application to verify this guard is actually installed.
+
+  The guard is a trigger, so no SELECT can see it and the health check would
+  otherwise have to assume. Assuming a security control is present is how you
+  find out it is not, months later, from a customer's credit balance.
+
+  Readable by any signed-in user: it returns a single boolean about the
+  platform's own configuration and discloses nothing about any workspace.
+*/
+create or replace function cortex_has_billing_guard()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from pg_trigger
+    where tgname = 'cortex_org_billing_guard'
+      and tgrelid = 'public.organizations'::regclass
+      and not tgisinternal
+  );
+$$;
+
+grant execute on function cortex_has_billing_guard() to authenticated, service_role;

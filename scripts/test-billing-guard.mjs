@@ -172,6 +172,34 @@ async function main() {
   check(noop === null, "legit: re-sending an UNCHANGED billing column is allowed",
     `a full-row PATCH that changes nothing was rejected: ${noop}`);
 
+  /* ------------------------------- the health check must not be able to lie */
+  /*
+    lib/health.ts reports "Schema migrations: operational" partly on the word of
+    cortex_has_billing_guard(). If that function returned true unconditionally,
+    the operator would be told a security control is installed when it is not —
+    strictly worse than not checking at all.
+
+    So: assert it says true with the trigger present, then DROP the trigger and
+    assert it says false.
+  */
+  const guardSays = async () =>
+    (await db.query(`select cortex_has_billing_guard() as v`)).rows[0].v;
+
+  check(await guardSays() === true,
+    "health: cortex_has_billing_guard() reports the guard as present", `got ${await guardSays()}`);
+
+  await db.exec(`drop trigger cortex_org_billing_guard on organizations;`);
+  check(await guardSays() === false,
+    "health: and reports FALSE once the trigger is gone",
+    "the helper would tell the operator the guard is installed when it is not");
+
+  // Put it back so the coverage checks below run against the real state.
+  await db.exec(`
+    create trigger cortex_org_billing_guard
+      before update on organizations
+      for each row execute function cortex_guard_org_billing();`);
+  check(await guardSays() === true, "health: reports true again after reinstalling");
+
   /* --------------------------------------- the list must stay comprehensive */
   /*
     The trigger allows any column it does not name. That is deliberate — the

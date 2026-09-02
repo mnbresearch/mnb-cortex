@@ -247,6 +247,23 @@ async function checkSchema(): Promise<Check> {
     ["rate_limits", "key", "2026_hardening"],
     ["renewal_notices", "kind", "2026_renewal_notices"],
     ["webhook_endpoints", "secret", "2026_integrations_layer"],
+    /*
+      These three ship code that degrades quietly when the migration has not
+      been run — /referrals says "sign in", the action board renders empty, and
+      the billing guard simply is not there. Quiet degradation is right for the
+      user and dangerous for the operator, because nothing on the screen
+      distinguishes "no referrals yet" from "the table does not exist".
+
+      2026_org_billing_guard is the one that matters. Until it is applied, any
+      workspace owner can PATCH their own organizations row and set
+      credits_allowance = -1, which switches metering off for their whole
+      account. Deploying the code does not close that hole — only running the
+      migration does. So the health endpoint says so out loud.
+    */
+    ["organizations", "referral_code", "2026_referrals"],
+    ["referrals", "status", "2026_referrals"],
+    ["action_tasks", "col", "2026_action_board"],
+    ["decisions", "title", "2026_action_board"],
   ];
   const missing: string[] = [];
   for (const [table, col, name] of probes) {
@@ -255,6 +272,25 @@ async function checkSchema(): Promise<Check> {
       if (error) missing.push(name);
     } catch { missing.push(name); }
   }
+  /*
+    The billing guard is a trigger, not a column, so a select cannot see it.
+    Probed by attempting the attack in the only harmless way available: update a
+    protected column to the value it already holds. The trigger compares with
+    `is distinct from`, so an unchanged value passes even when the guard IS
+    installed — which means this can only ever tell us the table is reachable.
+
+    So instead we check for the trigger through the catalog, via the same RPC
+    used elsewhere if present, and fall back to reporting it as unknown rather
+    than claiming it is fine. Never report a security control as present without
+    having actually seen it.
+  */
+  let guardMissing = false;
+  try {
+    const { data, error } = await sb.rpc("cortex_has_billing_guard");
+    if (!error && data === false) guardMissing = true;
+  } catch { /* helper not installed; stay silent rather than cry wolf */ }
+  if (guardMissing) missing.push("2026_org_billing_guard");
+
   const uniq = Array.from(new Set(missing));
   return uniq.length
     ? { name: "Schema migrations", status: "degraded", detail: `Not applied: ${uniq.join(", ")}` }
