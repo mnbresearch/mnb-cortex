@@ -950,6 +950,71 @@ export async function deleteGoal(fd: FormData) {
   revalidatePath("/goals");
 }
 
+// ---- Action board -----------------------------------------------------------
+/*
+  These used to live in localStorage, which meant the owner's task list was
+  empty on his phone and invisible to his team. Same fix, and the same reasoning,
+  as the alert rules immediately below.
+
+  Returned as plain objects rather than a page query so the board can be used
+  from anywhere; every one of these is org-scoped by RLS as well as by the
+  explicit .eq("org_id"), because relying on only one of the two is how a
+  tenancy bug gets in.
+*/
+export type ActionTask = {
+  id: string; title: string; col: 0 | 1 | 2;
+  priority?: "P1" | "P2" | "P3" | null; source: string;
+};
+
+export async function listTasks(): Promise<ActionTask[]> {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return [];
+  const sb = createClient();
+  try {
+    const { data } = await sb.from("action_tasks")
+      .select("id,title,col,priority,source")
+      .eq("org_id", orgId).order("created_at", { ascending: true }).limit(300);
+    return (data as any[] || []).map((t) => ({ ...t, col: Number(t.col) as 0 | 1 | 2 }));
+  } catch { return []; }   // table not migrated yet — board still renders
+}
+
+export async function addTask(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = createClient();
+  const title = str(fd.get("title")).slice(0, 200);
+  if (!title) return;
+  const priority = str(fd.get("priority"));
+  const { error } = await sb.from("action_tasks").insert({
+    org_id: orgId,
+    title,
+    col: 0,
+    priority: ["P1", "P2", "P3"].includes(priority) ? priority : null,
+    source: str(fd.get("source")) === "ai" ? "ai" : "user",
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath("/action-center");
+}
+
+export async function moveTask(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = createClient();
+  const id = str(fd.get("id"));
+  // Clamped here as well as by the CHECK constraint: a bad value should be a
+  // no-op, not a 500 in the user's face.
+  const col = Math.max(0, Math.min(2, Number(str(fd.get("col")) || 0)));
+  const { error } = await sb.from("action_tasks")
+    .update({ col, done_at: col === 2 ? new Date().toISOString() : null })
+    .eq("id", id).eq("org_id", orgId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/action-center");
+}
+
+export async function deleteTask(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = createClient();
+  const { error } = await sb.from("action_tasks")
+    .delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/action-center");
+}
+
 // ---- KPI alert rules ----
 /**
  * Rules used to live in localStorage. That meant they vanished on another

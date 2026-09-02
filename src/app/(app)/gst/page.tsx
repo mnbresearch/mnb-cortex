@@ -14,12 +14,31 @@ const calendar = [
   { form: "PT / TDS", desc: "Professional tax & TDS deposit", due: "7th", tone: "flat" },
 ];
 
+/*
+  GST 2.0 slabs, effective 22 September 2025.
+
+  THIS TABLE WAS TWO YEARS OUT OF DATE. It listed 0 / 5 / 12 / 18 / 28 — the
+  pre-2025 structure. The 12% and 28% slabs were ABOLISHED: 12% items moved
+  mostly to 5%, 28% items to 18%, and a new 40% demerit rate was created for
+  luxury and sin goods.
+
+  Being wrong about this is not a cosmetic bug in a product that gives financial
+  advice. An owner who spots one obviously stale tax fact stops trusting every
+  other number on the screen, and they are right to — trust in a financial tool
+  is binary. A wrong slab shown next to a filing calendar also invites a real
+  mistake on a real return.
+
+  Any statutory constant in this codebase carries a verified date, the way
+  components/tds-calc.tsx does. Re-check at each Budget and each GST Council
+  meeting; do not let this drift again.
+*/
+const RATES_AS_OF = "GST 2.0 · effective 22 September 2025";
+
 const rates = [
-  { slab: "0%", ex: "Fresh produce, unbranded staples" },
-  { slab: "5%", ex: "Packaged essentials, transport" },
-  { slab: "12%", ex: "Processed goods, some industrials" },
-  { slab: "18%", ex: "Most manufactured goods & services" },
-  { slab: "28%", ex: "Luxury & sin goods" },
+  { slab: "0%", ex: "Fresh produce, unbranded staples, health & life insurance" },
+  { slab: "5%", ex: "Packaged essentials, transport, most former 12% goods" },
+  { slab: "18%", ex: "Standard rate — most goods & services, most former 28% goods" },
+  { slab: "40%", ex: "Demerit rate: tobacco, sugary aerated drinks, luxury vehicles" },
 ];
 
 const tone: Record<string, string> = {
@@ -52,8 +71,8 @@ export default function GST() {
           <p className="text-xs text-muted-foreground mt-2">General guidance only — confirm edge cases with your chartered accountant.</p>
         </Section>
 
-        <Section title="GST rate slabs" desc="Quick reference">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <Section title="GST rate slabs" desc={`Quick reference · ${RATES_AS_OF}`}>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {rates.map((r) => (
               <Card key={r.slab} className="p-4">
                 <div className="text-xl font-bold">{r.slab}</div>

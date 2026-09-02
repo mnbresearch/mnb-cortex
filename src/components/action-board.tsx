@@ -3,28 +3,74 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Plus, Trash2, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { addTask, moveTask, deleteTask, type ActionTask } from "@/lib/actions";
 
-type Task = { id: string; title: string; col: 0 | 1 | 2; priority?: "P1" | "P2" | "P3" };
+type Task = ActionTask;
 const COLS = ["To do", "In progress", "Done"] as const;
 
-// Starts empty. This used to seed every workspace's board with another
-// company's tasks ("Chase Apex Traders (₹18 L overdue)"), which then persisted
-// to localStorage as if the owner had written them.
+/*
+  Starts empty. This used to seed every workspace's board with another company's
+  tasks ("Chase Apex Traders (₹18 L overdue)"), which then persisted as if the
+  owner had written them.
+*/
 const SEED: Task[] = [];
 
 const pt: Record<string, string> = { P1: "bg-danger/10 text-danger border-danger/20", P2: "bg-warning/10 text-warning border-warning/20", P3: "bg-primary/10 text-primary border-primary/20" };
 
-export function ActionBoard() {
-  const [tasks, setTasks] = useState<Task[]>(SEED);
+/*
+  `initial` is fetched on the server by the page and passed in, so the board is
+  populated in the first paint rather than flashing empty.
+
+  WHAT CHANGED. This component kept the entire board in localStorage. The owner
+  opened Cortex on his phone and saw nothing — not stale, empty — and nobody on
+  his team could see what he had committed to. It also meant the server had no
+  idea what Cortex had suggested, so the product could never ask "you said you'd
+  chase this three weeks ago, did you?", which is the loop it is sold on.
+
+  Each mutation writes through a server action and then updates local state, so
+  the board still feels instant while being real.
+*/
+export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
+  const [tasks, setTasks] = useState<Task[]>(initial);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { try { const s = localStorage.getItem("cortex_tasks"); if (s) setTasks(JSON.parse(s)); } catch {} }, []);
-  useEffect(() => { try { localStorage.setItem("cortex_tasks", JSON.stringify(tasks)); } catch {} }, [tasks]);
+  useEffect(() => { setTasks(initial); }, [initial]);
 
-  function add() { if (!draft.trim()) return; setTasks((t) => [...t, { id: "t" + Date.now(), title: draft.trim(), col: 0 }]); setDraft(""); }
-  function move(id: string, dir: -1 | 1) { setTasks((ts) => ts.map((t) => t.id === id ? { ...t, col: Math.max(0, Math.min(2, t.col + dir)) as 0 | 1 | 2 } : t)); }
-  function del(id: string) { setTasks((ts) => ts.filter((t) => t.id !== id)); }
+  async function persist(fn: () => Promise<void>, rollback: Task[]) {
+    try { await fn(); } catch { setTasks(rollback); }   // put it back if the write failed
+  }
+
+  async function add() {
+    const title = draft.trim();
+    if (!title) return;
+    setDraft("");
+    const before = tasks;
+    // Optimistic. The temporary id is replaced by the server's on next load.
+    const tmp: Task = { id: "tmp" + Date.now(), title, col: 0, source: "user" };
+    setTasks((t) => [...t, tmp]);
+    const fd = new FormData(); fd.set("title", title);
+    await persist(() => addTask(fd), before);
+  }
+
+  async function move(id: string, dir: -1 | 1) {
+    const before = tasks;
+    const cur = tasks.find((t) => t.id === id);
+    if (!cur) return;
+    const col = Math.max(0, Math.min(2, cur.col + dir)) as 0 | 1 | 2;
+    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, col } : t)));
+    if (id.startsWith("tmp")) return;   // not saved yet; nothing to move server-side
+    const fd = new FormData(); fd.set("id", id); fd.set("col", String(col));
+    await persist(() => moveTask(fd), before);
+  }
+
+  async function del(id: string) {
+    const before = tasks;
+    setTasks((ts) => ts.filter((t) => t.id !== id));
+    if (id.startsWith("tmp")) return;
+    const fd = new FormData(); fd.set("id", id);
+    await persist(() => deleteTask(fd), before);
+  }
 
   async function generate() {
     setLoading(true);
@@ -35,9 +81,20 @@ export function ActionBoard() {
       const parsed: Task[] = lines.slice(0, 8).map((l, i) => {
         const pr = (l.match(/\[(P[123])\]/) || [])[1] as any;
         const title = l.replace(/^\s*(\d+\.|[-*])\s*/, "").replace(/\*\*/g, "").replace(/\[P[123]\]\s*/, "").split("—")[0].trim().slice(0, 90);
-        return { id: "t" + Date.now() + i, title, col: 0 as const, priority: pr };
+        return { id: "tmp" + Date.now() + i, title, col: 0 as const, priority: pr, source: "ai" };
       }).filter((t) => t.title);
-      if (parsed.length) setTasks((t) => [...parsed, ...t]);
+      if (parsed.length) {
+        setTasks((t) => [...parsed, ...t]);
+        // Persist each one, tagged source:"ai" so the follow-up loop can later
+        // tell what Cortex suggested from what the owner wrote himself.
+        for (const t of parsed) {
+          const fd = new FormData();
+          fd.set("title", t.title);
+          if (t.priority) fd.set("priority", t.priority);
+          fd.set("source", "ai");
+          try { await addTask(fd); } catch { /* keep the rest */ }
+        }
+      }
     } catch {} finally { setLoading(false); }
   }
 
@@ -74,7 +131,7 @@ export function ActionBoard() {
           </div>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">Saved to this device. Use the arrows to move a task across the board.</p>
+      <p className="text-xs text-muted-foreground">Saved to your workspace — visible on every device and to your team. Use the arrows to move a task across the board.</p>
     </Card>
   );
 }

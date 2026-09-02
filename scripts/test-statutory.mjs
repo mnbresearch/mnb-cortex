@@ -46,6 +46,11 @@ const check = (label, cond) => {
   else { fail++; console.log(`  FAIL  ${label}`); }
 };
 
+/** Pages live under src/app/(app), not src/components. */
+function readPage(rel) {
+  return readFileSync(new URL(`../src/app/(app)/${rel}`, import.meta.url), "utf8");
+}
+
 /* ========================================================================= */
 console.log("\nTDS — rates and thresholds, FY 2025-26");
 /* ========================================================================= */
@@ -140,6 +145,39 @@ console.log("\nGST late fee — GSTR-3B");
   check("interest at 18% a year", /0\.18/.test(src));
   check("a nil return carries no interest, having no tax", /nil \? 0 :/.test(src));
   check("the fee is capped", /Math\.min\(rawFee/.test(src));
+}
+
+/* ========================================================================= */
+console.log("\nGST rate slabs — GST 2.0, effective 22 September 2025");
+/* ========================================================================= */
+{
+  /*
+    The 12% and 28% slabs were ABOLISHED on 22 Sep 2025: 12% items moved mostly
+    to 5%, 28% to 18%, and a 40% demerit rate was created. Both the reference
+    table and the calculator were still showing the pre-2025 five-slab list, two
+    years later — someone pricing a real invoice with it would have charged a
+    rate that no longer exists.
+
+    Asserted in both places because they drifted independently. The negative
+    assertions are the point: this test exists to stop 12 and 28 coming back.
+  */
+  const calc = read("gst-calc.tsx");
+  const m = calc.match(/const RATES = \[([^\]]*)\]/);
+  check("gst-calc: the RATES array is parseable", !!m);
+  const rates = m ? m[1].split(",").map((x) => Number(x.trim())) : [];
+  check("gst-calc: parsed a plausible slab list", rates.length >= 3 && rates.every((n) => !Number.isNaN(n)));
+  check("gst-calc: 12% is gone", !rates.includes(12));
+  check("gst-calc: 28% is gone", !rates.includes(28));
+  check("gst-calc: 5% is offered", rates.includes(5));
+  check("gst-calc: 18% is offered", rates.includes(18));
+  check("gst-calc: the 40% demerit rate is offered", rates.includes(40));
+
+  const page = readPage("gst/page.tsx");
+  check("gst page: no 12% slab card", !/slab:\s*"12%"/.test(page));
+  check("gst page: no 28% slab card", !/slab:\s*"28%"/.test(page));
+  check("gst page: a 40% slab card exists", /slab:\s*"40%"/.test(page));
+  check("gst page: the as-of date is stated on screen",
+    /RATES_AS_OF/.test(page) && /22 September 2025/.test(page));
 }
 
 console.log("");

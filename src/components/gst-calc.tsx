@@ -16,7 +16,16 @@ export function GstCalc() {
     return { base, gst, total, cgst: gst / 2, sgst: gst / 2, igst: gst };
   }, [amount, rate, mode]);
 
-  const RATES = [0, 5, 12, 18, 28];
+  /*
+    GST 2.0 slabs, effective 22 September 2025. 12% and 28% were abolished —
+    12% items moved mostly to 5%, 28% to 18% — and 40% was added for demerit
+    goods (tobacco, sugary aerated drinks, luxury vehicles).
+
+    This calculator was still offering 12% and 28%. Someone pricing an invoice
+    with it would have charged a rate that no longer exists, on a real invoice.
+    Re-check after each GST Council meeting; see the note in app/(app)/gst/page.
+  */
+  const RATES = [0, 5, 18, 40];
   const S = "rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring";
 
   return (
