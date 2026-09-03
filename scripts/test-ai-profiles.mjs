@@ -124,7 +124,16 @@ check("an empty model response is logged with its finishReason",
 
 console.log("\nThe profile is actually threaded to the request");
 check("generateFor passes a per-mode profile", /runCortex\(\[\{ role: "user", content: user \}\], context, profileFor\(mode\)\)/.test(CORTEX));
-check("runOnce receives it", /runOnce\(provider: string, messages: Msg\[\], context: string, profile: GenProfile\)/.test(CORTEX));
+/*
+  Asserts the PROPERTY (runOnce takes the profile, in that position) rather than
+  pinning the entire signature. The original pattern ended at `GenProfile)` and
+  so broke the moment a fifth parameter was added for the tool-calling org —
+  reporting a failure about token budgets for a change that had nothing to do
+  with them. A test should fail when the thing it names is wrong, not when an
+  unrelated parameter appears next to it.
+*/
+check("runOnce receives it", /runOnce\(provider: string, messages: Msg\[\], context: string, profile: GenProfile/.test(CORTEX));
+check("…and the profile is still passed at the call site", /runOnce\(provider, messages, context2, profile/.test(CORTEX));
 check("the Gemini body uses it", /generationConfig\(profile, \{ temperature/.test(CORTEX));
 check("thinkingConfig carries the profile's budget", /thinkingBudget: profile\.thinkingBudget/.test(SRC));
 

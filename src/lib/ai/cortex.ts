@@ -5,6 +5,9 @@ import "server-only";
 import { anyEnvKey, envKey } from "@/lib/env";
 import { geminiTextModels, geminiUrl } from "@/lib/ai/models";
 import { generationConfig, profileFor, STANDARD, type GenProfile } from "@/lib/ai/generation";
+// Read-only, org-scoped lookups the model can call. See lib/ai/tools.ts for why
+// these are named queries rather than generated SQL.
+import { TOOL_DECLARATIONS, TOOL_NAMES, runTool } from "@/lib/ai/tools";
 
 export const COO_SYSTEM = `You are MNB Cortex — the AI Chief Operating Officer for an SME owner.
 You are NOT a chatbot or a dashboard. You behave like a McKinsey/BCG-grade operator who has read all of the company's data.
@@ -101,10 +104,13 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
   // Best-effort: a workspace we can't resolve (the cron has no session) simply
   // gets the default behaviour rather than an error.
   let context2 = context;
+  let toolOrg: string | null = null;
   try {
     const { getUserAndOrg } = await import("@/lib/data");
     const { getInstructions, instructionBlock } = await import("@/lib/ai-instructions");
     const { orgId } = await getUserAndOrg();
+    // Also used to scope every tool lookup below. No session -> no tools.
+    toolOrg = orgId || null;
     const extra = instructionBlock(await getInstructions(orgId));
     if (extra) context2 = `${context}${extra}`;
   } catch { /* no session or no table — carry on with defaults */ }
@@ -118,7 +124,7 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
     // three cases the right move is to hand over to the next provider at once.
     const attempts = 3;
     for (let i = 0; i < attempts; i++) {
-      const out = await runOnce(provider, messages, context2, profile);
+      const out = await runOnce(provider, messages, context2, profile, toolOrg);
       if (out !== null) return out;
 
       const st = lastFailure?.status;
@@ -133,14 +139,35 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
 }
 
 /** One model call. Returns null on a transient/failed call so the caller can retry. */
-async function runOnce(provider: string, messages: Msg[], context: string, profile: GenProfile): Promise<string | null> {
+async function runOnce(provider: string, messages: Msg[], context: string, profile: GenProfile, toolOrg?: string | null): Promise<string | null> {
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
   try {
     // ---- Google Gemini (FREE: aistudio.google.com) ----
     if (provider === "gemini" && envKey("GEMINI_API_KEY")) {
+      /*
+        `contents` is mutable because a tool call extends the conversation: the
+        model asks for a lookup, we append its request and our answer, and ask
+        again. It is seeded from the caller's messages.
+      */
+      let contents: any[] = messages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+
+      /*
+        Tools are offered ONLY when we know whose workspace this is.
+
+        toolOrg comes from the session. The nightly cron has no session, so it
+        gets no tools rather than tools pointed at nothing — every lookup is
+        scoped by that id inside lib/ai/tools.ts, and an absent id must mean
+        "don't look anything up", never "look at everything".
+      */
+      const useTools = Boolean(toolOrg);
+
       const buildBody = (withThinking: boolean) => JSON.stringify({
         system_instruction: { parts: [{ text: sys }] },
-        contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+        contents,
+        ...(useTools ? { tools: [{ function_declarations: TOOL_DECLARATIONS }] } : {}),
         generationConfig: withThinking
           ? generationConfig(profile, { temperature: 0.4 })
           : { temperature: 0.4, maxOutputTokens: profile.maxOutputTokens },
@@ -175,8 +202,47 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
         }
 
         if (r.ok) {
-          const j = await r.json();
-          const text = j?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+          let j = await r.json();
+
+          /*
+            The tool loop.
+
+            Gemini answers with a functionCall part when it wants a lookup. We
+            run it, append both its request and our result, and ask again. Three
+            rounds maximum: enough for "find the customer, then their invoices",
+            and a hard stop so a model that keeps asking cannot spin the request
+            until Vercel kills it.
+          */
+          for (let round = 0; round < 3 && useTools; round++) {
+            const parts = j?.candidates?.[0]?.content?.parts || [];
+            const calls = parts.filter((p: any) => p?.functionCall?.name);
+            if (!calls.length) break;
+
+            contents = [...contents, { role: "model", parts }];
+
+            const responses = [];
+            for (const c of calls.slice(0, 4)) {
+              const fname = String(c.functionCall.name);
+              // Only names we declared. A model asking for anything else gets a
+              // refusal rather than a lookup.
+              const result = TOOL_NAMES.has(fname)
+                ? await runTool(fname, c.functionCall.args || {}, toolOrg!)
+                : { ok: false, error: `Unknown tool: ${fname}` };
+              responses.push({ functionResponse: { name: fname, response: result } });
+            }
+            contents = [...contents, { role: "user", parts: responses }];
+
+            const follow = await fetch(geminiUrl(model, process.env.GEMINI_API_KEY!), {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: buildBody(!thinkingUnsupported),
+            });
+            if (!follow.ok) break;   // keep whatever we already have
+            j = await follow.json();
+          }
+
+          // Join every text part: with tools in play the answer can arrive split.
+          const text = (j?.candidates?.[0]?.content?.parts || [])
+            .map((p: any) => p?.text).filter(Boolean).join("").trim() || null;
           /*
             An OK response with no text is the thinking-ate-the-budget case:
             the model spent maxOutputTokens reasoning and had none left to

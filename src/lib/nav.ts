@@ -111,6 +111,7 @@ export const NAV = [
   { href: "/receivables", label: "Receivables & DSO", icon: Hourglass, group: "Money", sub: "Cash & working capital" },
   { href: "/tds", label: "TDS Calculator", icon: Stamp, group: "Money", sub: "Tax & GST" },
   { href: "/buyvslease", label: "Buy vs Lease", icon: GitCompare, group: "Money", sub: "Funding & investment" },
+  { href: "/msme", label: "MSME 45-day (43B(h))", icon: ShieldAlert, group: "Money", sub: "Cash & working capital" },
   { href: "/payables", label: "Payables & DPO", icon: ReceiptText, group: "Money", sub: "Cash & working capital" },
   { href: "/itc", label: "GST ITC Set-off", icon: Blocks, group: "Money", sub: "Tax & GST" },
   { href: "/dscr", label: "DSCR & Loan Fit", icon: ShieldCheck, group: "Money", sub: "Funding & investment" },

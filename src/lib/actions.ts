@@ -987,6 +987,40 @@ export async function deleteGoal(fd: FormData) {
   revalidatePath("/goals");
 }
 
+// ---- Suppliers / MSME classification ----------------------------------------
+/*
+  Set one supplier's Udyam category.
+
+  This is the input to the 43B(h) exposure figure, and the reason that figure
+  can be honest: micro and small are covered by the section, medium and
+  unregistered are not, and none of it is derivable from any other data in the
+  workspace. The value is validated against the same list the CHECK constraint
+  allows, so a bad value is refused here rather than becoming a database error
+  in the user's face.
+*/
+const UDYAM = new Set(["micro", "small", "medium", "not_registered"]);
+
+export async function setVendorUdyam(fd: FormData): Promise<{ ok: boolean; error?: string }> {
+  let orgId: string;
+  try { orgId = await requireWriteOrg(); }
+  catch { return { ok: false, error: "Sign in to classify suppliers." }; }
+
+  const id = str(fd.get("id"));
+  const category = str(fd.get("udyam_category"));
+  if (!id) return { ok: false, error: "No supplier." };
+  if (!UDYAM.has(category)) return { ok: false, error: "Unknown category." };
+
+  const sb = createClient();
+  const { error } = await sb.from("vendors")
+    .update({ udyam_category: category })
+    .eq("id", id).eq("org_id", orgId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/msme");
+  revalidatePath("/vendors");
+  return { ok: true };
+}
+
 // ---- Invoices & quotes ------------------------------------------------------
 /*
   These used to be printouts. The generator and the quote builder were React

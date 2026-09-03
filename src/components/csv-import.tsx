@@ -6,7 +6,10 @@ import { Upload, CheckCircle2, Table } from "lucide-react";
 import { importRows, importFromUrl } from "@/lib/actions";
 // Same resolver the server uses, so the preview cannot disagree with the import.
 import { resolveHeaders } from "@/lib/import-map";
-import { parseCsv } from "@/lib/csv";
+// Recognises Tally/Vyapar/Busy export SHAPES — title rows, total rows,
+// Debit/Credit pairs — which header matching alone cannot handle.
+import { flattenExport, type FlattenResult } from "@/lib/accounting-export";
+import { parseCsv, parseCsvGrid } from "@/lib/csv";
 
 const DATASETS = [
   { table: "sales_orders", label: "Sales orders", cols: "order_no, customer_name, region, product, amount, status" },
@@ -20,6 +23,7 @@ export function CsvImport() {
   const [url, setUrl] = useState("");
   const [rows, setRows] = useState<any[]>([]);
   const [msg, setMsg] = useState("");
+  const [shape, setShape] = useState<FlattenResult | null>(null);
   const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const ds = DATASETS.find((d) => d.table === table)!;
@@ -41,8 +45,18 @@ export function CsvImport() {
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f) return;
     const text = await f.text();
-    const parsed = parseCsv(text);
-    setRows(parsed); setMsg(`${parsed.length} rows detected. Check the column match below, then import.`);
+    /*
+      Read the grid FIRST, then work out where the header is.
+
+      parseCsv() takes row 0 as the header, which is right for a clean sheet and
+      wrong for every Tally and Vyapar export — where row 0 is the company name
+      and the last row is a Grand Total that would otherwise be imported as a
+      transaction worth the sum of all the others.
+    */
+    const flat = flattenExport(parseCsvGrid(text));
+    setShape(flat);
+    setRows(flat.rows);
+    setMsg(`${flat.rows.length} rows detected. ${flat.note} Check the column match below, then import.`);
   }
 
   async function doImport() {
@@ -102,6 +116,13 @@ export function CsvImport() {
         file we cannot read used to write blank rows and report success — the
         single worst outcome, since the owner then believes their data is in.
       */}
+      {shape && shape.source !== "generic" && (
+        <div className="rounded-lg border bg-primary/5 border-primary/20 p-3 text-sm">
+          <span className="font-medium capitalize">{shape.source} export recognised.</span>{" "}
+          <span className="text-muted-foreground">{shape.note}</span>
+        </div>
+      )}
+
       {match && (
         <div className={`rounded-lg border p-3 text-sm ${match.matched === 0 ? "bg-danger/10 border-danger/20" : "bg-background"}`}>
           <div className="font-medium mb-1.5">
