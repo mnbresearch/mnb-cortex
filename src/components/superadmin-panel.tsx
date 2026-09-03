@@ -119,7 +119,7 @@ export function ProvisionCustomerForm() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
-  const [plan, setPlan] = useState("growth");
+  const [plan, setPlan] = useState("watch");
   const [credits, setCredits] = useState("4000");
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<any>(null);
@@ -171,7 +171,7 @@ export function ProvisionCustomerForm() {
 }
 
 export function OrgManager({ org }: { org: ManagedOrg }) {
-  const [plan, setPlan] = useState(org.plan || "growth");
+  const [plan, setPlan] = useState(org.plan || "watch");
   const [status, setStatus] = useState(org.subscription_status || "trialing");
   const [credits, setCredits] = useState(org.credits || 0);
   const [amount, setAmount] = useState(1000);

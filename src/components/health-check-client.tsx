@@ -17,7 +17,7 @@ const QUESTIONS: Q[] = [
     opts: [{ label: "Instantly", score: 100 }, { label: "A few days", score: 55 }, { label: "Weeks", score: 20 }] },
   { id: "unit", q: "Do you know your CAC and customer LTV?", area: "Unit economics", rec: "Unit Economics + Customer LTV & RFM",
     opts: [{ label: "Both", score: 100 }, { label: "One of them", score: 55 }, { label: "Neither", score: 20 }] },
-  { id: "decisions", q: "How are big decisions usually made?", area: "Decision quality", rec: "AI CEO Chat + a Decision Journal with a devil's advocate",
+  { id: "decisions", q: "How are big decisions usually made?", area: "Decision quality", rec: "Ask Cortex + a Decision Journal with a devil's advocate",
     opts: [{ label: "Data-driven", score: 100 }, { label: "A mix", score: 60 }, { label: "Mostly gut", score: 25 }] },
 ];
 

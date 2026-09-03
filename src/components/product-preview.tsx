@@ -26,7 +26,7 @@ export function ProductPreview() {
             <div className="h-6 w-6 rounded-lg brand-gradient" />
             <span className="font-semibold text-sm hidden md:inline">Cortex</span>
           </div>
-          {["Dashboard", "AI CEO Chat", "Workforce", "Finance", "Memory", "Agents"].map((x, i) => (
+          {["Dashboard", "Ask Cortex", "Workforce", "Finance", "Memory", "Agents"].map((x, i) => (
             <div key={x} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 mb-1 text-xs ${i === 0 ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground"}`}>
               <span className="h-3.5 w-3.5 rounded bg-current opacity-40" /><span className="hidden md:inline">{x}</span>
             </div>

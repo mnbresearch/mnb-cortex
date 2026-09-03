@@ -6,14 +6,14 @@ import { ThemeProvider } from "@/components/theme-provider";
 const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans", weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "MNB Cortex — The AI operating brain for your business",
-  description: "The AI that runs your business and never forgets it. One brain across your whole company — it reads all your data, predicts what's coming, tells you exactly what to do, and does it.",
+  title: "MNB Cortex — Know what's going wrong, before it costs you",
+  description: "The early-warning system for Indian businesses. Cortex reads your Tally, Vyapar or Excel exports and tells you who hasn't paid, what's due and what's about to run out — by email, before it costs you. Keep your accounting software.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "MNB Cortex", statusBarStyle: "black-translucent" },
   icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/icon-192.png", sizes: "192x192", type: "image/png" }], apple: "/apple-touch-icon.png" },
   metadataBase: new URL("https://cortex.mnbresearch.com"),
-  openGraph: { title: "MNB Cortex — The AI operating brain for your business", description: "Your business now has a brain of its own. It reads everything, remembers everything, predicts what's coming, and acts.", type: "website", url: "https://cortex.mnbresearch.com" },
-  twitter: { card: "summary_large_image", title: "MNB Cortex — The AI operating brain for your business", description: "Your business now has a brain of its own — one AI that runs it and never forgets." },
+  openGraph: { title: "MNB Cortex — Your books tell you what happened. Cortex tells you what's about to.", description: "Reads your Tally, Vyapar or Excel exports and warns you who hasn't paid, what's due and what's about to run out — by email, before it costs you.", type: "website", url: "https://cortex.mnbresearch.com" },
+  twitter: { card: "summary_large_image", title: "MNB Cortex — Know what's going wrong, before it costs you", description: "The early-warning system for Indian businesses. Keep your accounting software; this is the part it was never built to do." },
 };
 
 export const viewport = {

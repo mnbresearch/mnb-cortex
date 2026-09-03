@@ -38,8 +38,8 @@ export function ReferralWidget({
   const origin = typeof window !== "undefined" ? window.location.origin : "https://cortex.mnbresearch.com";
   const link = code ? `${origin}/?ref=${code}` : origin;
   const msg =
-    `I run my business on MNB Cortex — an AI COO that reads your numbers, spots problems early ` +
-    `and tells you what to do next. Have a look: ${link}`;
+    `I run my business on MNB Cortex — it reads my Tally exports and tells me who hasn't paid, ` +
+    `what's due and what's about to run out, before it costs me. Have a look: ${link}`;
 
   function copy(text: string, what: string) {
     navigator.clipboard?.writeText(text);

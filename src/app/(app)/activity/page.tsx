@@ -11,7 +11,7 @@ export default async function ActivityPage() {
   const { rows, live } = await getActivity();
   return (
     <>
-      <Topbar title="Activity" subtitle="Everything your AI COO and team have done" />
+      <Topbar title="Activity" subtitle="Everything Cortex and your team have done" />
       <PageShell>
         {!live && <Card className="p-5 bg-warning/10 border-warning/20 text-sm"><a href="/login" className="text-primary underline">Sign in</a> to see your workspace activity timeline.</Card>}
         {live && (

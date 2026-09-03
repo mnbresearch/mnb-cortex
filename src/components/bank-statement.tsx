@@ -282,7 +282,7 @@ export function BankStatementPanel() {
           )}
 
           <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border bg-primary/5 p-4">
-            <div className="text-sm"><b>Ground your whole workspace in this.</b> Save it to Cortex Memory so your AI CEO chat, Deep Dive and reports use these real numbers.</div>
+            <div className="text-sm"><b>Ground your whole workspace in this.</b> Save it to Cortex Memory so your Ask Cortex, Deep Dive and your weekly brief use these real numbers.</div>
             <Button onClick={save} disabled={saved === "saving"}>
               {saved === "done" ? <Check className="h-4 w-4" /> : <BrainCircuit className="h-4 w-4" />}{saved === "saving" ? "Saving…" : saved === "done" ? "Saved to Memory" : "Save to Cortex Memory"}
             </Button>

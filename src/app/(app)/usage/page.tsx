@@ -15,7 +15,7 @@ import { Coins, Infinity as InfinityIcon, Sparkles, Clock } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 const COST_SHOWCASE: [string, string][] = [
-  ["AI CEO chat message", "chat"], ["Dashboard pulse", "pulse"], ["Document draft", "document"],
+  ["Ask Cortex message", "chat"], ["Dashboard pulse", "pulse"], ["Document draft", "document"],
   ["Meeting summary", "meeting"], ["Strategy memo", "strategy"], ["Executive report", "report"],
   ["Forecast / scenario", "forecast"], ["Board deck", "board"], ["Marketing kit", "marketing"],
   ["Contract review", "contract"], ["Investor update", "investor"], ["Negotiation prep", "negotiate"],

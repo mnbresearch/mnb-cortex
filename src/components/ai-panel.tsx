@@ -82,7 +82,7 @@ export function AIPanel({ mode, placeholder, cta, multiline = false, allowFile =
           className="w-full rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
       )}
       <Button onClick={run} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Working…" : cta}</Button>
-      {loading && <p className="text-sm text-muted-foreground">The AI COO is analysing…</p>}
+      {loading && <p className="text-sm text-muted-foreground">Cortex is analysing…</p>}
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
       {out && saveMode && (
         <form action={saveArtifact} className="flex flex-wrap items-center gap-2">

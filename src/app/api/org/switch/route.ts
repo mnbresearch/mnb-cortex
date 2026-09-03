@@ -17,7 +17,14 @@ export async function POST(req: Request) {
     if (!mem) return NextResponse.json({ ok: false, error: "You are not a member of that workspace" }, { status: 403 });
 
     const res = NextResponse.json({ ok: true });
-    res.cookies.set("cortex_org", String(org_id), { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365 });
+    /*
+      `secure` added: this is now the main way a Practice firm moves between
+      client workspaces, so it is set far more often than when it was only a
+      rare manual switch. Membership is still re-verified server-side on every
+      read (lib/data.ts), so a forged value grants nothing — but there is no
+      reason to let it travel in clear text either.
+    */
+    res.cookies.set("cortex_org", String(org_id), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365 });
     return res;
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || "Failed" }, { status: 200 });

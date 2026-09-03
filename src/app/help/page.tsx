@@ -3,7 +3,7 @@ import { WHATSAPP_NUMBER } from "@/lib/config";
 import { Logo } from "@/components/logo";
 export const metadata = { title: "Help & FAQ — MNB Cortex" };
 const faqs = [
-  { q: "What is MNB Cortex?", a: "An AI Operating System — your 'AI COO' — that monitors your business, predicts problems, recommends actions, and executes them, so you can run your company by asking instead of opening spreadsheets." },
+  { q: "What is MNB Cortex?", a: "The early-warning system for your business — it watches your numbers and warns you, recommends actions, and executes them, so you can run your company by asking instead of opening spreadsheets." },
   { q: "How do I get my own data in?", a: "Sign in, then use Settings → Load demo data to explore, or Import data (CSV/Excel/Google Sheets), the public API, or connect an integration." },
   { q: "Is my data secure?", a: "Yes. Every workspace is isolated with Postgres Row-Level Security, traffic is HTTPS-only (HSTS), and API keys stay server-side." },
   { q: "Which AI does it use?", a: "It runs on fast open models via Groq by default, and also supports Gemini, OpenAI and Anthropic — grounded in your live business data." },

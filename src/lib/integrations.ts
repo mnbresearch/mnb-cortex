@@ -11,7 +11,8 @@ export type PlanId = "starter" | "growth" | "business" | "aicoo" | "enterprise" 
 // Ordering drives every "minimum plan" gate, so a missing id here silently
 // under-privileges a paying customer. aicoo must outrank business.
 export const PLAN_RANK: Record<string, number> = {
-  starter: 1, growth: 2, business: 3, aicoo: 4, enterprise: 5,
+  watch: 2, watchpro: 3, practice: 3, command: 4, enterprise: 5,
+  starter: 1, growth: 2, business: 3, aicoo: 4,
   // legacy ids mapped onto the nearest current tier
   solo: 1, premium: 3,
 };
@@ -39,6 +40,10 @@ export type Integration = {
 
 /** How many integrations each plan may connect. */
 export const PLAN_INTEGRATION_LIMIT: Record<string, number> = {
+  watch: 10,
+  watchpro: 30,
+  practice: 30,
+  command: 999,
   starter: 3,
   growth: 10,
   business: 30,

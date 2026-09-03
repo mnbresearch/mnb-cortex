@@ -16,7 +16,7 @@ export default function Bank() {
             <Landmark className="h-4 w-4 text-primary mt-0.5 shrink-0" />
             <span>
               Upload a bank statement (CSV or PDF) and Cortex reads every transaction — categorises your spend, shows exactly where the money went,
-              and computes your real money‑in, money‑out and net cash flow. Save it to <b>Cortex Memory</b> and your AI CEO chat, Deep Dive and reports all start using your real numbers.
+              and computes your real money‑in, money‑out and net cash flow. Save it to <b>Cortex Memory</b> and Ask Cortex, Deep Dive and your weekly brief all start using your real numbers.
             </span>
           </div>
         </Card>

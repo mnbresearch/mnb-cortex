@@ -188,7 +188,7 @@ export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]
 
       {goals.length > 0 && (
         <Button onClick={advise} disabled={loading}>
-          <Sparkles className="h-4 w-4" /> {loading ? "Thinking…" : "Ask the AI COO how to hit these"}
+          <Sparkles className="h-4 w-4" /> {loading ? "Thinking…" : "Ask Cortex how to hit these"}
         </Button>
       )}
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}

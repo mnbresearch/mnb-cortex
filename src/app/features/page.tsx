@@ -26,7 +26,7 @@ const DOMAINS: { n: string; name: string; blurb: string; tools: string[] }[] = [
   { n: "03", name: "Finance & Money", blurb: "A CFO-grade financial cockpit, tuned for Indian businesses.",
     tools: ["Business Health Dashboard", "P&L Builder", "13-Week Cash Flow", "Cash Runway & Burn", "Cash Conversion Cycle", "Receivables & Payables", "Unit Economics", "Funding, EMI & DSCR", "Net Worth & Balance Sheet", "GST Invoicing, ITC & TDS", "Payroll, CTC & Appraisals", "Financial Ratios & Depreciation"] },
   { n: "04", name: "Strategy & Advisory", blurb: "A McKinsey-in-your-pocket that knows your numbers.",
-    tools: ["AI CEO Chat", "Strategy Consultant", "Forecasting & Scenarios", "Business Valuation", "AI Playbooks", "Decision Journal", "Board Deck Generator", "Investor Updates", "Industry Benchmarks", "Risk Radar"] },
+    tools: ["Ask Cortex", "Strategy Consultant", "Forecasting & Scenarios", "Business Valuation", "AI Playbooks", "Decision Journal", "Board Deck Generator", "Investor Updates", "Industry Benchmarks", "Risk Radar"] },
   { n: "05", name: "Sales & Growth", blurb: "Fill the pipeline, price it right, keep customers longer.",
     tools: ["Deals Pipeline", "AI Lead Scoring", "Sales Targets", "Marketing Funnel", "Ad Budget & ROAS", "Churn Predictor", "Customer LTV & RFM", "Pricing Optimizer", "Competitor Intel", "Marketing Studio"] },
   { n: "06", name: "People & Operations", blurb: "Run the back half of the business without spreadsheets.",

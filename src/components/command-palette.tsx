@@ -58,7 +58,7 @@ export function CommandPalette() {
               if (e.key === "ArrowUp") { e.preventDefault(); setI((x) => Math.max(x - 1, 0)); }
               if (e.key === "Enter") { e.preventDefault(); go(i); }
             }}
-            placeholder="Search modules, your records, or ask the AI COO…" className="flex-1 bg-transparent outline-none text-sm" />
+            placeholder="Search modules, your records, or ask Cortex…" className="flex-1 bg-transparent outline-none text-sm" />
           <kbd className="text-[10px] text-muted-foreground border rounded px-1.5 py-0.5">ESC</kbd>
         </div>
         <div className="max-h-96 overflow-y-auto p-2">

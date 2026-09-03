@@ -40,7 +40,7 @@ export function Playbooks() {
         <button onClick={() => setActive(null)} className="text-sm text-primary inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> All playbooks</button>
         <div className="font-semibold text-lg">{active.title}</div>
         {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> The AI COO is writing your playbook…</div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> The Cortex is writing your playbook…</div>
         ) : (
           <>
             <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />

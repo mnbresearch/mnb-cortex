@@ -43,7 +43,7 @@ export default async function Settings() {
                 company profile, which is filled in once and forgotten. */}
             <AiInstructionsPanel canEdit={canEditAi} />
 
-            <Section title="Company profile" desc="This is the company your AI COO manages">
+            <Section title="Company profile" desc="The business Cortex watches for you">
               <form action={updateOrgProfile} className="grid sm:grid-cols-3 gap-3">
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-1">Company name
                   <input className={inp} name="name" defaultValue={profile?.name || ""} required />

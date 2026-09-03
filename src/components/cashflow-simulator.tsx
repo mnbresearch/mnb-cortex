@@ -69,7 +69,7 @@ export function CashflowSimulator() {
         <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Cash freed vs today</div><div className={`text-lg font-bold ${m.freed >= 0 ? "text-success" : "text-danger"}`}>{m.freed >= 0 ? "+" : ""}{inr(m.freed)}</div></div>
       </div>
 
-      <Button onClick={analyse} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "How do I free this cash? (ask the AI COO)"}</Button>
+      <Button onClick={analyse} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "How do I free this cash? (ask Cortex)"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
     </Card>
   );

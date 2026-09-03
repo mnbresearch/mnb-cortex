@@ -97,7 +97,7 @@ export function SaasMetrics() {
         Benchmarks: LTV:CAC above <b>3x</b> is healthy, CAC payback under <b>12 months</b> is strong, monthly churn under <b>3%</b> is good for SMB SaaS.
       </div>
 
-      <Button onClick={analyse} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "What should I fix first? (ask the AI COO)"}</Button>
+      <Button onClick={analyse} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "What should I fix first? (ask Cortex)"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
     </Card>
   );

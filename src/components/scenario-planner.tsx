@@ -70,7 +70,7 @@ export function ScenarioPlanner() {
       <div className="flex items-center justify-between">
         <div>
           <div className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> What-if scenario planner</div>
-          <div className="text-sm text-muted-foreground">Drag the levers — the model recalculates instantly, then let the AI COO stress-test it.</div>
+          <div className="text-sm text-muted-foreground">Drag the levers — the model recalculates instantly, then let the Cortex stress-test it.</div>
         </div>
         <Button variant="ghost" size="sm" onClick={reset}><RotateCcw className="h-4 w-4" /> Reset</Button>
       </div>
@@ -101,7 +101,7 @@ export function ScenarioPlanner() {
         </svg>
       </div>
 
-      <Button onClick={stressTest} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Stress-testing…" : "Stress-test this with the AI COO"}</Button>
+      <Button onClick={stressTest} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Stress-testing…" : "Stress-test this with Cortex"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
     </Card>
   );

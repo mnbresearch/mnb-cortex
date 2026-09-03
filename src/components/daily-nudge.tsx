@@ -31,7 +31,7 @@ export function DailyNudge({ status, daysLeft }: { status: string; daysLeft: num
           {daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left on your plan` : "Your plan is ending"}
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Loving Cortex? Pick a plan to keep your AI COO, agents, memory and reports running without interruption.
+          Loving Cortex? Pick a plan to keep the watching, agents, memory and reports running without interruption.
         </p>
         <div className="mt-5 flex flex-col gap-2">
           <Link href="/pricing" onClick={dismiss}><Button className="w-full">See plans & upgrade</Button></Link>

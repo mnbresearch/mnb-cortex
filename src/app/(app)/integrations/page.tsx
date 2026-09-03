@@ -48,15 +48,15 @@ export default async function Integrations() {
 
         <Section title="What each plan includes" desc="Integration allowances by tier">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {(["starter", "growth", "premium", "enterprise"] as const).map((p) => (
+            {(["watch", "watchpro", "command", "enterprise"] as const).map((p) => (
               <Card key={p} className={`p-4 ${plan === p ? "border-primary/40 bg-primary/5" : ""}`}>
                 <div className="font-semibold capitalize">{p}</div>
                 <div className="text-2xl font-bold mt-1">{PLAN_INTEGRATION_LIMIT[p] === 999 ? "Unlimited" : PLAN_INTEGRATION_LIMIT[p]}</div>
                 <div className="text-xs text-muted-foreground">integrations</div>
                 <div className="text-xs text-muted-foreground mt-2">
-                  {p === "starter" && "Slack, Telegram, Sheets, Resend"}
-                  {p === "growth" && "+ Zoho, Tally, Shopify, HubSpot, Stripe, Razorpay, Notion, Airtable"}
-                  {p === "premium" && "+ Salesforce, QuickBooks, Meta & Google Ads, Twilio, Gmail, OpenAI"}
+                  {p === "watch" && "Slack, Telegram, Sheets, Resend"}
+                  {p === "watchpro" && "+ Zoho, Tally, Shopify, HubSpot, Stripe, Razorpay, Notion, Airtable"}
+                  {p === "command" && "+ Salesforce, QuickBooks, Meta & Google Ads, Twilio, Gmail, OpenAI"}
                   {p === "enterprise" && "+ External Postgres, custom & on-prem connectors"}
                 </div>
               </Card>

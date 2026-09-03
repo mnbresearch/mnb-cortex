@@ -23,21 +23,29 @@ const FAQS = [
   { q: "How does billing work?", a: "Cortex runs on credits. Buy a ₹149 pack and use it with no subscription, or pick a plan from ₹1,499/mo for a monthly allowance — billed securely via Cashfree. Your free Business Health Check needs no card at all. Prices are in INR; international customers are onboarded by our team." },
 ];
 
+/*
+  Stats now describe the WATCHING, not the inventory.
+
+  "130+ modules" and "300+ agents" are true and were the wrong thing to lead
+  with: breadth reads as a free-tools site and invites the question "do I need
+  130 things?" A prospect deciding in five seconds needs to know what Cortex
+  looks at on their behalf.
+*/
 const STATS = [
-  { to: 130, suffix: "+", label: "modules & tools" },
-  { to: 300, suffix: "+", label: "runnable AI agents" },
-  { to: 62, suffix: "", label: "integrations" },
-  { to: 24, suffix: "/7", label: "live monitoring" },
+  { to: 45, suffix: "-day", label: "MSME clock, watched" },
+  { to: 7, suffix: "", label: "statutory deadlines tracked" },
+  { to: 1, suffix: "", label: "email a week — that's it" },
+  { to: 3, suffix: " min", label: "to your first warning" },
 ];
 
 // Problem-specific: the day-to-day reality of running an SME, and how Cortex changes it.
 const OLD_NEW = [
-  { old: "You find out about a cash crunch when the bank balance drops.", now: "Cortex forecasts the crunch weeks ahead and tells you exactly what to fix." },
-  { old: "Your numbers live in Tally, spreadsheets, WhatsApp and your head.", now: "One brain reads all of it and answers in plain language — instantly." },
-  { old: "You react to stockouts, overdue invoices and churn after they cost you.", now: "It predicts them early and drafts the PO, the reminder or the save-play." },
-  { old: "Consultants are slow and pricey; ChatGPT doesn't know your business.", now: "A COO-grade brain that knows your real numbers, on tap, 24/7." },
-  { old: "You're too busy running the business to actually analyse it.", now: "Autopilot watches your data daily and briefs you every morning." },
-  { old: "Nobody finds you when buyers ask ChatGPT for a recommendation.", now: "AI Visibility gets your business named by ChatGPT, Gemini & Perplexity." },
+  { old: "You find out a customer hasn't paid when you need the cash.", now: "Cortex emails you the day an invoice crosses its due date — with the name and the number." },
+  { old: "You pay a small supplier late and lose the deduction at year end.", now: "It watches the MSME 45-day clock (43B(h)) and tells you which bills to clear first." },
+  { old: "A GST or TDS date passes and you find out from a notice.", now: "Every statutory deadline that applies to you, warned before — not after." },
+  { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Vyapar and Busy files as they come." },
+  { old: "You're too busy running the business to sit and analyse it.", now: "One email on Monday: the three things worth your attention this week." },
+  { old: "Your CA opens thirty files to find the client in trouble.", now: "The Practice console ranks every client by who needs them — on one screen." },
 ];
 
 // The whole platform, grouped by the job it does for you.
@@ -56,7 +64,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
   {
     label: "Think & decide",
     items: [
-      { icon: MessageSquare, name: "AI CEO Chat", d: "Ask anything in English or Hinglish, grounded in your data." },
+      { icon: MessageSquare, name: "Ask Cortex", d: "Ask about your own rows — it looks them up, in English or Hinglish." },
       { icon: Telescope, name: "Cortex Deep Dive", d: "Diagnose → decide → draft the first action, in three passes." },
       { icon: LineChart, name: "Forecasting & Scenarios", d: "90-day forecast with interactive what-ifs." },
       { icon: Brain, name: "Strategy Consultant", d: "SWOT, growth levers and a prioritised plan." },
@@ -103,7 +111,7 @@ const CAPS = [
   { n: "01", name: "Cortex Workforce", blurb: "A 7-department AI org chart — 290+ runnable agents." },
   { n: "02", name: "Cortex Memory", blurb: "A permanent second brain that grounds every answer." },
   { n: "03", name: "Finance & Money", blurb: "Dashboards, cash flow, GST, payroll, ratios." },
-  { n: "04", name: "Strategy & Advisory", blurb: "AI CEO chat, forecasts, board decks, playbooks." },
+  { n: "04", name: "Strategy & Advisory", blurb: "Ask Cortex, forecasts, board decks, playbooks." },
   { n: "05", name: "Sales & Growth", blurb: "Pipeline, lead scoring, churn, pricing, LTV." },
   { n: "06", name: "People & Operations", blurb: "Hiring, capacity, reorder, SOPs, approvals." },
   { n: "07", name: "Legal & Compliance", blurb: "GST, contracts, compliance calendar, documents." },
@@ -165,20 +173,38 @@ export default function Home() {
         <div className="grid-bg absolute inset-0" aria-hidden />
         <div className="aurora opacity-60" aria-hidden />
         <div className="relative z-10 max-w-7xl mx-auto">
+          {/*
+            REPOSITIONED.
+
+            The old hero said "the AI operating brain for your business" over
+            "Your business now has a brain of its own". Both describe what the
+            software IS, and neither says what it DOES for the reader — so a
+            jeweller or a printer reads it, understands nothing concrete, and
+            leaves. "Cortex" made it worse: it names a role the owner already
+            occupies, and it is a category nobody searches for.
+
+            The position now is the one thing the incumbents structurally do not
+            do. Tally, Zoho and Vyapar record what happened. None of them warn
+            you. That is a real gap, it is what this product actually does after
+            the alerting and 43B(h) work, and it lets Cortex sit ON TOP of the
+            books rather than asking anyone to switch.
+          */}
           <div className="eyebrow flex items-center gap-3">
             <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-            The AI operating brain for your business — by MNB Research
+            The early-warning system for Indian businesses — by MNB Research
           </div>
           <Kinetic
             as="h1"
-            text={"Your business now has\na brain of its own."}
+            text={"Your books tell you what happened.\nCortex tells you what's about to."}
             className="font-display display-1 tracking-tightest mt-6"
           />
           <div className="mt-6 grid lg:grid-cols-[1.3fr_1fr] gap-8 items-end">
             <p className="text-lg lg:text-xl text-muted-foreground max-w-2xl">
-              Your numbers are scattered across Tally, spreadsheets and WhatsApp — and the things that matter, you spot too late.
-              MNB Cortex is <span className="text-foreground font-medium">one AI brain</span> that reads all of it, remembers every decision,
-              predicts what&rsquo;s coming and does the busywork. Ask <span className="text-foreground font-medium">&ldquo;How is my business?&rdquo;</span> and it already knows.
+              Cortex reads your Tally, Vyapar or Excel exports and watches them every day. It tells you{" "}
+              <span className="text-foreground font-medium">who hasn&rsquo;t paid</span>,{" "}
+              <span className="text-foreground font-medium">what&rsquo;s due</span> and{" "}
+              <span className="text-foreground font-medium">what&rsquo;s about to run out</span> — by email, before it costs you.
+              Keep your accounting software. This is the part it was never built to do.
             </p>
             <div className="flex flex-wrap items-center gap-3 lg:justify-end">
               <Magnetic>
@@ -193,7 +219,7 @@ export default function Home() {
           </div>
 
           <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            <span>One brain, working as your <RotatingWord words={["AI COO.", "AI CFO.", "AI CMO.", "AI analyst."]} /></span>
+            <span>This week it caught <RotatingWord words={["₹8.4L of deductions at risk.", "an invoice 62 days overdue.", "a GST deadline in 3 days.", "stock out in 9 days."]} /></span>
             <Link href="/health-check" className="inline-flex items-center gap-1.5 text-foreground font-medium link-sweep">Take the free 60-second health check <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
 

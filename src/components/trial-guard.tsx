@@ -7,8 +7,8 @@ import { PLANS as ALL_PLANS } from "@/lib/config";
 
 // Real prices, straight from the pricing source of truth.
 const PLANS = ALL_PLANS
-  .filter((p) => ["starter", "growth", "premium"].includes(p.id))
-  .map((p) => ({ name: p.name, price: "₹" + p.monthly.toLocaleString("en-IN"), note: p.tagline, highlight: p.id === "growth" }));
+  .filter((p) => ["watch", "watchpro", "command"].includes(p.id))
+  .map((p) => ({ name: p.name, price: "₹" + p.monthly.toLocaleString("en-IN"), note: p.tagline, highlight: p.id === "watchpro" }));
 
 // Pages that must stay reachable so a locked user can actually pay.
 const ALLOW = ["/billing", "/settings", "/pricing"];

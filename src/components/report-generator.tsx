@@ -33,7 +33,7 @@ export function ReportGenerator() {
             <div className="rounded-lg bg-primary/15 p-2"><FileText className="h-5 w-5 text-primary" /></div>
             <div>
               <p className="font-medium">Monthly business review</p>
-              <p className="text-sm text-muted-foreground">Your AI COO writes a board-ready MIS from your live numbers.</p>
+              <p className="text-sm text-muted-foreground">Cortex writes a board-ready MIS from your live numbers.</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -57,7 +57,7 @@ export function ReportGenerator() {
         {!report && !loading && (
           <Card className="p-10 text-center text-muted-foreground">
             <FileText className="h-8 w-8 mx-auto mb-2" />
-            Click <b className="text-foreground">Generate report</b> to have your AI COO write this month's business review.
+            Click <b className="text-foreground">Generate report</b> to have Cortex write this month's business review.
           </Card>
         )}
       </>

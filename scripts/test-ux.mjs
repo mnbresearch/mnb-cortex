@@ -36,12 +36,32 @@ console.log("\nNAVIGATION: no group may be an unscannable wall");
 /* ========================================================================= */
 {
   const nav = read("src", "lib", "nav.ts");
-  const entries = [...nav.matchAll(/\{ href: "([^"]+)", label: "([^"]+)", icon: \w+, group: "([^"]+)"(?:, sub: "([^"]+)")? \}/g)]
-    .map((m) => ({ href: m[1], label: m[2], group: m[3], sub: m[4] }));
+  /*
+    `calc: true` was added to ~28 standalone calculators, which the sidebar no
+    longer renders — they live behind one "Calculators" entry instead. The old
+    pattern required the entry to end immediately after group/sub, so every
+    tagged one stopped parsing and the count fell to 98.
+
+    Both halves are now checked separately, which is sharper than before:
+      - the PARSE guard counts everything, so a broken regex still fails loudly
+      - the group-size rules apply to what is actually RENDERED, because an
+        unscannable wall is a thing the user sees, and a calculator hidden
+        behind an index page is not part of that wall
+  */
+  const entries = [...nav.matchAll(/\{ href: "([^"]+)", label: "([^"]+)", icon: \w+, group: "([^"]+)"(?:, sub: "([^"]+)")?(, calc: true)? \}/g)]
+    .map((m) => ({ href: m[1], label: m[2], group: m[3], sub: m[4], calc: Boolean(m[5]) }));
   check(`nav parsed (${entries.length} modules)`, entries.length > 100);
 
+  const calcCount = entries.filter((e) => e.calc).length;
+  check(`the standalone calculators are tagged (${calcCount})`, calcCount >= 20);
+  check("the sidebar renders PRODUCT_NAV, not every entry",
+    /PRODUCT_NAV as NAV/.test(read("src", "components", "sidebar.tsx")));
+  check("there is one Calculators entry collecting them",
+    entries.some((e) => e.href === "/calculators"));
+
+  // Group-size rules apply to the RENDERED nav only.
   const byGroup = {};
-  for (const e of entries) (byGroup[e.group] ||= []).push(e);
+  for (const e of entries.filter((x) => !x.calc)) (byGroup[e.group] ||= []).push(e);
 
   // Any group past ~15 items needs sub-headings or it is a list to scroll, not
   // navigate. Money had 42.

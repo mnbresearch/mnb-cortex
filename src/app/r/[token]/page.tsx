@@ -23,7 +23,7 @@ export default async function PublicReport({ params }: { params: { token: string
         ) : (
           <>
             <h1 className="text-3xl font-semibold tracking-tight">{data.company} — Business Snapshot</h1>
-            <p className="text-muted-foreground mt-1">Powered by MNB Cortex, the AI COO for SMEs.</p>
+            <p className="text-muted-foreground mt-1">Powered by MNB Cortex — the early-warning system for Indian businesses.</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-8">
               {(data.metrics || []).map((m: any, i: number) => (
                 <div key={i} className="rounded-xl border p-4 bg-card">

@@ -3,7 +3,11 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { NAV } from "@/lib/nav";
+// PRODUCT_NAV excludes the ~28 standalone calculators; they are collected
+// behind a single "Calculators" entry so the screens that matter are not
+// buried under fifty that store nothing. The command palette still
+// searches all of them.
+import { PRODUCT_NAV as NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/logo";
 import { KeyRound, ShieldAlert, Mail, ChevronDown, Sun, Moon, Search } from "lucide-react";
@@ -38,7 +42,7 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
         <Logo size={34} />
         <div>
           <div className="font-semibold leading-none tracking-tight">MNB Cortex</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">The AI COO for SMEs</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">Early warning for your business</div>
         </div>
       </div>
       <OrgSwitcher orgs={orgs} activeId={activeOrgId} />

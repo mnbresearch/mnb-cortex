@@ -6,13 +6,21 @@ import { Sparkles, Send, User, Mic, BrainCircuit, Check } from "lucide-react";
 import type { ChatMessage } from "@/types";
 import { mdToHtml } from "@/lib/utils";
 
+/*
+  Rewritten to demonstrate the tool-calling.
+
+  The old set ("How is my business?", "Should I enter the Dubai market?") could
+  all be answered from the fifteen-line KPI summary, so the first thing a new
+  user saw was the model's weakest mode: plausible generalities. These require
+  it to actually look rows up, which is what it can now do.
+*/
 const SUGGESTIONS = [
-  "How is my business?",
-  "Why is profit falling?",
-  "What should I focus on this week?",
-  "What inventory should I buy?",
-  "Should I raise prices?",
-  "Should I enter the Dubai market?",
+  "Which five customers owe me the most?",
+  "Who is more than 45 days overdue?",
+  "What is at or below reorder level?",
+  "Show me revenue by month this year",
+  "How much do I owe suppliers right now?",
+  "Tell me everything about Sharma Traders",
 ];
 
 export default function Chat() {
@@ -84,7 +92,7 @@ export default function Chat() {
         setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", content: t }; return c; });
       }
     } catch {
-      setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", content: "Network error reaching the AI COO." }; return c; });
+      setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", content: "Could not reach Cortex. Nothing was lost — try again." }; return c; });
     } finally { setLoading(false); }
   }
 
@@ -101,7 +109,7 @@ export default function Chat() {
 
   return (
     <>
-      <Topbar title="AI CEO Chat" subtitle="Ask your business anything." />
+      <Topbar title="Ask Cortex" subtitle="Ask about your own numbers — it looks them up." />
       <div className="flex flex-col h-[calc(100vh-4rem)]">
         <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-6">
           <div className="max-w-3xl mx-auto space-y-6">
@@ -109,7 +117,7 @@ export default function Chat() {
               <div className="text-center py-12">
                 <div className="h-14 w-14 rounded-2xl bg-primary/15 grid place-items-center mx-auto"><Sparkles className="h-7 w-7 text-primary" /></div>
                 <h2 className="mt-4 text-xl font-semibold">Good morning. What do you want to know?</h2>
-                <p className="text-sm text-muted-foreground mt-1">I answer from whatever data is in your workspace — imports, bank statements, GST returns and Cortex Memory.</p>
+                <p className="text-sm text-muted-foreground mt-1">I look up your actual rows — invoices, orders, stock, suppliers — rather than guessing from a summary.</p>
                 <div className="mt-6 grid sm:grid-cols-2 gap-2 max-w-xl mx-auto">
                   {SUGGESTIONS.map((s) => (
                     <button key={s} onClick={() => send(s)} className="text-left text-sm rounded-lg border px-4 py-3 hover:bg-accent transition-colors">{s}</button>
@@ -149,7 +157,7 @@ export default function Chat() {
               <option value="Hindi">हिं</option>
               <option value="Hinglish">Hinglish</option>
             </select>
-            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening…" : "Ask your AI COO…"}
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening…" : "Who owes me the most right now?"}
               className="flex-1 rounded-xl border bg-card px-4 h-12 text-sm outline-none focus:ring-2 focus:ring-ring" />
             <Button type="button" variant={listening ? "default" : "outline"} size="icon" className={`h-12 w-12 rounded-xl ${listening ? "animate-pulse" : ""}`} onClick={toggleMic} title="Voice input"><Mic className="h-4 w-4" /></Button>
             <Button size="icon" className="h-12 w-12 rounded-xl" disabled={loading}><Send className="h-4 w-4" /></Button>

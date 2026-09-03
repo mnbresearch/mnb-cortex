@@ -28,7 +28,7 @@ export default function Terms() {
 
       <H2>3. The Service &amp; Plans</H2>
       <P>
-        MNB Cortex provides an AI-powered operations platform for small and medium businesses — including an AI CEO chat, a memory
+        MNB Cortex provides an AI-powered operations platform for small and medium businesses — including Ask Cortex, a memory
         layer, AI agents across multiple departments and industries, business calculators, dashboards, automations, and image agents.
         We offer the following subscription plans, billed in Indian Rupees (INR):
       </P>
@@ -36,7 +36,7 @@ export default function Terms() {
         <li><strong>Starter</strong> — ₹1,499/month or ₹14,990/year · 1,000 AI credits/month</li>
         <li><strong>Growth</strong> — ₹4,999/month or ₹49,990/year · 5,000 AI credits/month</li>
         <li><strong>Business</strong> — ₹14,999/month or ₹1,49,990/year · 20,000 AI credits/month</li>
-        <li><strong>AI COO</strong> — ₹39,999/month or ₹3,99,990/year · 60,000 AI credits/month</li>
+        <li><strong>Command</strong> — ₹39,999/month or ₹3,99,990/year · 37,000 AI credits/month</li>
         <li><strong>Enterprise</strong> — custom pricing · unlimited credits (contact us)</li>
       </UL>
       <P>

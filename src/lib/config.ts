@@ -151,7 +151,8 @@ export const IMAGE_WEEKLY: Record<string, number> = {
     negotiated price.
   */
   payg: 50,
-  starter: 0, growth: 120, business: 500, aicoo: 2000, enterprise: 5000,
+  watch: 0, watchpro: 500, practice: 500, command: 2000, enterprise: 5000,
+  starter: 0, growth: 120, business: 500, aicoo: 2000,
   // legacy ids kept so an existing workspace never falls through to a default
   solo: 0, premium: 500, trial: 0,
 };
@@ -163,7 +164,8 @@ export const IMAGE_WEEKLY: Record<string, number> = {
  */
 export const VIDEO_WEEKLY: Record<string, number> = {
   payg: 10,
-  starter: 0, growth: 5, business: 20, aicoo: 60, enterprise: 200,
+  watch: 0, watchpro: 20, practice: 20, command: 60, enterprise: 200,
+  starter: 0, growth: 5, business: 20, aicoo: 60,
   solo: 0, premium: 20, trial: 0,
 };
 
@@ -197,6 +199,14 @@ export const PLAN_CREDITS: Record<string, number> = {
     Starter goes UP: at ₹1,499 for 1,000 credits it was selling at ₹1.50 and
     leaving money on the table.
   */
+  /*
+    Live tiers. Each is floor(worst monthly price / ₹0.90), where the worst case
+    is the annual price divided by twelve — so no plan can sell a credit below
+    the floor every action in CREDIT_COSTS is priced against.
+  */
+  watch: 4600, watchpro: 13850, practice: 27750, command: 37000,
+
+  // Retired tiers, at the economics they were actually sold at.
   starter: 1350, growth: 4600, business: 13850, aicoo: 37000,
   /*
     A FAIR-USE CAP, not unlimited. "Unlimited" credits meant unbounded COGS
@@ -260,9 +270,36 @@ export const TRIAL_CREDITS = 0;
  * ₹39,999 both bought unlimited seats. -1 means unlimited.
  */
 export const PLAN_SEATS: Record<string, number> = {
-  starter: 1, growth: 5, business: 20, aicoo: 75, enterprise: -1,
+  /*
+    Live tiers. Practice gets 25 seats because a firm puts its whole team in;
+    the CLIENT WORKSPACES it manages are counted separately (PRACTICE_CLIENTS).
+  */
+  watch: 3, watchpro: 20, practice: 25, command: 75, enterprise: -1,
+  // Retired tiers — an existing workspace must keep the seats it paid for.
+  starter: 1, growth: 5, business: 20, aicoo: 75,
   solo: 1, premium: 20,
 };
+/**
+ * Client workspaces a Practice account may manage.
+ *
+ * Separate from seats on purpose. A CA firm has (say) six people who each need
+ * a login — that is seats — and thirty CLIENT BUSINESSES whose books they watch.
+ * Conflating the two is how a firm either pays for thirty logins it does not
+ * need or gets thirty clients on a six-seat plan.
+ *
+ * The credit allowance is POOLED across clients rather than per client, because
+ * a firm's usage is lumpy: nothing for three weeks, then everything at once in
+ * the run-up to the 20th.
+ */
+export const PRACTICE_CLIENTS: Record<string, number> = {
+  practice: 25,
+  enterprise: -1,   // negotiated by hand; see ENTERPRISE_MIN_MONTHLY_INR
+};
+
+export function practiceClientLimit(plan: string | null | undefined): number {
+  return PRACTICE_CLIENTS[String(plan || "").toLowerCase()] ?? 0;
+}
+
 export function seatLimit(plan: string | null | undefined): number {
   return PLAN_SEATS[String(plan || "").toLowerCase()] ?? PLAN_SEATS.starter;
 }
@@ -287,78 +324,121 @@ export const CREDIT_PACKS: CreditPack[] = [
   { id: "pack_10k", label: "Bulk", credits: 10000, price: 8999, per: "₹0.90 / credit" },
 ];
 
+/*
+  REPOSITIONED AND REPRICED.
+
+  The old ladder started at ₹1,499 and led with "AI COO". Both were wrong, and
+  they were wrong together.
+
+  ₹1,499 anchors the product as a cheap tool next to Zoho Books at ₹899 and
+  Vyapar below that — a price war against incumbents with a twenty-year head
+  start, fought on their turf (recording what happened). It also cannot repay
+  any paid acquisition, and it made the 90+ calculators the loudest thing on the
+  page, which reads as a free-tools site.
+
+  "AI COO" is a category with no search volume, describes a person the buyer
+  already IS, and is unfalsifiable — the largest remaining overclaim in a
+  product we spent weeks making honest.
+
+  THE POSITION NOW: Cortex is the early-warning layer, not the ledger. Your
+  books tell you what happened; Cortex tells you what is about to. It sits ON
+  TOP of Tally, Zoho and Vyapar rather than replacing them, which is a far lower
+  bar for adoption — nobody switches accounting packages, plenty will add
+  something that reads their export and warns them.
+
+  Priced accordingly: the floor is ₹4,999. That is a deliberate choice to stop
+  competing on price and start competing on the one thing the incumbents
+  structurally do not do.
+
+  LEGACY IDS ARE KEPT BELOW, HIDDEN. Existing workspaces carry `plan` values of
+  'starter'/'growth'/'business'/'aicoo' in the database, and their allowances in
+  PLAN_CREDITS are set against the price they actually paid. Renaming or
+  repricing those ids in place would silently hand a ₹1,499 customer the credit
+  allowance of a ₹4,999 one — a margin hole created by a marketing change. New
+  ids for new economics; old ids keep what was bought.
+*/
 export const PLANS: Plan[] = [
-  // Four tiers, not six. The old ladder ran ₹799 → ₹2,499 → ₹6,999 → ₹17,999 →
-  // ₹39,999; buyers couldn't tell Solo from Starter or Premium from Business,
-  // and ₹799 could never repay any paid-acquisition cost. Each tier now maps to
-  // a recognisable size of business and a distinct go-to-market motion.
-  //
-  // Every bullet below is something the product ACTUALLY does today. WhatsApp
-  // execution appears only on AI COO because it needs Meta credentials the
-  // customer supplies; "62 integrations" is not claimed anywhere, because only
-  // four currently sync data.
-  { id: "starter", name: "Starter", monthly: 1499, annual: 14990, usdMonthly: 19, usdAnnual: 189,
-    tagline: "See your business clearly. One owner, one workspace.",
-    cta: "Choose Starter",
+  { id: "watch", name: "Watch", monthly: 4999, annual: 49990, usdMonthly: 59, usdAnnual: 599,
+    tagline: "Know what is going wrong, before it costs you.",
+    cta: "Start watching",
     features: [
-      "1 user · 1 workspace",
-      "1,350 AI credits / month",
-      "Business Health Dashboard + Cortex Score",
-      "AI CEO Chat grounded in your data",
-      "Bank statement & GST return reader",
-      "90+ business calculators",
-      "3 integrations · CSV / Excel import",
-      "Email support",
-    ] },
-  { id: "growth", name: "Growth", monthly: 4999, annual: 49990, usdMonthly: 59, usdAnnual: 599,
-    tagline: "The AI COO for a growing team.", highlight: true,
-    cta: "Choose Growth",
-    features: [
-      "Up to 5 users",
+      "1 business · up to 3 users",
       "4,600 AI credits / month",
-      "All 7 agent departments + 26 industries",
-      "Workflow automation + approvals",
-      "Cortex Memory — permanent business context",
-      "Scheduled reports & daily autopilot",
-      "10 integrations",
-      "120 images + 5 videos / week",
-      "Priority email support",
+      "Receivables, payables & cash — watched daily",
+      "MSME 45-day (43B(h)) deduction exposure",
+      "GST & statutory deadline warnings",
+      "Weekly brief by email, automatically",
+      "Reads your Tally, Vyapar & Busy exports",
+      "Bank statement & GST return reader",
     ] },
-  { id: "business", name: "Business", monthly: 14999, annual: 149990, usdMonthly: 179, usdAnnual: 1799,
-    tagline: "For companies that run on their numbers.",
-    cta: "Choose Business",
+  { id: "watchpro", name: "Watch Pro", monthly: 14999, annual: 149990, usdMonthly: 179, usdAnnual: 1799,
+    tagline: "For companies where a missed number costs real money.", highlight: true,
+    cta: "Choose Watch Pro",
     features: [
-      "Up to 20 users",
+      "Up to 20 users · multi-workspace",
       "13,850 AI credits / month",
-      "Everything in Growth",
+      "Everything in Watch",
+      "Ask Cortex anything about your own rows",
+      "Alert rules you set, delivered by email",
+      "Workflow automation on a schedule",
       "Public API + outbound webhooks",
-      "Custom dashboards & auto-reports",
-      "30 integrations",
-      "500 images + 20 videos / week",
-      "Guided onboarding · priority support",
+      "Cortex Memory — permanent business context",
     ] },
-  { id: "aicoo", name: "AI COO", monthly: 39999, annual: 399990, usdMonthly: 469, usdAnnual: 4699,
-    tagline: "Cortex runs the operation, not just the reporting.",
-    cta: "Choose AI COO",
+  { id: "practice", name: "Practice", monthly: 29999, annual: 299990, usdMonthly: 359, usdAnnual: 3599,
+    tagline: "For CAs and advisory firms. Every client, one screen.",
+    cta: "Talk to us about Practice",
+    features: [
+      "Up to 25 client workspaces",
+      "27,750 AI credits / month, pooled",
+      "Practice console — every client's exposure ranked",
+      "Whose GST is due, whose 43B(h) clock is running",
+      "Whose receivables moved this week",
+      "White-label — your firm's name on the brief",
+      "Everything in Watch Pro, per client",
+      "Named onboarding for your team",
+    ] },
+  { id: "command", name: "Command", monthly: 39999, annual: 399990, usdMonthly: 469, usdAnnual: 4699,
+    tagline: "Cortex acts, not just warns.",
+    cta: "Choose Command",
     features: [
       "Up to 75 users · multi-workspace",
       "37,000 AI credits / month",
-      "Everything in Business",
+      "Everything in Watch Pro",
       "WhatsApp execution (your Meta account)",
+      "AI agents across every department",
       "White-label & custom branding",
-      "Unlimited integrations",
-      "2,000 images + 60 videos / week",
-      "Done-for-you onboarding · success manager",
+      "Image & video generation",
+      "Guided onboarding · priority support",
     ] },
   { id: "enterprise", name: "Enterprise", monthly: 0, annual: 0,
-    tagline: "For large groups, PE funds & family offices.",
-    cta: "Contact us",
+    tagline: "For groups, PE funds and family offices.",
+    cta: "Talk to sales",
     features: [
-      "Unlimited users & workspaces",
+      "Unlimited workspaces & users",
       "1,50,000 AI credits / month — fair use",
-      "SSO / SAML",
-      "Custom integrations (Tally, ERP, Shopify)",
-      "On-prem / private cloud option",
-      "Custom SLA & security review",
+      "Everything in Command",
+      "Single sign-on & audit export",
+      "Dedicated environment options",
+      "Named success manager",
     ] },
 ];
+
+/*
+  Retired tiers. NOT shown on the pricing page and not purchasable — kept only so
+  an existing workspace whose `plan` column holds one of these still resolves to
+  a real name, allowance and entitlement rather than falling through to a
+  default. Removing them would silently downgrade paying customers.
+*/
+export const LEGACY_PLANS: Plan[] = [
+  { id: "starter", name: "Starter (retired)", monthly: 1499, annual: 14990,
+    tagline: "Retired tier — kept for existing workspaces.", cta: "", features: [] },
+  { id: "growth", name: "Growth (retired)", monthly: 4999, annual: 49990,
+    tagline: "Retired tier — kept for existing workspaces.", cta: "", features: [] },
+  { id: "business", name: "Business (retired)", monthly: 14999, annual: 149990,
+    tagline: "Retired tier — kept for existing workspaces.", cta: "", features: [] },
+  { id: "aicoo", name: "AI COO (retired)", monthly: 39999, annual: 399990,
+    tagline: "Retired tier — kept for existing workspaces.", cta: "", features: [] },
+];
+
+/** Every plan the system must be able to resolve, live or retired. */
+export const ALL_PLANS: Plan[] = [...PLANS, ...LEGACY_PLANS];

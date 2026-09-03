@@ -22,10 +22,27 @@ import {
   Network, Telescope
 , KeyRound, Store} from "lucide-react";
 
+/*
+  `calc: true` marks a STANDALONE CALCULATOR — one that takes numbers you type,
+  returns an answer, and stores nothing.
+
+  There are roughly 28 of them and they are genuinely useful, but they were
+  sitting in the main navigation next to Receivables and Cash Flow. That does two
+  bad things: it buries the four screens that matter under fifty that do not, and
+  it makes the product read as a free-tools site, which is the wrong frame for
+  something sold at ₹4,999 a month.
+
+  They are NOT deleted. Every page still exists at its own URL, still renders,
+  and is still indexable — they are good acquisition surface, and deleting them
+  would throw away that traffic and break anyone's bookmark. They are simply
+  collected behind one nav entry instead of thirty.
+*/
 export const NAV = [
+  { href: "/practice", label: "Practice", icon: Building2, group: "Overview" },
   { href: "/dashboard", label: "Business Health", icon: LayoutDashboard, group: "Overview" },
-  { href: "/chat", label: "AI CEO Chat", icon: MessageSquare, group: "Overview" },
+  { href: "/chat", label: "Ask Cortex", icon: MessageSquare, group: "Overview" },
   { href: "/plan", label: "My Plan", icon: ListChecks, group: "Overview" },
+  { href: "/calculators", label: "Calculators", icon: Calculator, group: "Overview" },
   { href: "/tools", label: "AI Tools", icon: Blocks, group: "Overview" },
   { href: "/deepdive", label: "Cortex Deep Dive", icon: Telescope, group: "Overview" },
   { href: "/act", label: "AI Outreach", icon: Megaphone, group: "Overview" },
@@ -45,13 +62,13 @@ export const NAV = [
   { href: "/gbp", label: "Google Business Profile", icon: Store, group: "Intelligence", sub: "Marketing" },
   { href: "/customers", label: "Customers", icon: Contact, group: "Intelligence", sub: "Your data" },
   { href: "/accounts", label: "Account Plans", icon: UserSearch, group: "Intelligence", sub: "Customers & growth" },
-  { href: "/funnel", label: "Marketing Funnel", icon: Filter, group: "Intelligence", sub: "Marketing" },
-  { href: "/adbudget", label: "Ad Budget & ROAS", icon: Radar, group: "Intelligence", sub: "Marketing" },
+  { href: "/funnel", label: "Marketing Funnel", icon: Filter, group: "Intelligence", sub: "Marketing", calc: true },
+  { href: "/adbudget", label: "Ad Budget & ROAS", icon: Radar, group: "Intelligence", sub: "Marketing", calc: true },
   { href: "/rfm", label: "Customer Segments", icon: Layers, group: "Intelligence", sub: "Customers & growth" },
-  { href: "/ltv", label: "Lifetime Value", icon: Gem, group: "Intelligence", sub: "Customers & growth" },
-  { href: "/inventory-turns", label: "Inventory Turnover", icon: PackageSearch, group: "Intelligence", sub: "Stock & capacity" },
+  { href: "/ltv", label: "Lifetime Value", icon: Gem, group: "Intelligence", sub: "Customers & growth", calc: true },
+  { href: "/inventory-turns", label: "Inventory Turnover", icon: PackageSearch, group: "Intelligence", sub: "Stock & capacity", calc: true },
   { href: "/abc", label: "Inventory ABC", icon: ListOrdered, group: "Intelligence", sub: "Stock & capacity" },
-  { href: "/abtest", label: "A/B Test Stats", icon: FlaskConical, group: "Intelligence", sub: "Marketing" },
+  { href: "/abtest", label: "A/B Test Stats", icon: FlaskConical, group: "Intelligence", sub: "Marketing", calc: true },
   { href: "/pipeline", label: "Deals Pipeline", icon: KanbanSquare, group: "Intelligence", sub: "Customers & growth" },
   { href: "/churn", label: "Churn Predictor", icon: UserMinus, group: "Intelligence", sub: "Customers & growth" },
   { href: "/reorder", label: "Reorder Optimizer", icon: Warehouse, group: "Intelligence", sub: "Stock & capacity" },
@@ -82,42 +99,42 @@ export const NAV = [
   { href: "/costs", label: "Cost Optimizer", icon: PiggyBank, group: "Money", sub: "Profit & pricing" },
   { href: "/pnl", label: "P&L Builder", icon: FileSpreadsheet, group: "Money", sub: "Profit & pricing" },
   { href: "/discount", label: "Discount Impact", icon: Percent, group: "Money", sub: "Profit & pricing" },
-  { href: "/roi", label: "ROI & Payback", icon: CircleDollarSign, group: "Money", sub: "Funding & investment" },
-  { href: "/amortization", label: "Loan Schedule", icon: Table2, group: "Money", sub: "Funding & investment" },
+  { href: "/roi", label: "ROI & Payback", icon: CircleDollarSign, group: "Money", sub: "Funding & investment", calc: true },
+  { href: "/amortization", label: "Loan Schedule", icon: Table2, group: "Money", sub: "Funding & investment", calc: true },
   { href: "/commission", label: "Sales Commission", icon: HandCoins, group: "Money", sub: "Profit & pricing" },
   { href: "/payroll", label: "Payroll & CTC", icon: Banknote, group: "Money", sub: "Payroll" },
   { href: "/appraisal", label: "Appraisal & Hikes", icon: Award, group: "Money", sub: "Payroll" },
-  { href: "/gst-latefee", label: "GST Late Fee", icon: AlarmClock, group: "Money", sub: "Tax & GST" },
-  { href: "/gratuity", label: "Gratuity", icon: HeartHandshake, group: "Money", sub: "Payroll" },
-  { href: "/epf", label: "EPF & ESI", icon: Umbrella, group: "Money", sub: "Payroll" },
-  { href: "/advance-tax", label: "Advance Tax", icon: CalendarDays, group: "Money", sub: "Tax & GST" },
-  { href: "/prepay", label: "Prepay vs Invest", icon: Repeat2, group: "Money", sub: "Funding & investment" },
-  { href: "/rentvsbuy", label: "Rent vs Buy", icon: House, group: "Money", sub: "Funding & investment" },
+  { href: "/gst-latefee", label: "GST Late Fee", icon: AlarmClock, group: "Money", sub: "Tax & GST", calc: true },
+  { href: "/gratuity", label: "Gratuity", icon: HeartHandshake, group: "Money", sub: "Payroll", calc: true },
+  { href: "/epf", label: "EPF & ESI", icon: Umbrella, group: "Money", sub: "Payroll", calc: true },
+  { href: "/advance-tax", label: "Advance Tax", icon: CalendarDays, group: "Money", sub: "Tax & GST", calc: true },
+  { href: "/prepay", label: "Prepay vs Invest", icon: Repeat2, group: "Money", sub: "Funding & investment", calc: true },
+  { href: "/rentvsbuy", label: "Rent vs Buy", icon: House, group: "Money", sub: "Funding & investment", calc: true },
   { href: "/captable", label: "Cap Table", icon: PieChart, group: "Money", sub: "Funding & investment" },
   { href: "/cash13", label: "13-Week Cash Flow", icon: CalendarClock, group: "Money", sub: "Cash & working capital" },
   { href: "/saas", label: "SaaS Metrics", icon: Repeat, group: "Money", sub: "Ratios & metrics" },
   { href: "/projects", label: "Project Profitability", icon: Briefcase, group: "Money", sub: "Profit & pricing" },
   { href: "/valuation", label: "Business Valuation", icon: Scale, group: "Money", sub: "Funding & investment" },
   { href: "/ratios", label: "Financial Ratios", icon: Sigma, group: "Money", sub: "Ratios & metrics" },
-  { href: "/tax", label: "Income Tax", icon: IndianRupee, group: "Money", sub: "Tax & GST" },
-  { href: "/depreciation", label: "Depreciation", icon: Building2, group: "Money", sub: "Tax & GST" },
-  { href: "/gst-calc", label: "GST Calculator", icon: Divide, group: "Money", sub: "Tax & GST" },
+  { href: "/tax", label: "Income Tax", icon: IndianRupee, group: "Money", sub: "Tax & GST", calc: true },
+  { href: "/depreciation", label: "Depreciation", icon: Building2, group: "Money", sub: "Tax & GST", calc: true },
+  { href: "/gst-calc", label: "GST Calculator", icon: Divide, group: "Money", sub: "Tax & GST", calc: true },
   { href: "/currency", label: "Currency", icon: ArrowLeftRight, group: "Money", sub: "Ratios & metrics" },
-  { href: "/markup", label: "Markup & Margin", icon: Tag, group: "Money", sub: "Profit & pricing" },
-  { href: "/breakeven", label: "Break-even Mix", icon: Equal, group: "Money", sub: "Profit & pricing" },
-  { href: "/sip", label: "Investment Growth", icon: Sprout, group: "Money", sub: "Funding & investment" },
-  { href: "/debt", label: "Debt Payoff", icon: Anchor, group: "Money", sub: "Funding & investment" },
-  { href: "/runway", label: "Cash Runway", icon: Flame, group: "Money", sub: "Cash & working capital" },
+  { href: "/markup", label: "Markup & Margin", icon: Tag, group: "Money", sub: "Profit & pricing", calc: true },
+  { href: "/breakeven", label: "Break-even Mix", icon: Equal, group: "Money", sub: "Profit & pricing", calc: true },
+  { href: "/sip", label: "Investment Growth", icon: Sprout, group: "Money", sub: "Funding & investment", calc: true },
+  { href: "/debt", label: "Debt Payoff", icon: Anchor, group: "Money", sub: "Funding & investment", calc: true },
+  { href: "/runway", label: "Cash Runway", icon: Flame, group: "Money", sub: "Cash & working capital", calc: true },
   { href: "/receivables", label: "Receivables & DSO", icon: Hourglass, group: "Money", sub: "Cash & working capital" },
-  { href: "/tds", label: "TDS Calculator", icon: Stamp, group: "Money", sub: "Tax & GST" },
-  { href: "/buyvslease", label: "Buy vs Lease", icon: GitCompare, group: "Money", sub: "Funding & investment" },
+  { href: "/tds", label: "TDS Calculator", icon: Stamp, group: "Money", sub: "Tax & GST", calc: true },
+  { href: "/buyvslease", label: "Buy vs Lease", icon: GitCompare, group: "Money", sub: "Funding & investment", calc: true },
   { href: "/msme", label: "MSME 45-day (43B(h))", icon: ShieldAlert, group: "Money", sub: "Cash & working capital" },
   { href: "/payables", label: "Payables & DPO", icon: ReceiptText, group: "Money", sub: "Cash & working capital" },
-  { href: "/itc", label: "GST ITC Set-off", icon: Blocks, group: "Money", sub: "Tax & GST" },
-  { href: "/dscr", label: "DSCR & Loan Fit", icon: ShieldCheck, group: "Money", sub: "Funding & investment" },
-  { href: "/rate-card", label: "Billable Rate", icon: Timer, group: "Money", sub: "Profit & pricing" },
-  { href: "/ccc", label: "Cash Conversion Cycle", icon: RotateCw, group: "Money", sub: "Cash & working capital" },
-  { href: "/networth", label: "Net Worth & Balance", icon: Vault, group: "Money", sub: "Cash & working capital" },
+  { href: "/itc", label: "GST ITC Set-off", icon: Blocks, group: "Money", sub: "Tax & GST", calc: true },
+  { href: "/dscr", label: "DSCR & Loan Fit", icon: ShieldCheck, group: "Money", sub: "Funding & investment", calc: true },
+  { href: "/rate-card", label: "Billable Rate", icon: Timer, group: "Money", sub: "Profit & pricing", calc: true },
+  { href: "/ccc", label: "Cash Conversion Cycle", icon: RotateCw, group: "Money", sub: "Cash & working capital", calc: true },
+  { href: "/networth", label: "Net Worth & Balance", icon: Vault, group: "Money", sub: "Cash & working capital", calc: true },
   { href: "/capacity", label: "Team Capacity", icon: GaugeCircle, group: "Intelligence", sub: "Stock & capacity" },
   { href: "/nps", label: "NPS & Sentiment", icon: Smile, group: "Intelligence", sub: "Customers & growth" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },
@@ -148,3 +165,10 @@ export const NAV = [
   { href: "/settings", label: "Settings", icon: Settings, group: "Automation", sub: "Account & billing" },
   { href: "/pricing", label: "Pricing & plans", icon: Sparkles, group: "Automation", sub: "Account & billing" },
 ] as const;
+
+
+/** Nav items that are real product surface — everything except the calculators. */
+export const PRODUCT_NAV = NAV.filter((n) => !(n as any).calc);
+
+/** The standalone calculators, for the /calculators index. */
+export const CALCULATORS = NAV.filter((n) => (n as any).calc);

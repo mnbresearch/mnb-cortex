@@ -7,7 +7,7 @@ export function RoiCalculator() {
   const decisionValue = Math.round(rev * 100 * 0.03); // ~3% of revenue in lakh, better decisions
   return (
     <div className="rounded-2xl border bg-card p-6 max-w-2xl mx-auto">
-      <h3 className="font-semibold text-lg">What could an AI COO save you?</h3>
+      <h3 className="font-semibold text-lg">What could catching this early save you?</h3>
       <div className="grid sm:grid-cols-2 gap-5 mt-4">
         <label className="text-sm">Annual revenue: <b>₹{rev} Cr</b>
           <input type="range" min={1} max={100} value={rev} onChange={(e) => setRev(+e.target.value)} className="w-full accent-[hsl(var(--primary))] mt-1" />

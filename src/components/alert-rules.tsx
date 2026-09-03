@@ -138,7 +138,7 @@ export function AlertRules({ metrics = [], rules = [] }: { metrics?: LiveMetric[
 
         {firing.length > 0 && (
           <Button onClick={advise} disabled={loading}>
-            <Sparkles className="h-4 w-4" /> {loading ? "Thinking…" : "What should I do about these? (ask the AI COO)"}
+            <Sparkles className="h-4 w-4" /> {loading ? "Thinking…" : "What should I do about these? (ask CorteO)"}
           </Button>
         )}
         {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}

@@ -9,6 +9,6 @@ export async function GET() {
   try {
     return NextResponse.json(await getCreditState());
   } catch (e: any) {
-    return NextResponse.json({ known: false, enforceable: false, unlimited: true, balance: 0, allowance: 0, plan: "growth", resetAt: null });
+    return NextResponse.json({ known: false, enforceable: false, unlimited: true, balance: 0, allowance: 0, plan: "watch", resetAt: null });
   }
 }

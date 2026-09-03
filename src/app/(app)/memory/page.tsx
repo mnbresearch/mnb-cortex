@@ -16,7 +16,7 @@ export default async function MemoryPage() {
 
   return (
     <>
-      <Topbar title="Cortex Memory" subtitle="The long-term memory of your AI COO — it remembers so you don't have to" />
+      <Topbar title="Cortex Memory" subtitle="What Cortex remembers about your business, so you don't have to repeat it" />
       <PageShell>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Card className="p-4 border-primary/30 bg-primary/5"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Brain className="h-4 w-4 text-primary" /> Memories</div><div className="text-2xl font-bold mt-1">{stats.total}</div></Card>

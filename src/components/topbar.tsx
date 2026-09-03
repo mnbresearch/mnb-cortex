@@ -26,7 +26,7 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
       <div className="flex items-center gap-2">
         <form onSubmit={ask} className="hidden md:flex items-center gap-2 rounded-lg border px-3 h-9 text-sm w-72 focus-within:ring-2 focus-within:ring-ring">
           <Search className="h-4 w-4 text-muted-foreground" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask your AI COO anything…" className="flex-1 bg-transparent outline-none" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask Cortex about your numbers…" className="flex-1 bg-transparent outline-none" />
         </form>
         <Notifications />
         <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>

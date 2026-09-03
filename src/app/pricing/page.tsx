@@ -20,10 +20,23 @@ export default async function Pricing() {
       <section className="px-5 lg:px-10 pt-32 lg:pt-40 pb-12">
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="00">Pricing</SectionLabel>
-          <Kinetic as="h1" text={"Run your company\non AI."} className="font-display display-1 tracking-tightest mt-6" />
+          <Kinetic as="h1" text={"Find out first,\nnot last."} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            One AI COO with 380+ agents, memory and automation — from <span className="text-foreground font-medium">₹1,499/mo</span>, or ₹149 of credits with no subscription.
-            Try it for ₹149 with a credit pack — no subscription. Or pick a plan for a monthly allowance.
+            Cortex watches your receivables, your supplier deadlines and your stock, and emails you before any of them
+            costs you money. From <span className="text-foreground font-medium">₹4,999/month</span>.
+            Keep Tally or Zoho — this is the part they were never built to do.
+          </p>
+          {/*
+            One line for CAs, on the pricing page rather than buried.
+
+            A firm is worth roughly thirty businesses and arrives through a
+            different door: they are not looking for software for themselves,
+            they are looking for a way to see thirty clients at once. Practice is
+            the only tier that answers that, so it says so where they will look.
+          */}
+          <p className="mt-3 text-sm text-muted-foreground max-w-2xl">
+            <span className="text-foreground font-medium">Running a CA or advisory practice?</span>{" "}
+            Practice puts every client on one screen, ranked by who needs you this week.
           </p>
         </div>
       </section>

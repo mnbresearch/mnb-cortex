@@ -30,10 +30,10 @@ const GROUPS: Group[] = [
   },
   {
     title: "Think & decide",
-    desc: "An operating brain that reasons over your real numbers and Cortex Memory.",
+    desc: "Ask questions about your own rows — Cortex looks them up rather than guessing.",
     tools: [
       { href: "/deepdive", name: "Cortex Deep Dive", icon: Telescope, blurb: "Agentic analysis in three passes: diagnose → decide → draft.", you: "Root cause, three costed options, a 30-day plan and a ready first action.", cost: c("deepdive") },
-      { href: "/chat", name: "AI CEO Chat", icon: MessageSquare, blurb: "Ask anything in plain language — English or Hinglish.", you: "Answers grounded in your data, with memory across chats.", cost: c("chat") },
+      { href: "/chat", name: "Ask Cortex", icon: MessageSquare, blurb: "Ask anything in plain language — English or Hinglish.", you: "Answers grounded in your data, with memory across chats.", cost: c("chat") },
       { href: "/strategy", name: "Strategy Consultant", icon: Brain, blurb: "SWOT, growth levers and a prioritised plan.", you: "A board-ready strategy tailored to your business.", cost: c("strategy") },
       { href: "/forecast", name: "Forecasting & Scenarios", icon: LineChart, blurb: "90-day forecast with interactive what-ifs.", you: "See the impact of a price, cost or volume change before you make it.", cost: c("forecast") },
       { href: "/reports", name: "Executive Reports", icon: FileBarChart, blurb: "One-click business review, exportable to PDF.", you: "A polished report you can send to a bank, board or investor.", cost: c("report") },

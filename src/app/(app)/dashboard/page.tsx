@@ -50,7 +50,7 @@ export default async function Dashboard() {
 
   return (
     <>
-      <Topbar title="Business Health" subtitle="Your AI COO — I watch your numbers and tell you what to do next." />
+      <Topbar title="Business Health" subtitle="I watch your numbers and tell you what needs fixing." />
       <PageShell>
         <div className="flex justify-end gap-2 no-print">
           <ExportButton rows={metrics} filename="business-health.csv" columns={["label","value","unit","delta_pct","status"]} />

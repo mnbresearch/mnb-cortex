@@ -29,7 +29,7 @@ async function guard() {
   if (!mem) throw new Error("No workspace found");
   if ((RANK[(mem as any).role] || 0) < RANK.admin) throw new Error("Only workspace admins can manage integrations");
   const { data: org } = await sb.from("organizations").select("plan").eq("id", (mem as any).org_id).single();
-  return { sb, orgId: (mem as any).org_id as string, plan: (org as any)?.plan || "starter" };
+  return { sb, orgId: (mem as any).org_id as string, plan: (org as any)?.plan || "watch" };
 }
 
 /** Verifies credentials against the provider's real API. Never returns the secret. */

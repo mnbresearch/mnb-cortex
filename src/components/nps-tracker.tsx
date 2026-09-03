@@ -82,7 +82,7 @@ export function NpsTracker() {
 
       <p className="text-xs text-muted-foreground">Rough guide: above 50 is excellent, 30–50 good, 0–30 needs work, below 0 means more detractors than promoters.</p>
 
-      <Button onClick={analyse} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "How do I raise this? (ask the AI COO)"}</Button>
+      <Button onClick={analyse} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "How do I raise this? (ask Cortex)"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
     </Card>
   );

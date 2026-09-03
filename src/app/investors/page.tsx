@@ -38,7 +38,7 @@ export default function Investors() {
           <div className="eyebrow">Investors</div>
           <Kinetic as="h1" text={"The operating brain\nevery Indian SME will run on."} className="font-display display-1 tracking-tightest mt-5" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            MNB Cortex reads a business’s real numbers, remembers every decision, tells the owner exactly what to do next — and does the busywork. An <span className="text-foreground font-medium">AI COO</span>, not another dashboard.
+            MNB Cortex reads a business’s real numbers, remembers every decision, tells the owner exactly what to do next — and does the busywork. An <span className="text-foreground font-medium">Cortex</span>, not another dashboard.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a href="/investor-onepager.pdf" target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>

@@ -3,7 +3,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { LayoutDashboard, MessageSquare, TrendingUp, Boxes, Menu, X } from "lucide-react";
-import { NAV } from "@/lib/nav";
+// PRODUCT_NAV excludes the ~28 standalone calculators; they are collected
+// behind a single "Calculators" entry so the screens that matter are not
+// buried under fifty that store nothing. The command palette still
+// searches all of them.
+import { PRODUCT_NAV as NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 const primary = [

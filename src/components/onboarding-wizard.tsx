@@ -39,7 +39,7 @@ export function OnboardingWizard() {
         <div className="text-center">
           <div className="font-semibold tracking-tight">Welcome to MNB Cortex</div>
           {/*
-            The old copy went straight to "let's set up your AI COO in three
+            The old copy went straight to "let's set up Cortex in three
             steps", which assumes the reader already knows what that means. A
             first-time user needs one plain sentence about what the product
             actually does before being asked to configure it.
@@ -103,7 +103,7 @@ export function OnboardingWizard() {
         <div className="text-center py-4">
           <div className="h-12 w-12 rounded-full bg-success/15 grid place-items-center mx-auto"><Check className="h-6 w-6 text-success" /></div>
           <h2 className="mt-3 text-lg font-semibold">You're all set!</h2>
-          <p className="text-sm text-muted-foreground">Your AI COO is ready. Ask it "How is my business?"</p>
+          <p className="text-sm text-muted-foreground">Cortex is watching. Ask it "Who owes me the most?"</p>
           <Link href="/dashboard" className="mt-4 inline-flex items-center gap-2 rounded-lg brand-gradient text-white h-10 px-5 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity">Go to dashboard <ArrowRight className="h-4 w-4" /></Link>
         </div>
       )}
