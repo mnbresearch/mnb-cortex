@@ -115,3 +115,33 @@ begin
 
   raise notice 'cortex: upsert arbiters verified on invoices and sales_orders';
 end $$;
+
+/*
+  Let the application check that these indexes are still usable as arbiters.
+
+  The DO block above proves it at migration time. This proves it at any time,
+  which matters because the failure is invisible from the outside: a partial
+  index looks identical to a non-partial one until an upsert runs, and then the
+  customer sees "could not save your invoice" with no clue why.
+
+  Returns true only when every natural-key index exists, is unique, and has NO
+  predicate — `indpred is null` is the whole point, since a predicate is exactly
+  what stops Postgres inferring the arbiter.
+*/
+create or replace function cortex_upsert_arbiters_ok()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_catalog
+as $$
+  select count(*) = 3 from pg_index i
+    join pg_class c on c.oid = i.indexrelid
+   where c.relname in ('invoices_org_invoiceno_key',
+                       'sales_orders_org_orderno_key',
+                       'customers_org_name_key')
+     and i.indisunique
+     and i.indpred is null;
+$$;
+
+grant execute on function cortex_upsert_arbiters_ok() to authenticated, service_role;

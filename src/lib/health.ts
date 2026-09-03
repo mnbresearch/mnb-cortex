@@ -261,6 +261,9 @@ async function checkSchema(): Promise<Check> {
       migration does. So the health endpoint says so out loud.
     */
     ["organizations", "referral_code", "2026_referrals"],
+    ["invoices", "meta", "2026_invoice_documents"],
+    ["quotes", "status", "2026_invoice_documents"],
+    ["alerts", "notified_at", "2026_invoice_documents"],
     ["referrals", "status", "2026_referrals"],
     ["action_tasks", "col", "2026_action_board"],
     ["decisions", "title", "2026_action_board"],
@@ -297,6 +300,24 @@ async function checkSchema(): Promise<Check> {
     A control that cannot be verified is reported as unverified. Green has to
     mean green.
   */
+  /*
+    The upsert arbiters. Same shape of problem as the billing guard: invisible
+    to a SELECT, and the symptom is a customer being told their invoice could
+    not be saved. A partial unique index cannot serve `ON CONFLICT (cols)`, so
+    if this is false, saving an invoice and every Shopify/Stripe/Razorpay sync
+    write is failing.
+  */
+  try {
+    const { data, error } = await sb.rpc("cortex_upsert_arbiters_ok");
+    if (error) {
+      missing.push("2026_upsert_arbiter_fix (cannot verify)");
+    } else if (data === false) {
+      missing.push("2026_upsert_arbiter_fix (UPSERTS BROKEN — invoice save and store sync will fail)");
+    }
+  } catch {
+    missing.push("2026_upsert_arbiter_fix (cannot verify)");
+  }
+
   try {
     const { data, error } = await sb.rpc("cortex_has_billing_guard");
     if (error) {

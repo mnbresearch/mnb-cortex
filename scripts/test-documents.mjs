@@ -108,6 +108,31 @@ async function main() {
     `select count(*)::int n from invoices where org_id=$1 and invoice_no is null`, [orgProbe])).rows[0].n);
   check(nulls === 2, "dropping the predicate did not forbid NULL invoice numbers", `${nulls} rows`);
 
+  /*
+    The health check now reports "upserts broken" on the strength of
+    cortex_upsert_arbiters_ok(). A helper that always returns true would tell
+    the operator invoice saving works while customers see save failures — the
+    same trap the billing-guard probe fell into. So: assert it reports true
+    now, then restore ONE partial index and assert it flips to false.
+  */
+  const arbitersOk = async () =>
+    (await db.query(`select cortex_upsert_arbiters_ok() as v`)).rows[0].v;
+
+  check(await arbitersOk() === true,
+    "health: cortex_upsert_arbiters_ok() is true once the indexes are non-partial",
+    `got ${await arbitersOk()}`);
+
+  await db.exec(`drop index invoices_org_invoiceno_key;
+                 create unique index invoices_org_invoiceno_key
+                   on invoices (org_id, invoice_no) where invoice_no is not null;`);
+  check(await arbitersOk() === false,
+    "health: and FALSE again the moment one index goes back to partial",
+    "the operator would be told upserts work while every invoice save fails");
+
+  await db.exec(`drop index invoices_org_invoiceno_key;
+                 create unique index invoices_org_invoiceno_key on invoices (org_id, invoice_no);`);
+  check(await arbitersOk() === true, "health: true again after restoring it");
+
   const syncSql = readFileSync("supabase/migrations/2026_sync_layer.sql", "utf8");
   check(/create unique index if not exists invoices_org_invoiceno_key/.test(syncSql),
     "the unique index the upsert relies on is really declared in the repo",
