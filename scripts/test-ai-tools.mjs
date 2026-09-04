@@ -59,9 +59,28 @@ for (const verb of ["insert(", "update(", "upsert(", "delete("]) {
     `found .${verb} in runTool`);
 }
 
-/* No generated SQL. */
-check(!/\.rpc\(/.test(body) && !/execute_sql|raw\(/i.test(body),
-  "no arbitrary SQL execution path");
+/*
+  No GENERATED SQL — which is not the same as no SQL.
+
+  The first version of this banned `.rpc(` outright, and then failed the moment
+  a legitimate named function was called. That is the wrong property: the danger
+  is a query whose TEXT the model can influence, not a fixed function with typed
+  parameters. `cortex_recovery_summary(p_org, p_days)` is as safe as any
+  hand-written select — safer, since the org id is still supplied by us.
+
+  So: no raw execution paths at all, and every .rpc() must name a literal
+  function rather than a variable the model could reach.
+*/
+check(!/execute_sql|\braw\(|\bsql`/i.test(body), "no raw SQL execution path");
+const rpcCalls = [...body.matchAll(/\.rpc\(\s*([^,)]+)/g)].map((m) => m[1].trim());
+for (const call of rpcCalls) {
+  check(/^["'`]/.test(call),
+    `.rpc(${call}) names a literal function, not a variable`,
+    "a function name the model could influence is the same risk as generated SQL");
+}
+check(rpcCalls.every((c) => /cortex_/.test(c)),
+  "every RPC the tools call is one of ours",
+  `called: ${rpcCalls.join(", ")}`);
 
 /* Every declared tool has a case, and every case is declared — a declaration
    with no implementation makes the model call something that always errors. */

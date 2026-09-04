@@ -47,8 +47,31 @@ async function contextFor(svc: any, orgId: string): Promise<string | null> {
     .select("label,value,unit,delta_pct,status").eq("org_id", orgId);
   const m = (data as any[]) || [];
   if (!m.length) return null;   // nothing real to report on — skip rather than invent
-  return "KEY METRICS:\n" + m.map((x) =>
+  let out = "KEY METRICS:\n" + m.map((x) =>
     `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + (x.unit || "")} (${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, ${x.status})`).join("\n");
+
+  /*
+    What Cortex collected, in the weekly brief.
+
+    This is the Prove layer reaching the one artefact that arrives on its own.
+    An owner who reads "we collected ₹2.4 lakh for you in the last 30 days"
+    every Monday does not cancel — and unlike every other line in this email, it
+    is a claim about the PRODUCT, so it has to be conservative: the SQL counts
+    only invoices where a reminder was actually sent and the money then came in.
+  */
+  try {
+    const { data: rec } = await svc.rpc("cortex_recovery_summary", { p_org: orgId, p_days: 30 });
+    const r = (Array.isArray(rec) ? rec[0] : rec) as any;
+    const amount = Number(r?.amount_recovered) || 0;
+    const chasing = Number(r?.amount_chasing) || 0;
+    if (amount > 0 || chasing > 0) {
+      out += "\n\nCOLLECTIONS (last 30 days):";
+      if (amount > 0) out += `\n- Recovered after a Cortex reminder: ${Math.round(amount)} INR across ${r.invoices_recovered} invoice(s)`;
+      if (chasing > 0) out += `\n- Still chasing: ${Math.round(chasing)} INR across ${r.still_chasing} invoice(s)`;
+    }
+  } catch { /* collections not set up for this workspace */ }
+
+  return out;
 }
 
 export type ReportRun = { checked: number; sent: number; skipped: number; errors: number };

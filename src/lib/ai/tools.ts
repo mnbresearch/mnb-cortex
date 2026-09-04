@@ -120,6 +120,16 @@ export const TOOL_DECLARATIONS = [
     },
   },
   {
+    name: "collections_status",
+    description:
+      "What Cortex has recovered by chasing overdue invoices, what it is still chasing, and how many reminders it has sent. "
+      + "Use for questions about collections, chasing, recovery, or 'has Cortex actually got me any money back'.",
+    parameters: {
+      type: "object",
+      properties: { days: { type: "integer", description: "Look back this many days (default 90)." } },
+    },
+  },
+  {
     name: "revenue_by_month",
     description:
       "Monthly revenue from won sales orders for the last N months, oldest first. "
@@ -278,6 +288,28 @@ export async function runTool(name: string, args: any, orgId: string): Promise<T
           summary: o.length || i.length
             ? `Found ${o.length} order(s) and ${i.length} invoice(s) for "${raw}".`
             : `Nothing on file for "${raw}".`,
+        };
+      }
+
+      case "collections_status": {
+        const days = Math.min(Math.max(Number(args?.days) || 90, 1), 365);
+        const { data, error } = await sb.rpc("cortex_recovery_summary", { p_org: orgId, p_days: days });
+        if (error) return { ok: false, error: "Collections is not set up for this workspace yet." };
+        const r = (Array.isArray(data) ? data[0] : data) as any;
+        const recovered = Number(r?.amount_recovered) || 0;
+        return {
+          ok: true,
+          rows: [{
+            days,
+            amount_recovered: Math.round(recovered),
+            invoices_recovered: Number(r?.invoices_recovered) || 0,
+            reminders_sent: Number(r?.messages_sent) || 0,
+            still_chasing_amount: Math.round(Number(r?.amount_chasing) || 0),
+            still_chasing_count: Number(r?.still_chasing) || 0,
+          }],
+          summary: recovered > 0
+            ? `₹${Math.round(recovered).toLocaleString("en-IN")} recovered after a reminder in the last ${days} days.`
+            : `No invoices have been paid after a Cortex reminder in the last ${days} days.`,
         };
       }
 

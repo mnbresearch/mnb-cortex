@@ -987,6 +987,132 @@ export async function deleteGoal(fd: FormData) {
   revalidatePath("/goals");
 }
 
+// ---- Collections -------------------------------------------------------------
+/*
+  The chase loop, from the owner's side.
+
+  Approval is a real step, not a formality: `approveMessage` is the only path
+  from `draft` to `approved`, and lib/collections only ever sends `approved`.
+  That is what makes it safe to let Cortex write in someone's name.
+*/
+
+export async function saveCollectionPolicy(fd: FormData): Promise<{ ok: boolean; error?: string }> {
+  let orgId: string;
+  try { orgId = (await requireRole("admin")).orgId; }
+  catch { return { ok: false, error: "Only an admin can change collections settings." }; }
+
+  const clamp = (v: any, lo: number, hi: number, dflt: number) => {
+    const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : dflt;
+  };
+  const tone = str(fd.get("tone"));
+  const channels = String(fd.get("channels") || "email").split(",").map((c) => c.trim()).filter((c) => c === "email" || c === "whatsapp");
+
+  /*
+    Validated here as well as by the CHECK constraints. A bad value should be a
+    clear message, not a database error surfaced to someone changing a setting.
+  */
+  const patch = {
+    org_id: orgId,
+    enabled: str(fd.get("enabled")) === "1",
+    auto_send: str(fd.get("auto_send")) === "1",
+    tone: ["polite", "neutral", "firm"].includes(tone) ? tone : "polite",
+    channels: channels.length ? channels : ["email"],
+    first_after_days: clamp(fd.get("first_after_days"), 0, 90, 3),
+    min_gap_days: clamp(fd.get("min_gap_days"), 1, 90, 7),
+    max_attempts: clamp(fd.get("max_attempts"), 1, 10, 3),
+    max_per_day: clamp(fd.get("max_per_day"), 1, 200, 25),
+    send_from_hour: clamp(fd.get("send_from_hour"), 0, 23, 9),
+    send_to_hour: clamp(fd.get("send_to_hour"), 0, 23, 19),
+    do_not_contact: String(fd.get("do_not_contact") || "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 500),
+    signature: str(fd.get("signature")) || null,
+    payment_note: str(fd.get("payment_note")) || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const sb = createClient();
+  const { error } = await sb.from("collection_policies").upsert(patch, { onConflict: "org_id" });
+  if (error) return { ok: false, error: error.message };
+  await logActivity(orgId, "crud", `Updated collections settings (${patch.enabled ? "on" : "off"})`);
+  revalidatePath("/collections");
+  return { ok: true };
+}
+
+/** Draft the next reminder for everything that qualifies. Sends nothing. */
+export async function prepareCollectionDrafts(): Promise<{ ok: boolean; drafted?: number; skipped?: number; reasons?: Record<string, number>; error?: string }> {
+  let orgId: string;
+  try { orgId = await requireWriteOrg(); }
+  catch { return { ok: false, error: "Sign in to run collections." }; }
+  try {
+    const { prepareDrafts } = await import("@/lib/collections");
+    const { getOrgProfile } = await import("@/lib/data");
+    const profile: any = await getOrgProfile().catch(() => null);
+    const res = await prepareDrafts(orgId, profile?.name || "our company");
+    revalidatePath("/collections");
+    return { ok: true, ...res };
+  } catch (e: any) { return { ok: false, error: e?.message || "Could not prepare drafts." }; }
+}
+
+export async function approveMessage(fd: FormData): Promise<{ ok: boolean; error?: string }> {
+  let orgId: string;
+  try { orgId = await requireWriteOrg(); }
+  catch { return { ok: false, error: "Sign in to approve." }; }
+  const id = str(fd.get("id"));
+  const sb = createClient();
+  /*
+    Only a DRAFT may be approved. Without the status filter, re-submitting this
+    form would reset a message that had already been sent back to approved, and
+    the next run would send it again.
+  */
+  const { error } = await sb.from("collection_messages")
+    .update({ status: "approved", approved_at: new Date().toISOString() })
+    .eq("id", id).eq("org_id", orgId).eq("status", "draft");
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/collections");
+  return { ok: true };
+}
+
+export async function cancelMessage(fd: FormData): Promise<{ ok: boolean; error?: string }> {
+  let orgId: string;
+  try { orgId = await requireWriteOrg(); }
+  catch { return { ok: false, error: "Sign in." }; }
+  const sb = createClient();
+  const { error } = await sb.from("collection_messages")
+    .update({ status: "cancelled" })
+    .eq("id", str(fd.get("id"))).eq("org_id", orgId).in("status", ["draft", "approved"]);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/collections");
+  return { ok: true };
+}
+
+/** Send everything approved, now, rather than waiting for the daily run. */
+export async function sendApprovedNow(): Promise<{ ok: boolean; sent?: number; failed?: number; note?: string; error?: string }> {
+  let orgId: string;
+  try { orgId = await requireWriteOrg(); }
+  catch { return { ok: false, error: "Sign in." }; }
+  try {
+    const { sendApproved } = await import("@/lib/collections");
+    const res = await sendApproved(orgId);
+    revalidatePath("/collections");
+    return { ok: true, ...res };
+  } catch (e: any) { return { ok: false, error: e?.message || "Could not send." }; }
+}
+
+/** Never chase this invoice again. */
+export async function excludeFromCollections(fd: FormData): Promise<{ ok: boolean; error?: string }> {
+  let orgId: string;
+  try { orgId = await requireWriteOrg(); }
+  catch { return { ok: false, error: "Sign in." }; }
+  const invoiceId = str(fd.get("invoice_id"));
+  const sb = createClient();
+  const { error } = await sb.from("collection_threads").upsert({
+    org_id: orgId, invoice_id: invoiceId, party: str(fd.get("party")) || "Unknown",
+    amount: num(fd.get("amount")), status: "excluded",
+  }, { onConflict: "org_id,invoice_id" });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/collections");
+  return { ok: true };
+}
+
 // ---- Suppliers / MSME classification ----------------------------------------
 /*
   Set one supplier's Udyam category.

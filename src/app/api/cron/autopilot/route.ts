@@ -23,6 +23,7 @@ function entitled(o: any): boolean {
 export async function GET(req: Request) {
   let scheduledWorkflows = 0;
   let alertsEmailed = 0;
+  let collectionsSent = 0;
   if (!cronAuthorised(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const sb = serviceClient();
   if (!sb) return NextResponse.json({ ok: true, ran: 0, note: "add SUPABASE_SERVICE_ROLE_KEY to enable scheduled autopilot" });
@@ -65,6 +66,32 @@ export async function GET(req: Request) {
       const { runScheduledWorkflows } = await import("@/lib/workflow-schedule");
       const wf = await runScheduledWorkflows();
       scheduledWorkflows = wf.ran;
+    } catch { /* never let this take the cron down */ }
+
+    /*
+      Collections. Draft what qualifies, then send only what is APPROVED —
+      which, for a workspace that has not opted into auto-send, is nothing until
+      a human has read it. The two steps are separate calls on purpose: a single
+      function that both decided and sent would be one bug away from mailing
+      every customer a business has.
+    */
+    try {
+      const { serviceClient } = await import("@/lib/supabase/server");
+      const { prepareDrafts, sendApproved } = await import("@/lib/collections");
+      const svcC = serviceClient();
+      if (svcC) {
+        const { data: on } = await svcC.from("collection_policies")
+          .select("org_id").eq("enabled", true).limit(200);
+        for (const row of ((on as any[]) || [])) {
+          const oid = String(row.org_id);
+          try {
+            const { data: o } = await svcC.from("organizations").select("name").eq("id", oid).single();
+            await prepareDrafts(oid, String((o as any)?.name || "our company"));
+            const r = await sendApproved(oid, new URL(req.url).origin);
+            collectionsSent += r.sent;
+          } catch { /* one workspace must not stop the rest */ }
+        }
+      }
     } catch { /* never let this take the cron down */ }
 
     /*
@@ -197,5 +224,5 @@ export async function GET(req: Request) {
     console.error("[cron] heartbeat threw —", e?.message);
   }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, heartbeat, scheduledWorkflows, alertsEmailed });
+  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, heartbeat, scheduledWorkflows, alertsEmailed, collectionsSent });
 }

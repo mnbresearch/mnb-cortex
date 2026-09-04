@@ -42,6 +42,8 @@ export type ClientSignal = {
   msmeAtRisk: number;
   openAlerts: number;
   lastActivity: string | null;
+  /** What Cortex has actually collected for this client, last 90 days. */
+  recovered: number;
 };
 
 export type Practice = {
@@ -49,10 +51,16 @@ export type Practice = {
   needAttention: number;
   totalOverdue: number;
   totalMsmeAtRisk: number;
+  /*
+    The firm-wide Prove number. A practice paying ₹29,999 a month wants one
+    figure that says whether this was worth it, and "we collected ₹11 lakh
+    across your clients" is that figure.
+  */
+  totalRecovered: number;
   live: boolean;
 };
 
-const EMPTY: Practice = { clients: [], needAttention: 0, totalOverdue: 0, totalMsmeAtRisk: 0, live: false };
+const EMPTY: Practice = { clients: [], needAttention: 0, totalOverdue: 0, totalMsmeAtRisk: 0, totalRecovered: 0, live: false };
 
 /**
  * Every workspace this user belongs to, with the signals that decide urgency.
@@ -87,6 +95,7 @@ export async function getPractice(): Promise<Practice> {
     let msmeAtRisk = 0;
     let openAlerts = 0;
     let lastActivity: string | null = null;
+    let recovered = 0;
 
     // --- receivables past due -------------------------------------------
     try {
@@ -117,6 +126,13 @@ export async function getPractice(): Promise<Practice> {
         .eq("org_id", orgId).eq("is_read", false);
       openAlerts = count || 0;
     } catch { /* ignore */ }
+
+    // What Cortex collected for this client. Absent table -> 0, never a guess.
+    try {
+      const { data } = await svc.rpc("cortex_recovery_summary", { p_org: orgId, p_days: 90 });
+      const r = (Array.isArray(data) ? data[0] : data) as any;
+      recovered = Number(r?.amount_recovered) || 0;
+    } catch { /* collections not migrated for this org */ }
 
     try {
       const { data } = await svc.from("health_metrics")
@@ -168,7 +184,7 @@ export async function getPractice(): Promise<Practice> {
 
     clients.push({
       orgId, name: names.get(orgId) || "Untitled", rank, headline, detail,
-      receivablesOverdue, msmeAtRisk, openAlerts, lastActivity,
+      receivablesOverdue, msmeAtRisk, openAlerts, lastActivity, recovered,
     });
   }
 
@@ -182,6 +198,7 @@ export async function getPractice(): Promise<Practice> {
     needAttention: clients.filter((c) => c.rank === 0).length,
     totalOverdue: clients.reduce((n, c) => n + c.receivablesOverdue, 0),
     totalMsmeAtRisk: clients.reduce((n, c) => n + c.msmeAtRisk, 0),
+    totalRecovered: clients.reduce((n, c) => n + c.recovered, 0),
     live: true,
   };
 }

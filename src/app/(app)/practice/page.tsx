@@ -47,7 +47,7 @@ export default async function Practice() {
     <>
       <Topbar title="Practice" subtitle={`${p.clients.length} client${p.clients.length === 1 ? "" : "s"} · ranked by who needs you`} />
       <PageShell>
-        <div className="grid sm:grid-cols-3 gap-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Card className={`p-4 ${p.needAttention > 0 ? "border-danger/30 bg-danger/5" : ""}`}>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <AlertTriangle className={`h-4 w-4 ${p.needAttention > 0 ? "text-danger" : "text-muted-foreground"}`} />
@@ -60,6 +60,11 @@ export default async function Practice() {
             <div className="text-sm text-muted-foreground">Deductions at risk</div>
             <div className="text-2xl font-bold mt-1 tabular-nums">{rupee(p.totalMsmeAtRisk)}</div>
             <div className="text-xs text-muted-foreground mt-0.5">43B(h), across the book</div>
+          </Card>
+          <Card className={`p-4 ${p.totalRecovered > 0 ? "border-success/30 bg-success/5" : ""}`}>
+            <div className="text-sm text-muted-foreground">Collected for your clients</div>
+            <div className="text-2xl font-bold mt-1 tabular-nums">{rupee(p.totalRecovered)}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">last 90 days, after a Cortex reminder</div>
           </Card>
           <Card className="p-4">
             <div className="text-sm text-muted-foreground">Overdue to your clients</div>

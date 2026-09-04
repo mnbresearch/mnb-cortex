@@ -125,6 +125,7 @@ export const NAV = [
   { href: "/sip", label: "Investment Growth", icon: Sprout, group: "Money", sub: "Funding & investment", calc: true },
   { href: "/debt", label: "Debt Payoff", icon: Anchor, group: "Money", sub: "Funding & investment", calc: true },
   { href: "/runway", label: "Cash Runway", icon: Flame, group: "Money", sub: "Cash & working capital", calc: true },
+  { href: "/collections", label: "Collections", icon: HandCoins, group: "Money", sub: "Cash & working capital" },
   { href: "/receivables", label: "Receivables & DSO", icon: Hourglass, group: "Money", sub: "Cash & working capital" },
   { href: "/tds", label: "TDS Calculator", icon: Stamp, group: "Money", sub: "Tax & GST", calc: true },
   { href: "/buyvslease", label: "Buy vs Lease", icon: GitCompare, group: "Money", sub: "Funding & investment", calc: true },
