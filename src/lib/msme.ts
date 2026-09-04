@@ -37,6 +37,9 @@ export type ExposureRow = {
   oldest_days: number;
   window_days: number;
   past_window: boolean;
+  /* Bills from this party still INSIDE the window — shown, never counted. */
+  other_count: number;
+  other_amount: number;
 };
 
 export type Exposure = {
@@ -77,6 +80,8 @@ export async function getMsmeExposure(): Promise<Exposure> {
       oldest_days: Number(r.oldest_days) || 0,
       window_days: Number(r.window_days) || 45,
       past_window: Boolean(r.past_window),
+      other_count: Number(r.other_count) || 0,
+      other_amount: Number(r.other_amount) || 0,
     }));
   } catch { return EMPTY; }
 
@@ -84,7 +89,13 @@ export async function getMsmeExposure(): Promise<Exposure> {
   let anyClassified = false;
 
   for (const r of rows) {
-    totalPayable += r.total_amount;
+    /*
+      total_amount is now ONLY the bills past their window; other_amount is the
+      rest. The old SQL returned the party's whole balance with a per-party
+      "past window" flag, so a supplier with one late bill and nine current ones
+      contributed all ten to the exposure — a tax figure overstated tenfold.
+    */
+    totalPayable += r.total_amount + r.other_amount;
     if (r.udyam_category !== "unclassified") anyClassified = true;
 
     if (r.udyam_category === "unclassified") {

@@ -304,6 +304,64 @@ export function seatLimit(plan: string | null | undefined): number {
   return PLAN_SEATS[String(plan || "").toLowerCase()] ?? PLAN_SEATS.starter;
 }
 
+/**
+ * Capability entitlements — the plan bullets that are NOT metered by credits.
+ *
+ * WHY THIS EXISTS.
+ *
+ * Most of what the higher plans sell is AI work, and that is already gated by
+ * PLAN_CREDITS: a Watch workspace gets 4,600 credits and a Command workspace
+ * 37,000, so "AI agents across every department" and "Image & video generation"
+ * are limited by the money, whatever the UI lets you click. Those are fine.
+ *
+ * The bullets below are different. They are capabilities, not consumption — an
+ * API key works the same on any plan and costs us nothing per call, so nothing
+ * stopped a ₹4,999 Watch workspace from using "Public API + outbound webhooks",
+ * a Watch Pro bullet at ₹14,999. There was no feature-gate layer at all.
+ *
+ * THE FAILURE MODE THIS IS SHAPED AROUND.
+ *
+ * Refusing a PAYING customer is worse than letting a cheap one through — the
+ * entitlement suite was written after nearly shipping exactly that. So:
+ *
+ *   - An unrecognised or empty plan gets the LOWEST entitlement, but callers
+ *     are expected to gate only the CREATION of new things, never the use of
+ *     what already exists. An API key issued under an older plan keeps working.
+ *   - Legacy plan ids are listed explicitly. A workspace still on a retired
+ *     tier bought these capabilities and does not lose them because we renamed
+ *     the plans.
+ */
+export type Capability = "api" | "webhooks" | "whitelabel" | "workflows" | "alert_rules" | "memory";
+
+const PLAN_CAPABILITIES: Record<string, Capability[]> = {
+  watch: [],
+  watchpro: ["api", "webhooks", "workflows", "alert_rules", "memory"],
+  practice: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
+  command: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
+  enterprise: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
+
+  /*
+    Retired tiers. These workspaces PAID for these capabilities under the old
+    naming, and removing them here would silently downgrade a paying customer —
+    the one failure this module is most concerned with. Mapped to the nearest
+    current equivalent, generously where it is ambiguous.
+  */
+  starter: [],
+  growth: ["api", "webhooks", "workflows", "alert_rules"],
+  business: ["api", "webhooks", "workflows", "alert_rules", "memory"],
+  aicoo: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
+};
+
+export function planIncludes(plan: string | null | undefined, cap: Capability): boolean {
+  return (PLAN_CAPABILITIES[String(plan || "").toLowerCase()] ?? []).includes(cap);
+}
+
+/** The cheapest current plan that includes a capability, for the upgrade prompt. */
+export function lowestPlanWith(cap: Capability): string {
+  for (const p of PLANS) if (planIncludes(p.id, cap)) return p.name;
+  return "a higher plan";
+}
+
 // Buyable top-up packs (one-time). Price in INR.
 export type CreditPack = { id: string; label: string; credits: number; price: number; per: string };
 export const CREDIT_PACKS: CreditPack[] = [

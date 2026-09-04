@@ -20,7 +20,7 @@ const FAQS = [
   { q: "Is my data safe?", a: "Yes. Every workspace is isolated with Postgres row-level security, traffic is encrypted with TLS, sensitive keys use AES-256-GCM, and you can export or delete your data anytime." },
   { q: "Do I need to be technical?", a: "No. You ask questions in plain language (English or Hinglish), load a demo dataset or connect your tools, and Cortex does the analysis and drafting for you." },
   { q: "Which businesses is it built for?", a: "Indian SMEs — manufacturers, D2C and retail brands, services and agencies, and founders who want a COO-grade brain without a COO-grade salary." },
-  { q: "How does billing work?", a: "Cortex runs on credits. Buy a ₹149 pack and use it with no subscription, or pick a plan from ₹1,499/mo for a monthly allowance — billed securely via Cashfree. Your free Business Health Check needs no card at all. Prices are in INR; international customers are onboarded by our team." },
+  { q: "How does billing work?", a: "Cortex runs on credits. Buy a ₹149 pack and use it with no subscription, or pick a plan from ₹4,999/mo for a monthly allowance — billed securely via Cashfree. Your free Business Health Check needs no card at all. Prices are in INR; international customers are onboarded by our team." },
 ];
 
 /*

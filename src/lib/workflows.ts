@@ -70,7 +70,7 @@ export async function executeWorkflow(
           const today = new Date().toISOString().slice(0, 10);
           const { data } = await svc.from("invoices")
             .select("party,amount,due_date,status").eq("org_id", orgId).eq("type", "receivable")
-            .neq("status", "paid").limit(500);
+            .or("status.is.null,status.not.ilike.paid").limit(500);
           const overdue = ((data as any[]) || [])
             .filter((i) => i.status === "overdue" || (i.due_date && String(i.due_date) < today))
             .sort((a, b) => num(b.amount) - num(a.amount));

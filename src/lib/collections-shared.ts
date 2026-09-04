@@ -24,4 +24,15 @@ export type Policy = {
   do_not_contact: string[];
   signature: string | null;
   payment_note: string | null;
+
+  /*
+    The name of a message template the WORKSPACE had approved by Meta, and its
+    language. WhatsApp refuses free-form messages to anyone who has not messaged
+    the business first — which a debtor never has — so without one of these
+    there is no legal way to open the conversation and Cortex declines to try.
+    See lib/collections/whatsapp.ts for why the refusal must not be recorded as
+    a delivery failure.
+  */
+  whatsapp_template: string | null;
+  whatsapp_lang: string;
 };

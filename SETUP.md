@@ -51,16 +51,48 @@ The test token expires in 24 hours. For production, create a System User in
 Meta Business Settings and generate a **permanent** token with the
 `whatsapp_business_messaging` permission.
 
-**3. Approve templates**
+**3. Approve a template**
 WhatsApp only allows free-form text inside a 24-hour window that the *customer*
-opens by messaging you. To start a conversation you must use a template
-approved in *WhatsApp Manager → Message Templates*. Approval takes minutes to a
-day. Suggested first template, named `payment_reminder`:
+opens by messaging you. Anyone you are chasing for money has not done that, so
+payment reminders **must** use a template approved in advance, in
+*WhatsApp Manager → Message Templates*. Approval usually takes under an hour.
 
-> Hi {{1}}, this is a reminder that invoice {{2}} for {{3}} is now overdue. Please let us know if you need any help.
+Create it with category **Utility**, not Marketing. A reminder about an invoice
+that already exists is a utility message: it is cheaper per send, and Marketing
+templates are rejected far more often and can be blocked by a recipient's
+marketing opt-out.
+
+Cortex fills exactly **four** variables, in this order — customer name, your
+business name, invoice number, amount. Your template must have four, in that
+order, or the send fails. Suggested body, named `payment_reminder`:
+
+> Hello {{1}}, this is a payment reminder from {{2}}. Invoice {{3}} for {{4}} is now past its due date. If you have already paid, please ignore this message or reply with the payment reference.
+
+Then put the template's **exact** name into *Collections → Settings →
+Your approved WhatsApp template name*, along with its language code. Meta
+treats `en` and `en_US` as different templates, so copy whichever appears next
+to yours in WhatsApp Manager.
 
 **4. Add both variables in Vercel and redeploy.**
 `/setup` will show WhatsApp as **live**, and AI Outreach can send for real.
+
+### Collections is stricter, on purpose
+
+Payment reminders will **only** go out over WhatsApp using *your own* Meta
+account — the platform credentials above are never used for them, even when
+they are configured. Two reasons:
+
+- Your customer would receive a demand for money from *MNB Research*, a company
+  they have never dealt with, and their reply ("already paid, UTR 4471") would
+  arrive with us instead of you.
+- WhatsApp rates senders on how often recipients block or report them. One
+  shared number carrying every business's dunning is a number that gets rated
+  badly and then throttled — which would break everyone's messages at once.
+
+So: connect your own Meta account on **Integrations**, name your approved
+template in **Collections → Settings**, and until you do, WhatsApp reminders are
+skipped with the reason shown on each one. Your email reminders keep working
+throughout — a WhatsApp setup gap never switches collections off.
 
 Sending from code:
 

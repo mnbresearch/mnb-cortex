@@ -80,8 +80,23 @@ export async function GET(req: Request) {
       const { prepareDrafts, sendApproved } = await import("@/lib/collections");
       const svcC = serviceClient();
       if (svcC) {
+        /*
+          LEAST RECENTLY SWEPT first, not an arbitrary 200.
+
+          This was `.limit(200)` with no ordering. PostgREST returns whatever
+          the planner produces, so past 200 enabled workspaces the same ones
+          were served every night and the rest never were — a customer paying
+          for automated chasing would find it had quietly stopped, with no
+          error anywhere to explain it.
+
+          Ordering by last_swept_at with NULLs first makes the rotation fair
+          and deterministic: every workspace is reached within ceil(n/200)
+          days, and one that has never run goes to the front.
+        */
         const { data: on } = await svcC.from("collection_policies")
-          .select("org_id").eq("enabled", true).limit(200);
+          .select("org_id").eq("enabled", true)
+          .order("last_swept_at", { ascending: true, nullsFirst: true })
+          .limit(200);
         for (const row of ((on as any[]) || [])) {
           const oid = String(row.org_id);
           try {
@@ -90,6 +105,16 @@ export async function GET(req: Request) {
             const r = await sendApproved(oid, new URL(req.url).origin);
             collectionsSent += r.sent;
           } catch { /* one workspace must not stop the rest */ }
+          /*
+            Stamp OUTSIDE the try, so a workspace that throws still moves to the
+            back of the queue. Otherwise one permanently-failing workspace sits
+            at the head of the rotation forever and starves everyone behind it —
+            turning a single broken tenant into an outage for all of them.
+          */
+          try {
+            await svcC.from("collection_policies")
+              .update({ last_swept_at: new Date().toISOString() }).eq("org_id", oid);
+          } catch { /* column not migrated yet — rotation is best-effort */ }
         }
       }
     } catch { /* never let this take the cron down */ }

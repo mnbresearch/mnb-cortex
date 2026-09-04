@@ -110,6 +110,47 @@ export function CollectionsSettings({ policy, whatsappReady }: { policy: Policy;
           </div>
         </div>
 
+        {/*
+          The approved template.
+
+          Only shown when WhatsApp is selected, because it is meaningless
+          otherwise — but it is REQUIRED once it is, and the copy below says so
+          plainly rather than letting an owner discover it from a run of
+          skipped messages. WhatsApp does not allow a business to message
+          somebody who has not messaged them first unless the message uses a
+          template Meta approved in advance, and a customer being chased for
+          money has never messaged them. There is no way around that from our
+          side, so the honest thing is to explain it here.
+        */}
+        {channels.includes("whatsapp") && (
+          <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 space-y-2">
+            <label className="text-sm block">
+              <span className="text-muted-foreground block mb-1">Your approved WhatsApp template name</span>
+              <input className={I + " w-full"} name="whatsapp_template"
+                defaultValue={policy.whatsapp_template || ""}
+                placeholder="payment_reminder" autoCapitalize="none" spellCheck={false} />
+            </label>
+            <p className="text-xs text-muted-foreground">
+              WhatsApp will not deliver a message to someone who has not messaged you first unless it
+              uses a template Meta approved in advance. Create one in Meta Business Manager →
+              WhatsApp Manager → Message templates, category <strong>Utility</strong>, with four
+              variables in this order: customer name, your business name, invoice number, amount.
+              Approval usually takes under an hour. Then paste the template&rsquo;s exact name here.
+              Until you do, WhatsApp reminders are skipped — your email reminders are unaffected.
+            </p>
+            <label className="text-sm block">
+              <span className="text-muted-foreground block mb-1">Template language code</span>
+              <input className={I + " w-32"} name="whatsapp_lang"
+                defaultValue={policy.whatsapp_lang || "en"} placeholder="en"
+                autoCapitalize="none" spellCheck={false} />
+              <span className="text-xs text-muted-foreground block mt-1">
+                Meta treats <code>en</code> and <code>en_US</code> as different templates. Copy
+                whichever appears next to yours.
+              </span>
+            </label>
+          </div>
+        )}
+
         <label className="text-sm block">
           <span className="text-muted-foreground block mb-1">Never contact these customers</span>
           <textarea className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y"

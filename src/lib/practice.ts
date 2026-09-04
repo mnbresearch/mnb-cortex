@@ -1,6 +1,7 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
+import { practiceClientLimit } from "@/lib/config";
 
 /**
  * The Practice console — every client a firm watches, on one screen.
@@ -44,10 +45,28 @@ export type ClientSignal = {
   lastActivity: string | null;
   /** What Cortex has actually collected for this client, last 90 days. */
   recovered: number;
+  /*
+    Week-on-week receivables change, as a percentage. NULL when there is not a
+    week of snapshots yet — which is different from 0, and must stay different:
+    "nothing moved" and "we cannot see yet" need opposite words on screen.
+  */
+  movedPct: number | null;
 };
 
 export type Practice = {
   clients: ClientSignal[];
+  /*
+    Entitlement, resolved server-side and returned so the page can render the
+    right thing rather than guess.
+
+    `allowed` false means this plan does not include Practice at all.
+    `limit` is how many client workspaces the plan covers (-1 = unlimited), and
+    `overLimit` is how many are being hidden because the firm is above it.
+  */
+  allowed: boolean;
+  plan: string;
+  limit: number;
+  overLimit: number;
   needAttention: number;
   totalOverdue: number;
   totalMsmeAtRisk: number;
@@ -60,7 +79,10 @@ export type Practice = {
   live: boolean;
 };
 
-const EMPTY: Practice = { clients: [], needAttention: 0, totalOverdue: 0, totalMsmeAtRisk: 0, totalRecovered: 0, live: false };
+const EMPTY: Practice = {
+  clients: [], allowed: false, plan: "", limit: 0, overLimit: 0,
+  needAttention: 0, totalOverdue: 0, totalMsmeAtRisk: 0, totalRecovered: 0, live: false,
+};
 
 /**
  * Every workspace this user belongs to, with the signals that decide urgency.
@@ -84,8 +106,51 @@ export async function getPractice(): Promise<Practice> {
   } catch { return EMPTY; }
   if (!orgIds.length) return EMPTY;
 
-  const { data: orgRows } = await svc.from("organizations").select("id, name").in("id", orgIds);
+  const { data: orgRows } = await svc.from("organizations").select("id, name, plan").in("id", orgIds);
   const names = new Map(((orgRows as any[]) || []).map((o) => [String(o.id), String(o.name || "Untitled")]));
+
+  /*
+    ENTITLEMENT. Practice is a ₹29,999/month plan and this console was open to
+    every workspace on any plan — practiceClientLimit() existed in config.ts
+    with zero call sites anywhere in the codebase, so the cap the pricing page
+    advertises ("Up to 25 client workspaces") was never applied and the feature
+    that justifies the tier was free.
+
+    Resolved from the CURRENT workspace's plan, not from any of the clients':
+    the firm is the customer, the client workspaces are what they bought access
+    to, and reading the plan off a client would let a firm on the cheapest tier
+    unlock the console by being added to one paying client.
+  */
+  const { orgId: currentOrgId } = await getUserAndOrg();
+  let plan = "";
+  if (currentOrgId) {
+    const here = ((orgRows as any[]) || []).find((o) => String(o.id) === String(currentOrgId));
+    plan = String(here?.plan || "");
+    if (!here) {
+      try {
+        const { data } = await svc.from("organizations").select("plan").eq("id", currentOrgId).single();
+        plan = String((data as any)?.plan || "");
+      } catch { /* leave blank — treated as not entitled below */ }
+    }
+  }
+  const limit = practiceClientLimit(plan);
+  const allowed = limit !== 0;
+  if (!allowed) {
+    return { ...EMPTY, plan, limit, live: true };
+  }
+
+  /*
+    Apply the cap. Sorted for stability so the same 25 clients appear each time
+    rather than a different arbitrary subset per request — a console whose
+    contents shuffle is worse than one that is honestly truncated. The page
+    tells the firm how many are hidden and why.
+  */
+  const allOrgIds = orgIds;
+  if (limit > 0 && orgIds.length > limit) {
+    orgIds = [...orgIds].sort((a, b) =>
+      (names.get(a) || "").localeCompare(names.get(b) || "")).slice(0, limit);
+  }
+  const overLimit = Math.max(0, allOrgIds.length - orgIds.length);
 
   const clients: ClientSignal[] = [];
 
@@ -101,7 +166,7 @@ export async function getPractice(): Promise<Practice> {
     try {
       const { data } = await svc.from("invoices")
         .select("amount, due_date, status")
-        .eq("org_id", orgId).eq("type", "receivable").neq("status", "paid").limit(1000);
+        .eq("org_id", orgId).eq("type", "receivable").or("status.is.null,status.not.ilike.paid").limit(1000);
       const today = Date.now();
       for (const r of ((data as any[]) || [])) {
         if (!r.due_date) continue;
@@ -142,6 +207,32 @@ export async function getPractice(): Promise<Practice> {
     } catch { /* ignore */ }
 
     /*
+      What moved since last week.
+
+      This backs the Practice bullet "Whose receivables moved this week", which
+      previously had nothing behind it: health_metrics is overwritten on every
+      recompute, so no previous value existed anywhere to compare against.
+      2026_metric_snapshots.sql keeps a daily copy and lib/movement.ts reads it.
+
+      Only reported when there is genuinely a week of history. A client added
+      yesterday gets silence here, not "0% change" — telling a CA nothing moved
+      when we simply cannot see is the exact failure mode this console exists to
+      avoid.
+    */
+    let movedPct: number | null = null;
+    try {
+      const { getMovement } = await import("@/lib/movement");
+      const mv = await getMovement(orgId, 7, 10);
+      const rec = mv.movements.find((x) => x.metricKey === "receivables");
+      if (mv.haveHistory && rec && rec.deltaPct !== null) {
+        movedPct = rec.deltaPct;
+        const dir = rec.delta > 0 ? "up" : "down";
+        const when = new Date(rec.previousAsOf).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+        detail.push(`Receivables ${dir} ${Math.abs(rec.deltaPct)}% since ${when}`);
+      }
+    } catch { /* snapshots not migrated — say nothing rather than guess */ }
+
+    /*
       Severity.
 
       Deliberately conservative about what counts as urgent. A 43B(h) clock past
@@ -166,6 +257,15 @@ export async function getPractice(): Promise<Practice> {
       if (rank === 2) { rank = 1; headline = `₹${Math.round(receivablesOverdue).toLocaleString("en-IN")} overdue`; }
       detail.push(`₹${Math.round(receivablesOverdue).toLocaleString("en-IN")} past due`);
     }
+    /*
+      A receivables book that jumped materially in a week is worth a look even
+      when the absolute number is under the threshold above — a 40% rise is how
+      a problem starts, and catching it there is the entire pitch.
+    */
+    if (movedPct !== null && movedPct >= 25 && rank === 2) {
+      rank = 1;
+      headline = `Receivables up ${Math.abs(movedPct)}% this week`;
+    }
     if (openAlerts > 0) {
       if (rank === 2) { rank = 1; headline = `${openAlerts} open alert${openAlerts === 1 ? "" : "s"}`; }
       detail.push(`${openAlerts} unread alert${openAlerts === 1 ? "" : "s"}`);
@@ -184,7 +284,7 @@ export async function getPractice(): Promise<Practice> {
 
     clients.push({
       orgId, name: names.get(orgId) || "Untitled", rank, headline, detail,
-      receivablesOverdue, msmeAtRisk, openAlerts, lastActivity, recovered,
+      receivablesOverdue, msmeAtRisk, openAlerts, lastActivity, recovered, movedPct,
     });
   }
 
@@ -194,7 +294,7 @@ export async function getPractice(): Promise<Practice> {
     a.name.localeCompare(b.name));
 
   return {
-    clients,
+    clients, allowed, plan, limit, overLimit,
     needAttention: clients.filter((c) => c.rank === 0).length,
     totalOverdue: clients.reduce((n, c) => n + c.receivablesOverdue, 0),
     totalMsmeAtRisk: clients.reduce((n, c) => n + c.msmeAtRisk, 0),

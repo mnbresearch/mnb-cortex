@@ -212,7 +212,36 @@ When answering: say plainly that you don't have their numbers yet, then tell the
   const lines = m.map((x) => `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + x.unit} (${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, status ${x.status})`);
   const ins = await getInsights();
   const insLines = ins.map((i) => `- [${i.severity}] ${i.title}: ${i.detail}`);
-  return `KEY METRICS:\n${lines.join("\n")}\n\nACTIVE INSIGHTS:\n${insLines.join("\n")}`;
+
+  /*
+    Statutory deadlines in the next fortnight.
+
+    "GST & statutory deadline warnings" is a bullet on the Watch plan, and the
+    only thing behind it was a static reference calendar on a page nobody
+    opened. Putting the DATED version in the AI's context is what makes it a
+    warning: an owner asking Cortex anything in the third week of a month now
+    gets told GSTR-3B is four days out, without having to know to ask.
+
+    Each line keeps its "if this applies to you" condition, because Cortex is
+    never told whether a workspace files monthly or under QRMP, or whether it is
+    a company with ROC obligations. The instruction below exists so the model
+    does not helpfully drop the qualifier and assert an obligation the business
+    may not have.
+  */
+  let dueLines: string[] = [];
+  try {
+    const { upcomingDeadlines } = await import("@/lib/statutory");
+    dueLines = upcomingDeadlines(14).slice(0, 6)
+      .map((d) => `- ${d.name} in ${d.daysAway} day(s) (${d.due.toISOString().slice(0, 10)}): ${d.what} — applies if ${d.appliesIf}`);
+  } catch { /* never let a deadline lookup break the whole context */ }
+
+  const due = dueLines.length
+    ? `\n\nSTATUTORY DEADLINES COMING UP:\n${dueLines.join("\n")}\n` +
+      `(These are the standard Indian due dates. You do NOT know which apply to this business — ` +
+      `always keep the "if" condition when you mention one, and never state that they have missed or must file something.)`
+    : "";
+
+  return `KEY METRICS:\n${lines.join("\n")}\n\nACTIVE INSIGHTS:\n${insLines.join("\n")}${due}`;
 }
 
 export const getDocumentsList = () => fetchRows("documents", "created_at");

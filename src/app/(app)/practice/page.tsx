@@ -23,6 +23,40 @@ const rupee = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 export default async function Practice() {
   const p = await getPractice();
 
+  /*
+    Not on a plan that includes Practice.
+
+    This console was previously open to every workspace on every plan, which
+    made the ₹29,999 tier's headline feature free. The upsell is deliberately
+    specific about what the plan buys rather than being a generic paywall — a
+    firm reading this should be able to decide, not have to ask.
+  */
+  if (!p.allowed) {
+    return (
+      <>
+        <Topbar title="Practice" subtitle="Every client you watch, ranked by who needs you" />
+        <PageShell>
+          <Card className="p-6 text-sm max-w-2xl">
+            <div className="font-medium">Practice is part of the Practice plan.</div>
+            <p className="text-muted-foreground mt-2 leading-6">
+              It puts every client workspace you have access to on one screen, ordered by who needs you:
+              whose supplier bills have crossed the 43B(h) window, whose receivables moved this week, who
+              has alerts nobody has read. Up to 25 client workspaces, with credits pooled across all of
+              them rather than capped per client.
+            </p>
+            <p className="text-muted-foreground mt-2 leading-6">
+              You can still open each client&rsquo;s workspace one at a time from the workspace switcher —
+              this page is the view across all of them at once.
+            </p>
+            <a href="/billing" className="inline-block mt-4 rounded-lg bg-primary text-primary-foreground px-4 h-10 leading-10 text-sm font-medium">
+              See Practice pricing
+            </a>
+          </Card>
+        </PageShell>
+      </>
+    );
+  }
+
   if (!p.live || p.clients.length === 0) {
     return (
       <>
@@ -106,6 +140,23 @@ export default async function Practice() {
             </Card>
           ))}
         </div>
+
+        {/*
+          Over the plan's client cap. Said plainly, with the number, rather than
+          silently truncating — a CA who cannot find a client on this screen
+          needs to know it is a plan limit and not a bug.
+        */}
+        {p.overLimit > 0 && (
+          <Card className="p-4 text-sm flex items-start gap-2.5 border-warning/30 bg-warning/5">
+            <Info className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+            <div className="leading-6">
+              Your plan covers <b>{p.limit}</b> client workspaces and you have access to{" "}
+              <b>{p.limit + p.overLimit}</b>. {p.overLimit} {p.overLimit === 1 ? "is" : "are"} not shown here.
+              You can still open them individually from the workspace switcher —{" "}
+              <a className="underline" href="/billing">add capacity</a> to see them all on this screen.
+            </div>
+          </Card>
+        )}
 
         {quiet > 0 && (
           <Card className="p-4 text-sm flex items-start gap-2.5">

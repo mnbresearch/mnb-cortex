@@ -104,7 +104,7 @@ export default function Investors() {
           </div>
           <div className="bg-card p-7 lg:p-9">
             <SectionLabel n="05">Business model</SectionLabel>
-            <p className="mt-4 text-muted-foreground leading-7">Self‑serve SaaS. Plans ₹1,499 → ₹39,999/mo (+ Enterprise). Live payments via Cashfree. Credit‑metered AI with per‑plan allowances and pay‑as‑you‑go packs from ₹149; white‑label &amp; multi‑brand tiers for agencies and groups. No free trial — a free Business Health Check is the top of funnel.</p>
+            <p className="mt-4 text-muted-foreground leading-7">Self‑serve SaaS. Plans ₹4,999 → ₹39,999/mo (+ Enterprise). Live payments via Cashfree. Credit‑metered AI with per‑plan allowances and pay‑as‑you‑go packs from ₹149; white‑label &amp; multi‑brand tiers for agencies and groups. No free trial — a free Business Health Check is the top of funnel.</p>
           </div>
         </div>
       </section>

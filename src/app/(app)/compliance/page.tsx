@@ -4,6 +4,7 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AIPanel } from "@/components/ai-panel";
+import { upcomingDeadlines } from "@/lib/statutory";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,47 @@ const periodic = [
 const tone: Record<string, string> = { danger: "bg-danger/10 text-danger border-danger/20", warn: "bg-warning/10 text-warning border-warning/20", flat: "border-border text-muted-foreground" };
 
 export default function Compliance() {
+  /*
+    What is actually due, now.
+
+    This page used to be nothing but the two reference tables below — a calendar
+    that never mentioned today. "GST & statutory deadline warnings" is a paid
+    plan bullet, and a table of dates is not a warning: an owner had to already
+    know to look, on the right day, to get anything from it. lib/statutory.ts
+    dates them, so the band below says "in 4 days" rather than "the 20th".
+
+    Every line keeps its "if this applies to you" condition. Cortex is not told
+    whether a business files monthly or under QRMP, has employees on EPF, or is
+    a company with ROC filings — and telling a sole proprietor they must file
+    AOC-4 would cost us their trust in every other warning we send.
+  */
+  const soon = upcomingDeadlines(10);
+
   return (
     <>
       <Topbar title="Compliance Calendar" subtitle="India statutory due dates — never miss a filing" />
       <PageShell>
+        {soon.length > 0 && (
+          <Section title="Due in the next 10 days" desc="Dated from today. Check which of these apply to you.">
+            <div className="space-y-2">
+              {soon.map((d) => (
+                <Card key={d.id} className={`p-4 flex items-start gap-3 ${d.severity === "high" && d.daysAway <= 3 ? "border-danger/30 bg-danger/5" : ""}`}>
+                  <div className={`h-10 w-16 rounded-lg grid place-items-center text-xs font-bold shrink-0 ${
+                    d.daysAway <= 1 ? "bg-danger/10 text-danger" : d.daysAway <= 3 ? "bg-warning/10 text-warning" : "border"
+                  }`}>
+                    {d.daysAway === 0 ? "today" : d.daysAway === 1 ? "tomorrow" : `${d.daysAway} days`}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm">{d.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {d.what} — <span className="italic">if {d.appliesIf}</span>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </Section>
+        )}
         <Section title="Every month" desc="Recurring monthly obligations (dates are typical; verify for your category)">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {monthly.map((d) => (

@@ -1,7 +1,7 @@
 "use server";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { getUserAndOrg, getBusinessContext } from "@/lib/data";
-import { seatLimit } from "@/lib/config";
+import { seatLimit, planIncludes, lowestPlanWith } from "@/lib/config";
 import { SUPER_ADMINS } from "@/lib/operators";
 import { generateFor } from "@/lib/ai/cortex";
 import { sendEmail } from "@/lib/email";
@@ -258,7 +258,7 @@ export async function sendReminderAI() {
   const today = new Date().toISOString().slice(0, 10);
   const { data: rows } = await sb.from("invoices")
     .select("party,amount,due_date,status").eq("org_id", orgId).eq("type", "receivable")
-    .neq("status", "paid").limit(500);
+    .or("status.is.null,status.not.ilike.paid").limit(500);
   const overdue = ((rows as any[]) || [])
     .filter((i) => i.status === "overdue" || (i.due_date && String(i.due_date) < today))
     .sort((a, b) => Number(b.amount) - Number(a.amount));
@@ -374,7 +374,7 @@ export async function updateStatus(fd: FormData) {
 
 const IMPORT_COLS: Record<string, { cols: string[]; nums: string[] }> = {
   sales_orders: { cols: ["order_no", "customer_name", "region", "product", "amount", "status"], nums: ["amount"] },
-  invoices: { cols: ["invoice_no", "party", "amount", "due_date", "status", "type"], nums: ["amount"] },
+  invoices: { cols: ["invoice_no", "party", "amount", "issue_date", "due_date", "status", "type"], nums: ["amount"] },
   inventory_items: { cols: ["sku", "name", "category", "on_hand", "reorder_level", "unit_cost", "supplier"], nums: ["on_hand", "reorder_level", "unit_cost"] },
   employees: { cols: ["name", "department", "role", "monthly_ctc", "performance"], nums: ["monthly_ctc", "performance"] },
   // Leads were not importable, and no code path could create one belonging to a
@@ -495,6 +495,27 @@ export async function importRows(fd: FormData): Promise<{
         anywhere explained why. The two paths now agree.
       */
       if (table === "sales_orders" && !o.status) o.status = "won";
+
+      /*
+        Normalise the two columns that are COMPARED rather than displayed.
+
+        Every read in this codebase tests `status <> 'paid'` and
+        `type = 'receivable'` case-sensitively. A Tally or Vyapar export writes
+        "Paid", "PAID" or "Receivable", so an invoice the customer has already
+        settled came through as unpaid — and would then have been CHASED by the
+        collections agent, which is the worst outcome this product can produce.
+        It also inflated the 43B(h) tax exposure with bills that were paid.
+
+        Normalised at the point of writing rather than at every read, because
+        there are a dozen reads and one importer.
+      */
+      if (table === "invoices") {
+        if (o.status) o.status = String(o.status).trim().toLowerCase();
+        if (o.type) o.type = String(o.type).trim().toLowerCase();
+        // Anything that is not a known receivable/payable value is a receivable,
+        // which is the existing column default.
+        if (o.type && !["receivable", "payable"].includes(o.type)) o.type = "receivable";
+      }
       return o;
     });
     const sb = createClient();
@@ -786,7 +807,35 @@ export async function moveDeal(fd: FormData) {
 // ---- API keys ----
 export async function generateApiKey(fd: FormData) {
   const { orgId } = await requireRole("admin"); const sb = createClient();
-  const key = "mnb_" + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+  /*
+    ENTITLEMENT. "Public API + outbound webhooks" is a Watch Pro bullet at
+    ₹14,999 and nothing checked the plan, so a ₹4,999 Watch workspace could
+    issue keys. Gating CREATION only is deliberate: a key issued under an older
+    or higher plan keeps working, because cutting off a running integration to
+    enforce a price is the kind of correctness that loses customers.
+  */
+  const { data: org } = await sb.from("organizations").select("plan").eq("id", orgId).single();
+  const plan = String((org as any)?.plan || "");
+  if (!planIncludes(plan, "api")) {
+    throw new Error(
+      `The public API is part of ${lowestPlanWith("api")} and above. Your existing keys keep working — ` +
+      `upgrade under Billing to issue new ones.`,
+    );
+  }
+
+  /*
+    crypto.randomUUID, not Math.random.
+
+    Math.random is a fast non-cryptographic PRNG with observable internal state:
+    given a few outputs from the same process, the rest of the sequence is
+    recoverable. Three concatenated calls plus a timestamp is therefore a
+    GUESSABLE API key — and this key authenticates full read access to a
+    workspace's financial data. Two UUIDv4s give 244 bits from the platform CSPRNG.
+  */
+  const { randomUUID } = await import("node:crypto");
+  const key = "mnb_" + (randomUUID() + randomUUID()).replace(/-/g, "");
+
   const { error } = await sb.from("api_keys").insert({ org_id: orgId, label: str(fd.get("label")) || "API key", key });
   if (error) throw new Error(error.message);
   revalidatePath("/developers");
@@ -812,7 +861,23 @@ export async function runAutopilot() {
 // ---- Shareable public report links ----
 export async function createReportLink() {
   const orgId = await requireWriteOrg(); const sb = createClient();
-  const token = "r_" + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  /*
+    This token is the ONLY thing protecting the link.
+
+    A report link is a public URL — no session, no login — that renders the
+    workspace's revenue, cash position and customer list to anyone who has it.
+    The token was two concatenated Math.random() calls, which is roughly 100
+    bits of a NON-cryptographic PRNG whose internal state is recoverable from a
+    handful of outputs. Anyone who created two report links of their own could
+    work out the generator's state and derive other tenants' tokens, and the
+    result is one customer reading another customer's finances over the open
+    internet.
+
+    randomUUID draws from the platform CSPRNG. Two of them is 244 bits with no
+    recoverable state.
+  */
+  const { randomUUID } = await import("node:crypto");
+  const token = "r_" + (randomUUID() + randomUUID()).replace(/-/g, "");
   const { error } = await sb.from("report_links").insert({ org_id: orgId, token });
   if (error) throw new Error(error.message);
   revalidatePath("/reports");
@@ -1008,6 +1073,40 @@ export async function saveCollectionPolicy(fd: FormData): Promise<{ ok: boolean;
   const channels = String(fd.get("channels") || "email").split(",").map((c) => c.trim()).filter((c) => c === "email" || c === "whatsapp");
 
   /*
+    The WhatsApp template name is lowercased and stripped before it is stored.
+
+    Meta only accepts lowercase letters, digits and underscores, and the most
+    likely way for someone to get this wrong is pasting "Payment Reminder" as it
+    is displayed in WhatsApp Manager rather than as the name Meta assigned. A
+    silent send failure two days later is a much worse teacher than fixing the
+    obvious case here — and anything still invalid after this is rejected with a
+    sentence, below, rather than stored to fail at send time.
+  */
+  const waTemplate = str(fd.get("whatsapp_template")).trim().toLowerCase().replace(/\s+/g, "_") || null;
+  if (waTemplate && !/^[a-z0-9_]{1,512}$/.test(waTemplate)) {
+    return {
+      ok: false,
+      error: `"${waTemplate}" is not a valid WhatsApp template name. Meta allows only lowercase letters, numbers and underscores — copy it exactly as it appears in WhatsApp Manager.`,
+    };
+  }
+  const waLang = str(fd.get("whatsapp_lang")).trim().replace(/[^A-Za-z_]/g, "").slice(0, 10) || "en";
+
+  /*
+    Refuse to enable a channel that cannot send. Turning WhatsApp on without a
+    template produces a policy whose every WhatsApp reminder is skipped, and the
+    owner finds out from an empty outbox rather than from this form.
+  */
+  if (channels.includes("whatsapp") && !waTemplate) {
+    return {
+      ok: false,
+      error: "WhatsApp reminders need the name of a message template you have had approved by Meta. " +
+             "WhatsApp does not allow a business to message someone who has not messaged them first " +
+             "without one, and a customer you are chasing has not. Add the template name, or leave " +
+             "WhatsApp switched off and send by email.",
+    };
+  }
+
+  /*
     Validated here as well as by the CHECK constraints. A bad value should be a
     clear message, not a database error surfaced to someone changing a setting.
   */
@@ -1026,6 +1125,8 @@ export async function saveCollectionPolicy(fd: FormData): Promise<{ ok: boolean;
     do_not_contact: String(fd.get("do_not_contact") || "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 500),
     signature: str(fd.get("signature")) || null,
     payment_note: str(fd.get("payment_note")) || null,
+    whatsapp_template: waTemplate,
+    whatsapp_lang: waLang,
     updated_at: new Date().toISOString(),
   };
 
@@ -1104,9 +1205,37 @@ export async function excludeFromCollections(fd: FormData): Promise<{ ok: boolea
   catch { return { ok: false, error: "Sign in." }; }
   const invoiceId = str(fd.get("invoice_id"));
   const sb = createClient();
+
+  /*
+    Verify the invoice belongs to THIS workspace before writing a row about it.
+
+    org_id came from the session, so the row itself was always correctly scoped
+    — but invoice_id came from the form and was never checked. Posting another
+    tenant's invoice id created a collection_threads row in YOUR workspace
+    pointing at THEIR invoice, and every join from that thread back to invoices
+    then leaked their party name and amount onto your screen.
+
+    The read below is RLS-scoped (createClient, not the service role), so a
+    foreign id simply returns nothing and the request is refused. Cheap, and it
+    closes the hole rather than relying on the FK, which enforces existence but
+    says nothing about ownership.
+  */
+  if (!invoiceId) return { ok: false, error: "No invoice specified." };
+  const { data: inv } = await sb.from("invoices")
+    .select("id, party, amount").eq("id", invoiceId).eq("org_id", orgId).maybeSingle();
+  if (!inv) return { ok: false, error: "That invoice is not in this workspace." };
+
+  /*
+    Party and amount are taken from the INVOICE, not from the form. They were
+    read straight off the request, so the thread could be labelled with any name
+    and value the caller chose — and that thread feeds the recovery ledger,
+    which is the number we show a customer to prove Cortex earned its fee.
+  */
   const { error } = await sb.from("collection_threads").upsert({
-    org_id: orgId, invoice_id: invoiceId, party: str(fd.get("party")) || "Unknown",
-    amount: num(fd.get("amount")), status: "excluded",
+    org_id: orgId, invoice_id: invoiceId,
+    party: String((inv as any).party || "Unknown"),
+    amount: Number((inv as any).amount) || 0,
+    status: "excluded",
   }, { onConflict: "org_id,invoice_id" });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/collections");

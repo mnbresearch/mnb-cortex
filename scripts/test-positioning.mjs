@@ -171,6 +171,46 @@ const layout = readFileSync("src/app/layout.tsx", "utf8");
 check(!/operating brain/i.test(layout), "page metadata no longer says 'operating brain'");
 check(/early-warning/i.test(layout), "page metadata carries the new position");
 
+/*
+  ------------------------------------------------------------------
+  The PUBLIC price must be the cheapest LIVE plan.
+
+  The landing-page FAQ said "plans from ₹1,499/mo" and the investor page said
+  "₹1,499 → ₹39,999/mo" long after Starter was retired and Watch became the
+  entry tier at ₹4,999. Both quoted a price nobody can buy, and understated the
+  real one by more than three times — a customer arriving from that FAQ meets a
+  pricing page charging triple what they were told, which is the worst possible
+  first impression and the kind of thing that gets screenshotted.
+
+  Nobody re-reads a marketing page when they change a number in config.ts, so
+  the two are pinned together here. FLOOR is derived from the live plans above.
+*/
+{
+  const cheapest = FLOOR;
+  const inr = (n) => n.toLocaleString("en-IN");
+  const RETIRED_PRICES = RETIRED.map((p) => p.monthly).filter((n) => n > 0);
+
+  for (const f of ["src/app/page.tsx", "src/app/investors/page.tsx"]) {
+    const src = readFileSync(f, "utf8");
+    const name = f.replace("src/app/", "").replace("/page.tsx", "") || "home";
+
+    check(src.includes(`₹${inr(cheapest)}`),
+      `${name} quotes the cheapest live plan (₹${inr(cheapest)})`,
+      "the public entry price must be one a visitor can actually buy");
+
+    for (const old of RETIRED_PRICES) {
+      /* A retired price is only wrong when offered as a CURRENT plan price —
+         "plans from ₹1,499" — so match the phrasings that do that, not every
+         occurrence of the number. ₹14,999 is both a retired Business price and
+         a live Watch Pro price, which is why this cannot be a bare search. */
+      const offered = new RegExp(`(from|plans?)\\s*₹${inr(old).replace(/,/g, ",")}\\b`, "i");
+      check(!offered.test(src),
+        `${name} does not offer the retired ₹${inr(old)} tier as a current price`,
+        `"${(src.match(offered) || [""])[0]}" — that plan cannot be bought`);
+    }
+  }
+}
+
 console.log(`\npositioning: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   console.log("\nFAILURES:");

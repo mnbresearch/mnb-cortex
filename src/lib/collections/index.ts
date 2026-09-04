@@ -54,6 +54,8 @@ export const DEFAULT_POLICY: Policy = {
   do_not_contact: [],
   signature: null,
   payment_note: null,
+  whatsapp_template: null,
+  whatsapp_lang: "en",
 };
 
 export type Candidate = {
@@ -93,9 +95,42 @@ export function istHour(now = new Date()): number {
   }).format(now));
 }
 
+/**
+ * Midnight IST, as an instant.
+ *
+ * Not `setHours(0,0,0,0)`, which uses the server's timezone — UTC on Vercel.
+ * Built from the IST calendar date so the daily cap resets when the owner's day
+ * does, not at 05:30 their time.
+ */
+export function istStartOfDay(now = new Date()): Date {
+  const [d, m, y] = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric",
+  }).format(now).split("/");
+  // IST is UTC+5:30 with no daylight saving, so this is exact.
+  return new Date(`${y}-${m}-${d}T00:00:00+05:30`);
+}
+
+/**
+ * Is now inside the workspace's sending window?
+ *
+ * THE INVERTED CASE, which used to silently disable sending entirely.
+ *
+ * The old expression was `h >= from && h < to`. Set from=19 and to=9 — an
+ * overnight window, which is not a sensible dunning window but IS a thing the
+ * settings form accepts — and that is `h >= 19 && h < 9`, false at every hour
+ * of the day. Collections then reported "outside your sending window" forever
+ * and nothing ever went out, with no error anywhere to explain it.
+ *
+ * A wrapping window is now read as wrapping. Equal hours mean a zero-length
+ * window, which we treat as "always" rather than "never": someone who has set
+ * from and to the same has not asked for silence, they have misunderstood the
+ * field, and refusing to send forever is the worse reading of it.
+ */
 export function withinQuietHours(p: Policy, now = new Date()): boolean {
   const h = istHour(now);
-  return h >= p.send_from_hour && h < p.send_to_hour;
+  const from = Number(p.send_from_hour), to = Number(p.send_to_hour);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from === to) return true;
+  return from < to ? h >= from && h < to : h >= from || h < to;
 }
 
 /**
@@ -115,7 +150,7 @@ export async function findCandidates(orgId: string, policy?: Policy): Promise<Ca
   try {
     const { data } = await svc.from("invoices")
       .select("id, invoice_no, party, amount, due_date, status")
-      .eq("org_id", orgId).eq("type", "receivable").neq("status", "paid")
+      .eq("org_id", orgId).eq("type", "receivable").or("status.is.null,status.not.ilike.paid")
       .limit(500);
     invoices = (data as any[]) || [];
   } catch { return []; }
@@ -215,11 +250,32 @@ export async function prepareDrafts(orgId: string, businessName: string, limit =
   const candidates = await findCandidates(orgId, p);
   let drafted = 0, skipped = 0;
 
+  /* Resolved once, and only when WhatsApp is a channel this policy uses. */
+  const waGate = p.channels.includes("whatsapp")
+    ? await (await import("@/lib/collections/whatsapp")).collectionsWhatsAppGate(
+        orgId, p.whatsapp_template, p.whatsapp_lang)
+    : null;
+
   for (const c of candidates) {
     if (drafted >= Math.min(limit, p.max_per_day)) break;
     if (c.blockedBy) { skipped++; reasons[c.blockedBy] = (reasons[c.blockedBy] || 0) + 1; continue; }
 
     const channel: Channel = c.contact.email ? "email" : "whatsapp";
+
+    /*
+      Do not draft a WhatsApp reminder a workspace cannot send.
+
+      The send-time gate would catch it, but only after the owner had read the
+      draft, approved it, and watched it not go out. Refusing at draft time puts
+      the reason on the screen where they are already looking, and keeps the
+      queue honest about what will actually happen.
+    */
+    if (channel === "whatsapp" && waGate && !waGate.ok) {
+      skipped++;
+      reasons[waGate.reason] = (reasons[waGate.reason] || 0) + 1;
+      continue;
+    }
+
     if (!p.channels.includes(channel)) {
       skipped++;
       const why = `Only ${p.channels.join(" and ")} is enabled, and this customer has no ${p.channels.join("/")}`;
@@ -256,6 +312,24 @@ export async function prepareDrafts(orgId: string, businessName: string, limit =
       threadId = String((data as any).id);
     }
 
+    /*
+      Never queue a second unsent message for the same thread.
+
+      `attempts` and `last_sent_at` only advance on a real SEND, so between
+      drafting and sending nothing in findCandidates() blocks a repeat. Without
+      this check the daily cron drafted the same reminder every day, and the
+      owner approving the list would fire N identical emails at one debtor in
+      one run.
+    */
+    const { data: already } = await svc.from("collection_messages")
+      .select("id").eq("thread_id", threadId).in("status", ["draft", "approved"]).limit(1);
+    if (already && already.length) {
+      skipped++;
+      const why = "A reminder is already waiting to be sent for this invoice";
+      reasons[why] = (reasons[why] || 0) + 1;
+      continue;
+    }
+
     const { error: msgErr } = await svc.from("collection_messages").insert({
       org_id: orgId, thread_id: threadId, attempt: c.attempts + 1,
       channel, recipient: channel === "email" ? c.contact.email : c.contact.phone,
@@ -284,6 +358,30 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
   if (!svc) return { sent: 0, failed: 0, held: 0 };
 
   /*
+    Who the reminder is FROM. The workspace name, and its own sending address if
+    it has connected one — never ours. Resolved once per run rather than per
+    message.
+  */
+  let businessName = "our company";
+  const sender: { from: string | null; replyTo: string | null } = { from: null, replyTo: null };
+  try {
+    const { data: org } = await svc.from("organizations").select("name").eq("id", orgId).single();
+    businessName = String((org as any)?.name || businessName);
+  } catch { /* fall back to the generic name */ }
+  try {
+    const { credentialsFor } = await import("@/lib/credentials");
+    const c = await credentialsFor(orgId, "resend");
+    const own = String((c as any)?.from_email || "").trim();
+    if (own) { sender.from = `${businessName} <${own}>`; sender.replyTo = own; }
+  } catch { /* no own domain connected — relay, clearly labelled */ }
+  if (!sender.replyTo) {
+    try {
+      const { data: p2 } = await svc.from("collection_policies").select("reply_to").eq("org_id", orgId).maybeSingle();
+      sender.replyTo = String((p2 as any)?.reply_to || "").trim() || null;
+    } catch { /* column not migrated yet */ }
+  }
+
+  /*
     The platform switch, checked HERE rather than only in the UI.
 
     A kill switch that lives in a page is not a kill switch — the cron does not
@@ -308,8 +406,19 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
     return { sent: 0, failed: 0, held: 0, note: `Outside your sending window (${p.send_from_hour}:00–${p.send_to_hour}:00 IST).` };
   }
 
-  // Daily ceiling, counted from what has actually gone out today.
-  const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+  /*
+    Daily ceiling, counted from what has actually gone out today — where
+    "today" means the IST day.
+
+    `new Date().setHours(0,0,0,0)` uses the SERVER's timezone, and the server is
+    a Vercel function running in UTC. So the counter reset at 05:30 IST, in the
+    middle of the night but before the 09:00 sending window: harmless. The real
+    problem is the other end — a send at 23:00 IST on Monday is 17:30 UTC
+    Monday, but one at 06:00 IST Tuesday is 00:30 UTC Tuesday, so the window
+    that the cap governs does not line up with the day the owner set it for.
+    Someone who sets "25 a day" is talking about their working day.
+  */
+  const startOfDay = istStartOfDay();
   const { count: sentToday } = await svc.from("collection_messages")
     .select("id", { count: "exact", head: true })
     .eq("org_id", orgId).eq("status", "sent").gte("sent_at", startOfDay.toISOString());
@@ -321,11 +430,84 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
     .eq("org_id", orgId).eq("status", "approved")
     .order("created_at", { ascending: true }).limit(room);
 
-  let sent = 0, failed = 0;
+  let sent = 0, failed = 0, skipped = 0;
+
+  /*
+    Resolve the WhatsApp gate ONCE, and only if the queue actually contains a
+    WhatsApp message — the check decrypts credentials, and an email-only
+    workspace should not pay for it.
+
+    See lib/collections/whatsapp.ts for the two bugs this closes: sending every
+    tenant's dunning from OUR number, and using free-form text on recipients
+    who by definition have not opened a 24-hour window.
+  */
+  const wantsWhatsApp = ((queue as any[]) || []).some((m) => m.channel === "whatsapp");
+  const waGate = wantsWhatsApp
+    ? await (await import("@/lib/collections/whatsapp")).collectionsWhatsAppGate(
+        orgId, p.whatsapp_template, p.whatsapp_lang)
+    : null;
 
   for (const m of ((queue as any[]) || [])) {
     if (!m.recipient) {
       await svc.from("collection_messages").update({ status: "skipped", error: "No recipient on file" }).eq("id", m.id);
+      continue;
+    }
+
+    /*
+      Re-assert the limits HERE, per message, not only at draft time.
+
+      A queue built over several days outlives the state it was checked against.
+      Without this: the attempt cap is bypassed (five queued messages all send,
+      taking attempts to 5 against a max of 3), the minimum gap is bypassed
+      (everything goes in one run), and — worst — a party the owner added to the
+      do-not-contact list AFTER the draft existed still gets messaged. That last
+      one is precisely the "I told it not to contact them and it did" incident.
+    */
+    /*
+      `invoices(invoice_no)` is embedded rather than fetched separately: the
+      WhatsApp template needs the invoice number as a positional parameter, and
+      one round trip per message in a 25-message run is not free.
+    */
+    const { data: th0 } = await svc.from("collection_threads")
+      .select("attempts, last_sent_at, status, party, amount, invoices(invoice_no)")
+      .eq("id", m.thread_id).single();
+    const t0: any = th0 || {};
+    const partyNorm = normalizeCustomerName(String(t0.party || "")) || "";
+    const dncNow = new Set(p.do_not_contact.map((x) => normalizeCustomerName(x)).filter((x): x is string => Boolean(x)));
+
+    let refuse: string | null = null;
+    if (t0.status === "recovered") refuse = "Invoice was paid";
+    else if (t0.status === "excluded") refuse = "Excluded from collections";
+    else if (Number(t0.attempts || 0) >= p.max_attempts) refuse = `Already sent ${p.max_attempts} reminders`;
+    else if (partyNorm && dncNow.has(partyNorm)) refuse = "Added to your do-not-contact list";
+    else if (t0.last_sent_at &&
+             Date.now() - new Date(t0.last_sent_at).getTime() < p.min_gap_days * 86_400_000) {
+      refuse = `Last reminder was under ${p.min_gap_days} days ago`;
+    }
+    if (refuse) {
+      await svc.from("collection_messages")
+        .update({ status: "cancelled", error: refuse }).eq("id", m.id);
+      continue;
+    }
+
+    /*
+      WhatsApp not set up: skip, do not fail.
+
+      This is the fix for the failure that disabled the working channel. A
+      workspace with no Meta account produces a refusal on EVERY run — it is a
+      standing fact, not a transient error — and the breaker trips on
+      `failed > 0 && sent === 0`. Recording it as a failure therefore guaranteed
+      that an unconfigured WhatsApp would switch the entire policy off within
+      one day, silently stopping the email reminders that were working fine.
+
+      'skipped' is not counted by cortex_collections_trip_check. The message
+      stays visible with the reason attached, so the owner sees the sentence
+      that tells them what to connect.
+    */
+    if (m.channel === "whatsapp" && waGate && !waGate.ok) {
+      await svc.from("collection_messages")
+        .update({ status: "skipped", error: waGate.reason.slice(0, 300) }).eq("id", m.id);
+      skipped++;
       continue;
     }
 
@@ -344,14 +526,48 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
     try {
       if (m.channel === "email") {
         const { sendEmail } = await import("@/lib/email");
-        const { brandFrom, renderBrandedEmail } = await import("@/lib/branded-email");
-        const html = renderBrandedEmail(m.body, { origin });
-        const r = await sendEmail(m.recipient, m.subject || "Payment reminder", html, { from: brandFrom() });
+        const { reminderEnvelope } = await import("@/lib/collections/envelope");
+        /*
+          NOT brandFrom()/renderBrandedEmail(). Those are our product wrapper —
+          using them here sent a debt notice from "MNB Cortex" with a reply-to
+          at contact@mnbresearch.com, so the debtor's "already paid" reply came
+          to us and the owner never saw it. See lib/collections/envelope.ts.
+        */
+        const env = reminderEnvelope({
+          businessName, body: m.body,
+          ownFrom: sender.from, replyTo: sender.replyTo,
+        });
+        const r = await sendEmail(m.recipient, m.subject || "Payment reminder", env.html,
+          { from: env.from, replyTo: env.replyTo });
         ok = r.sent; err = r.reason;
-      } else {
-        const { sendText } = await import("@/lib/whatsapp");
-        const r = await sendText(m.recipient, m.body, orgId);
+      } else if (waGate && waGate.ok) {
+        /*
+          A template, never sendText().
+
+          Meta permits free-form only inside a 24-hour window the RECIPIENT
+          opened by messaging the business. Someone being chased for money has
+          not done that, so every sendText() here returned error 131047 — an
+          error that could not be fixed by retrying, because the channel was
+          being used in a way the platform does not allow.
+
+          The parameters are positional and their order is fixed by the template
+          the customer had approved. TEMPLATE_VARIABLES and SETUP.md both
+          document the order, so what they submit and what we fill agree.
+        */
+        const { sendReminderTemplate } = await import("@/lib/collections/whatsapp");
+        const r = await sendReminderTemplate({
+          orgId, to: m.recipient,
+          template: waGate.template, lang: waGate.lang,
+          party: String(t0.party || "there"),
+          businessName,
+          invoiceNo: String((t0 as any)?.invoices?.invoice_no || "").trim() || "your invoice",
+          amount: `₹${Number(t0.amount || 0).toLocaleString("en-IN")}`,
+        });
         ok = r.sent; err = r.error; providerId = r.id;
+      } else {
+        /* Unreachable: the gate check above skips these. Belt and braces —
+           never fall through to a send with no verified sender. */
+        ok = false; err = "WhatsApp is not configured for this workspace.";
       }
     } catch (e: any) { ok = false; err = e?.message || "send failed"; }
 
@@ -391,7 +607,18 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
     catch { /* breaker not migrated yet — the sends already failed safely */ }
   }
 
-  return { sent, failed, held: 0 };
+  /*
+    `skipped` is reported but deliberately excluded from the breaker condition
+    above. A run of 10 WhatsApp skips and 0 sends means "you have not connected
+    WhatsApp", which switching collections off would not fix — it would only
+    also stop the email that works.
+  */
+  return {
+    sent, failed, held: skipped,
+    note: skipped > 0 && sent === 0 && failed === 0
+      ? `${skipped} reminder${skipped === 1 ? "" : "s"} could not be sent by WhatsApp — see the reason on each. Email reminders are unaffected.`
+      : undefined,
+  };
 }
 
 export type Recovery = {

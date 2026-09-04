@@ -457,6 +457,34 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     return { ok: false, metrics: 0, months: 0, reason: e?.message };
   }
 
+  /*
+    Keep a daily copy, so "what moved this week" can be answered.
+
+    health_metrics holds one row per metric and is overwritten on every write,
+    which means it has no memory at all — the instant receivables go from ₹12L
+    to ₹19L, the ₹12L is gone. Everything this product sells is a change over
+    time (the whole positioning is early warning, and the Practice plan bullet
+    is literally "Whose receivables moved this week"), and none of it was
+    computable because nothing retained yesterday's number.
+
+    Upserted on (org_id, metric_key, as_of), so the hundreds of recomputes a
+    spreadsheet import triggers collapse into one row per metric per day. The
+    last reading of the day wins, which is the right one: it is the figure the
+    owner went home with.
+
+    Deliberately NOT fatal. A missing table (migration not yet applied) or a
+    failed write must never take down the metrics the dashboard is about to
+    read — the history is valuable, the current picture is essential.
+  */
+  if (metrics.length) {
+    try {
+      await svc.from("metric_snapshots").upsert(
+        metrics.map((m) => ({ org_id: orgId, metric_key: m.metric_key, as_of: today, value: m.value })),
+        { onConflict: "org_id,metric_key,as_of" },
+      );
+    } catch { /* history is best-effort; the live metrics above are what matter */ }
+  }
+
   // ---- Evaluate the workspace's alert rules ------------------------------------
   // This runs here, rather than in the browser, because that is the difference
   // between "warned the moment a number crosses your line" and "warned if you

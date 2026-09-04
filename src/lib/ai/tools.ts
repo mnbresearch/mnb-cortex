@@ -168,9 +168,21 @@ export async function runTool(name: string, args: any, orgId: string): Promise<T
     switch (name) {
       case "top_receivables": {
         const limit = clampLimit(args?.limit, 5);
+        /*
+          `neq("status", "paid")` is case-SENSITIVE in PostgREST, and every
+          Tally and Vyapar export writes "Paid". Settled invoices were coming
+          back as outstanding, and the assistant then told the owner to chase
+          money that was already in the bank.
+
+          The `or` rather than a bare `not.ilike`: in SQL `NOT (NULL ILIKE
+          'paid')` is NULL, not TRUE, so a row with no status at all would be
+          filtered OUT of a list of unpaid invoices. `neq` had the same hole.
+          An invoice with a blank status is unpaid until someone says otherwise.
+        */
         let q = sb.from("invoices")
           .select("invoice_no, party, amount, due_date, status")
-          .eq("org_id", orgId).eq("type", "receivable").neq("status", "paid")
+          .eq("org_id", orgId).eq("type", "receivable")
+          .or("status.is.null,status.not.ilike.paid")
           .order("amount", { ascending: false }).limit(MAX_ROWS);
         const { data } = await q;
         let rows = (data as any[] || []).map((r) => {
@@ -182,16 +194,38 @@ export async function runTool(name: string, args: any, orgId: string): Promise<T
           };
         });
         if (args?.only_overdue) rows = rows.filter((r) => r.days_past_due > 0);
-        rows = rows.slice(0, limit);
+
+        /*
+          Total the WHOLE matching set before truncating to the top few.
+
+          It used to slice to `limit` and then sum, and hand the assistant
+          "5 unpaid invoice(s), ₹6,20,000 in total" for a book of two hundred
+          invoices worth ₹94,00,000. The assistant repeated that as the owner's
+          outstanding position, because nothing in the result said otherwise.
+          Summing before the slice, and labelling the two numbers differently,
+          is what stops it.
+        */
+        const matched = rows.length;
         const total = rows.reduce((n, r) => n + r.amount, 0);
-        return { ok: true, rows, summary: `${rows.length} unpaid invoice(s), ₹${total.toLocaleString("en-IN")} in total.` };
+        const capped = matched >= MAX_ROWS;
+        rows = rows.slice(0, limit);
+        const shownTotal = rows.reduce((n, r) => n + r.amount, 0);
+
+        const what = args?.only_overdue ? "past-due invoice" : "unpaid invoice";
+        const summary = matched === rows.length
+          ? `${matched} ${what}(s), ₹${total.toLocaleString("en-IN")} in total.`
+          : `${matched}${capped ? "+" : ""} ${what}(s) totalling ₹${total.toLocaleString("en-IN")}` +
+            `${capped ? ` (counted up to the first ${MAX_ROWS})` : ""}. ` +
+            `Showing the largest ${rows.length}, worth ₹${shownTotal.toLocaleString("en-IN")}.`;
+
+        return { ok: true, rows, summary };
       }
 
       case "top_payables": {
         const limit = clampLimit(args?.limit, 5);
         const { data } = await sb.from("invoices")
           .select("invoice_no, party, amount, due_date, status, created_at")
-          .eq("org_id", orgId).eq("type", "payable").neq("status", "paid")
+          .eq("org_id", orgId).eq("type", "payable").or("status.is.null,status.not.ilike.paid")
           .order("amount", { ascending: false }).limit(limit);
         const rows = (data as any[] || []).map((r) => ({
           invoice: r.invoice_no, supplier: r.party, amount: Number(r.amount) || 0,
