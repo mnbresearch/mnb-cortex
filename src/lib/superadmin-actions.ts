@@ -16,6 +16,31 @@ async function assertSuper() {
  * the signed-in super-admin the owner. Creates the workspace + profile only —
  * real business figures must be imported; nothing is invented.
  */
+/**
+ * Stop, or resume, ALL outbound collections messaging.
+ *
+ * The one control that exists for us rather than for a customer. Collections
+ * messages people who never signed up for Cortex, so there has to be a way to
+ * halt it in seconds — from a browser, by a person who is not deploying — if it
+ * starts behaving badly for anyone.
+ *
+ * Deliberately global rather than per-workspace: if something is wrong with how
+ * Cortex writes or when it sends, it is wrong everywhere, and picking through
+ * workspaces one at a time during an incident is how the incident gets longer.
+ */
+export async function setCollectionsSwitch(fd: FormData): Promise<{ ok: boolean; on?: boolean; error?: string }> {
+  await assertSuper();
+  const sb = serviceClient();
+  if (!sb) return { ok: false, error: "Service role not configured." };
+  const on = String(fd.get("on") || "") === "1";
+  const reason = String(fd.get("reason") || "").trim().slice(0, 200);
+  try {
+    const { error } = await sb.rpc("cortex_set_collections_switch", { p_on: on, p_reason: reason || null });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, on };
+  } catch (e: any) { return { ok: false, error: e?.message || "Could not flip the switch." }; }
+}
+
 export async function provisionBusinesses() {
   await assertSuper();
   const sb = serviceClient();

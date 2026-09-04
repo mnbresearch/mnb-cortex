@@ -138,10 +138,24 @@ function walk(dir, out = []) {
   AI COO framing was retired, and a check that flags its own documentation is a
   check people switch off — the same mistake made twice already in this repo.
 */
+/*
+  One narrow exemption: a line that ALSO says "retired".
+
+  The Terms have to name the plans that were withdrawn — "Starter, Growth,
+  Business and AI COO have been retired" — because an existing customer needs to
+  recognise the plan they are on. That is naming a discontinued SKU, not
+  positioning the product, and the two are genuinely different things.
+
+  The exemption is deliberately per-LINE rather than per-file. Exempting
+  terms/page.tsx wholesale would let real positioning copy back in through the
+  one page a customer legally agrees to, which is the worst place to lose this.
+*/
 const offenders = [];
 for (const f of walk("src/app").concat(walk("src/components"))) {
   const code = strip(readFileSync(f, "utf8"));
-  if (/AI\s+(COO|CEO)\b/.test(code)) offenders.push(f.replace("src/", ""));
+  const positioning = code.split("\n").filter((line) =>
+    /AI\s+(COO|CEO)\b/.test(line) && !/retired/i.test(line));
+  if (positioning.length) offenders.push(f.replace("src/", ""));
 }
 check(offenders.length === 0, "no customer-facing copy says 'AI COO' or 'AI CEO'",
   `still present in: ${offenders.join(", ")}`);

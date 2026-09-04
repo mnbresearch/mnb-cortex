@@ -100,11 +100,43 @@ export function OnboardingWizard() {
         </div>
       )}
       {step === 2 && (
-        <div className="text-center py-4">
-          <div className="h-12 w-12 rounded-full bg-success/15 grid place-items-center mx-auto"><Check className="h-6 w-6 text-success" /></div>
-          <h2 className="mt-3 text-lg font-semibold">You're all set!</h2>
-          <p className="text-sm text-muted-foreground">Cortex is watching. Ask it "Who owes me the most?"</p>
-          <Link href="/dashboard" className="mt-4 inline-flex items-center gap-2 rounded-lg brand-gradient text-white h-10 px-5 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity">Go to dashboard <ArrowRight className="h-4 w-4" /></Link>
+        /*
+          The last step used to say "You're all set!" and send people to a
+          generic dashboard. That is the weakest possible ending: the owner has
+          just handed over their data and the payoff is a screen of tiles.
+
+          The product now sells one thing — being told what is about to go wrong
+          — so the finish states plainly what Cortex will do next, with dates,
+          and sends them to the money rather than to a dashboard.
+        */
+        <div className="py-2">
+          <div className="text-center">
+            <div className="h-12 w-12 rounded-full bg-success/15 grid place-items-center mx-auto"><Check className="h-6 w-6 text-success" /></div>
+            <h2 className="mt-3 text-lg font-semibold">Cortex is watching now</h2>
+            <p className="text-sm text-muted-foreground mt-1">Here is what happens without you doing anything else.</p>
+          </div>
+
+          <div className="mt-4 space-y-2 text-sm">
+            {[
+              ["Every day", "It checks who has gone past their due date, what is about to run out, and which supplier bills are nearing the MSME 45-day window."],
+              ["The moment something crosses a line", "You get an email — not a notification you have to log in to find."],
+              ["Monday morning", "One brief with the three things worth your attention this week."],
+            ].map(([when, what]) => (
+              <div key={when} className="rounded-lg border p-3">
+                <div className="font-medium">{when}</div>
+                <div className="text-muted-foreground leading-6">{what}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/receivables" className="inline-flex items-center gap-2 rounded-lg brand-gradient text-white h-10 px-5 text-sm font-medium shadow-sm hover:opacity-90 transition-opacity">
+              Show me who owes me <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link href="/dashboard" className="inline-flex items-center gap-2 rounded-lg border h-10 px-4 text-sm font-medium hover:bg-accent transition-colors">
+              Business health
+            </Link>
+          </div>
         </div>
       )}
       </div>

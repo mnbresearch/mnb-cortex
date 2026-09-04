@@ -365,9 +365,32 @@ async function computeHealth() {
     checkDatabase(), checkAI(), checkGenModels(), checkEmail(), checkPayments(), checkCron(), checkSchema(),
   ]);
 
+  /*
+    Surface the collections kill switch.
+
+    A global pause that is invisible is how a feature stays off for a week after
+    the incident ended. This puts it on the same status page the operator
+    already looks at.
+  */
+  let collections: Check = { name: "Outbound collections", status: "operational" };
+  try {
+    const svcSw = serviceClient();
+    if (svcSw) {
+      const { data: on } = await svcSw.rpc("cortex_collections_enabled");
+      if (on === false) {
+        const { data: row } = await svcSw.from("platform_switches").select("reason").limit(1).maybeSingle();
+        collections = {
+          name: "Outbound collections",
+          status: "degraded",
+          detail: `PAUSED platform-wide — ${(row as any)?.reason || "no reason recorded"}`,
+        };
+      }
+    }
+  } catch { collections = { name: "Outbound collections", status: "degraded", detail: "cannot verify the kill switch" }; }
+
   const services: Check[] = [
     { name: "Web app", status: "operational", critical: true },   // it answered, so it's up
-    db, ai, gen, pay, email, cron, schema,
+    db, ai, gen, pay, email, cron, schema, collections,
     { name: "Credential encryption", status: encryptionAvailable() ? "operational" : "degraded", detail: encryptionAvailable() ? undefined : "ENCRYPTION_KEY not set" },
   ];
 

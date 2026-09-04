@@ -283,6 +283,25 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
   const svc = serviceClient();
   if (!svc) return { sent: 0, failed: 0, held: 0 };
 
+  /*
+    The platform switch, checked HERE rather than only in the UI.
+
+    A kill switch that lives in a page is not a kill switch — the cron does not
+    render pages. This is the last gate before a message leaves, so flipping the
+    switch stops every workspace within one cron cycle without a deploy.
+
+    Fails OPEN on error, deliberately. If the switches table is unreachable the
+    correct behaviour is to keep working: a database blip must not silently stop
+    every customer's collections with no indication why. The switch exists to be
+    used deliberately, not to become a single point of failure.
+  */
+  try {
+    const { data } = await svc.rpc("cortex_collections_enabled");
+    if (data === false) {
+      return { sent: 0, failed: 0, held: 0, note: "Sending is paused across Cortex right now. Your drafts are safe and will go out once it resumes." };
+    }
+  } catch { /* switch unreadable — carry on rather than halt everyone */ }
+
   const p = await getPolicy(orgId);
   if (!p.enabled) return { sent: 0, failed: 0, held: 0, note: "Collections is switched off." };
   if (!withinQuietHours(p)) {
@@ -356,6 +375,20 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
         .update({ status: "failed", sent_at: null, error: (err || "send failed").slice(0, 300) })
         .eq("id", m.id);
     }
+  }
+
+  /*
+    Let the workspace trip its own breaker.
+
+    The realistic failure is an expired WhatsApp token: every send fails, and
+    without this the same messages are re-presented every run, burning the
+    customer's provider quota to rediscover the same broken credential. The SQL
+    only trips when there have been repeated failures AND nothing has got
+    through, so an occasional bounce on a busy workspace does not switch it off.
+  */
+  if (failed > 0 && sent === 0) {
+    try { await svc.rpc("cortex_collections_trip_check", { p_org: orgId }); }
+    catch { /* breaker not migrated yet — the sends already failed safely */ }
   }
 
   return { sent, failed, held: 0 };
