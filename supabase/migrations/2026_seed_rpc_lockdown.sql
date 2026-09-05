@@ -182,7 +182,17 @@ end $$;
   and a migration that refused to apply because of them would simply be
   deleted by whoever hit it.
 */
-create or replace function public.cortex_definer_audit()
+/*
+  DROP first, for the same reason 2026_msme_exposure_fix.sql does: `create or
+  replace` cannot change a `returns table` signature, and 2026_definer_grant_sweep
+  later redefines this function with a different third column. Without the drop,
+  re-running the two migrations in sequence fails on "cannot change return type
+  of existing function" — which is exactly the kind of half-applied migration
+  that leaves a database in a state nobody can reason about.
+*/
+drop function if exists public.cortex_definer_audit();
+
+create function public.cortex_definer_audit()
 returns table (function_name text, granted_to text, has_membership_check boolean)
 language sql
 stable
