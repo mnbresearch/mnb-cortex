@@ -1,6 +1,7 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { generateFor } from "@/lib/ai/cortex";
+import { withOrgAiKeys } from "@/lib/ai/byo";
 import { sendEmail } from "@/lib/email";
 import { brandFrom } from "@/lib/branded-email";
 import { mdToHtml } from "@/lib/utils";
@@ -99,7 +100,10 @@ export async function runScheduledReports(): Promise<ReportRun> {
     if (!to) { out.errors++; continue; }
 
     let body = "";
-    try { body = await generateFor(String(r.mode || "brief"), "", context); } catch { /* handled below */ }
+    /* Per-workspace AI key — see lib/ai/byo.ts. A scheduled report is exactly
+       the case a BYO customer expects to run on their own provider. */
+    try { body = await withOrgAiKeys(r.org_id, () => generateFor(String(r.mode || "brief"), "", context)); }
+    catch { /* handled below */ }
     if (!body || /^I couldn't reach the AI engine/.test(body)) { out.errors++; continue; }
 
     const title = `Your ${r.cadence} ${r.mode} — MNB Cortex`;

@@ -140,16 +140,22 @@ export default function Login() {
 
         {/* Tabs */}
         <div className="flex gap-1 rounded-xl border bg-card/70 backdrop-blur p-1 mb-4 text-sm">
-          <button onClick={() => { setMode("signin"); setErr(""); setNotice(""); }} className={`flex-1 rounded-lg py-2 font-medium transition-all ${mode === "signin" ? "brand-gradient text-white shadow-sm" : "text-muted-foreground hover:bg-accent"}`}>Sign in</button>
-          <button onClick={() => { setMode("signup"); setErr(""); setNotice(""); }} className={`flex-1 rounded-lg py-2 font-medium transition-all ${mode === "signup" ? "brand-gradient text-white shadow-sm" : "text-muted-foreground hover:bg-accent"}`}>Create account</button>
+          {/* aria-pressed: selection was signalled by a gradient background
+              alone, which is invisible to a screen reader. WCAG 1.4.1, 4.1.2. */}
+          <button type="button" aria-pressed={mode === "signin"}
+            onClick={() => { setMode("signin"); setErr(""); setNotice(""); }}
+            className={`flex-1 rounded-lg py-2 font-medium transition-all ${mode === "signin" ? "brand-gradient text-white shadow-sm" : "text-muted-foreground hover:bg-accent"}`}>Sign in</button>
+          <button type="button" aria-pressed={mode === "signup"}
+            onClick={() => { setMode("signup"); setErr(""); setNotice(""); }}
+            className={`flex-1 rounded-lg py-2 font-medium transition-all ${mode === "signup" ? "brand-gradient text-white shadow-sm" : "text-muted-foreground hover:bg-accent"}`}>Create account</button>
         </div>
 
         <div className="rounded-2xl border bg-card p-6 shadow-xl shadow-black/[0.03]">
           {!configured ? (
             <p className="text-sm text-muted-foreground">Authentication isn&rsquo;t configured yet. Add your Supabase keys to enable sign-in.</p>
           ) : linkSent ? (
-            <div className="text-center py-4">
-              <CheckCircle2 className="h-8 w-8 text-success mx-auto" />
+            <div className="text-center py-4" role="status" aria-live="polite">
+              <CheckCircle2 aria-hidden="true" className="h-8 w-8 text-success mx-auto" />
               <p className="mt-3 text-sm">Check your inbox — we sent a one-time login link to <b>{email}</b>.</p>
             </div>
           ) : (
@@ -165,26 +171,60 @@ export default function Login() {
               {notice && <div className="mt-4 text-sm rounded-lg border border-primary/30 bg-primary/5 p-3 text-primary">{notice}</div>}
 
               <form onSubmit={submit} className="mt-4 space-y-3">
+                {/*
+                  Real labels, not placeholders. All three inputs were
+                  placeholder-only — and a placeholder disappears on the first
+                  keystroke, so anyone who is interrupted mid-form, using a
+                  screen reader, or simply cannot see grey-on-white loses the
+                  question. This is the highest-traffic form in the product.
+                  WCAG 3.3.2, 1.3.1, 4.1.2.
+                */}
                 {mode === "signup" && (
-                  <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Business name (optional)"
-                    className="w-full rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <div>
+                    <label htmlFor="login-company" className="text-sm font-medium block mb-1">
+                      Business name <span className="text-muted-foreground font-normal">(optional)</span>
+                    </label>
+                    <input id="login-company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Sharma Steel"
+                      className="w-full rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
                 )}
-                <div className="relative">
-                  <Mail className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@business.com" autoComplete="email"
-                    className="w-full rounded-lg border bg-background pl-9 pr-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <div>
+                  <label htmlFor="login-email" className="text-sm font-medium block mb-1">Email address</label>
+                  <div className="relative">
+                    <Mail aria-hidden="true" className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input id="login-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@business.com" autoComplete="email"
+                      aria-invalid={err ? true : undefined} aria-describedby={err ? "login-error" : undefined}
+                      className="w-full rounded-lg border bg-background pl-9 pr-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
                 </div>
-                <div className="relative">
-                  <Lock className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input type={showPw ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)}
-                    placeholder={mode === "signup" ? "Create a password (8+ chars)" : "Your password"} autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                    className="w-full rounded-lg border bg-background pl-9 pr-10 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
-                  <button type="button" onClick={() => setShowPw((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label="Toggle password">
-                    {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                <div>
+                  <label htmlFor="login-password" className="text-sm font-medium block mb-1">
+                    Password {mode === "signup" && <span className="text-muted-foreground font-normal">(8 characters or more)</span>}
+                  </label>
+                  <div className="relative">
+                    <Lock aria-hidden="true" className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input id="login-password" type={showPw ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)}
+                      placeholder={mode === "signup" ? "Create a password" : "Your password"}
+                      autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                      aria-invalid={err ? true : undefined} aria-describedby={err ? "login-error" : undefined}
+                      className="w-full rounded-lg border bg-background pl-9 pr-11 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                    {/* 44px hit area, and a label that says which state it will move TO. */}
+                    <button type="button" onClick={() => setShowPw((s) => !s)}
+                      aria-label={showPw ? "Hide password" : "Show password"}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 h-11 w-11 grid place-items-center text-muted-foreground hover:text-foreground rounded-lg">
+                      {showPw ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
 
-                {err && <p className="text-sm text-danger">{err}</p>}
+                {/*
+                  role="alert" so a failed sign-in is spoken. Without it a
+                  screen-reader user who mistyped their password got complete
+                  silence and no way to find out why nothing happened.
+                  WCAG 3.3.1.
+                */}
+                {err && <p id="login-error" role="alert" className="text-sm text-danger">{err}</p>}
 
                 <button type="submit" disabled={loading} className="w-full inline-flex items-center justify-center gap-2 rounded-lg brand-gradient text-white h-11 text-sm font-medium disabled:opacity-70">
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (mode === "signin" ? "Sign in" : "Create my workspace")}

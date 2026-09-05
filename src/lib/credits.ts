@@ -22,7 +22,13 @@ export type CreditState = {
  * and message: "anonymous" → 401 (sign in), "insufficient" → 402 (top up),
  * "lapsed" → 402 (renew — the paid period has run out).
  */
-export type ChargeReason = "anonymous" | "insufficient" | "lapsed";
+/*
+  "own-key" is not a refusal — it is a SUCCESS that cost nothing. The workspace
+  supplied its own provider key, so the model call is billed to their account
+  and there is no COGS for us to recover. Callers that branch on `reason` must
+  treat it alongside ok:true, not with the failures.
+*/
+export type ChargeReason = "anonymous" | "insufficient" | "lapsed" | "own-key";
 export type ChargeResult = { ok: boolean; enforced: boolean; cost: number; balance: number; reason?: ChargeReason };
 
 // The entitlement rules live in their own dependency-free module so they can be
@@ -105,6 +111,22 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) return { ok: false, enforced: true, cost, balance: 0, reason: "anonymous" };
 
+  /*
+    BRING-YOUR-OWN-KEY, resolved here and nowhere else.
+
+    This function is called at the top of all 27 AI paths and already knows the
+    workspace, which makes it the one place where a per-org AI key can be put
+    into scope without changing six function signatures and every call site.
+    lib/ai/byo.ts holds it in request-scoped storage; every AI call later in
+    this request reads it through aiKey().
+
+    Loaded BEFORE the credit decision below, because whose key it is changes
+    what we may charge for.
+  */
+  const { loadOrgAiKeys, enterOrgAiKeys } = await import("@/lib/ai/byo");
+  const byo = await loadOrgAiKeys(orgId);
+  enterOrgAiKeys(byo);
+
   const svc = serviceClient();
   if (!svc) return { ok: true, enforced: false, cost, balance: 0 };
 
@@ -153,6 +175,35 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
     const balanceNow = Number((org as any)?.credits ?? 0);
     if (isLapsed(status) && !hasOverride && balanceNow < cost) {
       return { ok: false, enforced: true, cost, balance: balanceNow, reason: "lapsed" };
+    }
+
+    /*
+      A WORKSPACE ON ITS OWN KEY IS NOT CHARGED AI CREDITS — but only here,
+      AFTER the entitlement check above.
+
+      Credits recover the cost of the model call plus margin; every number in
+      CREDIT_COSTS is derived from measured COGS. When the customer supplies the
+      key that COGS is theirs, so charging credits as well is charging twice for
+      one call.
+
+      THE ORDERING IS THE WHOLE FIX. This used to return at the top of the
+      function, before the lapsed check — and because a brand-new workspace is
+      `expired` from its first second (see the comment above), that meant: sign
+      up, never pay, paste twenty characters into the AI key box, and the entire
+      paid product unlocked. The waiver is a discount on metering for a paying
+      customer, not a way past the paywall.
+
+      `byo.own` is also stricter than it looks: lib/ai/byo.ts only sets it when
+      the provider that will actually SERVE the call is the workspace's AND that
+      key passed a real provider call. A junk key in a provider we would never
+      reach leaves this false, so the call is metered as normal — otherwise it
+      was free unlimited AI on our own Gemini key.
+
+      THIS IS A REVERSIBLE PRICING DECISION. If BYO should carry a platform fee,
+      charge a reduced cost here rather than skipping the charge.
+    */
+    if (byo.own) {
+      return { ok: true, enforced: false, cost: 0, balance: balanceNow, reason: "own-key" };
     }
 
     if (allowance > 0) { try { await svc.rpc("sync_allowance", { p_org: orgId, p_amount: allowance, p_days: RESET_DAYS }); } catch {} }

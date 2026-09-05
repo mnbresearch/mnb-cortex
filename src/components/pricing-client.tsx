@@ -1,4 +1,5 @@
 "use client";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { useState } from "react";
 import { Check, Sparkles, X, MessageCircle } from "lucide-react";
 import { PLANS, WHATSAPP_NUMBER, CURRENCIES, formatMoney, planPrice, type CurrencyCode } from "@/lib/config";
@@ -50,6 +51,16 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
 
   const waText = encodeURIComponent(`Hi, I'm interested in MNB Cortex (${plan} plan, ${cur}).\nName: ${form.name || "-"}\nEmail: ${form.email || "-"}\nPhone: ${form.phone || "-"}`);
   const waLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${waText}`;
+
+
+  /* Escape, focus trap, focus restore — see lib/use-dialog-a11y.ts. This
+
+     overlay blocked the page with the mouse while Tab walked straight out
+
+     behind it, and could not be closed from the keyboard at all. */
+
+  const dlg = useDialogA11y(open, () => setOpen(false), "Plan details");
+
 
   return (
     <>
@@ -114,7 +125,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
 
       {open && (
         <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm grid place-items-center p-4" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border bg-card p-6" onClick={(e) => e.stopPropagation()}>
+          <div {...dlg} className="w-full max-w-md rounded-2xl border bg-card p-6 outline-none" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-lg font-semibold">Request the {plan} plan</h3>
               <button onClick={() => setOpen(false)} aria-label="Close"><X className="h-5 w-5 text-muted-foreground" /></button>

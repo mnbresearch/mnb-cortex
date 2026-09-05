@@ -112,9 +112,19 @@ export function CollectionsConsole({
       </Card>
 
       {msg && (
-        <div className={`rounded-lg border p-3 text-sm flex items-start gap-2 ${msg.ok ? "bg-success/10 text-success border-success/20" : "bg-danger/10 text-danger border-danger/20"}`}>
-          {msg.ok ? <Check className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}
-          <span>{msg.text}</span>
+        /*
+          Announced. This is the ONLY feedback for "draft reminders" and "send
+          approved" — actions that message the customer's own customers about
+          money. Silence after pressing that is the worst possible outcome: you
+          cannot tell whether nothing happened or everything did.
+
+          The icon carries the success/failure distinction alongside the colour,
+          so it does not rely on colour alone either (WCAG 1.4.1).
+        */
+        <div role="status" aria-live="polite"
+          className={`rounded-lg border p-3 text-sm flex items-start gap-2 ${msg.ok ? "bg-success/10 text-success border-success/20" : "bg-danger/10 text-danger border-danger/20"}`}>
+          {msg.ok ? <Check aria-hidden="true" className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertCircle aria-hidden="true" className="h-4 w-4 mt-0.5 shrink-0" />}
+          <span><span className="sr-only">{msg.ok ? "Success: " : "Problem: "}</span>{msg.text}</span>
         </div>
       )}
 

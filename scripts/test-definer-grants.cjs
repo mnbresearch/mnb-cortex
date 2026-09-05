@@ -1,6 +1,10 @@
-const {PGlite}=require("/sessions/brave-relaxed-feynman/mnt/mnb-cortex/node_modules/@electric-sql/pglite");
+/* Resolved from this file, not hardcoded — the suite has to run on any
+   machine and in CI, not just the box it was written on. */
+const path = require("node:path");
+const ROOT = path.resolve(__dirname, "..");
+const {PGlite}=require(path.join(ROOT, "node_modules/@electric-sql/pglite"));
 const fs=require("fs");
-const M="/sessions/brave-relaxed-feynman/mnt/mnb-cortex/supabase/migrations/2026_definer_grant_sweep.sql";
+const M=path.join(ROOT, "supabase/migrations/2026_definer_grant_sweep.sql");
 (async()=>{const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role;
  grant usage on schema public to anon, authenticated;

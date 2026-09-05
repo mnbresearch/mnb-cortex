@@ -1,4 +1,5 @@
 "use client";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,6 +83,16 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
     setTesting("");
     alert(j.ok ? `✅ ${j.message}` : `⚠️ ${j.error || j.message}`);
   }
+
+
+  /* Escape, focus trap, focus restore — see lib/use-dialog-a11y.ts. This
+
+     overlay blocked the page with the mouse while Tab walked straight out
+
+     behind it, and could not be closed from the keyboard at all. */
+
+  const dlg = useDialogA11y(Boolean(open), () => { if (!busy) setOpen(null); }, "Connect integration");
+
 
   return (
     <div className="space-y-5">
@@ -171,7 +182,7 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
       {open && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => !busy && setOpen(null)}>
           <Card className="w-full max-w-md p-5 space-y-4 animate-scale-in" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between">
+            <div {...dlg} className="flex items-start justify-between outline-none">
               <div>
                 <div className="font-semibold">Connect {open.name}</div>
                 <div className="text-sm text-muted-foreground">{open.desc}</div>

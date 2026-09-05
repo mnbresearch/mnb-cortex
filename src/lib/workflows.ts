@@ -1,6 +1,7 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { generateFor } from "@/lib/ai/cortex";
+import { withOrgAiKeys } from "@/lib/ai/byo";
 import { recomputeMetrics } from "@/lib/metrics";
 import { sendEmail } from "@/lib/email";
 import { brandFrom } from "@/lib/branded-email";
@@ -120,7 +121,8 @@ export async function executeWorkflow(
           const [mode, ...tail] = rest.split(/\s+/);
           if (!mode) { results.push({ step: raw, ok: false, detail: "ai needs a mode, e.g. `ai brief`" }); break; }
           const context = facts.length ? `WORKFLOW FINDINGS:\n${facts.map((f) => `- ${f}`).join("\n")}` : "";
-          const text = await generateFor(mode.toLowerCase(), tail.join(" "), context);
+          /* Per-workspace AI key — see lib/ai/byo.ts. */
+          const text = await withOrgAiKeys(orgId, () => generateFor(mode.toLowerCase(), tail.join(" "), context));
           const okAi = Boolean(text) && !/^I couldn't reach the AI engine/.test(text);
           let saved = false;
           if (okAi) {

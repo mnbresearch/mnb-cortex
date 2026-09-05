@@ -19,12 +19,20 @@ export function Toaster() {
   }, []);
   if (!toasts.length) return null;
   return (
-    <div className="fixed top-4 right-4 z-[90] space-y-2 w-80 no-print">
+    /*
+      A live region. These toasts appear from a 60-second poll, so nobody is
+      looking when they arrive — which is exactly the case a screen reader must
+      announce. Without this they were silent. "polite" rather than "assertive"
+      because an alert is worth hearing at the next pause, not worth cutting
+      someone off mid-sentence.
+    */
+    <div role="status" aria-live="polite" aria-label="Alerts"
+      className="fixed top-4 right-4 z-[90] space-y-2 w-80 no-print">
       {toasts.map((a, i) => (
         <div key={a.id + i} className={cn("rounded-xl border shadow-lg p-3 flex items-start gap-2", statusBg[a.severity])}>
-          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <AlertTriangle aria-hidden="true" className="h-4 w-4 mt-0.5 shrink-0" />
           <div className="flex-1"><p className="text-sm font-medium">{a.title}</p><p className="text-xs opacity-80">{a.body}</p></div>
-          <button onClick={() => setToasts((t) => t.filter((_, j) => j !== i))}><X className="h-3.5 w-3.5 opacity-70" /></button>
+          <button type="button" aria-label={`Dismiss: ${a.title}`} onClick={() => setToasts((t) => t.filter((_, j) => j !== i))}><X aria-hidden="true" className="h-3.5 w-3.5 opacity-70" /></button>
         </div>
       ))}
     </div>

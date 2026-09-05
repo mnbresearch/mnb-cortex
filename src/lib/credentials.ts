@@ -41,11 +41,34 @@ export async function credentialsFor(orgId: string, provider: string): Promise<C
 
   const out: Creds = {};
 
-  // Non-secret fields first (shop domain, phone number id, and so on).
+  /*
+    Non-secret fields first (shop domain, phone number id, and so on) — and
+    ONLY non-secret ones.
+
+    `config` is a plaintext jsonb column, and until 2026_integrations_lockdown
+    the RLS on this table let an ANALYST write it. Because this loop copied
+    every key it found, an analyst could put their own provider key in
+    `config.gemini` and every AI call in the workspace would then run on it,
+    sending the whole business's financial context to an account they control.
+    The RLS is now admin-only, which is the real fix; this is the second line,
+    because a table whose plaintext column can supply a secret is one privilege
+    bug away from that again.
+
+    The allowlist is derived from the catalogue: a field is safe to read from
+    plaintext only if the catalogue declares it as non-password. Anything not in
+    the catalogue at all is skipped, because an unknown key in a plaintext
+    column is exactly the shape of the attack.
+  */
   const cfg = (data as any).config;
   if (cfg && typeof cfg === "object") {
+    const { integrationById } = await import("@/lib/integrations");
+    const meta = integrationById(provider);
+    const plaintextOk = new Set(
+      (meta?.fields ?? []).filter((f) => f.type !== "password").map((f) => f.key),
+    );
     for (const [k, v] of Object.entries(cfg)) {
       if (k === "hint" || k === "last_test_ok" || k === "last_test_at") continue;
+      if (!plaintextOk.has(k)) continue;
       out[k] = String(v ?? "");
     }
   }

@@ -29,7 +29,7 @@ export function Notifications() {
         <div className="absolute right-0 mt-2 w-80 rounded-xl border bg-card shadow-lg z-50 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <span className="font-medium text-sm">Notifications</span>
-            <button className="text-xs text-primary" onClick={() => setRead(true)}>Mark all read</button>
+            <button aria-label="Notifications" aria-haspopup="true" className="text-xs text-primary" onClick={() => setRead(true)}>Mark all read</button>
           </div>
           <div className="max-h-80 overflow-y-auto p-2 space-y-1.5">
             {alerts.length === 0 && <p className="text-sm text-muted-foreground p-3">No alerts.</p>}

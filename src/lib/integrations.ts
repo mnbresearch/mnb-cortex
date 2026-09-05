@@ -29,7 +29,7 @@ export type Field = {
 export type Integration = {
   id: string;
   name: string;
-  category: "Accounting & Finance" | "Commerce & Payments" | "CRM & Sales" | "Communication" | "Productivity" | "Marketing & Analytics" | "Data & Automation" | "Support & Success" | "Social & Content";
+  category: "AI Providers" | "Accounting & Finance" | "Commerce & Payments" | "CRM & Sales" | "Communication" | "Productivity" | "Marketing & Analytics" | "Data & Automation" | "Support & Success" | "Social & Content";
   desc: string;
   minPlan: PlanId;
   fields: Field[];
@@ -65,6 +65,39 @@ export function integrationLimit(plan: string | null | undefined): number {
 const KEY = (label = "API key", ph = "sk_live_…"): Field => ({ key: "api_key", label, type: "password", placeholder: ph, required: true });
 
 export const INTEGRATIONS: Integration[] = [
+  /*
+    ---- AI Providers: bring your own key ----
+
+    First in the list because it is the one an enterprise asks about before
+    anything else. Until this existed, every AI call in the product ran on OUR
+    single Gemini key, which is disqualifying for any buyer with their own AI
+    governance or a data-processing agreement: they cannot let a vendor decide
+    which model sees their ledger, and they need prompts going to THEIR provider
+    account under their own retention terms.
+
+    minPlan "starter" deliberately — the LOWEST tier. This is the one
+    integration we should never gate: a workspace on its own key costs us
+    nothing in model spend, so restricting it would be charging for the
+    privilege of saving us money. lib/credits.ts waives AI credit metering
+    entirely while a workspace is on its own key.
+
+    Every field is optional. One provider is enough; more than one is genuine
+    failover, since lib/ai/cortex.ts walks the chain on a 404 or a rate limit.
+  */
+  { id: "ai", name: "Your own AI provider", category: "AI Providers", minPlan: "starter", testable: true,
+    desc: "Run Cortex on your own Gemini, OpenAI, Anthropic or Groq key — your account, your data terms, no AI credits charged",
+    docs: "https://aistudio.google.com/apikey",
+    fields: [
+      { key: "gemini", label: "Google Gemini API key", type: "password", placeholder: "AIza…",
+        help: "Free tier, no card needed — aistudio.google.com/apikey. This is what Cortex uses by default." },
+      { key: "openai", label: "OpenAI API key", type: "password", placeholder: "sk-proj-…",
+        help: "platform.openai.com/api-keys — use a project-scoped key so you can revoke it on its own." },
+      { key: "anthropic", label: "Anthropic API key", type: "password", placeholder: "sk-ant-…",
+        help: "console.anthropic.com/settings/keys — workspace keys let you cap spend from Anthropic's console." },
+      { key: "groq", label: "Groq API key", type: "password", placeholder: "gsk_…",
+        help: "console.groq.com/keys — fast and cheap; worth adding purely as a second key for failover." },
+    ] },
+
   // ---- Accounting & Finance ----
   { id: "zoho_books", name: "Zoho Books", category: "Accounting & Finance", desc: "Invoices, expenses and ledger sync", minPlan: "growth", testable: true,
     docs: "https://www.zoho.com/books/api/v3/",

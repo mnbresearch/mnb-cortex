@@ -1,4 +1,5 @@
 "use client";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -259,6 +260,11 @@ function Templates({ templates }: { templates: Template[] }) {
   const [editing, setEditing] = useState<Template | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /* Escape, focus trap, focus restore — see lib/use-dialog-a11y.ts. This
+     overlay blocked the page with the mouse while Tab walked straight out
+     behind it, and could not be closed from the keyboard at all. */
+  const dlg = useDialogA11y(Boolean(editing), () => { if (!busy) setEditing(null); }, "Edit email template");
+
   async function save() {
     if (!editing) return;
     setBusy(true);
@@ -291,7 +297,7 @@ function Templates({ templates }: { templates: Template[] }) {
       {editing && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => !busy && setEditing(null)}>
           <Card className="w-full max-w-lg p-5 space-y-3 animate-scale-in" onClick={(e) => e.stopPropagation()}>
-            <div className="font-semibold">{editing.id ? "Edit template" : "New template"}</div>
+            <div {...dlg} className="font-semibold outline-none">{editing.id ? "Edit template" : "New template"}</div>
             <input className={I} placeholder="Template name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             <input className={I} placeholder="Subject (use {{first_name}} etc.)" value={editing.subject} onChange={(e) => setEditing({ ...editing, subject: e.target.value })} />
             <div className="flex flex-wrap gap-1">{TOKENS.map((t) => <button key={t} onClick={() => setEditing({ ...editing, body: editing.body + " " + t })} className="text-xs rounded border px-2 py-1 text-muted-foreground hover:bg-accent font-mono">{t}</button>)}</div>

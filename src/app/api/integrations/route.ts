@@ -25,11 +25,32 @@ async function guard() {
   const sb = createClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) throw new Error("Sign in to manage integrations");
-  const { data: mem } = await sb.from("memberships").select("org_id,role").eq("user_id", user.id).limit(1).single();
+  /*
+    The ACTIVE workspace, not an arbitrary membership row.
+
+    This was `.limit(1).single()` with no ordering and no reference to the
+    cortex_org cookie — so for anyone in more than one workspace (a CA in
+    Practice mode, a consultant, us) Postgres returned whichever row it felt
+    like. The page would show workspace B while the POST wrote the credential
+    into workspace A, and the role check ran against A's role rather than B's.
+
+    Harmless-ish when the payload was a Shopify domain. Not harmless now that it
+    can be an AI provider key, because the key decides where that workspace's
+    prompts go.
+
+    getUserAndOrg() is the same resolver the pages use: it honours the cookie
+    and only after verifying the user is still a member of it.
+  */
+  const { getUserAndOrg } = await import("@/lib/data");
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) throw new Error("No workspace found");
+
+  const { data: mem } = await sb.from("memberships")
+    .select("role").eq("user_id", user.id).eq("org_id", orgId).maybeSingle();
   if (!mem) throw new Error("No workspace found");
   if ((RANK[(mem as any).role] || 0) < RANK.admin) throw new Error("Only workspace admins can manage integrations");
-  const { data: org } = await sb.from("organizations").select("plan").eq("id", (mem as any).org_id).single();
-  return { sb, orgId: (mem as any).org_id as string, plan: (org as any)?.plan || "watch" };
+  const { data: org } = await sb.from("organizations").select("plan").eq("id", orgId).single();
+  return { sb, orgId, plan: (org as any)?.plan || "watch" };
 }
 
 /** Verifies credentials against the provider's real API. Never returns the secret. */
@@ -60,6 +81,30 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
       case "calendly": return j(await fetch("https://api.calendly.com/users/me", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Calendly");
       case "intercom": return j(await fetch("https://api.intercom.io/me", { headers: { Authorization: `Bearer ${c.api_key}`, Accept: "application/json" } }), "Connected to Intercom");
       case "typeform": return j(await fetch("https://api.typeform.com/me", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Typeform");
+      /*
+        BYO AI keys. Tests each key the workspace supplied with ONE real,
+        minimal model call — a "Test" that only checks the string is non-empty
+        tells someone they are connected and lets them discover otherwise from
+        an empty report three days later.
+      */
+      case "ai": {
+        const { verifyProviderKey, PROVIDERS } = await import("@/lib/ai/byo");
+        const present = PROVIDERS
+          .map((prov) => ({ prov, k: String((c as any)[prov.id] || "").trim() }))
+          .filter((x) => x.k);
+        if (!present.length) return { ok: false, message: "No keys entered. Add at least one provider key." };
+
+        /*
+          In PARALLEL. Sequentially, four providers at a 15s timeout each is 60s
+          against this route's maxDuration of 60 — a workspace with all four
+          keys and one slow provider would get a 504 instead of an answer.
+        */
+        const settled = await Promise.all(
+          present.map(async ({ prov, k }) => ({ prov, r: await verifyProviderKey(prov.id, k) })),
+        );
+        const anyOk = settled.some((x) => x.r.ok);
+        return { ok: anyOk, message: settled.map((x) => `${x.prov.name}: ${x.r.ok ? "✓" : "✗"} ${x.r.detail}`).join("  ·  ") };
+      }
       default: return { ok: true, message: "Saved securely. This provider has no automated test — verify from its dashboard." };
     }
   } catch (e: any) {
@@ -73,6 +118,26 @@ export async function POST(req: Request) {
     const op = String(body?.op || "");
     const id = String(body?.id || "");
     const { sb, orgId, plan } = await guard();
+
+    /*
+      Rate limit. `test` makes up to four outbound provider calls per hit, each
+      with a 15-second timeout, and every one spends the customer's tokens (or
+      ours). Admin-only is not a rate limit — one admin with a loop is enough to
+      burn a provider quota or hold four connections open indefinitely.
+
+      Connect is bucketed more loosely: it also tests, but it is a deliberate
+      action somebody performs a handful of times.
+    */
+    const { enforce } = await import("@/lib/ratelimit");
+    const over = op === "test"
+      ? await enforce([{ key: `integrations:test:org:${orgId}`, limit: 30, windowSecs: 3600 }])
+      : await enforce([{ key: `integrations:write:org:${orgId}`, limit: 120, windowSecs: 3600 }]);
+    if (over) {
+      return NextResponse.json({
+        ok: false, rateLimited: true,
+        error: "Too many integration requests for this workspace in the last hour. Try again shortly.",
+      }, { status: 429 });
+    }
 
     const meta = integrationById(id);
     if (!meta && op !== "disconnect") return NextResponse.json({ ok: false, error: "Unknown integration" }, { status: 400 });
@@ -89,11 +154,18 @@ export async function POST(req: Request) {
       if (!planAllows(plan, meta)) {
         return NextResponse.json({ ok: false, error: `${meta.name} requires the ${meta.minPlan} plan or higher.`, upgrade: meta.minPlan }, { status: 200 });
       }
-      // Quota gate
+      /*
+        Quota gate — with BYO AI keys exempt.
+
+        A workspace running on its own provider key costs us nothing in model
+        spend; counting that against their integration allowance would be
+        charging them for the privilege of saving us money, and it would hit
+        exactly the enterprise buyer we most want to say yes to.
+      */
       const { count } = await sb.from("integrations").select("id", { count: "exact", head: true }).eq("org_id", orgId);
       const limit = limitForPlan(plan);
       const { data: existing } = await sb.from("integrations").select("id").eq("org_id", orgId).eq("provider", id).maybeSingle();
-      if (!existing && (count || 0) >= limit) {
+      if (id !== "ai" && !existing && (count || 0) >= limit) {
         return NextResponse.json({ ok: false, error: `Your ${plan} plan allows ${limit} integrations. Upgrade to connect more.`, upgrade: "premium" }, { status: 200 });
       }
 
@@ -102,6 +174,15 @@ export async function POST(req: Request) {
         const v = String(body?.credentials?.[f.key] ?? "").trim();
         if (f.required && !v) return NextResponse.json({ ok: false, error: `${f.label} is required.` }, { status: 200 });
         if (v) creds[f.key] = v;
+      }
+
+      /*
+        Every AI field is optional (one provider is enough), which means an
+        empty submit would otherwise store {} and show as "connected" while
+        every call silently fell back to the platform key. Require at least one.
+      */
+      if (!Object.keys(creds).length) {
+        return NextResponse.json({ ok: false, error: `Enter at least one value for ${meta.name}.` }, { status: 200 });
       }
 
       const hasSecret = meta.fields.some((f) => f.type === "password" && creds[f.key]);

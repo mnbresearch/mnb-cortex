@@ -29,7 +29,7 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask Cortex about your numbers…" className="flex-1 bg-transparent outline-none" />
         </form>
         <Notifications />
-        <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+        <Button variant="ghost" size="icon" aria-label="Switch between light and dark theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           <Sun className="h-4 w-4 dark:hidden" /><Moon className="hidden h-4 w-4 dark:block" />
         </Button>
         <UserMenu />

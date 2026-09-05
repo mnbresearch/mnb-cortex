@@ -172,7 +172,16 @@ const MOATS = [
 ];
 
 const mark = (v: string) =>
-  v === "y" ? <span className="text-primary">●</span> : v === "~" ? <span className="text-warning">◐</span> : <span className="text-muted-foreground/40">○</span>;
+  /*
+    A glyph with no text alternative is nothing to a screen reader — this table
+    is the competitive-positioning grid a procurement reviewer lands on, and it
+    read as rows of empty cells. The sr-only word carries the meaning; the glyph
+    stays for everyone else. The ○ also moves off /40 opacity, which measured
+    2.02:1. WCAG 1.1.1, 1.4.1.
+  */
+  v === "y" ? <span className="text-primary"><span className="sr-only">Yes</span><span aria-hidden="true">●</span></span>
+    : v === "~" ? <span className="text-warning"><span className="sr-only">Partly</span><span aria-hidden="true">◐</span></span>
+    : <span className="text-muted-foreground"><span className="sr-only">No</span><span aria-hidden="true">○</span></span>;
 
 export default function Home() {
   return (

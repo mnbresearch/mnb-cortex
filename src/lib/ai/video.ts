@@ -1,4 +1,5 @@
 import "server-only";
+import { aiKey } from "@/lib/ai/byo";
 import { veoParameters } from "@/lib/ai/visual-prompts";
 
 /**
@@ -18,7 +19,7 @@ import { veoParameters } from "@/lib/ai/visual-prompts";
 const API = "https://generativelanguage.googleapis.com/v1beta";
 
 function key(): string | undefined {
-  const k = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const k = aiKey("GEMINI_API_KEY") || aiKey("GOOGLE_API_KEY");
   if (!k || k.trim().length < 20 || /^\[.*\]$/.test(k.trim())) return undefined;
   return k.trim();
 }

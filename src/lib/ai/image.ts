@@ -1,11 +1,12 @@
 import "server-only";
+import { aiKey } from "@/lib/ai/byo";
 import { geminiImageModels } from "@/lib/ai/models";
 
 // Image generation + editing via Google Gemini (free tier at aistudio.google.com).
 // One GEMINI_API_KEY powers both the text engine and image agents.
 
 export function hasImageProvider(): boolean {
-  return Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+  return Boolean(aiKey("GEMINI_API_KEY") || aiKey("GOOGLE_API_KEY"));
 }
 
 export function imageModel(): string {
@@ -19,7 +20,7 @@ export function imageModel(): string {
  * Returns an array of data-URLs. Empty array = no provider / nothing returned.
  */
 export async function generateImages(prompt: string, inputImageDataUrl?: string): Promise<{ images: string[]; note: string }> {
-  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const key = aiKey("GEMINI_API_KEY") || aiKey("GOOGLE_API_KEY");
   if (!key) return { images: [], note: "no-provider" };
 
   const parts: any[] = [{ text: prompt }];

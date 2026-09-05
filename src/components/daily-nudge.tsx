@@ -1,4 +1,5 @@
 "use client";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -20,11 +21,16 @@ export function DailyNudge({ status, daysLeft }: { status: string; daysLeft: num
     try { localStorage.setItem("cortex-nudge", new Date().toISOString().slice(0, 10)); } catch {}
     setShow(false);
   }
+  /* Escape, focus trap, focus restore — see lib/use-dialog-a11y.ts. This
+     dialog renders from the app layout, so before this it could appear over
+     any page and could not be dismissed by keyboard at all. */
+  const dlg = useDialogA11y(show, dismiss, "Trial reminder");
+
   if (!show) return null;
 
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center bg-black/40 backdrop-blur-sm p-4" onClick={dismiss}>
-      <div className="max-w-sm w-full rounded-2xl border bg-card p-6 shadow-2xl text-center relative" onClick={(e) => e.stopPropagation()}>
+      <div {...dlg} className="max-w-sm w-full rounded-2xl border bg-card p-6 shadow-2xl text-center relative outline-none" onClick={(e) => e.stopPropagation()}>
         <button onClick={dismiss} className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
         <div className="h-12 w-12 rounded-2xl brand-gradient grid place-items-center text-white mx-auto animate-float"><Sparkles className="h-6 w-6" /></div>
         <h2 className="mt-3 font-semibold text-lg">

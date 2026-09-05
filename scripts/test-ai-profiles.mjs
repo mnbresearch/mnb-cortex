@@ -157,7 +157,15 @@ console.log("\nEVERY Gemini call site must use the shared budget, not its own");
   const files = readdirSync(dir).filter((f) => f.endsWith(".ts") && f !== "generation.ts" && f !== "models.ts");
   const offenders = [];
   for (const f of files) {
-    const src = readFileSync(join(dir, f), "utf8");
+    /*
+      Comments stripped first. This check is about what the CODE does, and the
+      files it scans document the very anti-pattern it looks for — a comment
+      reading "not a hand-rolled maxOutputTokens: 8" was enough to fail the
+      build. A test that cannot tell an example from an instance produces
+      false alarms, and false alarms are how a real one gets waved through.
+    */
+    const raw = readFileSync(join(dir, f), "utf8");
+    const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
     if (!/generativelanguage\.googleapis\.com|geminiUrl/.test(src)) continue;   // not a Gemini caller
     // A literal token cap means the call invented its own budget.
     if (/maxOutputTokens:\s*\d+/.test(src)) offenders.push(f);

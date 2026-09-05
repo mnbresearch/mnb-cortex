@@ -70,7 +70,26 @@ export function PublicHeader() {
       </header>
 
       {/* Full-screen mobile menu */}
-      <div className={`fixed inset-0 z-50 md:hidden transition-opacity duration-300 ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+      {/*
+        `invisible` when closed, not just transparent.
+
+        This was `opacity-0 pointer-events-none`, which stops the MOUSE and does
+        nothing to the tab order or the accessibility tree. On a phone-width
+        viewport a keyboard user tabbing the header fell into five invisible
+        links with the focus ring rendered at opacity 0 — focus simply
+        disappeared. `invisible` removes it from both, and the delay keeps the
+        fade-out visible on the way closed. WCAG 2.4.3, 2.4.7.
+      */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
+        aria-hidden={!open}
+        onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-300 ${
+          open ? "opacity-100 pointer-events-auto visible" : "opacity-0 pointer-events-none invisible delay-300"
+        }`}
+      >
         <div className="absolute inset-0 bg-foreground text-background flex flex-col">
           <div className="flex items-center justify-between px-5 h-16">
             <span className="font-semibold">MNB Cortex</span>

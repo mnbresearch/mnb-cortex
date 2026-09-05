@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cronAuthorised } from "@/lib/cron-auth";
 import { serviceClient } from "@/lib/supabase/server";
 import { generateFor } from "@/lib/ai/cortex";
+import { withOrgAiKeys } from "@/lib/ai/byo";
 import { recomputeMetrics } from "@/lib/metrics";
 import { statusOf, isLapsed } from "@/lib/entitlement";
 export const runtime = "nodejs";
@@ -232,7 +233,14 @@ export async function GET(req: Request) {
     const { data: m } = await sb.from("health_metrics").select("label,value,unit,delta_pct,status").eq("org_id", o.id);
     if (!m?.length) continue;
     const ctx = "KEY METRICS:\n" + m.map((x: any) => `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + x.unit} (${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, ${x.status})`).join("\n");
-    let text = ""; try { text = await generateFor("pulse", "", ctx); } catch { continue; }
+    /*
+      Each org's analysis must run on THAT org's AI key. Without this the
+      nightly loop sent every customer's business context to our own Gemini
+      account, including customers who had connected their own provider
+      precisely so that would not happen.
+    */
+    let text = "";
+    try { text = await withOrgAiKeys(o.id, () => generateFor("pulse", "", ctx)); } catch { continue; }
     await sb.from("alerts").insert({ org_id: o.id, severity: "yellow", module: "autopilot", title: "Autopilot daily analysis", body: text.slice(0, 400) });
     await sb.from("activity").insert({ org_id: o.id, type: "ai", message: "Autopilot ran the daily business analysis" });
     ran++;

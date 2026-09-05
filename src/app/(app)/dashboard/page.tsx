@@ -14,6 +14,7 @@ import { Landmark, ReceiptText, Upload as UploadIcon } from "lucide-react";
 import { AlertTriangle, Sparkles } from "lucide-react";
 import { PrintButton, ExportButton } from "@/components/export-button";
 import { AIPulse } from "@/components/ai-panel";
+import { ConnectBanner } from "@/components/connect-banner";
 import { NextBestActions } from "@/components/next-best-actions";
 import { IndustryPlaybook } from "@/components/industry-playbook";
 import { IndustryPrompt } from "@/components/industry-prompt";
@@ -88,6 +89,19 @@ export default async function Dashboard() {
 
         {/* Guided command layer: turns 130 modules into the few that matter now. */}
         <NextBestActions />
+
+        {/*
+          The one entry point for "connect Cortex to my own stuff".
+
+          It lives on the dashboard because the two questions it answers are the
+          two people arrive with — can I use my own AI key, and what is already
+          connected — and both were previously reachable only by finding
+          /integrations in the nav and scrolling a 62-entry grid.
+
+          Rendered by a server component so it can show real state (connected,
+          nothing yet) rather than a button that always says the same thing.
+        */}
+        <ConnectBanner />
 
         {isReal && (resolveIndustry((profile as any)?.industry)
           ? <IndustryPlaybook industry={(profile as any)?.industry} />

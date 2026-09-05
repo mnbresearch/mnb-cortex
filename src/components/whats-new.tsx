@@ -1,4 +1,5 @@
 "use client";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sparkles, X } from "lucide-react";
@@ -8,10 +9,15 @@ export function WhatsNew() {
   const [show, setShow] = useState(false);
   useEffect(() => { if (localStorage.getItem("mnb-seen-version") !== APP_VERSION) setShow(true); }, []);
   function dismiss() { localStorage.setItem("mnb-seen-version", APP_VERSION); setShow(false); }
+  /* Escape, focus trap, focus restore — see lib/use-dialog-a11y.ts. This
+     dialog renders from the app layout, so before this it could appear over
+     any page and could not be dismissed by keyboard at all. */
+  const dlg = useDialogA11y(show, dismiss, "What's new in Cortex");
+
   if (!show) return null;
   return (
     <div className="fixed inset-0 z-[95] bg-black/40 backdrop-blur-sm grid place-items-center p-4" onClick={dismiss}>
-      <div className="w-full max-w-sm rounded-2xl border bg-card p-6" onClick={(e) => e.stopPropagation()}>
+      <div {...dlg} className="w-full max-w-sm rounded-2xl border bg-card p-6 relative outline-none" onClick={(e) => e.stopPropagation()}>
         <button onClick={dismiss} className="absolute right-4 top-4 text-muted-foreground"><X className="h-4 w-4" /></button>
         <div className="h-11 w-11 rounded-xl bg-primary/15 grid place-items-center"><Sparkles className="h-6 w-6 text-primary" /></div>
         <h2 className="mt-3 text-lg font-semibold">What's new · v{APP_VERSION}</h2>

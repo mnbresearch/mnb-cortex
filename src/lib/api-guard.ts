@@ -25,6 +25,19 @@ export type DenialBody = {
  * 401 for "you aren't signed in", 402 for "you're out of credits".
  */
 export function creditDenial(gate: ChargeResult, action = "This action"): { status: number; body: DenialBody } {
+  /*
+    "own-key" means the workspace supplied its own provider key, so the call
+    succeeded and cost nothing — it is an ok:true reason, not a denial.
+    Unreachable today, because every caller checks `!gate.ok` first. Kept
+    because the failure mode if that ever changes is telling a customer who
+    brought their own key that they are out of credits, which is both wrong and
+    exactly the sort of billing message that loses an enterprise account.
+  */
+  if (gate.ok || gate.reason === "own-key") {
+    /* A success. Shaped as one — ok:true and no `error`, because a client that
+       reads `error` would render a failure for a call that worked. */
+    return { status: 200, body: { ok: true, cost: 0, balance: gate.balance } as unknown as DenialBody };
+  }
   if (gate.reason === "anonymous") {
     return {
       status: 401,

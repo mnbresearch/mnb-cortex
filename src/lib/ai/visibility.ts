@@ -1,3 +1,4 @@
+import { aiKey } from "@/lib/ai/byo";
 // Cortex Visibility — Answer Engine Optimization (AEO) for SMEs.
 // Runs real buyer-intent questions through AI answer engines, detects whether the
 // brand (and competitors) get recommended, scores it, and drafts the fix.
@@ -29,10 +30,10 @@ const NEUTRAL_SYSTEM =
 
 /** Ask one answer engine. Prefers Gemini with Google Search grounding (live web); falls back to Groq (model knowledge). */
 async function askEngine(prompt: string): Promise<{ answer: string; engine: string; grounded: boolean }> {
-  if (process.env.GEMINI_API_KEY) {
+  if (aiKey("GEMINI_API_KEY")) {
     const model = geminiTextModels()[0];
     try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(aiKey("GEMINI_API_KEY") ?? "")}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: NEUTRAL_SYSTEM }] },
@@ -48,10 +49,10 @@ async function askEngine(prompt: string): Promise<{ answer: string; engine: stri
       }
     } catch { /* fall through */ }
   }
-  if (process.env.GROQ_API_KEY) {
+  if (aiKey("GROQ_API_KEY")) {
     try {
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey("GROQ_API_KEY")}` },
         body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", messages: [{ role: "system", content: NEUTRAL_SYSTEM }, { role: "user", content: prompt }], temperature: 0.3 }),
       });
       if (r.ok) { const j = await r.json(); const answer = (j?.choices?.[0]?.message?.content || "").trim(); if (answer) return { answer, engine: "Llama 3.3 · model knowledge", grounded: false }; }
@@ -130,20 +131,20 @@ A 3–4 sentence description of ${brand}, optimised to be quoted.
 3 concrete actions (directories, review sites, mentions, structured data) that make AI engines trust and cite ${brand}.`;
 
   // Reuse the same providers directly (neutral AEO persona, not the COO persona).
-  if (process.env.GEMINI_API_KEY) {
+  if (aiKey("GEMINI_API_KEY")) {
     const model = geminiTextModels()[0];
     try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(aiKey("GEMINI_API_KEY") ?? "")}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ system_instruction: { parts: [{ text: sys }] }, contents: [{ role: "user", parts: [{ text: ask }] }], generationConfig: generationConfig(STANDARD, { temperature: 0.5 }) }),
       });
       if (r.ok) { const j = await r.json(); const t = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim(); if (t) return t; }
     } catch { /* fall through */ }
   }
-  if (process.env.GROQ_API_KEY) {
+  if (aiKey("GROQ_API_KEY")) {
     try {
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey("GROQ_API_KEY")}` },
         body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", messages: [{ role: "system", content: sys }, { role: "user", content: ask }], temperature: 0.5 }),
       });
       if (r.ok) { const j = await r.json(); const t = (j?.choices?.[0]?.message?.content || "").trim(); if (t) return t; }

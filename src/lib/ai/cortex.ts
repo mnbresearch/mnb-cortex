@@ -1,3 +1,4 @@
+import { aiKey } from "@/lib/ai/byo";
 // Server-only AI layer for the AI COO.
 // Supports FREE providers (Google Gemini, Groq) and paid (Anthropic, OpenAI).
 // Set ONE key; provider is auto-detected (or force with AI_PROVIDER).
@@ -52,10 +53,10 @@ function providerChain(): string[] {
   const forced = (process.env.AI_PROVIDER || "").toLowerCase().trim();
   if (forced) return [forced];
   const chain: string[] = [];
-  if (envKey("GEMINI_API_KEY")) chain.push("gemini");
-  if (envKey("GROQ_API_KEY")) chain.push("groq");
-  if (envKey("ANTHROPIC_API_KEY")) chain.push("anthropic");
-  if (envKey("OPENAI_API_KEY")) chain.push("openai");
+  if (aiKey("GEMINI_API_KEY")) chain.push("gemini");
+  if (aiKey("GROQ_API_KEY")) chain.push("groq");
+  if (aiKey("ANTHROPIC_API_KEY")) chain.push("anthropic");
+  if (aiKey("OPENAI_API_KEY")) chain.push("openai");
   return chain.length ? chain : ["none"];
 }
 
@@ -83,7 +84,7 @@ function describeFailure(f: ProviderFailure | null): string {
 
 /** True when at least one AI provider key is configured. */
 export function hasAIKey(): boolean {
-  return anyEnvKey("GROQ_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY");
+  return ["GROQ_API_KEY","GEMINI_API_KEY","OPENAI_API_KEY","ANTHROPIC_API_KEY"].some((n) => Boolean(aiKey(n)));
 }
 
 /**
@@ -143,7 +144,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
   try {
     // ---- Google Gemini (FREE: aistudio.google.com) ----
-    if (provider === "gemini" && envKey("GEMINI_API_KEY")) {
+    if (provider === "gemini" && aiKey("GEMINI_API_KEY")) {
       /*
         `contents` is mutable because a tool call extends the conversation: the
         model asks for a lookup, we append its request and our answer, and ask
@@ -175,7 +176,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
       // Walk the candidate models: a 404 means that name was retired, so try
       // the next one rather than taking the whole product down.
       for (const model of geminiTextModels()) {
-        let r = await fetch(geminiUrl(model, process.env.GEMINI_API_KEY!), {
+        let r = await fetch(geminiUrl(model, aiKey("GEMINI_API_KEY")!), {
           method: "POST", headers: { "Content-Type": "application/json" }, body: buildBody(!thinkingUnsupported),
         });
 
@@ -195,7 +196,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
           if (/thinking|unknown name|invalid json payload|unrecognized/i.test(detail)) {
             console.warn(`[cortex] ${model} rejected thinkingConfig; retrying without it and disabling for this process.`);
             thinkingUnsupported = true;
-            r = await fetch(geminiUrl(model, process.env.GEMINI_API_KEY!), {
+            r = await fetch(geminiUrl(model, aiKey("GEMINI_API_KEY")!), {
               method: "POST", headers: { "Content-Type": "application/json" }, body: buildBody(false),
             });
           }
@@ -232,7 +233,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
             }
             contents = [...contents, { role: "user", parts: responses }];
 
-            const follow = await fetch(geminiUrl(model, process.env.GEMINI_API_KEY!), {
+            const follow = await fetch(geminiUrl(model, aiKey("GEMINI_API_KEY")!), {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: buildBody(!thinkingUnsupported),
             });
@@ -261,9 +262,9 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
       return null;
     }
     // ---- Groq (FREE: console.groq.com) — OpenAI-compatible ----
-    if (provider === "groq" && process.env.GROQ_API_KEY) {
+    if (provider === "groq" && aiKey("GROQ_API_KEY")) {
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey("GROQ_API_KEY")}` },
         body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
       });
       if (!r.ok) return await note("groq", r); // 429 rate-limit or 5xx → let the caller retry
@@ -271,9 +272,9 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
       return j?.choices?.[0]?.message?.content ?? null;
     }
     // ---- OpenAI ----
-    if (provider === "openai" && process.env.OPENAI_API_KEY) {
+    if (provider === "openai" && aiKey("OPENAI_API_KEY")) {
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey("OPENAI_API_KEY")}` },
         body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
       });
       if (!r.ok) return await note("openai", r);
@@ -281,9 +282,9 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
       return j?.choices?.[0]?.message?.content ?? null;
     }
     // ---- Anthropic ----
-    if (provider === "anthropic" && process.env.ANTHROPIC_API_KEY) {
+    if (provider === "anthropic" && aiKey("ANTHROPIC_API_KEY")) {
       const r = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+        method: "POST", headers: { "Content-Type": "application/json", "x-api-key": aiKey("ANTHROPIC_API_KEY")!, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022", max_tokens: 1024, system: sys, messages }),
       });
       if (!r.ok) return await note("anthropic", r);
@@ -344,12 +345,12 @@ export async function streamCortex(messages: Msg[], context: string): Promise<Re
   // call emitted as a single chunk — the user watched an empty box for the whole
   // generation. With a Groq key present the reply now actually streams.
   const chain = providerChain();
-  const provider = chain.find((c) => (c === "groq" && process.env.GROQ_API_KEY) || (c === "openai" && process.env.OPENAI_API_KEY)) || chain[0];
+  const provider = chain.find((c) => (c === "groq" && aiKey("GROQ_API_KEY")) || (c === "openai" && aiKey("OPENAI_API_KEY"))) || chain[0];
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
   const enc = new TextEncoder();
   const openaiLike =
-    (provider === "groq" && process.env.GROQ_API_KEY) ? { url: "https://api.groq.com/openai/v1/chat/completions", key: process.env.GROQ_API_KEY!, model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile" } :
-    (provider === "openai" && process.env.OPENAI_API_KEY) ? { url: "https://api.openai.com/v1/chat/completions", key: process.env.OPENAI_API_KEY!, model: process.env.OPENAI_MODEL || "gpt-4o-mini" } : null;
+    (provider === "groq" && aiKey("GROQ_API_KEY")) ? { url: "https://api.groq.com/openai/v1/chat/completions", key: aiKey("GROQ_API_KEY")!, model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile" } :
+    (provider === "openai" && aiKey("OPENAI_API_KEY")) ? { url: "https://api.openai.com/v1/chat/completions", key: aiKey("OPENAI_API_KEY")!, model: process.env.OPENAI_MODEL || "gpt-4o-mini" } : null;
 
   if (openaiLike) {
     try {

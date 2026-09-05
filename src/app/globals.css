@@ -43,7 +43,8 @@
   --warning-foreground: 0 0% 100%;
   --danger: 356 70% 50%;
   --danger-foreground: 0 0% 100%;
-  --brand-2: 44 72% 56%;   /* bright gold — gradient fills only, never text */
+  --brand-2: 44 72% 56%;   /* bright gold — decorative fills only, never text */
+  --brand-2-deep: 44 72% 32%; /* 4.87:1 with white — the end stop for .brand-gradient */
   --brand-3: 32 48% 55%;   /* warm bronze/amber */
   --radius: 0.9rem;
   --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui;
@@ -85,6 +86,7 @@
   --warning-foreground: 36 60% 9%;
   --danger-foreground: 356 55% 10%;
   --brand-2: 44 66% 64%;   /* lighter gold */
+  --brand-2-deep: 44 72% 32%; /* same deep gold in dark mode: white must stay readable on the button */
   --brand-3: 32 50% 60%;   /* amber/bronze */
 }
 
@@ -120,7 +122,22 @@ body {
 }
 
 /* Brand gradient surfaces */
-.brand-gradient { background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--brand-2))); }
+/*
+  .brand-gradient carries WHITE TEXT in 31 places — including the login CTA and
+  the Sign in / Create account tabs — so both ends of it must clear 4.5:1
+  against white, not just the first.
+
+  It used to end on --brand-2 (hsl 44 72% 56%), which is 1.95:1 with white: the
+  right-hand ~60% of every gradient button was unreadable, and in dark mode
+  (brand-2 at 64% lightness, 1.78:1) the whole button was. The token's own
+  comment says "gradient fills only, never text" — correct intent, but nothing
+  enforced it and text-white sat straight on top.
+
+  --brand-2-deep is the same gold at 32% lightness = 4.87:1 with white. Used
+  ONLY here, so decorative fills elsewhere keep the bright original. Fixing the
+  token rather than 31 call sites means a new gradient button is safe by default.
+*/
+.brand-gradient { background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--brand-2-deep))); }
 
 /* ---- In-app polish (v6.25) ---- */
 /* A calm, layered canvas behind the app content — replaces the flat near-white. */

@@ -23,6 +23,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
   return (
     <div className="flex min-h-screen">
+      {/*
+        Skip link. Visually hidden until focused, which is the point: the first
+        Tab on any page offers a jump past ~122 sidebar links straight to the
+        content. Without it a keyboard user traverses the whole nav every time.
+      */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-lg focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:text-sm focus:font-medium"
+      >
+        Skip to content
+      </a>
       <NavProgress />
       <Sidebar superAdmin={superAdmin} orgs={orgs} activeOrgId={orgId} />
       <div className="flex-1 min-w-0 app-canvas">{children}</div>

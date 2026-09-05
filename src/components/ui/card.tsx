@@ -7,8 +7,15 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("flex flex-col space-y-1.5 p-5", className)} {...props} />;
 }
+/*
+  h2, not h3.
+  Topbar renders the page's h1 and Section renders every heading through
+  CardTitle — so with h3 here, all ~90 app pages read h1 -> h3 -> h3 with no h2
+  at all, and a screen-reader user navigating by heading level found a hole in
+  the outline on every page. WCAG 1.3.1.
+*/
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn("font-semibold leading-tight tracking-tight", className)} {...props} />;
+  return <h2 className={cn("font-semibold leading-tight tracking-tight", className)} {...props} />;
 }
 export function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
   return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;

@@ -1,5 +1,5 @@
 "use client";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Ticker, EASE, DURATION } from "@/components/motion";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -27,12 +27,19 @@ function fmt(m: HealthMetric, value: number = m.value) {
 
 export function KpiCard({ m, i = 0 }: { m: HealthMetric; i?: number }) {
   const up = m.delta_pct >= 0;
+  /*
+    A dashboard renders a whole GRID of these, so the staggered entrance is a
+    dozen tiles moving at once — the case that actually triggers vestibular
+    symptoms. motion.tsx honours the preference in all six of its primitives;
+    this component was written separately and did not.
+  */
+  const reduce = useReducedMotion();
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: i * 0.04, duration: DURATION.base, ease: EASE }}
-      whileHover={{ y: -3 }}
+      initial={reduce ? false : { opacity: 0, y: 10 }}
+      animate={reduce ? undefined : { opacity: 1, y: 0 }}
+      transition={reduce ? undefined : { delay: i * 0.04, duration: DURATION.base, ease: EASE }}
+      whileHover={reduce ? undefined : { y: -3 }}
     >
       <Card className="p-4 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between">

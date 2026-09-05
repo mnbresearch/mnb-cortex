@@ -153,6 +153,7 @@ export const NAV = [
   { href: "/approvals", label: "Approvals", icon: CheckCircle2, group: "Automation", sub: "Automate" },
   { href: "/import", label: "Import data", icon: Upload, group: "Automation", sub: "Your data & tools" },
   { href: "/data", label: "Data Explorer", icon: Database, group: "Automation", sub: "Your data & tools" },
+  { href: "/connect", label: "Connect", icon: Plug, group: "Automation", sub: "Your API keys & accounts" },
   { href: "/integrations", label: "Integrations", icon: Plug, group: "Automation", sub: "Your data & tools" },
   { href: "/setup-guides", label: "Connection guides", icon: KeyRound, group: "Automation", sub: "Your data & tools" },
   { href: "/leads", label: "Leads", icon: Inbox, group: "Automation", sub: "Your data & tools" },

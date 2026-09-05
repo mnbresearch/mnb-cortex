@@ -1,11 +1,26 @@
 "use client";
+/*
+  prefers-reduced-motion, which this file ignored entirely.
+
+  motion.tsx and loco.tsx both honour it; these three did not. RotatingWord is
+  the serious one — a setInterval that runs forever with no way to pause it,
+  in the landing hero. That is WCAG 2.2.2 (moving content over five seconds
+  must be pausable) as well as 2.3.3, and for someone with a vestibular
+  disorder it is the difference between reading the page and leaving it.
+*/
+const prefersReduced = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
 import { useEffect, useRef, useState } from "react";
 
 /** Fades + slides children in when they scroll into view (with a safe fallback). */
 export function Reveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(false);
+  /* Reduced motion: render shown immediately, no transform, no transition. */
+  const [shown, setShown] = useState(() => prefersReduced());
   useEffect(() => {
+    if (prefersReduced()) { setShown(true); return; }
     const el = ref.current;
     const fallback = setTimeout(() => setShown(true), 600); // never leave content hidden
     if (!el || typeof IntersectionObserver === "undefined") return () => clearTimeout(fallback);
@@ -33,6 +48,9 @@ export function CountUp({ to, suffix = "", prefix = "", duration = 1200 }: { to:
   const [val, setVal] = useState(0);
   const started = useRef(false);
   useEffect(() => {
+    /* Reduced motion: show the final number rather than animating to it. The
+       information is the number, not the count. */
+    if (prefersReduced()) { setVal(to); return; }
     const el = ref.current; if (!el) return;
     const start = () => {
       if (started.current) return; started.current = true;
@@ -58,6 +76,15 @@ export function RotatingWord({ words }: { words: string[] }) {
   const [i, setI] = useState(0);
   const [show, setShow] = useState(true);
   useEffect(() => {
+    /*
+      Reduced motion: stop rotating entirely and hold the first word.
+
+      This is the one that mattered most in this file — an interval with no
+      pause control, running forever, in the landing hero. WCAG 2.2.2 requires
+      moving content lasting more than five seconds to be pausable; honouring
+      the OS preference is the pause.
+    */
+    if (prefersReduced()) return;
     const t = setInterval(() => {
       setShow(false);
       setTimeout(() => { setI((v) => (v + 1) % words.length); setShow(true); }, 300);
