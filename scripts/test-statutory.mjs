@@ -161,16 +161,56 @@ console.log("\nGST rate slabs — GST 2.0, effective 22 September 2025");
     Asserted in both places because they drifted independently. The negative
     assertions are the point: this test exists to stop 12 and 28 coming back.
   */
-  const calc = read("gst-calc.tsx");
-  const m = calc.match(/const RATES = \[([^\]]*)\]/);
-  check("gst-calc: the RATES array is parseable", !!m);
-  const rates = m ? m[1].split(",").map((x) => Number(x.trim())) : [];
-  check("gst-calc: parsed a plausible slab list", rates.length >= 3 && rates.every((n) => !Number.isNaN(n)));
-  check("gst-calc: 12% is gone", !rates.includes(12));
-  check("gst-calc: 28% is gone", !rates.includes(28));
-  check("gst-calc: 5% is offered", rates.includes(5));
-  check("gst-calc: 18% is offered", rates.includes(18));
-  check("gst-calc: the 40% demerit rate is offered", rates.includes(40));
+  /*
+    The slab list now lives in src/lib/gst-rates.ts rather than inside
+    gst-calc.tsx, so that invoice-generator and quote-builder can validate
+    against it — they took a free numeric GST field and would happily put an
+    abolished 12% on a document a customer receives. Importing and running the
+    module beats regexing it: `isValidGstRate` is what the invoice actually
+    calls, so this tests the thing rather than a lookalike.
+  */
+  const G = await import(join(ROOT, "src", "lib", "gst-rates.ts"));
+  const rates = G.GST_RATES.map((r) => r.v);
+
+  check("gst rates: 12% is gone", !rates.includes(12));
+  check("gst rates: 28% is gone", !rates.includes(28));
+  check("gst rates: 5% is offered", rates.includes(5));
+  check("gst rates: 18% is offered", rates.includes(18));
+  check("gst rates: the 40% demerit rate is offered", rates.includes(40));
+  check("gst rates: 3% bullion/jewellery is offered", rates.includes(3));
+  check("gst rates: 0.25% rough diamonds is offered", rates.includes(0.25));
+
+  check("isValidGstRate accepts a real slab", G.isValidGstRate(18) === true);
+  check("isValidGstRate rejects the abolished 12%", G.isValidGstRate(12) === false);
+  check("isValidGstRate rejects the abolished 28%", G.isValidGstRate(28) === false);
+  check("...and 12% gets a warning that says why", /abolished/.test(G.gstRateWarning(12) ?? ""));
+  check("...and 28% too", /abolished/.test(G.gstRateWarning(28) ?? ""));
+  check("a valid rate produces no warning", G.gstRateWarning(5) === null);
+  check("a negative rate is refused", G.gstRateWarning(-5) !== null);
+
+  console.log("\n  The document surfaces must warn, not just the calculator");
+  for (const f of ["invoice-generator.tsx", "quote-builder.tsx"]) {
+    check(`${f} validates the GST rate`, /gstRateWarning/.test(read(f)));
+  }
+  check("gst-calc uses the shared table", /from "@\/lib\/gst-rates"/.test(read("gst-calc.tsx")));
+  check("gst-calc shows its vintage on screen", /\{RATES_AS_OF\}/.test(read("gst-calc.tsx")));
+
+  console.log("\n  GST late fee — the cap is turnover-linked, not flat");
+  {
+    /*
+      The cap was a flat ₹10,000 for everyone, with no turnover input, so the
+      correct figure was not even computable. Worst for the smallest filer: a
+      nil return a year late showed ₹7,300 against a true ₹500.
+    */
+    const lf = read("gst-latefee.tsx");
+    check("a nil return caps at ₹500", /NIL_CAP\s*=\s*500/.test(lf));
+    check("the ₹1.5cr band caps at ₹2,000", /cap:\s*2_000/.test(lf));
+    check("the ₹5cr band caps at ₹5,000", /cap:\s*5_000/.test(lf));
+    check("the top band caps at ₹10,000", /cap:\s*10_000/.test(lf));
+    check("turnover is an input, so the cap is knowable", /TURNOVER_BANDS/.test(lf) && /setBand/.test(lf));
+    check("the flat 10,000-for-everyone cap is gone", !/Math\.min\(rawFee,\s*10000\)/.test(lf));
+    check("it declares an as-of date", /RATES_AS_OF/.test(lf));
+  }
 
   const page = readPage("gst/page.tsx");
   check("gst page: no 12% slab card", !/slab:\s*"12%"/.test(page));

@@ -4,6 +4,7 @@ import { saveInvoice, type SavedInvoice } from "@/lib/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Printer, Save, Check, Loader2, AlertCircle } from "lucide-react";
+import { gstRateWarning } from "@/lib/gst-rates";
 
 type Item = { id: string; desc: string; qty: number; rate: number; gst: number };
 const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -126,15 +127,26 @@ export function InvoiceGenerator({ saved = [] }: { saved?: SavedInvoice[] }) {
       </div>
 
       <div className="space-y-2">
-        {items.map((it) => (
-          <div key={it.id} className="flex items-center gap-2">
-            <input className={I + " flex-1"} value={it.desc} onChange={(e) => upd(it.id, "desc", e.target.value)} />
-            <input className={I + " w-16"} type="number" value={it.qty} onChange={(e) => upd(it.id, "qty", e.target.value)} title="Qty" />
-            <input className={I + " w-24"} type="number" value={it.rate} onChange={(e) => upd(it.id, "rate", e.target.value)} title="Rate" />
-            <input className={I + " w-16"} type="number" value={it.gst} onChange={(e) => upd(it.id, "gst", e.target.value)} title="GST %" />
-            <button onClick={() => del(it.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-4 w-4" /></button>
-          </div>
-        ))}
+        {items.map((it, n) => {
+          /* Free entry, but say so when the rate is not a current slab. A hard
+             dropdown would block reissuing an old invoice; silence lets someone
+             put an abolished 12% on a document a customer receives. */
+          const warn = gstRateWarning(Number(it.gst));
+          return (
+            <div key={it.id} className="space-y-1">
+              <div className="flex items-center gap-2">
+                {/* title= is not an accessible name for a screen reader; these
+                    four inputs were announced as "edit text" and nothing else. */}
+                <input aria-label={`Item ${n + 1} description`} className={I + " flex-1"} value={it.desc} onChange={(e) => upd(it.id, "desc", e.target.value)} />
+                <input aria-label={`Item ${n + 1} quantity`} className={I + " w-16"} type="number" value={it.qty} onChange={(e) => upd(it.id, "qty", e.target.value)} title="Qty" />
+                <input aria-label={`Item ${n + 1} rate`} className={I + " w-24"} type="number" value={it.rate} onChange={(e) => upd(it.id, "rate", e.target.value)} title="Rate" />
+                <input aria-label={`Item ${n + 1} GST percent`} aria-invalid={warn ? true : undefined} className={I + " w-16" + (warn ? " border-warning" : "")} type="number" value={it.gst} onChange={(e) => upd(it.id, "gst", e.target.value)} title="GST %" />
+                <button aria-label={`Remove item ${n + 1}`} onClick={() => del(it.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-4 w-4" /></button>
+              </div>
+              {warn && <p className="text-xs text-warning pl-1">{warn}</p>}
+            </div>
+          );
+        })}
         <Button variant="outline" size="sm" onClick={add}><Plus className="h-4 w-4" /> Add item</Button>
       </div>
 

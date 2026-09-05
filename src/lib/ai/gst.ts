@@ -119,7 +119,17 @@ export async function analyzeGst(text: string): Promise<GstAnalysis | null> {
   else signals.push({ label: "No cash GST due", tone: "good", detail: `ITC covers your output tax — nothing to pay in cash.` });
   if (itcCarryForward > 0) signals.push({ label: "ITC carried forward", tone: "info", detail: `${inr(itcCarryForward)} of unused input credit carries to next period.` });
   if (itcUtilPct != null && itcUtilPct < 40 && totalTax > 0) signals.push({ label: "Low ITC utilisation", tone: "warn", detail: `Only ${itcUtilPct}% of output tax is offset by ITC — check you've claimed all eligible credit.` });
-  if (effectiveRatePct != null && effectiveRatePct > 18.5) signals.push({ label: "High effective rate", tone: "warn", detail: `Output tax is ${effectiveRatePct}% of turnover — verify the rate mix and exempt supplies.` });
+  /*
+    The threshold sits above the 18% standard rate, not below the 40% demerit
+    one. GST 2.0 added a 40% slab (tobacco, aerated drinks, luxury vehicles), so
+    a threshold of 18.5 fired "High effective rate" at every single seller in
+    those categories, every period, correctly charging the statutory rate. A
+    warning that is always on for a whole industry is noise, and teaches the
+    user to ignore the panel. 40.5 still catches the real case this is for:
+    an effective rate above the highest slab means the arithmetic is wrong.
+  */
+  if (effectiveRatePct != null && effectiveRatePct > 40.5) signals.push({ label: "Effective rate above the top slab", tone: "warn", detail: `Output tax is ${effectiveRatePct}% of turnover, which is above the 40% maximum — check the turnover and tax figures.` });
+  else if (effectiveRatePct != null && effectiveRatePct > 18.5) signals.push({ label: "High effective rate", tone: "info", detail: `Output tax is ${effectiveRatePct}% of turnover — expected if you sell at the 40% demerit rate, otherwise verify the rate mix and exempt supplies.` });
   if (!gstin) signals.push({ label: "GSTIN missing", tone: "warn", detail: "No GSTIN found — make sure the correct one is on the return before filing." });
 
   const summaryMd = `## GST summary — ${period}${gstin ? ` · ${gstin}` : ""}

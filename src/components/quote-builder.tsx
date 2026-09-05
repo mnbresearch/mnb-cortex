@@ -4,6 +4,7 @@ import { saveQuote } from "@/lib/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Printer, Save, Check, Loader2, AlertCircle } from "lucide-react";
+import { gstRateWarning } from "@/lib/gst-rates";
 
 type Item = { id: string; desc: string; qty: number; rate: number };
 const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -92,8 +93,11 @@ export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
         <input className={I} value={meta.no} onChange={(e) => setMeta({ ...meta, no: e.target.value })} placeholder="Quote #" />
         <input className={I} type="date" value={meta.date} onChange={(e) => setMeta({ ...meta, date: e.target.value })} />
         <label className="text-sm text-muted-foreground flex items-center gap-1">Valid <input className={I + " w-16"} type="number" value={meta.validity} onChange={(e) => setMeta({ ...meta, validity: Number(e.target.value) })} /> days</label>
-        <label className="text-sm text-muted-foreground flex items-center gap-1">GST <input className={I + " w-16"} type="number" value={gst} onChange={(e) => setGst(Number(e.target.value))} /> %</label>
+        <label className="text-sm text-muted-foreground flex items-center gap-1">GST <input aria-label="GST percent" aria-invalid={gstRateWarning(gst) ? true : undefined} className={I + " w-16" + (gstRateWarning(gst) ? " border-warning" : "")} type="number" value={gst} onChange={(e) => setGst(Number(e.target.value))} /> %</label>
       </div>
+      {/* A quote becomes an invoice. Catching an abolished slab here is cheaper
+          than catching it after the customer has accepted the price. */}
+      {gstRateWarning(gst) && <p className="text-xs text-warning">{gstRateWarning(gst)}</p>}
       <div className="space-y-2">
         {items.map((it) => (
           <div key={it.id} className="flex items-center gap-2">
