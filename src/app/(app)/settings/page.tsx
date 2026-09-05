@@ -3,6 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { AiInstructionsPanel } from "@/components/ai-instructions-panel";
 import { hasRole } from "@/lib/roles";
+import { DeleteWorkspace } from "@/components/delete-workspace";
 import { Card } from "@/components/ui/card";
 import { Field, ActionForm } from "@/components/forms";
 import { getOrgProfile, getUserAndOrg } from "@/lib/data";
@@ -20,6 +21,7 @@ export default async function Settings() {
   // admin action. Read is open — people should be able to see why the AI
   // behaves the way it does.
   const canEditAi = await hasRole("admin");
+  const isOwner = await hasRole("owner");
   const { user } = await getUserAndOrg();
   const profile = await getOrgProfile();
   const demoPresent = await hasDemoData();
@@ -114,6 +116,22 @@ export default async function Settings() {
                 </div>
               </div>
             </Section>
+
+            {/*
+              Erasure. Owner only — the component enforces it again server-side,
+              but there is no reason to show a destructive control to someone
+              who cannot use it.
+
+              This exists because /privacy and the landing FAQ both promised
+              "export or delete your data anytime" and only export was real.
+              Under the DPDP Act erasure is a statutory right, so the promise
+              created the obligation whether or not the button existed.
+            */}
+            {isOwner && (
+              <Section title="Danger zone" desc="Deleting a workspace cannot be undone.">
+                <DeleteWorkspace orgName={String(profile?.name || "this workspace")} />
+              </Section>
+            )}
           </>
         )}
       </PageShell>

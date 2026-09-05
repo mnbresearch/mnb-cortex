@@ -1,30 +1,33 @@
-# MNB Cortex — The AI COO for SMEs
+# MNB Cortex — early warning for Indian SMEs
 
-An AI Operating System that helps business owners run their company by **asking**, not by opening spreadsheets. Cortex observes your business data, detects problems, predicts outcomes, recommends actions, and executes workflows — then explains everything in plain language.
+Cortex watches an Indian SME's receivables, payables, cash and statutory clocks, and tells the owner what is about to cost them money — before it does. It sits on top of Tally, Vyapar or Busy rather than replacing them: you upload the export, Cortex reads it.
 
-> Ask *"How is my business?"* and get a real answer.
+> The positioning is **early warning**, not "AI COO". See `src/lib/config.ts` for the plans and `scripts/test-positioning.mjs`, which fails the build if marketing copy drifts back.
 
-Built with **Next.js 14 (App Router) · TypeScript · Tailwind · Framer Motion · Supabase (Postgres + Auth + RLS) · Claude / OpenAI**. Deploys to **Vercel + Supabase**.
+
+Built with **Next.js 16 (App Router) · TypeScript · Tailwind · Supabase (Postgres + Auth + RLS) · Google Gemini**. Deploys to **Vercel + Supabase**.
 
 ---
 
-## What's inside — all 13 modules
+## What's inside
 
-| # | Module | What it does |
-|---|--------|--------------|
-| 1 | **Business Health Dashboard** | 12 live KPIs (revenue, profit, cash, inventory, risk, CSAT...) with green/yellow/red status, AI summary banner, alerts, recommended actions. |
-| 2 | **AI CEO Chat** | Natural-language interface. Reads all business data and answers "Why is profit falling?", "What should I buy?", "Should I enter Dubai?". |
-| 3 | **Sales Intelligence** | Region/product sales, funnel, conversion, AOV, churn risk + AI actions (quotations, emails, WhatsApp campaigns). |
-| 4 | **Finance Intelligence** | P&L, margins, cash runway, receivables ageing, EBITDA + AI actions (invoices, MIS, reminders). |
-| 5 | **Production Intelligence** | OEE by machine, downtime, reject rate, yield + maintenance & manpower actions. |
-| 6 | **Inventory Intelligence** | Stockout prediction, dead stock, reorder, supplier performance + AI-drafted POs. |
-| 7 | **HR Intelligence** | Attrition risk radar, performance, overtime + JD/resume/interview actions. |
-| 8 | **Market Intelligence** | AI market scans: size, growth, competitor map, entry barriers, recommendation. |
-| 9 | **Strategy Consultant** | McKinsey-style issue trees, SWOT, frameworks, sequenced roadmap with KPIs. |
-| 10 | **Document Intelligence** | Upload PDF/Excel/Word/contracts -> summarize, extract, flag risks. |
-| 11 | **Meeting Assistant** | Meet/Zoom/Teams transcription -> MOM + auto-assigned action items. |
-| 12 | **Workflow Automation** | Scheduled/event workflows that execute (digests, auto-reorder, reminders). |
-| 13 | **Admin & Permissions** | Team roles (owner/admin/manager/analyst/viewer) and integrations. |
+130 module pages, 438 agent definitions and 28 calculators. Rather than list them
+here — where the list goes stale the moment someone adds a page — the sources of
+truth are:
+
+| Question | Where the answer actually lives |
+|---|---|
+| What modules exist? | `src/lib/nav.ts` (127 nav entries; `NAV.filter(n => n.calc)` are the calculators) |
+| What agents exist? | `src/lib/agents/catalog.ts` — `agentCount()` |
+| What do the plans include? | `src/lib/config.ts` — `PLANS[].features`, pinned by `scripts/test-positioning.mjs` and `scripts/test-legal.mjs` |
+| Which integrations really sync? | `src/lib/sync/index.ts` — `CONNECTORS`. Four: Shopify, Razorpay, Stripe, Google Sheets. The 62-entry catalogue in `src/lib/integrations.ts` is a credential vault, not 62 syncs. |
+| What is genuinely wired vs aspirational? | `SETUP.md`, which is the honest document |
+
+**The load-bearing parts**, the ones worth understanding first: the MSME 43B(h)
+exposure engine (`src/lib/msme.ts` + `cortex_msme_exposure`), the collections
+engine (`src/lib/collections/`), the metrics aggregation layer
+(`src/lib/metrics.ts`), credit metering (`src/lib/credits.ts`) and the tenancy
+model (`supabase/migrations/2026_tenancy.sql`).
 
 Dark + light mode, fully responsive (desktop sidebar + mobile bottom nav), animated.
 
@@ -45,7 +48,7 @@ The app runs **in demo mode out of the box** — every screen is alive with real
 ### 1. Create the Supabase project & database
 1. Create a project at supabase.com.
 2. Open **SQL Editor** and run these three files **in order**:
-   1. `supabase/schema.sql` — all tables for the 13 modules
+   1. `supabase/schema.sql` — the base tables
    2. `supabase/rls.sql` — Row-Level Security (multi-tenant isolation) + auto-create org on signup
    3. `supabase/seed.sql` — demo data + a reusable `seed_demo_data(org_id)` function
 3. In **Authentication -> Providers**, enable **Email** (magic link) and optionally **Google**.
@@ -112,11 +115,22 @@ After a user signs up, run in the Supabase SQL editor (or wire a button):
 
 ---
 
-## Extending the "magic" (clean seams already in place)
-- **Integrations** (Tally, Zoho, Shopify, Salesforce, WhatsApp, bank/GST) — add connectors that write into existing tables; UI + AI pick them up automatically.
-- **RAG / vector search** — enable `pgvector` and embed documents/meetings.
-- **Agentic execution** (LangGraph/MCP) — the Workflow module models triggers/steps; back them with Supabase Edge Functions or a worker to actually send emails/POs.
-- **Forecasting** — swap heuristic insights for model-driven predictions per module.
+## Known gaps
+
+Kept here deliberately, and kept honest — this list is read by people deciding
+whether to trust the rest of the repo, so an out-of-date one is worse than none.
+
+- **Sync connectors** — four are live. Tally, Zoho and the other 58 catalogue
+  entries store credentials and sync nothing. File import covers Tally, Vyapar
+  and Busy exports, which is what the Watch plan actually promises.
+- **White-label** — `organizations.logo_url` is captured and read by nothing;
+  `renderBrandedEmail()` takes no org parameter. Per-org accent colour works.
+- **Enterprise SSO** — no SAML/OIDC. Supabase Google sign-in only. Sell on
+  request, per `SETUP.md`.
+- **Practice credit pooling** — credits are per workspace; there is no
+  cross-org aggregation.
+- **RAG / vector search** — `pgvector` is not enabled; Cortex Memory is
+  keyword-recalled, not embedded.
 
 ---
 

@@ -1,5 +1,18 @@
 "use client";
 import Link from "next/link";
+
+/*
+  The CTA says "Get started", not "Start free".
+
+  TRIAL_DAYS and TRIAL_CREDITS are both 0 and a new workspace is created with no
+  credits, so a visitor who signs up on the strength of "Start free" cannot
+  actually run anything — which is the misleading-advertisement pattern the
+  Consumer Protection Act 2019 is aimed at, and which /refund and /terms already
+  contradicted by stating plainly that there is no free trial.
+
+  The genuinely free thing is the Business Health Check, which needs no card and
+  no account. Point at that when you want to say "free".
+*/
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { Logo } from "@/components/logo";
@@ -29,7 +42,15 @@ export function PublicHeader() {
         <div className="flex items-center justify-between px-5 lg:px-10 h-16">
           <Link href="/" className="flex items-center gap-2.5" aria-label="MNB Cortex home">
             <Logo size={32} />
-            <span className="font-semibold tracking-tight">MNB Cortex<sup className="text-[9px] align-super ml-0.5 opacity-60">®</sup></span>
+            {/*
+              TM, not (R). Section 107 of the Trade Marks Act 1999 makes it an offence
+              to represent a mark as REGISTERED when it is not — punishable by up to
+              three years. There is no registration on file for this mark. TM asserts
+              common-law rights and carries no such condition, so it says everything
+              we are entitled to say. Change this back only against a registration
+              certificate number.
+            */}
+            <span className="font-semibold tracking-tight">MNB Cortex<sup className="text-[9px] align-super ml-0.5 opacity-60">&trade;</sup></span>
           </Link>
           <nav className="hidden md:flex items-center gap-8 text-sm">
             {NAV.map((n) => (
@@ -40,7 +61,7 @@ export function PublicHeader() {
             <Link href="/login" className="hidden sm:inline text-sm link-sweep text-muted-foreground hover:text-foreground">Sign in</Link>
             <Magnetic>
               <Link href="/login" className="hidden sm:inline-flex items-center gap-1.5 rounded-full btn-ink px-5 h-10 text-sm font-medium">
-                Start free <ArrowUpRight className="h-4 w-4" />
+                Get started <ArrowUpRight className="h-4 w-4" />
               </Link>
             </Magnetic>
             <button onClick={() => setOpen(true)} className="md:hidden h-10 w-10 grid place-items-center rounded-full border" aria-label="Open menu"><Menu className="h-5 w-5" /></button>
@@ -59,7 +80,7 @@ export function PublicHeader() {
             {NAV.map((n) => (
               <Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="font-display display-3 py-1 tracking-tightest hover:opacity-60 transition-opacity">{n.label}</Link>
             ))}
-            <Link href="/login" onClick={() => setOpen(false)} className="font-display display-3 py-1 tracking-tightest text-primary">Start free →</Link>
+            <Link href="/login" onClick={() => setOpen(false)} className="font-display display-3 py-1 tracking-tightest text-primary">Get started →</Link>
           </nav>
           <div className="px-6 pb-8 text-sm text-background/60">contact@mnbresearch.com · +91 97114 88480</div>
         </div>

@@ -33,7 +33,7 @@ const FAQS = [
 */
 const STATS = [
   { to: 45, suffix: "-day", label: "MSME clock, watched" },
-  { to: 7, suffix: "", label: "statutory deadlines tracked" },
+  { to: 19, suffix: "", label: "statutory deadlines tracked" },
   { to: 1, suffix: "", label: "email a week — that's it" },
   { to: 3, suffix: " min", label: "to your first warning" },
 ];
@@ -56,8 +56,8 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
       { icon: LayoutDashboard, name: "Business Health Dashboard", d: "Every KPI on one page, with a live Cortex Score." },
       { icon: Landmark, name: "Bank Statement Intelligence", d: "Upload a statement → real cashflow, trends, recurring spend, runway." },
       { icon: ReceiptText, name: "GST Return Reader", d: "Turnover, tax split, ITC utilisation & net payable in seconds." },
-      { icon: CalendarClock, name: "13-week Cash Flow", d: "Rolling runway with an out-of-cash early warning." },
-      { icon: Database, name: "Import & Data Explorer", d: "CSV, Excel or Google Sheets — then query it all." },
+      { icon: CalendarClock, name: "13-week Cash Flow", d: "Rolling runway you can model, seeded from your ledger." },
+      { icon: Database, name: "Import & Data Explorer", d: "CSV or a shared Google Sheet — then query it all." },
       { icon: Gauge, name: "Benchmarks & Risk Radar", d: "See where you stand and what threatens you." },
     ],
   },
@@ -68,8 +68,8 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
       { icon: Telescope, name: "Cortex Deep Dive", d: "Diagnose → decide → draft the first action, in three passes." },
       { icon: LineChart, name: "Forecasting & Scenarios", d: "90-day forecast with interactive what-ifs." },
       { icon: Brain, name: "Strategy Consultant", d: "SWOT, growth levers and a prioritised plan." },
-      { icon: FileBarChart, name: "Executive Reports", d: "Board-ready reviews, exportable to PDF." },
-      { icon: Calculator, name: "50+ Business Calculators", d: "Margins, GST, payroll, valuation, ratios & more." },
+      { icon: FileBarChart, name: "Executive Reports", d: "Board-ready reviews you can print or save as PDF." },
+      { icon: Calculator, name: "28 Business Calculators", d: "Margins, GST, payroll, valuation, ratios & more." },
     ],
   },
   {
@@ -77,17 +77,17 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
     items: [
       { icon: Megaphone, name: "AI Outreach", d: "Drafts reminders & follow-ups; you approve, it sends." },
       { icon: Sparkles, name: "Marketing Studio", d: "Full campaign kits — copy, posts and emails in one click." },
-      { icon: Bot, name: "380+ AI Agents", d: "A 7-department AI workforce across 25 Indian industries." },
+      { icon: Bot, name: "438 AI Agents", d: "A 7-department AI workforce across 27 Indian industries." },
       { icon: Workflow, name: "Workflows & Approvals", d: "Automate the busywork with a human in the loop." },
-      { icon: Radio, name: "WhatsApp Broadcast", d: "Personalised broadcasts, ready to send." },
+      { icon: Radio, name: "WhatsApp Broadcast", d: "Personalised messages, ready for you to send." },
       { icon: Cpu, name: "AI Autopilot", d: "Runs a daily analysis and briefs you each morning." },
     ],
   },
   {
     label: "Grow & get found",
     items: [
-      { icon: Radar, name: "AI Visibility (AEO)", d: "See if ChatGPT & Gemini recommend you — and fix it." },
-      { icon: KanbanSquare, name: "Pipeline + Lead Scoring", d: "An AI-ranked pipeline that tells you who to chase." },
+      { icon: Radar, name: "AI Visibility (AEO)", d: "See whether Gemini recommends you — and fix it." },
+      { icon: KanbanSquare, name: "Pipeline + Lead Scoring", d: "A scored pipeline that tells you who to chase." },
       { icon: UserMinus, name: "Churn Predictor", d: "Spot at-risk customers before they leave." },
       { icon: BadgeIndianRupee, name: "Pricing Optimizer", d: "Find the price your market will bear." },
       { icon: Target, name: "Sales Targets & Funnel", d: "Plan targets and fix the leaky funnel." },
@@ -101,14 +101,14 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
       { icon: Receipt, name: "GST & Compliance", d: "Filing calendar, ITC set-off and GST invoicing." },
       { icon: Banknote, name: "Payroll & CTC", d: "Take-home, EPF/ESI, gratuity and appraisals." },
       { icon: ScrollText, name: "Contract Review", d: "AI reads a contract and flags the real risks." },
-      { icon: Plug, name: "62 Integrations + API", d: "Tally, Zoho, Razorpay, Shopify and more." },
+      { icon: Plug, name: "Public API + 4 live syncs", d: "Shopify, Razorpay, Stripe, Sheets — plus Tally & Vyapar file imports." },
       { icon: ShieldCheck, name: "Security & RLS", d: "Row-level isolation, encryption, export anytime." },
     ],
   },
 ];
 
 const CAPS = [
-  { n: "01", name: "Cortex Workforce", blurb: "A 7-department AI org chart — 290+ runnable agents." },
+  { n: "01", name: "Cortex Workforce", blurb: "A 7-department AI org chart — 326 runnable text agents." },
   { n: "02", name: "Cortex Memory", blurb: "A permanent second brain that grounds every answer." },
   { n: "03", name: "Finance & Money", blurb: "Dashboards, cash flow, GST, payroll, ratios." },
   { n: "04", name: "Strategy & Advisory", blurb: "Ask Cortex, forecasts, board decks, playbooks." },
@@ -145,17 +145,30 @@ const COMPARE: [string, string, string, string, string][] = [
   ["Plain-language answers", "y", "n", "n", "y"],
 ];
 
-const TESTI = [
-  { q: "I finally stopped living in spreadsheets. I just ask.", n: "Manufacturing owner" },
-  { q: "It caught a stockout nine days early and drafted the PO.", n: "Distributor" },
-  { q: "Feels like having a COO I can actually afford.", n: "D2C founder" },
-];
+/*
+  EMPTY, DELIBERATELY.
+
+  This held three quotes — including "It caught a stockout nine days early and
+  drafted the PO", a specific performance claim — attributed to "Distributor",
+  "Manufacturing owner" and "D2C founder". There is no CMS, no table and no
+  source file behind them: they were written, not collected.
+
+  An invented testimonial is an unfair trade practice under the Consumer
+  Protection Act 2019, and the ASCI guidelines require testimonials to be
+  genuine and substantiable. It is also the single easiest thing for a
+  competitor to report.
+
+  Put real ones here when there are real ones — name, business, and something
+  they actually said. Until then the section does not render, which is a
+  smaller loss than it looks: nobody believes anonymous praise anyway.
+*/
+const TESTI: { q: string; n: string }[] = [];
 
 const MOATS = [
   { n: "01", name: "A memory that compounds", claim: "Every workspace builds its own permanent brain — decisions, numbers, context, preferences — that gets sharper every single day. A rival starting today starts from zero for each customer; your Cortex only deepens. The data moat is private, per-customer, and grows on its own." },
-  { n: "02", name: "One brain, not 130 point tools", claim: "Finance, sales, ops and 380+ agents all reason over the same memory and your live data, so the whole company thinks together. You can bolt a chatbot onto a dashboard — you can't retrofit a unified operating brain." },
+  { n: "02", name: "One brain, not 130 point tools", claim: "Finance, sales, ops and 438 agents draw on the same memory and your live data, so answers stay consistent across the company. You can bolt a chatbot onto a dashboard — you can't retrofit a unified operating brain." },
   { n: "03", name: "It acts, not just answers", claim: "Cortex reads your real bank statements and GST returns, drafts the reminder, PO or plan, and — with one approval — sends it. Advice is a commodity. A system that closes the loop across every function is not." },
-  { n: "04", name: "Vertical depth × the AI-search era", claim: "Tuned to 25 Indian industries and built to get you recommended by ChatGPT, Gemini and Perplexity. Generic tools can't match the depth, and latecomers can't catch a head start that compounds." },
+  { n: "04", name: "Vertical depth × the AI-search era", claim: "Tuned to 27 Indian industries and built to get you recommended when buyers ask an AI assistant. Generic tools can't match the depth, and latecomers can't catch a head start that compounds." },
 ];
 
 const mark = (v: string) =>
@@ -226,7 +239,13 @@ export default function Home() {
           <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-2 text-xs text-muted-foreground">
             <span>★ Shark Tank India featured</span>
             <span>◆ DPIIT-recognised startup</span>
-            <span>◇ 10,000+ businesses served</span>
+            {/*
+              WAS "10,000+ businesses served", against MNB Research's own published
+              figure of 50+ in config.ts — a 200x overstatement shipping in the same
+              repo as the number it contradicts. Replaced with something true and
+              checkable, which is also the only kind of proof worth putting here.
+            */}
+            <span>◇ Built for Indian SMEs · GST, TDS and 43B(h) native</span>
           </div>
         </div>
       </section>
@@ -392,7 +411,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="04">Everything you get</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Not one AI trick.<br />An operating system for your business.</h2>
-          <p className="mt-4 text-muted-foreground max-w-2xl">120+ modules, 380+ agents and a permanent memory — organised into the jobs you actually need done. Here&rsquo;s the whole thing.</p>
+          <p className="mt-4 text-muted-foreground max-w-2xl">130 modules, 438 agents and a permanent memory — organised into the jobs you actually need done. Here&rsquo;s the whole thing.</p>
 
           <div className="mt-14 space-y-14">
             {FEATURES.map((g) => (
@@ -522,7 +541,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------- TESTIMONIALS ---------- */}
+      {/* ---------- TESTIMONIALS ----------
+           Hidden until there are real ones. Without this guard, emptying TESTI
+           leaves a bare "In the field" heading over nothing, which looks more
+           broken than having no section at all. */}
+      {TESTI.length > 0 && (
       <section className="px-5 lg:px-10 py-24 border-t">
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="10">In the field</SectionLabel>
@@ -538,6 +561,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      )}
 
       {/* ---------- FAQ ---------- */}
       <section className="px-5 lg:px-10 py-24 border-t">

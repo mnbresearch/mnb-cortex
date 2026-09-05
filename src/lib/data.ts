@@ -416,15 +416,41 @@ export async function getReportLinks() {
 }
 
 
-/** Webhook endpoints for the current workspace. The signing secret is included
- *  because only an admin can reach /developers, and they need it to verify. */
+/**
+ * Webhook endpoints for the current workspace.
+ *
+ * THE SECRET IS NOW ADMIN-ONLY, AND THE OLD COMMENT WAS WRONG.
+ *
+ * It used to read: "the signing secret is included because only an admin can
+ * reach /developers". Nothing enforced that — the page had no role guard at
+ * all — and this function uses serviceClient(), which bypasses RLS, with
+ * select("*"). So any member, including a `viewer`, was handed
+ * webhook_endpoints.secret.
+ *
+ * That secret is the HMAC key we sign outbound payloads with. Whoever holds it
+ * can forge a request that the customer's own receiving system will verify as
+ * genuinely from Cortex — the signature is the only thing distinguishing a real
+ * event from an invented one.
+ *
+ * Two changes: the role is actually checked here rather than assumed of the
+ * caller, and the column list is explicit so a future column cannot join the
+ * payload by accident the way `secret` did.
+ */
 export async function getWebhooks() {
   const { orgId } = await getUserAndOrg();
-  if (!orgId) return { rows: [] as any[], live: false };
+  if (!orgId) return { rows: [] as any[], live: false, canSeeSecret: false };
   const svc = serviceClient();
-  if (!svc) return { rows: [], live: false };
-  const { data } = await svc.from("webhook_endpoints").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
-  return { rows: (data as any[]) || [], live: true };
+  if (!svc) return { rows: [], live: false, canSeeSecret: false };
+
+  const { hasRole } = await import("@/lib/roles");
+  const canSeeSecret = await hasRole("admin");
+
+  /* Every column of webhook_endpoints EXCEPT `secret`, listed explicitly so a
+     column added later cannot join the payload the way `secret` did. */
+  const cols = "id, org_id, url, events, is_active, label, created_at, last_ok_at, last_error, fail_count"
+    + (canSeeSecret ? ", secret" : "");
+  const { data } = await svc.from("webhook_endpoints").select(cols).eq("org_id", orgId).order("created_at", { ascending: false });
+  return { rows: (data as any[]) || [], live: true, canSeeSecret };
 }
 
 export async function getWebhookDeliveries(limit = 15) {

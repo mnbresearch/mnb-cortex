@@ -20,7 +20,7 @@ const LOOP = [
 
 const DOMAINS: { n: string; name: string; blurb: string; tools: string[] }[] = [
   { n: "01", name: "Cortex Workforce", blurb: "A complete AI org chart you can actually run — like hiring a whole team on day one.",
-    tools: ["7 departments, one brain", "290+ runnable agents", "Sales → Back Office coverage", "Industry packs (e.g. jewellery sketch → spec)", "Every agent uses your memory", "Audit engine marks a deploy-first roadmap", "Cortex builds custom agents for you", "Image agents via your Gemini key"] },
+    tools: ["7 departments, one brain", "326 runnable text agents", "Sales → Back Office coverage", "Industry packs (e.g. jewellery sketch → spec)", "Ask Cortex and Deep Dive use your memory", "Audit engine marks a deploy-first roadmap", "Cortex builds custom agents for you", "Image agents via your Gemini key"] },
   { n: "02", name: "Cortex Memory", blurb: "A living, permanent memory of your business that grounds every answer.",
     tools: ["Long-term business memory", "Grounds every AI response", "Knowledge graph of people, customers & vendors", "A self-updating company profile", "Extract memories from any pasted text", "Teach Cortex from your real data", "Export your memory anytime (JSON / Markdown)"] },
   { n: "03", name: "Finance & Money", blurb: "A CFO-grade financial cockpit, tuned for Indian businesses.",
@@ -66,7 +66,7 @@ export default function Features() {
               a runnable workforce, a permanent memory, and 100+ tools that monitor, predict, recommend and act — together.
             </p>
             <div className="flex gap-3 lg:justify-end">
-              <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Start free <ArrowUpRight className="h-4 w-4" /></Link>
+              <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>
               <Link href="/pricing" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">See pricing</Link>
             </div>
           </div>

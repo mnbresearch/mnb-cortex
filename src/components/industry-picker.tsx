@@ -70,7 +70,7 @@ export function IndustryPicker() {
         <div className="bg-card p-6 lg:p-8 border-t flex flex-wrap items-center justify-between gap-4">
           <p className="text-sm lg:text-base max-w-xl"><span className="text-primary font-medium">The outcome:</span> {ind.outcome}</p>
           <Link href="/login" className="inline-flex items-center gap-1.5 rounded-full btn-ink px-5 h-11 text-sm font-medium shrink-0" data-cursor>
-            Start free for {ind.name.split(" ")[0].toLowerCase() === "any" ? "your business" : ind.name} <ArrowUpRight className="h-4 w-4" />
+            Get started for {ind.name.split(" ")[0].toLowerCase() === "any" ? "your business" : ind.name} <ArrowUpRight className="h-4 w-4" />
           </Link>
         </div>
       </div>

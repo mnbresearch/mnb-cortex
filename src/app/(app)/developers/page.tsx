@@ -9,9 +9,42 @@ import { Field, CollapsibleForm } from "@/components/forms";
 import { getApiKeys } from "@/lib/data";
 import { generateApiKey, deleteApiKey } from "@/lib/actions";
 import { KeyRound, Trash2, Terminal } from "lucide-react";
+import { hasRole } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 export default async function Developers() {
+  /*
+    ROLE GUARD. This page had none.
+
+    It renders API keys in plaintext and, until the fix in lib/data.ts, the
+    webhook HMAC signing secret — to any member, including a `viewer`. A viewer
+    is the role given to accountants, interns and (in Practice mode) clients,
+    and it exists specifically to deny writes. With the API key in hand they
+    could write through /api/v1/ingest, which authorises on the key alone;
+    with the signing secret they could forge events the customer's own systems
+    would verify as genuinely from Cortex.
+
+    lib/data.ts now enforces this independently, because a guard that lives
+    only in a page is one new page away from being missed.
+  */
+  if (!(await hasRole("admin"))) {
+    return (
+      <>
+        <Topbar title="Developers · API" subtitle="Push data in and pull insights out" />
+        <PageShell>
+          <Card className="p-6 text-sm max-w-2xl">
+            <div className="font-medium">API keys are visible to admins and owners only.</div>
+            <p className="text-muted-foreground mt-2 leading-6">
+              An API key can read and write everything in this workspace, and the webhook signing
+              secret can be used to forge messages that look like they came from Cortex — so both
+              are kept to the people who can already do those things. Ask an admin if you need one.
+            </p>
+          </Card>
+        </PageShell>
+      </>
+    );
+  }
+
   const hooks = await getWebhooks();
   const deliveries = await getWebhookDeliveries();
   const { rows, live } = await getApiKeys();

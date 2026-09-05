@@ -14,13 +14,28 @@ import { serviceClient } from "@/lib/supabase/server";
  * integrating has one scheme to learn, and it's the same one we ask of others.
  */
 
+/*
+  Every event here MUST have an emitter. Three of these did not —
+  `alert.created`, `invoice.overdue` and `subscription.expired` were selectable
+  in the developers UI and fired by nothing, so a customer could wire up an
+  integration against a promise and never learn it was inert.
+
+  `alert.created`  now fires from lib/metrics.ts when a rule breach opens an alert.
+  `invoice.overdue` now fires from lib/collections when an invoice first crosses
+                    its due date and becomes chaseable.
+  `subscription.expired` is REMOVED. Lapse is evaluated lazily by
+                    entitlement.ts rather than at a moment in time, so there is
+                    no single event to hang it on; advertising it would mean
+                    inventing a cron just to make a checkbox honest.
+
+  scripts/test-webhook-events.mjs fails if this list and the emitters diverge.
+*/
 export const WEBHOOK_EVENTS = [
   "metrics.recomputed",
   "alert.created",
   "workflow.completed",
   "invoice.overdue",
   "payment.succeeded",
-  "subscription.expired",
   "report.generated",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];

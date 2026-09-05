@@ -340,6 +340,26 @@ export async function prepareDrafts(orgId: string, businessName: string, limit =
     });
     if (msgErr) { skipped++; continue; }
     drafted++;
+
+    /*
+      `invoice.overdue` is offered in the webhook UI and had no emitter — a
+      customer could subscribe and wait forever. Here is the right place for
+      it: this is the moment the product first decides an invoice is past due
+      AND chaseable, so the event carries the same judgement the reminder does
+      rather than a bare date comparison a customer could make themselves.
+
+      Once per thread, on the FIRST reminder only. Firing on every attempt
+      would turn one late invoice into three identical webhooks.
+    */
+    if (c.attempts === 0) {
+      try {
+        const { emitQuietly } = await import("@/lib/webhooks");
+        emitQuietly(orgId, "invoice.overdue", {
+          invoice_id: c.invoiceId, invoice_no: c.invoiceNo, party: c.party,
+          amount: c.amount, due_date: c.dueDate, days_past_due: c.daysPastDue,
+        });
+      } catch { /* webhooks are best-effort; never block a draft */ }
+    }
   }
 
   return { drafted, skipped, reasons };

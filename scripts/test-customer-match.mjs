@@ -298,6 +298,32 @@ console.log("\nSAMPLE DATASET: the button promises to fill EVERY module");
   const demoOrg = "77777777-7777-7777-7777-777777777777";
   await db.query("insert into organizations (id,name) values ($1,$2)", [demoOrg, "Demo Co"]);
 
+  /*
+    A MEMBERSHIP, and a signed-in user.
+
+    seed_demo_data() is SECURITY DEFINER and takes the workspace as a parameter.
+    It used to check nothing at all, which meant anyone holding the public anon
+    key could rewrite a stranger's dashboard — see
+    2026_seed_rpc_lockdown.sql. It now requires the caller to be a member with
+    write rank, so this harness has to model a real owner seeding their OWN
+    workspace rather than an anonymous call into an arbitrary org id.
+
+    This test failed the moment that guard landed, which is the guard working:
+    the previous setup was only ever valid because the hole existed.
+  */
+  const demoUser = "88888888-8888-8888-8888-888888888888";
+  /*
+    Triggers off for this insert. 2026_signup_trigger.sql fires on auth.users to
+    provision a workspace for a brand-new signup — correct in production, wrong
+    here, where the workspace already exists and we only need the row the
+    memberships FK points at.
+  */
+  await db.exec("alter table auth.users disable trigger all");
+  await db.query("insert into auth.users (id,email) values ($1,'owner@demo.test')", [demoUser]);
+  await db.exec("alter table auth.users enable trigger all");
+  await db.query("insert into memberships (user_id,org_id,role) values ($1,$2,'owner')", [demoUser, demoOrg]);
+  await db.exec(`create or replace function auth.uid() returns uuid language sql stable as $fn$ select '${demoUser}'::uuid $fn$;`);
+
   let seeded = true;
   try {
     await db.query("select seed_demo_data($1::uuid)", [demoOrg]);

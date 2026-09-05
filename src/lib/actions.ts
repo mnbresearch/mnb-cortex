@@ -311,7 +311,9 @@ export async function saveArtifact(fd: FormData) {
 
 // ---- Workflows ----
 export async function addWorkflow(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg();
+  await requireCapability(orgId, "workflows", "Workflow automation");
+  const sb = createClient();
   const steps = str(fd.get("steps")).split(",").map((s) => s.trim()).filter(Boolean);
   const { error } = await sb.from("workflows").insert({
     org_id: orgId, name: str(fd.get("name")), trigger: str(fd.get("trigger")) || "manual",
@@ -805,6 +807,29 @@ export async function moveDeal(fd: FormData) {
 }
 
 // ---- API keys ----
+/**
+ * Plan gate for capabilities that credits do not meter.
+ *
+ * Most of what the upper tiers sell is AI work, and PLAN_CREDITS already limits
+ * that whatever the UI allows. The handful below are different — an API key or
+ * a webhook costs us nothing per use, so nothing stopped a ₹4,999 Watch
+ * workspace from using four of Watch Pro's six differentiators. planIncludes()
+ * existed in config.ts with exactly one call site.
+ *
+ * Gates CREATION only, never use. An integration built under an older or higher
+ * plan keeps running; cutting off a live webhook to enforce a price is how you
+ * turn a billing conversation into a churn event.
+ */
+async function requireCapability(orgId: string, cap: Parameters<typeof planIncludes>[1], what: string) {
+  const sb = createClient();
+  const { data } = await sb.from("organizations").select("plan").eq("id", orgId).maybeSingle();
+  if (!planIncludes(String((data as any)?.plan || ""), cap)) {
+    throw new Error(
+      `${what} is part of ${lowestPlanWith(cap)} and above. Anything you have already set up keeps working — upgrade under Billing to add more.`,
+    );
+  }
+}
+
 export async function generateApiKey(fd: FormData) {
   const { orgId } = await requireRole("admin"); const sb = createClient();
 
@@ -893,6 +918,7 @@ export async function revokeReportLink(fd: FormData) {
 
 export async function addWebhook(fd: FormData) {
   const { orgId } = await requireRole("admin");
+  await requireCapability(orgId, "webhooks", "Outbound webhooks");
   const url = str(fd.get("url"));
   if (!/^https:\/\/.+/i.test(url)) throw new Error("Enter an https:// URL — plain http isn't accepted for webhooks.");
   const label = str(fd.get("label"));
@@ -1505,7 +1531,16 @@ export async function deleteTask(fd: FormData) {
  * already runs after every write.
  */
 export async function saveAlertRule(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg();
+  /*
+    CUSTOM rules only. Every workspace gets the three default rules from
+    2026_default_alert_rules.sql, so Watch's "receivables, payables & cash —
+    watched daily" is delivered without this. What Watch Pro sells is "alert
+    rules YOU set", and that is what this guards. Gating the defaults instead
+    would have enforced the price list by breaking the cheaper plan's own bullet.
+  */
+  await requireCapability(orgId, "alert_rules", "Custom alert rules");
+  const sb = createClient();
   const metric_key = str(fd.get("metric_key"));
   const op = str(fd.get("op")) === ">" ? ">" : "<";
   const threshold = num(fd.get("threshold"));
@@ -1545,4 +1580,40 @@ export async function dismissAlert(fd: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath("/alerts");
   revalidatePath("/dashboard");
+}
+
+/**
+ * Delete this workspace and everything in it.
+ *
+ * The landing FAQ and /privacy both told customers they could "export or delete
+ * your data anytime". Export was real; deletion existed nowhere. Under the DPDP
+ * Act erasure is a statutory right, and a privacy policy stating it creates the
+ * obligation whether or not a button exists — so this is the button.
+ *
+ * All of the safety lives in lib/erasure.ts: owner-only, the workspace name
+ * must be typed back exactly, payments are anonymised rather than destroyed
+ * (they are tax records), and the caller is handed a full export first.
+ */
+export async function deleteWorkspace(fd: FormData): Promise<{ ok: boolean; error?: string; summary?: string }> {
+  const { eraseWorkspace } = await import("@/lib/erasure");
+  const r = await eraseWorkspace(str(fd.get("confirm")));
+  if (!r.ok) return { ok: false, error: r.error };
+
+  const rows = Object.values(r.deleted || {}).reduce((a, b) => a + b, 0);
+  const kept = Object.values(r.anonymised || {}).reduce((a, b) => a + b, 0);
+
+  /* No revalidatePath: the workspace this page belonged to no longer exists,
+     and re-rendering it would just 404 against a deleted org. The client
+     redirects to /login instead. */
+  return {
+    ok: true,
+    summary: `Deleted ${rows.toLocaleString("en-IN")} record${rows === 1 ? "" : "s"}.`
+      + (kept ? ` ${kept} payment record${kept === 1 ? "" : "s"} kept and anonymised, as required for tax.` : ""),
+  };
+}
+
+/** The pre-deletion export, so nobody deletes a workspace they still needed. */
+export async function exportWorkspaceJson(): Promise<{ ok: boolean; json?: string; error?: string }> {
+  const { exportBeforeErasure } = await import("@/lib/erasure");
+  return exportBeforeErasure();
 }

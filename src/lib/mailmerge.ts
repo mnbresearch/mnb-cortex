@@ -1,4 +1,5 @@
 import "server-only";
+import { signDestination } from "@/lib/track-link";
 
 export type Recipient = { name?: string; email: string; plan?: string; company?: string };
 
@@ -31,7 +32,9 @@ export function buildHtml(bodyText: string, opts: { origin: string; recipientId:
   const parts = esc(bodyText).split(/(https?:\/\/[^\s<]+)/g);
   const withLinks = parts.map((p) => {
     if (/^https?:\/\//.test(p)) {
-      const tracked = `${origin}/api/track/click?r=${encodeURIComponent(recipientId)}&u=${encodeURIComponent(p)}`;
+      /* Signed — see lib/track-link.ts. Without `s` the click endpoint sends
+         the reader to our homepage rather than following an unverified host. */
+      const tracked = `${origin}/api/track/click?r=${encodeURIComponent(recipientId)}&u=${encodeURIComponent(p)}&s=${signDestination(p)}`;
       return `<a href="${tracked}" style="color:#9A7B1F">${p}</a>`;
     }
     return p;

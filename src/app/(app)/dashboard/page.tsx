@@ -86,7 +86,7 @@ export default async function Dashboard() {
           </div>
         </Card>
 
-        {/* Guided command layer: turns 120+ modules into the few that matter now. */}
+        {/* Guided command layer: turns 130 modules into the few that matter now. */}
         <NextBestActions />
 
         {isReal && (resolveIndustry((profile as any)?.industry)

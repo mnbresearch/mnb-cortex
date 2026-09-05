@@ -35,7 +35,20 @@ const MAX_ORGS = 200;
 
 export type DeliveryResult = { orgs: number; sent: number; alerts: number };
 
-async function ownerEmail(svc: any, orgId: string): Promise<string | null> {
+/**
+ * The address a workspace's automated mail should go to.
+ *
+ * Exported because the workflow scheduler needs exactly this and was doing
+ * without: it called executeWorkflow() with no ownerEmail, so every `email`
+ * step in a SCHEDULED run short-circuited on "No owner email on file" while the
+ * same workflow run by hand worked fine. Every demo workflow the product ships
+ * ends in an email step, so "workflow automation on a schedule" failed silently
+ * every night for the canonical case.
+ *
+ * One implementation, not two — an owner-resolution rule that differs between
+ * two callers is one that is wrong in one of them.
+ */
+export async function ownerEmail(svc: any, orgId: string): Promise<string | null> {
   try {
     const { data: mems } = await svc.from("memberships")
       .select("user_id, role").eq("org_id", orgId).in("role", ["owner", "admin"]).limit(3);

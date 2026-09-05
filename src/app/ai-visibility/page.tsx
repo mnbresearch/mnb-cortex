@@ -60,7 +60,7 @@ export default function AiVisibility() {
           <h2 className="font-display display-3 tracking-tightest max-w-xl">AI Visibility is one tool. Cortex runs your whole company.</h2>
           <div className="flex gap-3">
             <Link href="/features" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">See all features</Link>
-            <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Start free <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
         </div>
       </section>

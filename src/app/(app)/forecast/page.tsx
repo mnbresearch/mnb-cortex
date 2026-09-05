@@ -5,7 +5,7 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AIPanel } from "@/components/ai-panel";
-import { ScenarioPlanner } from "@/components/scenario-planner";
+import { ScenarioPlanner, type ScenarioBaseline } from "@/components/scenario-planner";
 import { TrendingUp, Wallet, AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +17,44 @@ const drivers = [
   { label: "New SKU adoption", detail: "Premium-X mix rising each week", tone: "up" },
 ];
 
+/**
+ * The scenario baseline, from the workspace's own KPIs.
+ *
+ * scenario-planner.tsx carried four constants under a comment claiming they
+ * were "drawn from the live business snapshot" — ₹4.25 Cr monthly revenue, 12%
+ * margin, ₹1.89 Cr reserve. They were read from nothing, so every customer's
+ * what-ifs moved a business that does not exist. The misleading comment was the
+ * reason it survived: it told each reader the wiring was already there.
+ */
+async function scenarioBaseline(): Promise<ScenarioBaseline> {
+  try {
+    const { getMetrics } = await import("@/lib/data");
+    const m = await getMetrics();
+    const pick = (k: string) => {
+      const row = m.find((x) => x.metric_key === k);
+      const v = row ? Number(row.value) : NaN;
+      return Number.isFinite(v) ? v : null;
+    };
+    const revenue = pick("revenue");
+    const cash = pick("cash_balance");
+    /* Margin is a percentage KPI when we have it; 12% is a neutral placeholder
+       used only to make the sliders move, and the banner says the baseline is
+       unknown whenever revenue is missing. */
+    const marginPct = pick("gross_margin") ?? pick("net_profit");
+    return {
+      revenue,
+      margin: marginPct !== null && marginPct > 0 && marginPct < 100 ? marginPct / 100 : null,
+      cash,
+    };
+  } catch {
+    return { revenue: null, margin: null, cash: null };
+  }
+}
+
 export default async function Forecast() {
   const { orgId } = await getUserAndOrg();
   const signedIn = Boolean(orgId);
+  const baseline = await scenarioBaseline();
 
   return (
     <>
@@ -62,7 +97,7 @@ export default async function Forecast() {
           </Card>
         </div>
 
-        <ScenarioPlanner />
+        <ScenarioPlanner baseline={baseline} />
 
         <Section title="AI forecast" desc="A CFO-grade 90-day outlook grounded in your live numbers">
           <AIPanel mode="forecast" placeholder="Optional: focus the forecast (e.g. 'if we win the Dubai order' or 'cash only')" cta="Generate 90-day forecast" saveMode="strategy" />

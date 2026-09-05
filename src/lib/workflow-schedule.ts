@@ -1,4 +1,5 @@
 import "server-only";
+import { ownerEmail } from "@/lib/alert-delivery";
 import { serviceClient } from "@/lib/supabase/server";
 import { executeWorkflow } from "@/lib/workflows";
 
@@ -90,7 +91,18 @@ export async function runScheduledWorkflows(): Promise<ScheduleResult> {
         : [];
       if (!steps.filter(Boolean).length) continue;
 
-      const res = await executeWorkflow(wf.org_id, steps.filter(Boolean), { name: wf.name || "Scheduled workflow" });
+      /*
+        ownerEmail was missing here, and workflows.ts refuses an `email` step
+        without it ("No owner email on file"). Every workflow the product ships
+        as an example ends in an email step, so the scheduled path — the one
+        Watch Pro sells as "workflow automation on a schedule" — produced a
+        failed step every night while the manual Run button worked.
+      */
+      const to = await ownerEmail(svc, wf.org_id);
+      const res = await executeWorkflow(wf.org_id, steps.filter(Boolean), {
+        name: wf.name || "Scheduled workflow",
+        ownerEmail: to,
+      });
       res.ok ? ran++ : failed++;
 
       try {

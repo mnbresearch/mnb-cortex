@@ -46,7 +46,7 @@ const GROUPS: Group[] = [
       { href: "/act", name: "AI Outreach", icon: Megaphone, blurb: "Payment reminders, follow-ups and supplier notes.", you: "You approve; it sends by email (your domain) or WhatsApp.", cost: c("act") },
       { href: "/marketing", name: "Marketing Studio", icon: Sparkles, blurb: "Full campaign kits — copy, posts, emails.", you: "A launch-ready marketing pack in one click.", cost: c("marketing") },
       { href: "/broadcast", name: "WhatsApp Broadcast", icon: Radio, blurb: "Compose and personalise a broadcast.", you: "Ready-to-send wa.me messages for your list.", cost: c("broadcast") },
-      { href: "/agents", name: "AI Agents & Workforce", icon: Bot, blurb: "380+ department agents across 25 Indian industries.", you: "Run, approve, revise and export specialist work.", cost: null },
+      { href: "/agents", name: "AI Agents & Workforce", icon: Bot, blurb: "438 department agents across 27 Indian industries.", you: "Run, approve, revise and export specialist work.", cost: null },
     ],
   },
   {

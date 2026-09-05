@@ -10,6 +10,17 @@ create or replace function public.seed_demo_data(p_org uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare m int;
 begin
+-- SECURITY: this function is SECURITY DEFINER and takes the workspace as a
+-- PARAMETER, so definer rights bypass RLS and the org id comes from whoever is
+-- calling. Without the check below, anyone holding the public anon key — which
+-- ships in the browser bundle — could POST /rest/v1/rpc/seed_demo_data with a
+-- stranger's org uuid and overwrite their dashboard, invoices and ledger.
+-- That was live. See 2026_seed_rpc_lockdown.sql for the full write-up.
+-- It runs FIRST so a rejected call cannot delete anything on its way out.
+if p_org is null or coalesce(user_org_rank(p_org), 0) < 2 then
+  raise exception 'seed_demo_data: not a member of workspace %', p_org
+    using errcode = '42501';
+end if;
 -- SAFETY: every delete below is scoped to `and is_demo`, and every insert sets
 -- is_demo = true. Re-seeding therefore replaces the previous demo rows and
 -- leaves real data alone. Before this, seeding wiped the customer's own records
@@ -164,3 +175,9 @@ end $$;
 -- owner asks for it. To seed a specific org by hand:
 --
 --   select public.seed_demo_data('<org-uuid>');
+
+-- Postgres grants EXECUTE to PUBLIC on every new function, and both `anon` and
+-- `authenticated` are members of PUBLIC. The guard above is the real control,
+-- but there is no reason for `anon` to hold execute at all.
+revoke all on function public.seed_demo_data(uuid) from public, anon;
+grant execute on function public.seed_demo_data(uuid) to authenticated, service_role;

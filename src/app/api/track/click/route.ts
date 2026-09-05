@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabase/server";
+import { safeDestination } from "@/lib/track-link";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,11 +9,16 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const r = params.get("r");
-  const u = params.get("u") || "";
+  const u = params.get("u");
 
-  // Only follow http(s) destinations — never open javascript:/data: etc.
-  let dest = "https://mnb-cortex.vercel.app";
-  try { const parsed = new URL(u); if (parsed.protocol === "http:" || parsed.protocol === "https:") dest = parsed.toString(); } catch { /* keep default */ }
+  /*
+    The previous check allowed ANY http(s) host, which is an open redirect on an
+    unauthenticated endpoint sitting on the domain we ask customers to trust
+    with their bank statements. safeDestination() requires an HMAC signature for
+    anything off our own origin, and falls back to our homepage otherwise.
+    See lib/track-link.ts.
+  */
+  const dest = safeDestination(u, params.get("s"));
 
   if (r) {
     const sb = serviceClient();

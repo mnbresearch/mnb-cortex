@@ -230,7 +230,20 @@ check("still returns twelve buckets", e2.series.length, 12);
 console.log("\nAlert raising (the bug that shipped silently)");
 {
   const rule = "33333333-3333-3333-3333-333333333333";
-  await db.query("insert into alert_rules (id, org_id, metric_key, op, threshold) values ($1,$2,'cash','<',6)", [rule, org]);
+  /*
+    UPSERT, not INSERT. 2026_default_alert_rules.sql now seeds three rules on
+    every organizations insert — including `cash < 30` — so a raw insert here
+    collides on uniq_alert_rule (org_id, metric_key, op).
+
+    Upserting is also what the app does: saveAlertRule() has always used
+    `on conflict do update`, precisely so that a customer setting their own
+    threshold REPLACES the default rather than failing. Matching that here keeps
+    the test exercising the real write path instead of one nothing uses.
+  */
+  await db.query(
+    `insert into alert_rules (id, org_id, metric_key, op, threshold) values ($1,$2,'cash','<',6)
+     on conflict (org_id, metric_key, op) do update set id = excluded.id, threshold = excluded.threshold`,
+    [rule, org]);
 
   let upsertFailed = false;
   try {

@@ -43,7 +43,7 @@ export default function Terms() {
       <UL>
         <li><strong>Watch</strong> — ₹4,999/month or ₹49,990/year · 4,600 AI credits/month</li>
         <li><strong>Watch Pro</strong> — ₹14,999/month or ₹1,49,990/year · 13,850 AI credits/month</li>
-        <li><strong>Practice</strong> — ₹29,999/month or ₹2,99,990/year · 27,750 AI credits/month, pooled across up to 25 client workspaces</li>
+        <li><strong>Practice</strong> — ₹29,999/month or ₹2,99,990/year · 27,750 AI credits/month, and access to up to 25 client workspaces from the Practice console</li>
         <li><strong>Command</strong> — ₹39,999/month or ₹3,99,990/year · 37,000 AI credits/month</li>
         <li><strong>Enterprise</strong> — custom pricing · 1,50,000 AI credits/month on a fair-use basis (contact us)</li>
       </UL>

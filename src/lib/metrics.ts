@@ -551,6 +551,19 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
         if (error && !/duplicate key|23505/i.test(error.message || "")) {
           console.error("[metrics] could not raise alert:", error.message);
         }
+        /*
+          `alert.created` is offered in the webhook UI and had no emitter
+          anywhere, so a customer could subscribe to the single most useful
+          event in the product and wait forever. Emitted only when the insert
+          actually succeeded — a duplicate-key race means the alert was already
+          open and already announced, and firing again would double-notify.
+        */
+        if (!error) {
+          emitQuietly(orgId, "alert.created", {
+            rule_id: b.rule.id, metric_key: b.rule.metric_key,
+            severity: b.severity, title: b.title, body: b.body,
+          });
+        }
       }
 
       // A rule that is no longer breached closes its own alert, so the bell

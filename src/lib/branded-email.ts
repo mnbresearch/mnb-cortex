@@ -1,4 +1,5 @@
 import "server-only";
+import { signDestination } from "@/lib/track-link";
 
 /* ============================================================
    BRANDING — edit this block only. Everything else is generic.
@@ -58,7 +59,11 @@ export function renderBrandedEmail(bodyText: string, opts?: { origin?: string; t
   // Body: escape → linkify (tracked if token) → line breaks.
   const linked = esc(bodyText).split(/(https?:\/\/[^\s<]+)/g).map((p) => {
     if (/^https?:\/\//.test(p)) {
-      const href = token && origin ? `${origin}/api/t/c/${encodeURIComponent(token)}?u=${encodeURIComponent(p)}` : p;
+      /* Signed: /api/t/c now refuses an off-origin destination without a valid
+         HMAC, because an unsigned `u` was an open redirect on our own domain. */
+      const href = token && origin
+        ? `${origin}/api/t/c/${encodeURIComponent(token)}?u=${encodeURIComponent(p)}&s=${signDestination(p)}`
+        : p;
       return `<a href="${href}" style="color:${BRAND.COLOR_TO};text-decoration:underline">${p}</a>`;
     }
     return p;

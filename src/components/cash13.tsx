@@ -7,10 +7,34 @@ import { inr, mdToHtml } from "@/lib/utils";
 
 const WEEKS = 13;
 
-export function Cash13() {
-  const [opening, setOpening] = useState(1_890_000);
-  const [inflow, setInflow] = useState<number[]>(Array.from({ length: WEEKS }, () => 950_000));
-  const [outflow, setOutflow] = useState<number[]>(Array.from({ length: WEEKS }, () => 880_000));
+/**
+ * `seed` is the workspace's OWN position, resolved on the server.
+ *
+ * This component used to start from three hardcoded constants — ₹18,90,000
+ * opening, thirteen weeks of ₹9,50,000 in and ₹8,80,000 out — and read nothing
+ * from the database at all. So the page sold as "see the crunch coming while
+ * you can still act", on a plan bullet reading "rolling runway with an
+ * out-of-cash early warning", modelled a business that does not exist. Every
+ * figure, including the low point and the week it fell, described a fiction
+ * identical for every customer.
+ *
+ * It is still a MODELLING tool — the whole point is to type in what you expect
+ * — but it now starts from the customer's real cash balance and their real
+ * weekly receipts and payments, and says plainly when it could not.
+ */
+export type Cash13Seed = {
+  opening: number | null;
+  weeklyIn: number | null;
+  weeklyOut: number | null;
+  /** What the numbers were derived from, shown to the user. */
+  basis: string | null;
+};
+
+export function Cash13({ seed }: { seed?: Cash13Seed } = {}) {
+  const real = Boolean(seed && (seed.opening !== null || seed.weeklyIn !== null));
+  const [opening, setOpening] = useState(seed?.opening ?? 0);
+  const [inflow, setInflow] = useState<number[]>(Array.from({ length: WEEKS }, () => seed?.weeklyIn ?? 0));
+  const [outflow, setOutflow] = useState<number[]>(Array.from({ length: WEEKS }, () => seed?.weeklyOut ?? 0));
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
 
   const m = useMemo(() => {
@@ -41,6 +65,19 @@ export function Cash13() {
   const I = "rounded-md border bg-background px-1.5 h-8 text-xs outline-none focus:ring-2 focus:ring-ring w-full text-right";
 
   return (
+    <>
+    {/* Say where the numbers came from — or that they came from nowhere. */}
+    {real ? (
+      <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground mb-3">
+        Seeded from {seed!.basis}. Adjust any week to model what you actually expect —
+        nothing here is saved.
+      </div>
+    ) : (
+      <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground mb-3">
+        Cortex doesn&rsquo;t have your cash position yet, so this starts empty. Upload a bank
+        statement or import your invoices and it will seed itself from your real numbers.
+      </div>
+    )}
     <Card className="p-5 space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -110,6 +147,7 @@ export function Cash13() {
       <Button onClick={analyse} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "How do I protect cash? (ask the AI CFO)"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
     </Card>
+    </>
   );
 }
 

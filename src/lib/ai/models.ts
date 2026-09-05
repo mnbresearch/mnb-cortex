@@ -26,13 +26,28 @@ export function geminiTextModels(): string[] {
   // paid a wasted round-trip before falling through. That is the cost of
   // choosing a model from a pricing page instead of testing it.
   //
-  // Output price per 1M tokens, which dominates for this workload:
-  //   gemini-3.7-flash  $3.75  (promotional until 31 Dec 2026, then $7.50)
-  //   gemini-3.6-flash  $3.75  (same)
-  //   gemini-3.5-flash  $9.00  (known-good on this key — the safety net)
+  // Output price per 1M tokens, which dominates for this workload. Re-checked
+  // against ai.google.dev/gemini-api/docs/pricing on 5 Sep 2026:
+  //   gemini-3.8-flash  $0.75 in / $3.75 out  (promotional until 31 Dec 2026)
+  //   gemini-3.7-flash  $0.75 / $3.75         (same promotional pricing)
+  //   gemini-3.6-flash  $0.75 / $3.75         (same)
+  //   gemini-3.5-flash  $1.50 / $9.00         (known-good on this key — the safety net)
+  //
+  // 3.8 leads because it is Google's newest STABLE Flash and is priced
+  // identically to 3.7 and 3.6 — strictly better output at the same cost, so
+  // there is no trade to make. It was missing from this list simply because it
+  // shipped after the list was written, which is the failure mode CANDIDATES
+  // exists to survive in the other direction.
+  //
+  // ALL THREE PROMOTIONAL PRICES DOUBLE ON 1 JANUARY 2027 ($1.50 / $7.50).
+  // scripts/test-margins.mjs already costs the product at the post-promotional
+  // rate, so the 85% floor holds through that date without a repricing — do not
+  // "optimise" the margin model back onto the discounted figure.
+  //
   // /api/health names whichever one actually answers, so a silent fallback to
   // the expensive end is visible rather than invisible.
   const fallbacks = [
+    "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",

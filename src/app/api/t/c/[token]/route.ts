@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabase/server";
+import { safeDestination } from "@/lib/track-link";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,11 +8,14 @@ export const dynamic = "force-dynamic";
 /** Click-tracking redirect: /api/t/c/<token>?u=<encoded-url> */
 export async function GET(req: Request, { params }: { params: { token: string } }) {
   const token = params.token || "";
-  const u = new URL(req.url).searchParams.get("u") || "";
+  const sp = new URL(req.url).searchParams;
 
-  // Only follow http(s) — never javascript:/data: (open-redirect protection).
-  let dest = "https://mnb-cortex.vercel.app";
-  try { const p = new URL(u); if (p.protocol === "http:" || p.protocol === "https:") dest = p.toString(); } catch { /* keep default */ }
+  /*
+    Was an open redirect: any http(s) host was followed, on an unauthenticated
+    endpoint under our own domain. safeDestination() requires an HMAC signature
+    for off-origin destinations. See lib/track-link.ts.
+  */
+  const dest = safeDestination(sp.get("u"), sp.get("s"));
 
   if (token) {
     const sb = serviceClient();

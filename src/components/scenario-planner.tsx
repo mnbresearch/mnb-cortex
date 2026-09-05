@@ -6,11 +6,25 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, TrendingUp, TrendingDown, RotateCcw } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
 
-// Baseline drawn from the live business snapshot (monthly).
-const BASE_REVENUE = 42_500_000; // ₹4.25 Cr
-const BASE_MARGIN = 0.12; // 12% net
-const BASE_COSTS = BASE_REVENUE * (1 - BASE_MARGIN); // ₹3.74 Cr
-const CASH_RESERVE = 18_900_000; // working capital ₹1.89 Cr
+/**
+ * The baseline comes from the WORKSPACE, not from constants.
+ *
+ * The comment here used to read "Baseline drawn from the live business
+ * snapshot" above four hardcoded numbers — ₹4.25 Cr revenue, 12% margin,
+ * ₹1.89 Cr reserve — read from nothing. That comment was the worst part: it
+ * told the next reader the wiring existed, so nobody checked. Every customer
+ * moved sliders against the same fictional business, and the page is sold as
+ * "interactive what-ifs".
+ *
+ * The fallbacks below are only used when the workspace has no figures at all,
+ * and in that case the UI says so instead of presenting them as the customer's.
+ */
+export type ScenarioBaseline = {
+  revenue: number | null;   // monthly
+  margin: number | null;    // 0..1
+  cash: number | null;
+};
+
 const COST_PER_HIRE = 60_000; // fully-loaded monthly
 
 function Slider({ label, value, min, max, step, unit, onChange }: {
@@ -29,7 +43,17 @@ function Slider({ label, value, min, max, step, unit, onChange }: {
   );
 }
 
-export function ScenarioPlanner() {
+export function ScenarioPlanner({ baseline }: { baseline?: ScenarioBaseline } = {}) {
+  /*
+    `real` drives the banner. Without it a workspace with no data silently
+    models zero, which reads as "your business makes nothing" rather than
+    "we do not know yet".
+  */
+  const real = Boolean(baseline && baseline.revenue !== null);
+  const BASE_REVENUE = baseline?.revenue ?? 0;
+  const BASE_MARGIN = baseline?.margin ?? 0.12;
+  const BASE_COSTS = BASE_REVENUE * (1 - BASE_MARGIN);
+  const CASH_RESERVE = baseline?.cash ?? 0;
   const [g, setG] = useState(5);     // revenue growth %/mo
   const [p, setP] = useState(0);     // price change %
   const [c, setC] = useState(3);     // cost inflation %
@@ -66,6 +90,18 @@ export function ScenarioPlanner() {
   const marginUp = m.margin >= BASE_MARGIN;
 
   return (
+    <>
+    {real ? (
+      <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground mb-3">
+        Baseline: <b>{inr(BASE_REVENUE)}</b> monthly revenue at <b>{Math.round(BASE_MARGIN * 100)}%</b> net,
+        from your own figures. Move the sliders to model against it.
+      </div>
+    ) : (
+      <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground mb-3">
+        Cortex doesn&rsquo;t have your revenue yet, so there is nothing to model against. Import your
+        sales or upload a bank statement and this page will run scenarios on your real baseline.
+      </div>
+    )}
     <Card className="p-5 space-y-5">
       <div className="flex items-center justify-between">
         <div>
@@ -104,6 +140,7 @@ export function ScenarioPlanner() {
       <Button onClick={stressTest} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Stress-testing…" : "Stress-test this with Cortex"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
     </Card>
+    </>
   );
 }
 
