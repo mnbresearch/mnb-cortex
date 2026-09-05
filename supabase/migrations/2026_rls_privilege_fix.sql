@@ -105,8 +105,21 @@ begin
     using (user_org_rank(org_id) >= 4)
     with check (user_org_rank(org_id) >= 4 and (lower(role::text) <> 'owner' or user_org_rank(org_id) >= 5));
 
+  /*
+    An admin must not be able to remove an OWNER.
+
+    The insert and update policies above stop an admin promoting themselves to
+    owner — but delete was left open, so the same admin could simply DELETE the
+    owner's membership row instead. That leaves a workspace with no owner at
+    all, and owner is the only role that can delete a workspace or change
+    billing. Same escalation this migration exists to close, reached by removing
+    someone rather than promoting yourself.
+  */
   create policy "admins remove members" on memberships for delete
-    using (user_org_rank(org_id) >= 4);
+    using (
+      user_org_rank(org_id) >= 4
+      and (lower(role::text) <> 'owner' or user_org_rank(org_id) >= 5)
+    );
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -188,4 +201,102 @@ begin
   drop policy if exists "anon insert leads" on leads;
   create policy "anon insert leads" on leads for insert to anon
     with check (org_id is null);
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 4. A workspace must never be left without an owner
+-- ---------------------------------------------------------------------------
+
+/*
+  RLS decides row by row and cannot count what would remain, so "you may not
+  remove the last owner" is not expressible as a policy. It needs a trigger.
+
+  Two ways to reach an ownerless workspace, both real:
+
+    an admin deletes the owner's membership   (closed by the policy above)
+    the owner demotes or removes THEMSELVES   (nothing stopped this)
+
+  The second is the likelier accident, and it is unrecoverable through the
+  product: owner is the only role that can change billing or delete the
+  workspace, so an ownerless workspace needs us to intervene in the database.
+
+  Deliberately allows the case that looks similar but is fine — removing an
+  owner while ANOTHER owner remains — because a two-owner business removing a
+  departing founder is a normal Tuesday.
+*/
+create or replace function cortex_guard_last_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  remaining int;
+  target_org uuid;
+begin
+  target_org := coalesce(old.org_id, new.org_id);
+
+  /* Only care when an owner is being removed or demoted. */
+  if lower(old.role::text) <> 'owner' then return coalesce(new, old); end if;
+  if tg_op = 'UPDATE' and lower(new.role::text) = 'owner' then return new; end if;
+
+  select count(*) into remaining
+    from memberships
+   where org_id = target_org
+     and lower(role::text) = 'owner'
+     and user_id <> old.user_id;
+
+  if remaining = 0 then
+    raise exception
+      'A workspace must have at least one owner. Make someone else an owner first, or delete the workspace from Settings.'
+      using errcode = '23514';
+  end if;
+
+  return coalesce(new, old);
+end $$;
+
+drop trigger if exists trg_guard_last_owner on memberships;
+create trigger trg_guard_last_owner
+  before update or delete on memberships
+  for each row execute function cortex_guard_last_owner();
+
+/*
+  Erasure deletes every membership before dropping the org row, which would trip
+  the trigger above on the last owner. lib/erasure.ts is service-role, and
+  session_replication_role is not available to us on hosted Postgres — so the
+  trigger explicitly stands down when the ORG ITSELF is already going away.
+*/
+create or replace function cortex_guard_last_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  remaining int;
+  target_org uuid;
+begin
+  target_org := coalesce(old.org_id, new.org_id);
+
+  /* The workspace is being deleted outright — there is no owner to protect. */
+  if not exists (select 1 from organizations where id = target_org) then
+    return coalesce(new, old);
+  end if;
+
+  if lower(old.role::text) <> 'owner' then return coalesce(new, old); end if;
+  if tg_op = 'UPDATE' and lower(new.role::text) = 'owner' then return new; end if;
+
+  select count(*) into remaining
+    from memberships
+   where org_id = target_org
+     and lower(role::text) = 'owner'
+     and user_id <> old.user_id;
+
+  if remaining = 0 then
+    raise exception
+      'A workspace must have at least one owner. Make someone else an owner first, or delete the workspace from Settings.'
+      using errcode = '23514';
+  end if;
+
+  return coalesce(new, old);
 end $$;

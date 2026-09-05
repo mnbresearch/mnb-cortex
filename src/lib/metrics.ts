@@ -249,7 +249,18 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   const revTrend = buckets.slice(-7).map((b) => +(revenueByMonth.get(b) || 0).toFixed(0));
 
   // ---- Receivables / payables from invoices ----------------------------------
-  const today = new Date().toISOString().slice(0, 10);
+  /*
+    The IST calendar date, not the UTC one.
+
+    Vercel runs in UTC, so between 00:00 and 05:30 IST `toISOString()` still
+    returns YESTERDAY. metric_snapshots is keyed on (org_id, metric_key, as_of)
+    and upserted, so an early-morning recompute would overwrite the previous
+    IST day's row — losing the figure the owner actually went home with, which
+    is the one the week-over-week comparison in lib/movement.ts is built on.
+  */
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
   let overdueRecv = 0, openRecv = 0, openPay = 0;
   if (agg) { overdueRecv = agg.overdueRecv; openRecv = agg.openRecv; openPay = agg.openPay; } else
   for (const inv of invoices) {

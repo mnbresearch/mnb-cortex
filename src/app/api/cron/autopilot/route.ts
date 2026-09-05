@@ -93,11 +93,35 @@ export async function GET(req: Request) {
           and deterministic: every workspace is reached within ceil(n/200)
           days, and one that has never run goes to the front.
         */
-        const { data: on } = await svcC.from("collection_policies")
-          .select("org_id").eq("enabled", true)
-          .order("last_swept_at", { ascending: true, nullsFirst: true })
-          .limit(200);
-        for (const row of ((on as any[]) || [])) {
+        /*
+          DEPLOY ORDER. `last_swept_at` is added by
+          2026_collections_whatsapp.sql, which ships in the same commit as this
+          code — and Vercel deploys before anyone runs a migration. Ordering by
+          a column PostgREST does not know about fails the whole SELECT, `data`
+          comes back null, the loop runs zero times, and collections silently
+          stops for every customer with no error anywhere.
+
+          So: try the ordered read, and fall back to the unordered one if the
+          column is not there yet. The fallback is the old behaviour (an
+          arbitrary 200), which is worse than the rotation but infinitely better
+          than nothing, and it repairs itself the moment the migration lands.
+        */
+        let on: any[] | null = null;
+        {
+          const ordered = await svcC.from("collection_policies")
+            .select("org_id").eq("enabled", true)
+            .order("last_swept_at", { ascending: true, nullsFirst: true })
+            .limit(200);
+          if (ordered.error) {
+            const plain = await svcC.from("collection_policies")
+              .select("org_id").eq("enabled", true).limit(200);
+            on = (plain.data as any[]) || [];
+            console.warn("[cron] last_swept_at missing — run 2026_collections_whatsapp.sql; sweeping without rotation");
+          } else {
+            on = (ordered.data as any[]) || [];
+          }
+        }
+        for (const row of (on || [])) {
           const oid = String(row.org_id);
           try {
             const { data: o } = await svcC.from("organizations").select("name").eq("id", oid).single();

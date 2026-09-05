@@ -132,6 +132,42 @@ show("admin invites an OWNER",    await as(AD,"authenticated","insert into invit
 show("owner invites an owner",    await as(OW,"authenticated","insert into invites (org_id,email,role,status) values ($1,'c@y.z','owner','pending')",[org]), false);
 show("admin reads the API key",   await as(AD,"authenticated","select key from api_keys where org_id=$1",[org]), false, true);
 show("anon submits a public lead (org_id null)", await as("","anon","insert into leads (org_id,name) values (null,'web form')"), false);
-console.log(bad ? `\n>>> ${bad} WRONG` : "\n>>> all correct: 4 holes reproduced before, all closed after, legitimate use unaffected");
+/* ------------------------------------------------------------------
+   A workspace must never be left without an owner.
+
+   The insert/update policies stop an admin PROMOTING themselves to owner, but
+   delete was left open — so the same admin could simply remove the owner's
+   membership row instead, reaching the identical end state by a different
+   verb. And nothing stopped the owner demoting themselves. Owner is the only
+   role that can change billing or delete the workspace, so either route
+   produces something only we can repair, from the database.
+*/
+console.log("\nOwnership cannot be orphaned:");
+/*
+  A DELETE filtered out by RLS removes zero rows and does NOT throw, so
+  "the statement succeeded" says nothing. The only question that matters is
+  whether the owner is still there afterwards — assert on the outcome, not on
+  the absence of an error.
+*/
+{
+  await as(AD,"authenticated","delete from memberships where user_id=$1 and org_id=$2",[OW,org]);
+  const survived = Number((await db.query(
+    "select count(*) c from memberships where user_id=$1 and org_id=$2 and role='owner'",[OW,org])).rows[0].c) === 1;
+  if (!survived) bad++;
+  console.log(`  ${survived?"  ok  ":"  !!  "} ${survived?"blocked":"ALLOWED"}: admin deletes the OWNER's membership${survived?"":"   <-- WRONG"}`);
+}
+show("the sole owner demotes themselves",
+  await as(OW,"authenticated","update memberships set role='viewer' where user_id=$1 and org_id=$2",[OW,org]), true);
+show("the sole owner deletes their own membership",
+  await as(OW,"authenticated","delete from memberships where user_id=$1 and org_id=$2",[OW,org]), true);
+
+/* …but a SECOND owner makes both legitimate again — a departing co-founder is
+   a normal Tuesday, and blocking that would be the over-correction. */
+const OW2="66666666-6666-6666-6666-666666666666";
+await db.query("insert into memberships (user_id,org_id,role) values ($1,$2,'owner')",[OW2,org]);
+show("with two owners, one can step down",
+  await as(OW,"authenticated","update memberships set role='admin' where user_id=$1 and org_id=$2",[OW,org]), false);
+
+console.log(bad ? `\n>>> ${bad} WRONG` : "\n>>> all correct: holes reproduced before, closed after, legitimate use unaffected, ownership cannot be orphaned");
 process.exit(bad?1:0);
 })().catch(e=>{console.error("ERR",e.message);process.exit(1)});

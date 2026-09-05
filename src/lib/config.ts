@@ -333,7 +333,9 @@ export function seatLimit(plan: string | null | undefined): number {
  */
 export type Capability = "api" | "webhooks" | "whitelabel" | "workflows" | "alert_rules" | "memory";
 
-const PLAN_CAPABILITIES: Record<string, Capability[]> = {
+/* Exported so scripts/test-capabilities.mjs can check it against PLAN_SEATS —
+   two maps keyed by plan id that drift apart is how `premium` lost everything. */
+export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
   watch: [],
   watchpro: ["api", "webhooks", "workflows", "alert_rules", "memory"],
   practice: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
@@ -350,6 +352,21 @@ const PLAN_CAPABILITIES: Record<string, Capability[]> = {
   growth: ["api", "webhooks", "workflows", "alert_rules"],
   business: ["api", "webhooks", "workflows", "alert_rules", "memory"],
   aicoo: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
+
+  /*
+    `solo` and `premium` are NOT in PLANS or LEGACY_PLANS, but they are real:
+    superadmin-actions.ts accepts both (its own LEGACY_PLANS list), and
+    provisionBusinesses() hardcodes `plan: "premium"` for the portfolio
+    workspaces. PLAN_SEATS already knows them; this map did not, so every
+    premium workspace — including our own — would have been refused API keys,
+    webhooks, workflows and alert rules the moment gating went in.
+
+    That is the failure this whole map is shaped to avoid: refusing someone who
+    paid is worse than letting someone through who did not. Mirrored from
+    PLAN_SEATS, where premium sits at 20 seats alongside `business`.
+  */
+  solo: [],
+  premium: ["api", "webhooks", "workflows", "alert_rules", "memory"],
 };
 
 export function planIncludes(plan: string | null | undefined, cap: Capability): boolean {

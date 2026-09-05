@@ -52,7 +52,7 @@ try {
   console.error("Could not compile src/lib/config.ts\n" + (e.stdout || e).toString().slice(0, 800));
   process.exit(1);
 }
-const { planIncludes, lowestPlanWith, PLANS } = await import(pathToFileURL(join(out, "config.js")).href);
+const { planIncludes, lowestPlanWith, PLANS, PLAN_SEATS, PLAN_CAPABILITIES } = await import(pathToFileURL(join(out, "config.js")).href);
 
 /* ------------------------------------------------- the matrix itself */
 
@@ -93,6 +93,28 @@ for (const [plan, cap] of [
 }
 check(!planIncludes("starter", "api"),
   "…but Starter, which never included the API, still does not");
+
+/*
+  EVERY plan PLAN_SEATS recognises must appear in PLAN_CAPABILITIES.
+
+  PLAN_SEATS is the older, more complete map — it already carried `solo` and
+  `premium`, which are written by superadmin-actions.ts (provisionBusinesses
+  hardcodes `plan: "premium"`) but appear in neither PLANS nor LEGACY_PLANS.
+  PLAN_CAPABILITIES was written from PLANS alone and missed them, so every
+  premium workspace — our own portfolio included — would have been refused API
+  keys, webhooks, workflows and alert rules the moment gating shipped.
+
+  Two maps keyed by the same thing WILL drift. This is the check that catches it.
+*/
+{
+  const seatPlans = Object.keys(PLAN_SEATS);
+  check(seatPlans.length >= 8, "parse: read PLAN_SEATS", `${seatPlans.length}`);
+  for (const id of seatPlans) {
+    check(PLAN_CAPABILITIES[id] !== undefined,
+      `plan "${id}" appears in PLAN_CAPABILITIES as well as PLAN_SEATS`,
+      "a plan known to one map and not the other silently loses every capability — add it explicitly, even if the answer is []");
+  }
+}
 
 /* The upgrade prompt must name a plan that actually has the capability. */
 for (const cap of ["api", "webhooks", "whitelabel", "workflows", "memory"]) {

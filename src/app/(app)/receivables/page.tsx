@@ -1,11 +1,42 @@
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { ReceivablesAging } from "@/components/receivables-aging";
-import { getInvoices, getSalesOrders } from "@/lib/data";
+import { getSalesOrders, getUserAndOrg } from "@/lib/data";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 const n = (v: any) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+
+/** How many invoices we will read. Above this the page says so. */
+const CEILING = 5000;
+
+/**
+ * Every OPEN receivable, not the most recent 200.
+ *
+ * getInvoices() goes through fetchRows(), which selects * with `.limit(200)`
+ * ordered by created_at — fine for a list, wrong for a total. Reading four
+ * columns instead of * makes a much larger ceiling cheap, and filtering in
+ * Postgres rather than in JS means the 5,000 budget is spent on invoices that
+ * actually count rather than on paid ones.
+ */
+async function allOpenReceivables(): Promise<{ rows: any[]; live: boolean; capped: boolean }> {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return { rows: [], live: false, capped: false };
+  try {
+    const sb = createClient();
+    const { data } = await sb.from("invoices")
+      .select("id, party, amount, due_date")
+      .eq("org_id", orgId).eq("type", "receivable")
+      .or("status.is.null,status.not.ilike.paid")
+      .order("amount", { ascending: false })
+      .limit(CEILING);
+    const rows = (data as any[]) || [];
+    return { rows, live: true, capped: rows.length >= CEILING };
+  } catch {
+    return { rows: [], live: false, capped: false };
+  }
+}
 
 /**
  * Whole days between a due date and today. NEGATIVE means not yet due.
@@ -31,10 +62,17 @@ export default async function Receivables() {
     sat in the database untouched. Every number on it (total, DSO, priority
     list) described a fiction.
   */
-  const { rows, live } = await getInvoices();
+  /*
+    NOT getInvoices(). fetchRows() caps at 200 rows ordered by created_at, so a
+    workspace with 300 open invoices would still get an understated headline
+    total — the same bug as the old slice(0, 60), just at a higher number, and
+    the previous version of this comment wrongly claimed it was fixed.
+
+    This reads only the four columns the page needs, with a ceiling high enough
+    that the truncation notice below is honest about it when reached.
+  */
+  const { rows, live } = await allOpenReceivables();
   const open = (live ? rows : [])
-    .filter((i) => String(i.type || "receivable").toLowerCase() !== "payable")
-    .filter((i) => String(i.status || "").toLowerCase() !== "paid")
     .map((i) => ({
       id: String(i.id),
       client: String(i.party || "Unnamed"),
@@ -43,7 +81,7 @@ export default async function Receivables() {
     }));
 
   /*
-    The totals are computed over EVERY open invoice, then the table is
+    The totals are computed over every open invoice we read, then the table is
     truncated — not the other way round.
 
     It used to slice to the largest 60 and let the component total what it was

@@ -715,7 +715,14 @@ export async function inviteMember(fd: FormData) {
   revalidatePath("/admin");
 }
 export async function cancelInvite(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  /*
+    ADMIN, matching the RLS policy. It was requireWriteOrg() (analyst), while
+    "tenant delete invites" now requires rank >= 4 — so for a manager or analyst
+    the delete matched zero rows, PostgREST returned success, and the X button
+    appeared to work while the invite stayed. A silent no-op is worse than a
+    refusal; at least a refusal can be read.
+  */
+  const { orgId } = await requireRole("admin"); const sb = createClient();
   await sb.from("invites").delete().eq("org_id", orgId).eq("id", str(fd.get("id")));
   revalidatePath("/admin");
 }
@@ -1157,7 +1164,26 @@ export async function saveCollectionPolicy(fd: FormData): Promise<{ ok: boolean;
   };
 
   const sb = createClient();
-  const { error } = await sb.from("collection_policies").upsert(patch, { onConflict: "org_id" });
+  let { error } = await sb.from("collection_policies").upsert(patch, { onConflict: "org_id" });
+
+  /*
+    DEPLOY ORDER. whatsapp_template and whatsapp_lang arrive with
+    2026_collections_whatsapp.sql, and Vercel deploys before anyone runs a
+    migration — so between the two, this upsert fails on an unknown column and
+    the owner cannot save ANY collections setting, including switching the
+    whole thing off. Retry without the two new fields so the rest of the form
+    keeps working, and say what is missing rather than showing a raw PostgREST
+    error about a column nobody has heard of.
+  */
+  if (error && /whatsapp_template|whatsapp_lang|column/i.test(error.message || "")) {
+    const { whatsapp_template, whatsapp_lang, ...rest } = patch as any;
+    const retry = await sb.from("collection_policies").upsert(rest, { onConflict: "org_id" });
+    if (retry.error) return { ok: false, error: retry.error.message };
+    error = null as any;
+    if (waTemplate) {
+      return { ok: true, error: "Saved — but the WhatsApp template could not be stored yet. Run the 2026_collections_whatsapp migration." };
+    }
+  }
   if (error) return { ok: false, error: error.message };
   await logActivity(orgId, "crud", `Updated collections settings (${patch.enabled ? "on" : "off"})`);
   revalidatePath("/collections");
@@ -1558,7 +1584,19 @@ export async function saveAlertRule(fd: FormData) {
 }
 
 export async function deleteAlertRule(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg();
+  /*
+    Gated to MATCH saveAlertRule, not left open.
+
+    Without this a Watch workspace could delete the three rules seeded by
+    2026_default_alert_rules.sql — the whole mechanism behind that plan's
+    "receivables, payables and cash, watched daily" — and then hit the upsell
+    error trying to recreate them. An asymmetric gate, where creating is
+    restricted and deleting is not, is how a customer permanently destroys
+    something they are entitled to and cannot get back without support.
+  */
+  await requireCapability(orgId, "alert_rules", "Changing alert rules");
+  const sb = createClient();
   const id = str(fd.get("id"));
   const { error } = await sb.from("alert_rules").delete().eq("id", id).eq("org_id", orgId);
   if (error) throw new Error(error.message);
@@ -1599,16 +1637,20 @@ export async function deleteWorkspace(fd: FormData): Promise<{ ok: boolean; erro
   const r = await eraseWorkspace(str(fd.get("confirm")));
   if (!r.ok) return { ok: false, error: r.error };
 
-  const rows = Object.values(r.deleted || {}).reduce((a, b) => a + b, 0);
-  const kept = Object.values(r.anonymised || {}).reduce((a, b) => a + b, 0);
+  const rows = Object.values(r.deleted || {}).reduce((a: number, b: number) => a + b, 0);
+  const kept = Object.values(r.retained || {}).reduce((a: number, b: number) => a + b, 0);
 
   /* No revalidatePath: the workspace this page belonged to no longer exists,
      and re-rendering it would just 404 against a deleted org. The client
      redirects to /login instead. */
   return {
     ok: true,
+    /* `r.error` is set when the workspace IS gone but some tables reported
+       errors and were removed by cascade instead. Say so rather than reporting
+       a clean run — the customer may want to tell us. */
+    error: r.error,
     summary: `Deleted ${rows.toLocaleString("en-IN")} record${rows === 1 ? "" : "s"}.`
-      + (kept ? ` ${kept} payment record${kept === 1 ? "" : "s"} kept and anonymised, as required for tax.` : ""),
+      + (kept ? ` ${kept} payment and subscription record${kept === 1 ? "" : "s"} retained without your identity, as tax law requires.` : ""),
   };
 }
 
