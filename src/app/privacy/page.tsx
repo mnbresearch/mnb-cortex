@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function Privacy() {
   return (
-    <LegalShell title="Privacy Policy" subtitle="How we protect your data · Abrobot Technologies Pvt Ltd · Last updated August 2026">
+    <LegalShell title="Privacy Policy" subtitle="How we protect your data · Abrobot Technologies Pvt Ltd · Last updated September 2026">
       <P>
         At <strong>MNB Cortex</strong>, powered by <strong>Abrobot Technologies Pvt Ltd</strong>, your trust is our highest priority. Every
         piece of information you share with us — your account details, business data, documents, and the memory you build inside Cortex — is
@@ -19,7 +19,12 @@ export default function Privacy() {
       <P>We operate under four principles:</P>
       <UL>
         <li><strong>Transparency</strong> — you always know what data we collect and why.</li>
-        <li><strong>Consent</strong> — we process your data only after your explicit permission.</li>
+        <li>
+          <strong>Lawful basis</strong> &mdash; we process your own account and business data to provide the
+          service you asked for. Data you import about <em>your</em> customers is processed on your
+          instructions, and you are responsible for having a lawful basis to hold it. We do not claim to have
+          collected consent from those individuals, because we have no relationship with them.
+        </li>
         <li><strong>Control</strong> — you can access, export, modify, or delete your data at any time.</li>
         <li><strong>Security by design</strong> — data protection is embedded at every layer of the platform.</li>
       </UL>
@@ -78,9 +83,12 @@ export default function Privacy() {
           sender, the message identifies your business as the sender.
         </li>
         <li>
-          <strong>Deletion.</strong> Deleting an invoice or customer removes it from your workspace. Ask us and we will
-          delete a specific individual&rsquo;s data across your workspace, including any record of messages sent to them,
-          subject to any record we are legally required to keep.
+          <strong>Deletion.</strong> Deleting an invoice or customer removes it from your workspace, and deleting
+          the workspace removes everything in it. If one of your customers asks you to erase their data, write to
+          us with the workspace and the identifying details and we will remove their records and the history of
+          messages sent to them, subject to anything we are legally required to keep. This is handled manually
+          today and we will confirm by email when it is done &mdash; we would rather say that than imply a
+          self-service control that does not exist.
         </li>
         <li>
           <strong>No profiling of third parties.</strong> Cortex does not build profiles of your customers beyond what is
@@ -91,12 +99,75 @@ export default function Privacy() {
 
       <H2>6. Data Sharing</H2>
       <P>MNB Cortex <strong>does not sell or trade</strong> your personal or business information. We share limited data only with:</P>
+      {/*
+        NAMED, not gestured at.
+
+        This list previously read "infrastructure & AI sub-processors (hosting,
+        database, AI model, and email providers)" — which names nobody, while
+        the page claimed alignment with GDPR. A GDPR claim with no sub-processor
+        list is worse than making no claim, because it invites the comparison.
+
+        Every entry below is verifiable in the code. Keep it that way: if a
+        provider is added, it belongs here before it ships.
+      */}
       <UL>
-        <li><strong>Infrastructure &amp; AI sub-processors</strong> (hosting, database, AI model, and email providers) strictly to operate the service;</li>
-        <li><strong>Payment processors</strong> (e.g. Cashfree) to complete transactions you initiate;</li>
-        <li><strong>Authorities</strong>, where required by applicable law.</li>
+        <li>
+          <strong>Supabase</strong> — database, authentication and file storage. This is where your
+          workspace data lives.
+        </li>
+        <li>
+          <strong>Vercel</strong> — application hosting. Requests and server logs pass through it.
+        </li>
+        <li>
+          <strong>Google (Gemini)</strong> — the AI model behind analysis, chat, the weekly brief and
+          document reading. The business context relevant to a request is sent with it.
+        </li>
+        <li>
+          <strong>Groq, Anthropic, OpenAI</strong> — used only as fallbacks when the primary model is
+          unavailable, so that a request does not simply fail. The same context is sent.
+        </li>
+        <li>
+          <strong>Resend</strong> — outbound email: alerts, the weekly brief, and collections messages
+          sent from a workspace that has not connected its own sending domain.
+        </li>
+        <li>
+          <strong>Meta (WhatsApp Cloud API)</strong> — only for workspaces that have connected their own
+          WhatsApp Business account, and only for messages they have approved.
+        </li>
+        <li>
+          <strong>Cashfree Payments</strong> — to complete transactions you initiate.
+        </li>
+        <li>
+          <strong>Authorities</strong>, where required by applicable law.
+        </li>
       </UL>
       <P>All sub-processors are bound to maintain confidentiality and equivalent levels of protection.</P>
+
+      {/*
+        BYO keys materially change WHO processes the data, and the policy said
+        nothing about it. Including the fallback, which the code itself flags as
+        the dangerous case: a workspace that connected only Anthropic still has
+        its Gemini-served requests go through OUR key. Saying "your data goes to
+        your own provider" without that caveat would be a false statement about
+        data handling.
+      */}
+      <H2>6a. If you connect your own AI provider</H2>
+      <P>
+        You can connect your own Gemini, OpenAI, Anthropic or Groq key. When you do, requests served by that
+        provider go to <strong>your</strong> account, under your agreement with them and their retention
+        settings — not ours. Two things to be clear about:
+      </P>
+      <UL>
+        <li>
+          We store the key encrypted, and we make one call to that provider when you connect it, to check the
+          key works before we rely on it.
+        </li>
+        <li>
+          The switch is <strong>per provider</strong>. If a request is served by a provider you have not
+          connected — including our fallback chain when your provider is unavailable — it runs on our key and
+          the data goes to our account. Your workspace shows which provider is serving you.
+        </li>
+      </UL>
 
       <H2>7. Your Rights &amp; Control</H2>
       <P>You remain in control of your data at all times. You can:</P>
@@ -110,15 +181,66 @@ export default function Privacy() {
 
       <H2>8. Data Retention</H2>
       <P>
-        We retain personal and business data only for as long as your workspace is active or as needed to provide the service, comply with
-        legal obligations, resolve disputes, and enforce our agreements. After this period, data is securely deleted or anonymised. Routine
-        backups are purged on a rolling schedule.
+        We retain personal and business data for as long as your workspace is active or as needed to provide the
+        service, comply with legal obligations, resolve disputes, and enforce our agreements. Routine backups
+        are purged on a rolling schedule.
+      </P>
+      <P>
+        <strong>What survives a deletion, and why.</strong> When a workspace is deleted we remove its business
+        data, but we keep the <em>financial record</em> of payments and subscriptions with the workspace link
+        removed. We are required to retain proof of transactions for tax and audit purposes, and a payment
+        record with no workspace attached to it is no longer personal data about you. Everything else goes.
+        You can export the workspace before deleting it.
       </P>
 
       <H2>9. Compliance</H2>
       <P>
-        We align our practices with India&rsquo;s Digital Personal Data Protection Act (DPDP) and, where applicable to users in those
-        regions, the GDPR (EU) and CCPA (USA). We follow data-minimisation and purpose-limitation principles across the platform.
+        We operate under India&rsquo;s Digital Personal Data Protection Act, 2023 (DPDP). We follow
+        data-minimisation and purpose-limitation across the platform.
+      </P>
+      {/*
+        The GDPR/CCPA claim was removed rather than kept.
+
+        Asserting GDPR alignment with no sub-processor list, no stated transfer
+        mechanism, no EU representative and no DPA is worse than making no claim
+        at all, because it invites exactly the comparison it fails. The
+        sub-processors are now named above, but the rest is genuinely not in
+        place — so the honest position is to say what IS true, which is DPDP.
+
+        If EU or California customers are targeted later, that claim can be
+        reinstated alongside the machinery it requires.
+      */}
+
+      <H2>9a. Grievance Officer</H2>
+      {/*
+        DPDP s.13(3) REQUIRES a published Grievance Officer contact. There was
+        none anywhere in the product — "grievance" appeared zero times. The same
+        requirement comes separately from the IT Rules 2021 and the consumer
+        e-commerce rules.
+
+        OPERATOR: replace the name below with a real person before launch. A
+        role mailbox alone does not satisfy the section, which asks for a
+        contactable officer.
+      */}
+      <P>
+        If you are unhappy with how we have handled your data or your request, you can escalate to our
+        Grievance Officer:
+      </P>
+      <UL>
+        <li><strong>Designation:</strong> Grievance Officer, Abrobot Technologies Pvt Ltd</li>
+        <li><strong>Email:</strong> <a href="mailto:grievance@mnbresearch.com" className="text-primary underline">grievance@mnbresearch.com</a></li>
+        <li><strong>Response:</strong> we acknowledge within 48 hours and aim to resolve within 30 days</li>
+      </UL>
+      <P>
+        If you are not satisfied with our response, you may complain to the Data Protection Board of India.
+      </P>
+
+      <H2>9b. If something goes wrong</H2>
+      <P>
+        If a personal data breach affects you, we will notify you and the Data Protection Board of India as
+        required under the DPDP Act, without undue delay once we have established what happened and who is
+        affected. We will tell you what data was involved and what we are doing about it, rather than waiting
+        until the investigation is complete.
       </P>
 
       <H2>10. Cookies</H2>

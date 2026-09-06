@@ -131,6 +131,103 @@ for (const [label, src] of [["Terms", TERMS], ["Privacy", PRIVACY]]) {
   check(sequential, `${label} sections are numbered 1..n with no repeats or gaps`,
     `got ${nums.join(", ")}`);
 }
+/* ------------------------------------------------------------------ tranche 2
+   The legal pages must describe the product as it is TODAY. Everything below
+   was found by comparing the pages against the code, and each one was either
+   false or absent.
+*/
+{
+  /*
+    Comments stripped, and whitespace collapsed. Both matter here:
+
+      these pages now carry long JSX comments explaining what was removed and
+      WHY — including the literal phrase "Applicable GST will be shown at
+      checkout" — so a naive match found the explanation of the removal and
+      reported the claim as still present. That is the fourth time this trap
+      has caught me in this codebase (test-ai-profiles, test-income-tax,
+      test-payments-adversarial, now this);
+
+      and prose in JSX wraps across lines, so "handled manually today" is
+      "handled manually\n today" in the source and never matches as written.
+  */
+  const clean = (f) =>
+    readFileSync(f, "utf8")
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")   // JSX comments
+      .replace(/\/\*[\s\S]*?\*\//g, "")        // block comments
+      .replace(/\s+/g, " ");                    // wrapped prose
+  const terms = clean("src/app/terms/page.tsx");
+  const privacy = clean("src/app/privacy/page.tsx");
+  const refund = clean("src/app/refund/page.tsx");
+
+  /* A refund silently claws back credits and shortens the paid period. That was
+     undisclosed — an unstated adverse consequence is what loses a chargeback
+     representment, not the behaviour itself. */
+  check(/What a refund takes back/.test(refund),
+    "the refund page discloses the clawback",
+    "lib/pay/refund.ts reverses credits and shortens the plan; the page said nothing");
+  check(/never pushed below zero/.test(refund), "...including the floor on credits");
+  check(/shortened by the days that payment bought/.test(refund), "...and the effect on the plan period");
+
+  /* Conditioning someone's right to dispute a charge on using our channel
+     first, backed by a suspension threat, reads badly to a card network and a
+     consumer forum — and sat above a process with no in-product route. */
+  check(!/may result in suspension of your workspace while we investigate/.test(refund),
+    "the chargeback suspension threat is gone",
+    "a customer's right to dispute is not ours to condition");
+
+  /* The checkout sends the catalogue price to Cashfree unmodified. */
+  check(!/Applicable GST will be shown at checkout/.test(terms),
+    "the false 'GST shown at checkout' claim is gone",
+    "there is no GST computation anywhere in the payment path");
+
+  /* "Infrastructure & AI sub-processors" named nobody. */
+  for (const p of ["Supabase", "Vercel", "Google", "Resend", "Cashfree", "WhatsApp"]) {
+    check(new RegExp(p).test(privacy), `privacy names ${p} as a recipient`);
+  }
+  check(!/the GDPR \(EU\) and CCPA/.test(privacy),
+    "the unsupported GDPR/CCPA claim is gone",
+    "claiming GDPR with no sub-processor list, transfer mechanism or DPA is worse than not claiming it");
+
+  /* BYO keys change who processes the data — including the per-provider
+     fallback, which the code itself flags as the dangerous case. */
+  check(/connect your own/i.test(privacy) && /per provider/i.test(privacy),
+    "bring-your-own-key is documented, including the fallback",
+    "a workspace that connected only Anthropic still has Gemini requests served by OUR key");
+
+  /* DPDP s.13(3) requires a published Grievance Officer. There was none. */
+  check(/Grievance Officer/.test(privacy), "a Grievance Officer is published (DPDP s.13(3))");
+  check(/Data Protection Board of India/.test(privacy), "...and the escalation route to the Board");
+
+  /* The consent principle was untrue, and for imported debtor data cannot be. */
+  check(!/we process your data only after your explicit permission/.test(privacy),
+    "the false blanket-consent claim is gone",
+    "there is no consent capture, and none is possible for imported third-party contacts");
+
+  /* Erasure and retention must match erasure.ts. */
+  check(/handled manually today/.test(privacy),
+    "per-individual erasure is described as manual, not as a self-service control");
+  check(/financial record/.test(privacy) && /tax and audit/.test(privacy),
+    "what survives a workspace deletion is disclosed",
+    "erasure.ts keeps payments and subscriptions forever with org_id nulled");
+
+  /* Three names, one business — the classic chargeback setup. */
+  check(/ABROBOT TECHNOLOGIES/.test(terms) && /statement/.test(terms),
+    "the name on the card statement is explained",
+    "'I don't recognise this merchant' is the most common chargeback reason code");
+
+  /* The product SELLS deadline warnings, so disclaiming advice is not enough. */
+  check(/Deadlines and statutory warnings/.test(terms),
+    "statutory deadline warnings carry a no-reliance clause",
+    "a missed 43B(h) window is the most plausible damages claim, and it is a paid feature");
+  check(/remain responsible for your own filings/.test(terms), "...placing responsibility explicitly");
+
+  /* Dates must move when the terms do. */
+  for (const [name, src] of [["terms", terms], ["privacy", privacy], ["refund", refund]]) {
+    check(!/August 2026/.test(src), `${name} is not still dated August 2026`,
+      "collections, BYO keys and the refund path all shipped in September");
+  }
+}
+
 
 console.log(`\nlegal: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {

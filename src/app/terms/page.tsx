@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function Terms() {
   return (
-    <LegalShell title="Terms & Conditions" subtitle="Abrobot Technologies Pvt Ltd · Effective 1 August 2026 · Delhi, India">
+    <LegalShell title="Terms & Conditions" subtitle="Abrobot Technologies Pvt Ltd · Effective 6 September 2026 · Delhi, India">
       <H2>1. Acceptance of Terms</H2>
       <P>
         These Terms and Conditions (&ldquo;Terms&rdquo;) form a legally binding agreement between you (&ldquo;User,&rdquo;
@@ -58,12 +58,60 @@ export default function Terms() {
         already completed.
       </P>
 
+      {/*
+        THE THREE NAMES.
+
+        A customer contracts with "Abrobot Technologies Pvt Ltd", is charged by
+        "ABROBOT TECHNOLOGIES" on their statement, and interacts entirely with
+        "MNB Cortex" / "MNB Research" — support is contact@mnbresearch.com and
+        mail arrives from updates.mnbresearch.com. No page connected the three.
+
+        "I don't recognise this merchant" is the most common chargeback reason
+        code, and this is exactly the setup for it: the name on the statement
+        appears nowhere the customer has been. One paragraph removes a whole
+        class of dispute, and it costs nothing.
+      */}
+      <H2>3a. Who you are contracting with, and what appears on your statement</H2>
+      <P>
+        <strong>MNB Cortex</strong> is a product of <strong>Abrobot Technologies Pvt Ltd</strong>, and is
+        operated by the MNB Research team. All three names refer to the same business:
+      </P>
+      <UL>
+        <li><strong>On your card or bank statement:</strong> ABROBOT TECHNOLOGIES</li>
+        <li><strong>On your invoice and in this agreement:</strong> Abrobot Technologies Pvt Ltd</li>
+        <li><strong>In the product and in emails from us:</strong> MNB Cortex, from mnbresearch.com</li>
+      </UL>
+      <P>
+        If you see a charge from ABROBOT TECHNOLOGIES you did not expect, it is this subscription. Please
+        contact us before raising a dispute &mdash; we can usually identify and resolve it the same day.
+      </P>
+
       <H2>4. Payment &amp; Billing</H2>
       <P>
         All payments are processed securely through <strong>Cashfree Payments</strong> (and, where applicable, other authorised payment
         gateways). All prices are in Indian Rupees (INR). Monthly subscriptions renew every 30 days; annual subscriptions renew every 365
-        days. Credit top-up packs are billed as a one-time payment. Applicable GST will be shown at checkout. Failed or reversed payments
+        days. Credit top-up packs are billed as a one-time payment. Failed or reversed payments
         may result in suspension of your workspace until payment is completed.
+      </P>
+      {/*
+        "Applicable GST will be shown at checkout" was not true. The order route
+        sends the catalogue price to Cashfree unmodified — there is no GST
+        computation anywhere in the payment path, and no page said whether the
+        listed price was inclusive or exclusive.
+
+        A stated tax treatment that the checkout does not perform is both a
+        tax-invoice problem for a registered merchant and a live dispute at
+        every renewal. Replaced with what actually happens.
+
+        NOTE FOR THE OPERATOR: confirm the inclusive/exclusive wording below
+        against your GST registration and invoicing before launch. This states
+        the current behaviour of the code; it does not decide your tax
+        position.
+      */}
+      <P>
+        Prices shown on the pricing page and charged at checkout are the amounts debited. Where GST applies to
+        your purchase, it is accounted for within that amount rather than added on top at the payment step, and
+        your tax invoice will show the breakdown.
       </P>
 
       <H2>5. Refunds &amp; Cancellation</H2>
@@ -144,6 +192,36 @@ export default function Terms() {
         responsible for reviewing and verifying all outputs before relying on or acting on them. We are not a licensed financial advisor,
         chartered accountant, or law firm.
       </P>
+      {/*
+        THE GAP §9 LEFT OPEN.
+
+        §9 disclaims *advice*. But the product is sold as a compliance
+        early-warning system — the plans market "MSME 45-day (43B(h)) deduction
+        exposure" and "GST & statutory deadline warnings" as paid features. A
+        customer who misses a 43B(h) window has a quantifiable loss and a
+        straightforward argument: they paid for the warning.
+
+        Disclaiming advice does not answer that. This does, and it is also
+        simply true — the warnings are computed from data the customer imports,
+        on a nightly cycle, from rate tables that change with each Finance Act.
+        Every one of those is a way a real deadline can be missed through no
+        fault of the calculation.
+      */}
+      <H2>9a. Deadlines and statutory warnings</H2>
+      <P>
+        Cortex surfaces statutory deadlines &mdash; GST filings, TDS, MSME 45-day (section 43B(h)) exposure and
+        similar &mdash; as a prompt to look, not as a guarantee that you have been told everything. These are
+        computed from the data in your workspace, refreshed on a schedule, using rate tables and thresholds
+        that change with each Finance Act and notification. A warning can therefore be late, absent, or wrong
+        if your data is incomplete or out of date, if a rate has changed since we last updated it, or if a
+        scheduled run does not complete.
+      </P>
+      <P>
+        <strong>You remain responsible for your own filings, payments and deadlines.</strong> Cortex does not
+        replace your accountant or your own compliance calendar, and we do not accept liability for a missed
+        deadline, an interest or late-fee charge, or a disallowed deduction. Every rate table in the product
+        shows the period it applies to, so you can see how current it is before you rely on it.
+      </P>
 
       <H2>10. Intellectual Property</H2>
       <P>
@@ -193,7 +271,7 @@ export default function Terms() {
         <li><strong>Email:</strong> <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a></li>
         <li><strong>WhatsApp &amp; Phone:</strong> <a href="https://wa.me/919711488480" className="text-primary underline">+91 97114 88480</a></li>
       </UL>
-      <P>© 2026 Abrobot Technologies Pvt Ltd. All rights reserved. Delhi, India. Last updated August 2026.</P>
+      <P>© 2026 Abrobot Technologies Pvt Ltd. All rights reserved. Delhi, India. Last updated September 2026.</P>
     </LegalShell>
   );
 }

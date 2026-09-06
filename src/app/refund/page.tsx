@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function Refund() {
   return (
-    <LegalShell title="Refund & Cancellation Policy" subtitle="Abrobot Technologies Pvt Ltd · Last updated August 2026 · Delhi, India">
+    <LegalShell title="Refund & Cancellation Policy" subtitle="Abrobot Technologies Pvt Ltd · Last updated September 2026 · Delhi, India">
       <P>
         This policy explains how refunds and cancellations work for <strong>MNB Cortex</strong>, an AI-COO software-as-a-service platform
         operated by <strong>Abrobot Technologies Pvt Ltd</strong>. By purchasing a subscription or credit pack, you agree to the terms below,
@@ -39,7 +39,44 @@ export default function Refund() {
       </UL>
       <P>
         Approved refunds are credited to your original payment method (via Cashfree) within <strong>5–7 working days</strong> of approval.
-        Refunds do not apply to credits that have already been consumed.
+      </P>
+
+      {/*
+        WHAT A REFUND TAKES BACK.
+
+        This was undisclosed, and it is the single most disputable thing on the
+        page. lib/pay/refund.ts reverses entitlement when a refund or chargeback
+        lands: it claws back the credits from that purchase (floored at the
+        current balance) and shortens the paid period by the days that payment
+        bought. A customer refunded one item who then finds their subscription
+        end date has moved has a complaint we would lose — not because the
+        behaviour is wrong, but because we never said it.
+
+        Written plainly, including the floor, because "we may adjust your
+        account" is not disclosure.
+      */}
+      <H2>3a. What a refund takes back</H2>
+      <P>
+        A refund reverses what that payment bought. This is automatic, and it applies to chargebacks too:
+      </P>
+      <UL>
+        <li>
+          <strong>Credits:</strong> the credits from that purchase are removed. If you have already spent some,
+          we take back only what is left — your balance is never pushed below zero, and you are never billed
+          for the difference.
+        </li>
+        <li>
+          <strong>Plans:</strong> your paid period is shortened by the days that payment bought. If that uses up
+          the whole remaining period, the subscription is marked cancelled. Periods you paid for separately
+          are unaffected.
+        </li>
+        <li>
+          Credits already consumed are not refundable, and consuming them does not prevent the rest of the
+          reversal above.
+        </li>
+      </UL>
+      <P>
+        You will see an alert in your workspace when this happens, so a reversal is never silent.
       </P>
 
       <H2>4. Cancellation</H2>
@@ -66,8 +103,25 @@ export default function Refund() {
       <P>
         Email <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a> from your registered
         email address with your <strong>transaction / order ID</strong> and a short description of the issue. Our team will review within{" "}
-        <strong>3 business days</strong> and respond with a decision. Please raise concerns with us first — chargebacks filed outside this
-        process may result in suspension of your workspace while we investigate.
+        <strong>3 business days</strong> and respond with a decision.
+      </P>
+      {/*
+        The old wording ended: "chargebacks filed outside this process may
+        result in suspension of your workspace while we investigate."
+
+        Removed. A customer's right to dispute a charge with their bank is not
+        ours to condition, and threatening to withdraw a paid service for
+        exercising it is the kind of term that reads badly to a card network,
+        a consumer forum, and a customer. It also sat directly above a refund
+        process with no in-product route — asking someone to use our channel
+        exclusively while giving them only an email address.
+
+        Asking first is a reasonable request. Penalising them for not is not.
+      */}
+      <P>
+        We would rather hear from you before you go to your bank — we can usually resolve it faster, and a
+        chargeback takes weeks. But raising one is your right, and we will not suspend your workspace for
+        using it.
       </P>
 
       <H2>8. Contact</H2>
