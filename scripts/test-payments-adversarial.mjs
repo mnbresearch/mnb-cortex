@@ -92,6 +92,17 @@ console.log("\nRETRY — a failed grant must not be acked as handled");
         /Unknown plan\."/.test(settle) && !/retryable: true[^\n]*Unknown plan/.test(settle));
   check("an amount mismatch is NOT retryable",
         !/retryable: true[^\n]*did not match/.test(settle));
+
+  /*
+    A DATABASE ERROR ON THE CLAIM IS RETRYABLE.
+
+    The ₹1 live test failed here: payments.owner_id NOT NULL, added by the other
+    product sharing this table, rejected every Cortex insert. Money gone, claim
+    unwritten, nothing granted. Unmarked, the webhook acks and Cashfree never
+    retries — a permanent loss from a one-line migration's absence.
+  */
+  check("a claim (insert) failure asks for a retry",
+        /if \(claimErr\) return \{ orgId, ok: false, retryable: true/.test(settle));
 }
 
 /* ========================================================================= */

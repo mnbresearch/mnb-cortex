@@ -97,7 +97,20 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
     { order_id: orderId, org_id: orgId, kind: type, ref, amount: order.amount, status: "paid" },
     { onConflict: "order_id", ignoreDuplicates: true },
   ).select("order_id");
-  if (claimErr) return { orgId, ok: false, error: claimErr.message };
+  /*
+    RETRYABLE. This is a database error, not a decision about the payment.
+
+    The ₹1 live test failed exactly here — `payments.owner_id NOT NULL`, added
+    by the other product that shares this table, rejected every Cortex insert.
+    The money had left and the claim could not be written, so nothing was
+    granted. Because this path was not marked retryable, the webhook would have
+    acknowledged it and Cashfree would never have tried again: a permanent
+    silent loss from a condition that a migration fixes in one line.
+
+    Nothing has been granted at this point, and the unique index on order_id
+    still prevents a duplicate, so asking for a retry is safe.
+  */
+  if (claimErr) return { orgId, ok: false, retryable: true, error: claimErr.message };
   const isNew = Array.isArray(claimed) && claimed.length > 0;
 
   // If we didn't claim it, make sure the existing row is actually a PAID one.
