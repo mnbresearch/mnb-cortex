@@ -169,6 +169,48 @@ async function main() {
     "the status page reports when sending is paused",
     "an invisible pause is how a feature stays off for a week after the incident ended");
 
+  /* ---------------------------------------------------------------- operator
+     THE KILL SWITCH MUST BE REACHABLE.
+
+     Everything for it already existed — the platform_switches row, the
+     cortex_collections_enabled() guard the sender checks before every run, the
+     health check that surfaces it, and setCollectionsSwitch() itself. What did
+     NOT exist was a single call site. Stopping the system meant opening the SQL
+     editor and writing an UPDATE by hand.
+
+     That is the wrong shape for this control specifically: collections sends to
+     the customer's customers, in the customer's name, from their own domain,
+     and the damage compounds every minute a bad run continues. A control whose
+     response time depends on finding database credentials under pressure is not
+     an emergency control.
+  */
+  {
+    const ks = readFileSync("src/components/collections-killswitch.tsx", "utf8");
+    const page = readFileSync("src/app/(app)/superadmin/page.tsx", "utf8");
+    const api = readFileSync("src/app/api/superadmin/route.ts", "utf8");
+
+    check(/CollectionsKillSwitch/.test(page),
+      "the operator console renders the kill switch",
+      "setCollectionsSwitch existed with ZERO call sites — unreachable except via SQL");
+    check(page.indexOf("CollectionsKillSwitch") < page.indexOf('title="Money"'),
+      "...above the revenue panel, because it is the emergency control");
+    check(/op === "collectionsSwitch"/.test(api) && /setCollectionsSwitch/.test(api),
+      "the API exposes it behind the super-admin check");
+    check(!/from "@\/lib\/superadmin-actions"/.test(ks),
+      "the client panel does NOT import the server-only module",
+      "that pulls `server-only` into a client component and fails the build — caught by test-boundaries");
+    check(/confirming/.test(ks), "stopping asks for confirmation");
+    check(/aria-label="Reason for stopping collections"/.test(ks),
+      "...and records WHY, for the health check and whoever looks next");
+    check(/role="status"/.test(ks) && /aria-live/.test(ks),
+      "the resulting state is announced",
+      "an operator using a screen reader during an incident must hear that the stop took");
+    check(/Resuming will send anything that queued/.test(ks),
+      "resuming warns that the queue will flush");
+    check(/2026_collections_safety\.sql/.test(page),
+      "an unmigrated database says so rather than showing a false 'running'");
+  }
+
   console.log(`\ncollections safety: ${pass} passed, ${failures.length} failed`);
   if (failures.length) { console.log("\nFAILURES:"); failures.forEach((f) => console.log("  ✗ " + f)); process.exit(1); }
   console.log("  global stop works and is checked before sending; the breaker trips on failure, not on bounces.");

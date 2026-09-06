@@ -9,6 +9,8 @@ import { getPlatformEconomics } from "@/lib/admin-metrics";
 import { statusOf, isLapsed } from "@/lib/entitlement";
 import { inr } from "@/lib/utils";
 import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager, ProvisionCustomerForm, BackupButton } from "@/components/superadmin-panel";
+import { CollectionsKillSwitch } from "@/components/collections-killswitch";
+import { serviceClient } from "@/lib/supabase/server";
 import { ShieldAlert, Building2, Users, Activity, Lock, ExternalLink, IndianRupee, TrendingUp, Cpu, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
@@ -37,6 +39,18 @@ export default async function SuperAdmin() {
   }
 
   const [{ rows, live, reason }, portfolio, econ] = await Promise.all([getAllOrgs(), getPortfolioStatus(), getPlatformEconomics()]);
+
+  /*
+    The collections switch. Read here rather than in the client component so the
+    operator sees the real state in the first paint — during an incident, a
+    panel that says "loading" is a panel that cannot be trusted.
+  */
+  let sw: { collections_enabled: boolean; reason: string | null; updated_at: string | null } | null = null;
+  try {
+    const { data } = await serviceClient()!
+      .from("platform_switches").select("collections_enabled, reason, updated_at").limit(1).maybeSingle();
+    sw = (data as any) ?? null;
+  } catch { /* table not migrated — the panel below says so rather than lying */ }
   const totalMembers = rows.reduce((s, r) => s + r.members, 0);
 
   // ---- Adoption ----
@@ -96,6 +110,16 @@ export default async function SuperAdmin() {
         {/* The screen that answers "is this making money?". Nothing in the product
             showed revenue against what the AI actually costs — which is exactly
             how a ₹270-per-clip loss on video went unnoticed for weeks. */}
+        <Section title="Safety" desc="Stop outbound collections platform-wide — messages that go to your customers' customers, in their name">
+          {sw
+            ? <CollectionsKillSwitch enabled={sw.collections_enabled !== false} reason={sw.reason} updatedAt={sw.updated_at} />
+            : <Card className="p-5 text-sm text-muted-foreground">
+                Could not read <code>platform_switches</code>. Run
+                <code> supabase/migrations/2026_collections_safety.sql</code> — until then there is no
+                way to stop collections except from the database.
+              </Card>}
+        </Section>
+
         <Section title="Money" desc="Revenue collected against estimated AI cost — the number that decides whether ads are worth it">
           {!econ.live ? (
             <p className="text-sm text-muted-foreground">Not available — {econ.reason}</p>
