@@ -31,7 +31,7 @@ export default function Contact() {
         <strong>Abrobot Technologies Pvt Ltd</strong> — the company behind MNB Cortex, an AI-COO platform for Indian small and medium
         businesses. MNB Cortex is built by the MNB Research team.
       </P>
-      <P className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" /> Delhi, India</P>
+      <P className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" aria-hidden="true" /> 1945 P Sani Colony, Block F, Sector 49, Flat 1201, Delhi, India</P>
       <P className="flex items-center gap-2"><Clock className="h-4 w-4 text-primary" /> Support hours: Mon–Sat, 10:00–19:00 IST</P>
 
       <H2>Sales &amp; plans</H2>

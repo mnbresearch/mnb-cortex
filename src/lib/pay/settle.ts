@@ -6,6 +6,7 @@ import { PLANS, CREDIT_PACKS } from "@/lib/config";
 import { PAYMENTS_TABLE } from "@/lib/pay/table";
 import { emitQuietly } from "@/lib/webhooks";
 import { rewardReferral } from "@/lib/referrals";
+import { sendPaymentReceipt } from "@/lib/pay/receipt";
 
 export type SettleResult = {
   ok: boolean;
@@ -171,6 +172,12 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
             const sameInstant = landed && new Date(landed).getTime() === new Date(endsAt).getTime();
             if ((check as any)?.plan === ref && sameInstant) {
               emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
+              /* Our own receipt, in our own name. The gateway's confirmation carries
+                 the merchant ACCOUNT's identity, which is shared and is not the product
+                 the customer bought. Best-effort: the grant has already committed and
+                 must not depend on mail. */
+              void sendPaymentReceipt({ orgId, orderId, amount: order.amount, kind: "plan", ref,
+                label: `the ${ref} plan (${cycle === "annual" ? "annual" : "monthly"})`, endsAt });
               return { orgId, ok: true, kind: "plan", plan: ref, cycle, endsAt };
             }
           } catch {
@@ -222,6 +229,12 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       */
       try { await rewardReferral(orgId); } catch { /* never block activation */ }
       emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
+      /* Our own receipt, in our own name. The gateway's confirmation carries
+         the merchant ACCOUNT's identity, which is shared and is not the product
+         the customer bought. Best-effort: the grant has already committed and
+         must not depend on mail. */
+      void sendPaymentReceipt({ orgId, orderId, amount: order.amount, kind: "plan", ref,
+        label: `the ${ref} plan (${cycle === "annual" ? "annual" : "monthly"})`, endsAt });
       return { orgId, ok: true, kind: "plan", plan: ref, cycle, endsAt };
     }
     return { orgId, ok: true, already: true, kind: "plan", plan: ref, cycle };
@@ -249,6 +262,8 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
 
       try {
         const balance = await grantCredits(orgId, pack.credits, reason, null);
+        void sendPaymentReceipt({ orgId, orderId, amount: order.amount, kind: "credits", ref,
+          label: `${pack.credits.toLocaleString("en-IN")} credits` });
         return { orgId, ok: true, kind: "credits", credits: pack.credits, balance };
       } catch (e: any) {
         // Did it actually land before the error? If so, this was a lost response,

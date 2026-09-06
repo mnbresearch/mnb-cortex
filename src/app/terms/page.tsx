@@ -94,24 +94,27 @@ export default function Terms() {
         may result in suspension of your workspace until payment is completed.
       </P>
       {/*
-        "Applicable GST will be shown at checkout" was not true. The order route
-        sends the catalogue price to Cashfree unmodified — there is no GST
-        computation anywhere in the payment path, and no page said whether the
-        listed price was inclusive or exclusive.
+        NO GST.
 
-        A stated tax treatment that the checkout does not perform is both a
-        tax-invoice problem for a registered merchant and a live dispute at
-        every renewal. Replaced with what actually happens.
+        The page used to say "Applicable GST will be shown at checkout", which
+        was false in two ways at once: there is no GST computation anywhere in
+        the payment path, AND the business is not GST-registered, so none is
+        chargeable. Confirmed by the operator.
 
-        NOTE FOR THE OPERATOR: confirm the inclusive/exclusive wording below
-        against your GST registration and invoicing before launch. This states
-        the current behaviour of the code; it does not decide your tax
-        position.
+        Stating the position plainly matters more than it looks. A customer who
+        expects a GST invoice and cannot get one has a real problem — they
+        cannot claim input credit — and finding that out after paying is worse
+        than knowing before. Better they see it on the terms page.
+
+        If registration happens later, this paragraph and the checkout both
+        need changing together; a price that silently starts including tax is
+        the version that causes disputes.
       */}
       <P>
-        Prices shown on the pricing page and charged at checkout are the amounts debited. Where GST applies to
-        your purchase, it is accounted for within that amount rather than added on top at the payment step, and
-        your tax invoice will show the breakdown.
+        <strong>We are not currently registered for GST</strong>, so no GST is charged on your purchase and we
+        do not issue a GST tax invoice. The price shown on the pricing page is the full amount debited, with
+        nothing added at the payment step. You will receive a payment receipt for your records. If our
+        registration status changes we will update this page and show the tax separately at checkout.
       </P>
 
       <H2>5. Refunds &amp; Cancellation</H2>
@@ -267,7 +270,8 @@ export default function Terms() {
 
       <H2>16. Contact</H2>
       <UL>
-        <li><strong>Company:</strong> Abrobot Technologies Pvt Ltd, Delhi, India</li>
+        <li><strong>Company:</strong> Abrobot Technologies Pvt Ltd (MNB Cortex)</li>
+        <li><strong>Registered address:</strong> 1945 P Sani Colony, Block F, Sector 49, Flat 1201, Delhi, India</li>
         <li><strong>Email:</strong> <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a></li>
         <li><strong>WhatsApp &amp; Phone:</strong> <a href="https://wa.me/919711488480" className="text-primary underline">+91 97114 88480</a></li>
       </UL>

@@ -259,11 +259,15 @@ async function handleSubscriptionEvent(type: string, body: any) {
   const days = annual ? 365 : 30;
   const cur = (org as any).subscription_ends_at ? new Date((org as any).subscription_ends_at).getTime() : 0;
   const from = Math.max(cur, Date.now()); // stack onto whatever is left
+  /* Hoisted out of the update so the receipt below can tell the customer what
+     they are now paid until — the single most useful line on a renewal notice,
+     and the one that stops "what is this charge?". */
+  const endsAt = new Date(from + days * 86_400_000).toISOString();
   const grant = async () => svc.from("organizations").update({
     plan: plan.id,
     subscription_status: "active",
     subscription_cycle: annual ? "annual" : "monthly",
-    subscription_ends_at: new Date(from + days * 86_400_000).toISOString(),
+    subscription_ends_at: endsAt,
     autorenew_status: "ACTIVE",
     autorenew_next: sub.subscription_next_scheduled_time || null,
   }).eq("id", orgId);
@@ -288,4 +292,9 @@ async function handleSubscriptionEvent(type: string, body: any) {
 
   const { emitQuietly } = await import("@/lib/webhooks");
   emitQuietly(orgId, "payment.succeeded", { kind: "subscription", subscription_id: ref, plan: plan.id, cycle: annual ? "annual" : "monthly", amount, event: type });
+  /* A renewal is the payment a customer is MOST likely not to recognise —
+     they did not click anything. It is the one that most needs our receipt. */
+  const { sendPaymentReceipt } = await import("@/lib/pay/receipt");
+  void sendPaymentReceipt({ orgId, orderId: claimId, amount, kind: "plan", ref: plan.id,
+    label: `${plan.name} renewal (${annual ? "annual" : "monthly"})`, endsAt });
 }

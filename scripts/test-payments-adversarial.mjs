@@ -401,5 +401,45 @@ console.log("\nTHE LEDGER MUST BE OURS ALONE");
         !/alter table payments/.test(mig) && !/drop table payments/.test(mig));
 }
 
+/* ========================================================================= */
+console.log("\nOUR OWN RECEIPT — the gateway's carries the wrong product name");
+/* ========================================================================= */
+{
+  /*
+    The merchant account is shared, so the gateway's confirmation email arrives
+    headed with a DIFFERENT product's name. Nothing here causes that — Cortex
+    sends Cashfree only an order id, an amount, customer details and an internal
+    note — and it is not reachable from code. What IS reachable is sending our
+    own, so the customer always gets an MNB Cortex receipt naming what they
+    bought and the order id they need to ask us about it.
+
+    Worth keeping even after the dashboard is corrected: a confirmation from the
+    party you think you bought from is the cheapest defence against the most
+    common chargeback reason code.
+  */
+  const r = src("src/lib/pay/receipt.ts");
+  const settle = src("src/lib/pay/settle.ts");
+  const wh = src("src/app/api/pay/cashfree/webhook/route.ts");
+
+  check("no product name is sent to the gateway from here",
+        !/TaxSense/i.test(src("src/lib/pay/cashfree.ts")));
+  check("the receipt is branded MNB Cortex", /MNB Cortex/.test(r));
+  check("...and states the statement descriptor up front",
+        /ABROBOT TECHNOLOGIES/.test(r),
+        "the card statement shows the entity, not the product — say so before they ask their bank");
+  check("...and carries the order id, so they can quote it to us", /orderId/.test(r));
+  check("the receipt goes to the workspace OWNER, not whoever clicked pay",
+        /role", "owner"|eq\("role", "owner"\)/.test(r));
+
+  check("a plan purchase sends one", /sendPaymentReceipt\([\s\S]{0,120}kind: "plan"/.test(settle));
+  check("a credit purchase sends one", /sendPaymentReceipt\([\s\S]{0,120}kind: "credits"/.test(settle));
+  check("a renewal sends one", /sendPaymentReceipt/.test(wh),
+        "a renewal is the charge a customer is least likely to recognise — they clicked nothing");
+
+  /* Mail must never affect whether the customer got what they paid for. */
+  check("every call is fire-and-forget", (settle.match(/void sendPaymentReceipt/g) || []).length >= 3);
+  check("...and the sender never throws", /return sendEmail\(/.test(r) && !/throw /.test(r));
+}
+
 console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

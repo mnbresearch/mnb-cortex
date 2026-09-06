@@ -227,8 +227,10 @@ export default function Privacy() {
         Grievance Officer:
       </P>
       <UL>
+        <li><strong>Name:</strong> Mridul Nanda</li>
         <li><strong>Designation:</strong> Grievance Officer, Abrobot Technologies Pvt Ltd</li>
-        <li><strong>Email:</strong> <a href="mailto:grievance@mnbresearch.com" className="text-primary underline">grievance@mnbresearch.com</a></li>
+        <li><strong>Email:</strong> <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a></li>
+        <li><strong>Address:</strong> 1945 P Sani Colony, Block F, Sector 49, Flat 1201, Delhi, India</li>
         <li><strong>Response:</strong> we acknowledge within 48 hours and aim to resolve within 30 days</li>
       </UL>
       <P>
@@ -257,7 +259,8 @@ export default function Privacy() {
 
       <H2>12. Contact — Data Protection</H2>
       <UL>
-        <li><strong>Company:</strong> Abrobot Technologies Pvt Ltd (MNB Cortex), Delhi, India</li>
+        <li><strong>Company:</strong> Abrobot Technologies Pvt Ltd (MNB Cortex)</li>
+        <li><strong>Registered address:</strong> 1945 P Sani Colony, Block F, Sector 49, Flat 1201, Delhi, India</li>
         <li><strong>Email:</strong> <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a></li>
         <li><strong>Phone / WhatsApp:</strong> <a href="https://wa.me/919711488480" className="text-primary underline">+91 97114 88480</a></li>
       </UL>

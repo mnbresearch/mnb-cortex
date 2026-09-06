@@ -221,6 +221,22 @@ for (const [label, src] of [["Terms", TERMS], ["Privacy", PRIVACY]]) {
     "a missed 43B(h) window is the most plausible damages claim, and it is a paid feature");
   check(/remain responsible for your own filings/.test(terms), "...placing responsibility explicitly");
 
+  /* The operator's real details, supplied after the first pass. A city is not
+     an address, and DPDP s.13(3) asks for a contactable officer, not a role
+     mailbox. */
+  check(/1945 P Sani Colony/.test(terms) && /1945 P Sani Colony/.test(privacy) && /1945 P Sani Colony/.test(refund),
+    "a real registered address appears on all three legal pages",
+    "Terms previously gave only 'Delhi, India'");
+  check(/Mridul Nanda/.test(privacy), "the Grievance Officer is a named person (DPDP s.13(3))");
+
+  /* Not GST-registered. Saying nothing is worse than saying so: a customer who
+     expects a tax invoice and cannot get one has a real problem, and finding
+     out after paying is the bad version. */
+  check(/not currently registered for GST/.test(terms),
+    "the GST position is stated plainly");
+  check(!/Applicable GST will be shown at checkout/.test(terms) && !/Where GST applies to/.test(terms),
+    "...and no page implies GST is charged or invoiced");
+
   /* Dates must move when the terms do. */
   for (const [name, src] of [["terms", terms], ["privacy", privacy], ["refund", refund]]) {
     check(!/August 2026/.test(src), `${name} is not still dated August 2026`,

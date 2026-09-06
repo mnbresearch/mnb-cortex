@@ -126,7 +126,8 @@ export default function Refund() {
 
       <H2>8. Contact</H2>
       <UL>
-        <li><strong>Company:</strong> Abrobot Technologies Pvt Ltd (MNB Cortex), Delhi, India</li>
+        <li><strong>Company:</strong> Abrobot Technologies Pvt Ltd (MNB Cortex)</li>
+        <li><strong>Registered address:</strong> 1945 P Sani Colony, Block F, Sector 49, Flat 1201, Delhi, India</li>
         <li><strong>Email:</strong> <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a></li>
         <li><strong>Phone / WhatsApp:</strong> <a href="https://wa.me/919711488480" className="text-primary underline">+91 97114 88480</a></li>
         <li><strong>Response time:</strong> within 2 business days</li>
