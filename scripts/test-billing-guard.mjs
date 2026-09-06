@@ -225,6 +225,38 @@ async function main() {
       `credits.ts/entitlement.ts reads "${col}" but the trigger does not guard it`);
   }
 
+  /* --------------------------------------------------- shared payments table
+     The `payments` table is shared with another product in the same Supabase
+     project — a school/tuition app keyed on owner_id, whose rows also carry
+     status='paid'. admin-metrics summed every paid row, so that app's takings
+     were reported as MNB Cortex revenue (the ~₹79K of null-org_id rows).
+
+     Cortex's three write paths — settleOrder, the subscription webhook, and
+     the amount_mismatch record — all set `kind`; the other app never does.
+     Pinning both halves: the filter must be present, and every write path must
+     keep setting the column the filter depends on. Drop either and the number
+     on the admin dashboard silently stops being revenue.
+  */
+  {
+    const metrics = readFileSync("src/lib/admin-metrics.ts", "utf8");
+    check(/\.not\("kind",\s*"is",\s*null\)/.test(metrics),
+      "admin-metrics filters payments to rows Cortex wrote",
+      "revenueTotal sums every status='paid' row, including the other app's");
+
+    const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    for (const [file, label] of [
+      ["src/lib/pay/settle.ts", "settleOrder"],
+      ["src/app/api/pay/cashfree/webhook/route.ts", "the subscription webhook"],
+    ]) {
+      const src = strip(readFileSync(file, "utf8"));
+      const upserts = src.match(/\.upsert\(\s*\{[^}]*\}/g) || [];
+      const paymentUpserts = upserts.filter((u) => /order_id/.test(u));
+      check(paymentUpserts.length > 0 && paymentUpserts.every((u) => /kind:/.test(u)),
+        `${label} sets kind on every payments upsert`,
+        `${file} writes a payments row without kind — it would drop out of revenue`);
+    }
+  }
+
   /* ----------------------------------------------------------------- report */
   console.log(`\nbilling guard: ${pass} passed, ${failures.length} failed`);
   if (failures.length) { console.log("\nFAILURES:"); failures.forEach((f) => console.log("  ✗ " + f)); process.exit(1); }

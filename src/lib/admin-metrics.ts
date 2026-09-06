@@ -88,7 +88,29 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
     const priceOf = new Map(PLANS.map((p) => [p.id, p.monthly]));
 
     const [paymentsRes, orgsRes, ledgerRes] = await Promise.all([
-      sb.from("payments").select("order_id, amount, status, created_at, org_id, kind, ref").eq("status", "paid").order("created_at", { ascending: false }).limit(20_000),
+      /*
+        `.not("kind", "is", null)` is load-bearing — it is what keeps another
+        product's revenue off this dashboard.
+
+        The `payments` table is SHARED. This Supabase project also serves a
+        school/tuition app whose tables (students, teachers, attendance, and
+        payments) are keyed on `owner_id` rather than `org_id`, and whose rows
+        carry status='paid' like ours. migration_payments.sql created ours with
+        `create table if not exists` plus `add column if not exists` precisely
+        because a payments table already existed with a different shape.
+
+        Without a filter, every row with status='paid' was summed into
+        revenueTotal and revenue30d, so the admin dashboard reported the other
+        app's takings as MNB Cortex revenue. That is the ~₹79K of rows with a
+        null org_id.
+
+        Filtering on `kind` rather than `org_id`: settle.ts and the webhook
+        always write kind ('plan' or 'credits'), the other app never does, and
+        unlike org_id it survives workspace erasure — erasure.ts nulls org_id
+        to unlink a deleted workspace while keeping the financial record, and
+        filtering on org_id would silently drop that history from the totals.
+      */
+      sb.from("payments").select("order_id, amount, status, created_at, org_id, kind, ref").eq("status", "paid").not("kind", "is", null).order("created_at", { ascending: false }).limit(20_000),
       sb.from("organizations").select("id, name, plan, subscription_status, subscription_ends_at, credits").limit(5_000),
       // Only AI charges. Refunds and grants carry other reasons.
       sb.from("credit_ledger").select("org_id, reason, delta, created_at").lt("delta", 0).gte("created_at", since).limit(100_000),
