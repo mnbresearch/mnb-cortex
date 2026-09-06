@@ -350,5 +350,56 @@ console.log("\nCSP MUST NOT BLOCK CHECKOUT — this broke every payment");
         /Promise\.race/.test(client) && /__stalled__/.test(client));
 }
 
+/* ========================================================================= */
+console.log("\nTHE LEDGER MUST BE OURS ALONE");
+/* ========================================================================= */
+{
+  /*
+    `payments` is owned by the school/tuition app in this Supabase project. That
+    coupling produced three failures: their revenue counted as ours, then
+    owner_id NOT NULL rejected every Cortex insert, then student_id NOT NULL did
+    the same on the very next attempt.
+
+    The split to cortex_payments touches fourteen call sites. Missing ONE would
+    be worse than not splitting: settle would claim in one table while the
+    webhook checked the other, and the idempotency guard -- the thing that stops
+    one payment granting twice -- would silently stop working. So every payment
+    path must go through the constant.
+  */
+  const PAY_FILES = [
+    "src/lib/pay/settle.ts",
+    "src/lib/pay/refund.ts",
+    "src/app/api/pay/cashfree/webhook/route.ts",
+    "src/lib/admin-metrics.ts",
+    "src/app/api/superadmin/paytest-status/route.ts",
+    "src/lib/erasure.ts",
+  ];
+  for (const f of PAY_FILES) {
+    const t = src(f);
+    check(`${f.replace("src/", "")} never names the shared table`,
+          !/\.from\("payments"\)/.test(t));
+    if (/\.from\(/.test(t) && /PAYMENTS_TABLE/.test(t)) {
+      check(`...and imports the constant`, /from "@\/lib\/pay\/table"/.test(t));
+    }
+  }
+
+  const table = src("src/lib/pay/table.ts");
+  check("the constant points at cortex_payments",
+        /PAYMENTS_TABLE = "cortex_payments"/.test(table));
+
+  const backup = src("src/lib/backup.ts");
+  check("backups capture cortex_payments, not the other product's table",
+        /"cortex_payments"/.test(backup) && !/"payments",/.test(backup));
+
+  const mig = readFileSync(join(ROOT, "supabase/migrations/2026_cortex_payments.sql"), "utf8");
+  check("the new table is service-role only (RLS on, no policy)",
+        /enable row level security/.test(mig) && !/create policy/.test(mig));
+  check("order_id is unique, so settlement stays idempotent",
+        /unique index[^;]*cortex_payments\(order_id\)|order_id   text primary key/.test(mig));
+  check("history is backfilled from the shared table", /insert into cortex_payments/.test(mig));
+  check("...and the other product's table is not modified",
+        !/alter table payments/.test(mig) && !/drop table payments/.test(mig));
+}
+
 console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

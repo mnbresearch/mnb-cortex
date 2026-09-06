@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { isSuperAdmin } from "@/lib/superadmin";
 import { getUserAndOrg } from "@/lib/data";
 import { serviceClient } from "@/lib/supabase/server";
+import { PAYMENTS_TABLE } from "@/lib/pay/table";
 import { CREDIT_PACKS } from "@/lib/config";
 import { Card } from "@/components/ui/card";
 import { PayTestClient } from "@/components/pay-test-client";
@@ -42,7 +43,7 @@ export default async function PayTestPage() {
   if (svc && orgId) {
     const { data: org } = await svc.from("organizations").select("credits").eq("id", orgId).maybeSingle();
     credits = Number((org as any)?.credits ?? 0);
-    const { data: rows } = await svc.from("payments")
+    const { data: rows } = await svc.from(PAYMENTS_TABLE)
       .select("order_id, status, amount, kind, ref, created_at")
       .eq("org_id", orgId).eq("ref", "pack_test")
       .order("created_at", { ascending: false }).limit(10);

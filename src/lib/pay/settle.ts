@@ -3,6 +3,7 @@ import { getOrder } from "@/lib/pay/cashfree";
 import { serviceClient } from "@/lib/supabase/server";
 import { grantCredits } from "@/lib/credits";
 import { PLANS, CREDIT_PACKS } from "@/lib/config";
+import { PAYMENTS_TABLE } from "@/lib/pay/table";
 import { emitQuietly } from "@/lib/webhooks";
 import { rewardReferral } from "@/lib/referrals";
 
@@ -84,7 +85,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
   */
   if (expected > 0 && order.amount + 0.01 < expected) {
     // Underpaid — record for audit, do NOT grant.
-    await svc.from("payments").upsert(
+    await svc.from(PAYMENTS_TABLE).upsert(
       { order_id: orderId, org_id: orgId, kind: type, ref, amount: order.amount, status: "amount_mismatch" },
       { onConflict: "order_id", ignoreDuplicates: true },
     );
@@ -93,7 +94,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
 
   // Claim the order idempotently. If a row already existed, `data` is empty and
   // we must NOT grant again.
-  const { data: claimed, error: claimErr } = await svc.from("payments").upsert(
+  const { data: claimed, error: claimErr } = await svc.from(PAYMENTS_TABLE).upsert(
     { order_id: orderId, org_id: orgId, kind: type, ref, amount: order.amount, status: "paid" },
     { onConflict: "order_id", ignoreDuplicates: true },
   ).select("order_id");
@@ -117,7 +118,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
   // An earlier 'amount_mismatch' row would otherwise make every later attempt
   // report "already settled" while nothing was ever activated.
   if (!isNew) {
-    const { data: prior } = await svc.from("payments").select("status").eq("order_id", orderId).maybeSingle();
+    const { data: prior } = await svc.from(PAYMENTS_TABLE).select("status").eq("order_id", orderId).maybeSingle();
     const priorStatus = String((prior as any)?.status || "");
     if (priorStatus && priorStatus !== "paid") {
       return { orgId, ok: false, error: `This order was previously recorded as "${priorStatus}" and cannot be activated. Please contact support.` };
@@ -127,7 +128,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
   /** Release our claim so a webhook retry can settle this order again. */
   const releaseClaim = async () => {
     if (!isNew) return;
-    try { await svc.from("payments").delete().eq("order_id", orderId); } catch { /* best effort */ }
+    try { await svc.from(PAYMENTS_TABLE).delete().eq("order_id", orderId); } catch { /* best effort */ }
   };
 
   if (type === "plan") {
@@ -191,7 +192,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
               row so it is findable rather than looking like a normal payment.
             */
             try {
-              await svc.from("payments")
+              await svc.from(PAYMENTS_TABLE)
                 .update({ status: "grant_unverified" }).eq("order_id", orderId);
             } catch { /* best effort — the status is a signal, not the control */ }
             return { orgId,

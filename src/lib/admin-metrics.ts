@@ -1,6 +1,7 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { PLANS } from "@/lib/config";
+import { PAYMENTS_TABLE } from "@/lib/pay/table";
 
 /**
  * Platform economics for the operator.
@@ -89,28 +90,19 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
 
     const [paymentsRes, orgsRes, ledgerRes] = await Promise.all([
       /*
-        `.not("kind", "is", null)` is load-bearing — it is what keeps another
-        product's revenue off this dashboard.
+        Still filtered on `kind`, even though cortex_payments is now ours alone.
 
-        The `payments` table is SHARED. This Supabase project also serves a
-        school/tuition app whose tables (students, teachers, attendance, and
-        payments) are keyed on `owner_id` rather than `org_id`, and whose rows
-        carry status='paid' like ours. migration_payments.sql created ours with
-        `create table if not exists` plus `add column if not exists` precisely
-        because a payments table already existed with a different shape.
+        The table was shared with a school/tuition app whose rows also carried
+        status='paid', and summing every paid row reported their takings as MNB
+        Cortex revenue — the ~₹79K of null-org_id rows. The split removes the
+        cause, but the backfill copied history across, so the filter still earns
+        its place: it keeps any mis-attributed legacy row out of the total.
 
-        Without a filter, every row with status='paid' was summed into
-        revenueTotal and revenue30d, so the admin dashboard reported the other
-        app's takings as MNB Cortex revenue. That is the ~₹79K of rows with a
-        null org_id.
-
-        Filtering on `kind` rather than `org_id`: settle.ts and the webhook
-        always write kind ('plan' or 'credits'), the other app never does, and
-        unlike org_id it survives workspace erasure — erasure.ts nulls org_id
-        to unlink a deleted workspace while keeping the financial record, and
-        filtering on org_id would silently drop that history from the totals.
+        `kind` rather than `org_id` because erasure nulls org_id to unlink a
+        deleted workspace while keeping the financial record, and an org_id
+        filter would silently drop that history from the totals.
       */
-      sb.from("payments").select("order_id, amount, status, created_at, org_id, kind, ref").eq("status", "paid").not("kind", "is", null).order("created_at", { ascending: false }).limit(20_000),
+      sb.from(PAYMENTS_TABLE).select("order_id, amount, status, created_at, org_id, kind, ref").eq("status", "paid").not("kind", "is", null).order("created_at", { ascending: false }).limit(20_000),
       sb.from("organizations").select("id, name, plan, subscription_status, subscription_ends_at, credits").limit(5_000),
       // Only AI charges. Refunds and grants carry other reasons.
       sb.from("credit_ledger").select("org_id, reason, delta, created_at").lt("delta", 0).gte("created_at", since).limit(100_000),

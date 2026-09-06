@@ -52,7 +52,10 @@ import { serviceClient } from "@/lib/supabase/server";
  */
 export const BACKUP_TABLES = [
   "organizations", "memberships", "profiles", "invites",
-  "subscriptions", "payments", "credit_ledger", "renewal_notices",
+  /* cortex_payments, not "payments" — the latter belongs to another product in
+     this project (see lib/pay/table.ts). Backing up their table instead of ours
+     would have produced a restore with no Cortex payment history at all. */
+  "subscriptions", "cortex_payments", "credit_ledger", "renewal_notices",
   "customers", "leads", "sales_pipeline", "sales_orders", "purchase_orders",
   "invoices", "finance_ledger", "inventory_items", "employees", "meetings",
   "production_runs",

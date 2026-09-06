@@ -2,6 +2,7 @@ import "server-only";
 import { serviceClient, createClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
 import { assertRole } from "@/lib/roles";
+import { PAYMENTS_TABLE } from "@/lib/pay/table";
 
 /**
  * Workspace erasure — the "or delete" half of a promise we were already making.
@@ -141,7 +142,7 @@ export async function eraseWorkspace(confirmation: string): Promise<ErasureResul
 
   /* payments.org_id is nullable — sever the link and keep the row. */
   try {
-    const { count } = await svc.from("payments").update({ org_id: null }, { count: "exact" }).eq("org_id", orgId);
+    const { count } = await svc.from(PAYMENTS_TABLE).update({ org_id: null }, { count: "exact" }).eq("org_id", orgId);
     if (count) retained.payments = count;
   } catch { /* table absent in this deployment */ }
 
@@ -260,7 +261,7 @@ export async function exportBeforeErasure(): Promise<{ ok: boolean; json?: strin
   if (!svc) return { ok: false, error: "Export is unavailable right now." };
 
   const out: Record<string, any[]> = {};
-  for (const t of [...OWNED_TABLES, "payments", "subscriptions"]) {
+  for (const t of [...OWNED_TABLES, PAYMENTS_TABLE, "subscriptions"]) {
     try {
       const { data } = await svc.from(t).select("*").eq("org_id", orgId);
       let rows = (data as any[]) || [];

@@ -1,6 +1,7 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { emitQuietly } from "@/lib/webhooks";
+import { PAYMENTS_TABLE } from "@/lib/pay/table";
 
 /**
  * Refunds, chargebacks and disputes.
@@ -65,7 +66,7 @@ export async function handleRefundEvent(
   ).trim();
   if (!orderId) return { ok: false, action: "not_found", detail: "no order id on event" };
 
-  const { data: row } = await svc.from("payments")
+  const { data: row } = await svc.from(PAYMENTS_TABLE)
     .select("order_id, org_id, kind, ref, amount, status")
     .eq("order_id", orderId).maybeSingle();
 
@@ -167,7 +168,7 @@ export async function handleRefundEvent(
   /* Mark first, then alert. The status is what makes this idempotent, so it
      must land even if the alert does not. */
   try {
-    await svc.from("payments")
+    await svc.from(PAYMENTS_TABLE)
       .update({ status: `refunded:${action}` }).eq("order_id", orderId);
   } catch { /* best effort */ }
 

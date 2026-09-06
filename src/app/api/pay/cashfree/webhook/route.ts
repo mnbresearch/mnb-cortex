@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { settleOrder } from "@/lib/pay/settle";
 import { handleRefundEvent } from "@/lib/pay/refund";
+import { PAYMENTS_TABLE } from "@/lib/pay/table";
 import { verifyCashfreeWebhook } from "@/lib/pay/cashfree-webhook";
 
 export const runtime = "nodejs";
@@ -230,7 +231,7 @@ async function handleSubscriptionEvent(type: string, body: any) {
   const periodAnchor = String((org as any).subscription_ends_at || "none").slice(0, 10);
   const claimId = `sub_${ref}_${paymentId || `cycle_${periodAnchor}`}`;
   const { data: claimed, error: claimErr } = await svc
-    .from("payments")
+    .from(PAYMENTS_TABLE)
     .upsert(
       { order_id: claimId, org_id: orgId, kind: `subscription:${plan.id}`, ref, amount: Number.isFinite(amount) ? amount : expected, status: "paid", provider: "cashfree" },
       { onConflict: "order_id", ignoreDuplicates: true },
@@ -248,10 +249,10 @@ async function handleSubscriptionEvent(type: string, body: any) {
     // it is marked paid — an earlier attempt that failed mid-grant leaves
     // `grant_failed`, and treating that as done would swallow the cycle. Same
     // reasoning as settleOrder().
-    const { data: prior } = await svc.from("payments").select("status").eq("order_id", claimId).maybeSingle();
+    const { data: prior } = await svc.from(PAYMENTS_TABLE).select("status").eq("order_id", claimId).maybeSingle();
     if (String((prior as any)?.status || "paid") === "paid") return; // genuinely done
     console.warn(`[cashfree-sub] re-attempting a previously failed grant for ${claimId}`);
-    await svc.from("payments").update({ status: "paid" }).eq("order_id", claimId);
+    await svc.from(PAYMENTS_TABLE).update({ status: "paid" }).eq("order_id", claimId);
   }
 
   // ---- Grant --------------------------------------------------------------
@@ -280,7 +281,7 @@ async function handleSubscriptionEvent(type: string, body: any) {
     // support. Because it is no longer 'paid', the claim branch above re-opens
     // it on the next attempt instead of deduplicating the retry away.
     try {
-      await svc.from("payments").update({ status: "grant_failed" }).eq("order_id", claimId);
+      await svc.from(PAYMENTS_TABLE).update({ status: "grant_failed" }).eq("order_id", claimId);
     } catch { /* best effort — the throw below still triggers a retry */ }
     throw new Error(updErr?.message || "grant failed");
   }

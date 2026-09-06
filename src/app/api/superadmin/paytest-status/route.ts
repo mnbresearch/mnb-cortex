@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isSuperAdmin } from "@/lib/superadmin";
 import { getUserAndOrg } from "@/lib/data";
 import { serviceClient } from "@/lib/supabase/server";
+import { PAYMENTS_TABLE } from "@/lib/pay/table";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,7 +33,7 @@ export async function GET() {
   const credits = Number((org as any)?.credits ?? 0);
 
   /* Most recent test order for this workspace. */
-  const { data: rows } = await svc.from("payments")
+  const { data: rows } = await svc.from(PAYMENTS_TABLE)
     .select("order_id, status, amount, kind, ref, created_at")
     .eq("org_id", orgId).eq("ref", "pack_test")
     .order("created_at", { ascending: false }).limit(1);
@@ -42,7 +43,7 @@ export async function GET() {
   let ledgerReason: string | null = null;
   if (payment?.order_id) {
     /* How many claim rows exist for this exact order. Must be 1. */
-    const { count } = await svc.from("payments")
+    const { count } = await svc.from(PAYMENTS_TABLE)
       .select("order_id", { count: "exact", head: true })
       .eq("order_id", payment.order_id);
     claimCount = Number(count ?? 0);
