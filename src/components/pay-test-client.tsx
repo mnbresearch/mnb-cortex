@@ -60,6 +60,42 @@ export function PayTestClient({ packId, price, before }: { packId: string; price
   const expected = before + 1;
   const granted = after === null ? null : after - before;
 
+  /*
+    RECOVERY, for a payment that was taken but never recorded.
+
+    The ₹1 test hit `payments.owner_id NOT NULL` and the claim insert was
+    rejected, so no row exists — Cortex has nothing to retry against, and the
+    webhook had already acked. The money is with Cashfree, the order is PAID,
+    and it is simply unclaimed.
+
+    settleOrder is idempotent and keyed to the order's own customer_id, so
+    re-running it once the constraint is gone settles it correctly and credits
+    the right workspace. This box is how you do that without paying twice, and
+    it is worth keeping: "money taken, nothing granted" is a real support case
+    and the alternative is a manual SQL insert that skips every guard.
+  */
+  const [recoverId, setRecoverId] = useState("");
+  const [recovering, setRecovering] = useState(false);
+
+  async function recover() {
+    const id = recoverId.trim();
+    if (!id) return;
+    setRecovering(true); setMsg("");
+    try {
+      const v = await fetch("/api/pay/cashfree/verify", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: id }),
+      }).then((r) => r.json());
+      setMsg(v.ok
+        ? `Settled ${id}. ${v.already ? "It was already settled." : `Granted ${v.credits ?? "?"} credit(s).`}`
+        : `Could not settle ${id}: ${v.error || "unknown error"}`);
+    } catch {
+      setMsg("Could not reach the verify endpoint.");
+    }
+    setRecovering(false);
+    await check();
+  }
+
   return (
     <Card className="p-5 space-y-4">
       <div className="flex items-center gap-3">
@@ -71,6 +107,27 @@ export function PayTestClient({ packId, price, before }: { packId: string; price
         <Button variant="outline" onClick={check} disabled={state === "paying" || state === "checking"}>
           Re-check without paying
         </Button>
+      </div>
+
+      <div className="rounded-lg border p-3 space-y-2">
+        <div className="text-sm font-medium">Settle an order that was paid but never recorded</div>
+        <p className="text-xs text-muted-foreground">
+          Find the order id in the Cashfree dashboard (Transactions → the ₹{price} payment).
+          It looks like <code>mnb_1788700230364_zqn9j</code>. Settling is idempotent — it cannot
+          grant twice, and it credits the workspace that actually paid, not whoever runs this.
+        </p>
+        <div className="flex gap-2">
+          <input
+            aria-label="Cashfree order id to settle"
+            value={recoverId}
+            onChange={(e) => setRecoverId(e.target.value)}
+            placeholder="mnb_…"
+            className="flex-1 rounded-md border bg-background px-3 h-9 text-sm font-mono outline-none focus:ring-2 focus:ring-ring"
+          />
+          <Button variant="outline" onClick={recover} disabled={recovering || !recoverId.trim()}>
+            {recovering ? <><Loader2 className="h-4 w-4 animate-spin" /> Settling…</> : "Settle"}
+          </Button>
+        </div>
       </div>
 
       {msg && (
