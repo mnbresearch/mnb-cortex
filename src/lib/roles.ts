@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { getUserAndOrg } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 
@@ -12,13 +13,22 @@ import { createClient } from "@/lib/supabase/server";
  */
 export const ROLE_RANK: Record<string, number> = { viewer: 1, analyst: 2, manager: 3, admin: 4, owner: 5 };
 
-export async function currentRole(): Promise<{ orgId: string | null; role: string }> {
+/**
+ * Memoised per request, for the same reason getUserAndOrg() is.
+ *
+ * A page like /settings calls hasRole("admin") and hasRole("owner") back to
+ * back, and every gated server action calls assertRole — each of which lands
+ * here and issues its own memberships query. Request-scoped, so a role change
+ * still takes effect on the very next request; it only stops the same answer
+ * being fetched repeatedly within one render.
+ */
+export const currentRole = cache(async function currentRole(): Promise<{ orgId: string | null; role: string }> {
   const { orgId, user } = await getUserAndOrg();
   if (!orgId || !user) return { orgId: null, role: "viewer" };
   const sb = createClient();
   const { data } = await sb.from("memberships").select("role").eq("org_id", orgId).eq("user_id", user.id).maybeSingle();
   return { orgId, role: (data as any)?.role || "viewer" };
-}
+});
 
 /** True when the signed-in user meets `min` in this workspace. Never throws. */
 export async function hasRole(min: string): Promise<boolean> {

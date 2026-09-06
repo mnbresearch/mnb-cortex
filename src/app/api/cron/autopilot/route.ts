@@ -5,6 +5,7 @@ import { generateFor } from "@/lib/ai/cortex";
 import { withOrgAiKeys } from "@/lib/ai/byo";
 import { recomputeMetrics } from "@/lib/metrics";
 import { statusOf, isLapsed } from "@/lib/entitlement";
+import { rotate } from "@/lib/cron-rotation";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -210,26 +211,49 @@ export async function GET(req: Request) {
   //    nothing had recomputed since the rows were removed. Stale numbers a
   //    customer might act on are worse than a few milliseconds of database time,
   //    and they're the first thing someone sees if they come back and renew.
+  /*
+    ROTATED, not sliced.
+
+    This was `orgs.slice(0, SWEEP_CAP)` against a list ordered by created_at
+    ascending — the same 200 workspaces every night, forever. Workspace 201 was
+    never swept. The cap is still needed (300s function limit); what was missing
+    is that the window has to move. See lib/cron-rotation.ts.
+  */
   const SWEEP_CAP = 200, BATCH = 5;
-  const sweepable = (orgs as any[] || []).slice(0, SWEEP_CAP);
+  const sweep = await rotate("metrics_sweep", (orgs as any[]) || [], SWEEP_CAP);
   let recomputed = 0;
-  for (let i = 0; i < sweepable.length; i += BATCH) {
-    const results = await Promise.all(sweepable.slice(i, i + BATCH).map(async (o) => {
+  for (let i = 0; i < sweep.batch.length; i += BATCH) {
+    const results = await Promise.all(sweep.batch.slice(i, i + BATCH).map(async (o: any) => {
       try { return (await recomputeMetrics(o.id)).ok; } catch { return false; }
     }));
     recomputed += results.filter(Boolean).length;
   }
+  await sweep.commit(sweep.batch.length);
 
   // 4. Daily analysis — only for workspaces that are actually entitled to it.
   //    Running the model for expired/suspended workspaces is money spent on
   //    customers who aren't paying.
   //    Budgeted by wall clock, not just count: an LLM call is 2-10s and the
   //    function dies at 300s, which would lose the counts and the email results.
+  /*
+    Also rotated, and rotated over the ENTITLED list rather than over all
+    workspaces.
+
+    The old loop iterated every org and broke at `ran >= 20`. Entitled or not,
+    it walked them in the same order every night, so the twenty-first entitled
+    workspace never got an analysis. Filtering first means the twenty slots go
+    to twenty workspaces that can actually use them, instead of being consumed
+    by position in a list mostly made of lapsed accounts.
+  */
+  const ANALYSIS_CAP = 20;
+  const entitledOrgs = ((orgs as any[]) || []).filter(entitled);
+  const skipped = (((orgs as any[]) || []).length) - entitledOrgs.length;
+  const analysis = await rotate("daily_analysis", entitledOrgs, ANALYSIS_CAP);
+
   const deadline = Date.now() + 200_000;
-  let ran = 0, skipped = 0;
-  for (const o of (orgs as any[] || [])) {
-    if (!entitled(o)) { skipped++; continue; }
-    if (ran >= 20 || Date.now() > deadline) break;
+  let ran = 0;
+  for (const o of analysis.batch) {
+    if (ran >= ANALYSIS_CAP || Date.now() > deadline) break;
     const { data: m } = await sb.from("health_metrics").select("label,value,unit,delta_pct,status").eq("org_id", o.id);
     if (!m?.length) continue;
     const ctx = "KEY METRICS:\n" + m.map((x: any) => `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + x.unit} (${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, ${x.status})`).join("\n");
@@ -245,6 +269,7 @@ export async function GET(req: Request) {
     await sb.from("activity").insert({ org_id: o.id, type: "ai", message: "Autopilot ran the daily business analysis" });
     ran++;
   }
+  await analysis.commit(ran);
 
   // Heartbeat. /api/health reads this rather than inferring liveness from a
   // side effect that only happens when a workspace has data — a healthy cron
@@ -281,5 +306,33 @@ export async function GET(req: Request) {
     console.error("[cron] heartbeat threw —", e?.message);
   }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, heartbeat, scheduledWorkflows, alertsEmailed, collectionsSent });
+  /*
+    COVERAGE IS REPORTED, not implied.
+
+    The old response was `ok: true` plus counts, which reads as success whether
+    the run covered every workspace or the first 200 of ten thousand. Now that
+    the rotation makes full coverage take several nights by design, the run has
+    to say how much of the platform it reached — otherwise "we serve everyone"
+    remains an assumption nobody can check.
+
+    `nights_for_full_cycle` is the number to watch: if it starts climbing, the
+    caps need raising or the cron needs to run more often, and that should be a
+    decision rather than a discovery.
+  */
+  const coverage = {
+    metrics_sweep: {
+      workspaces: sweep.total,
+      this_run: sweep.batch.length,
+      wrapped: sweep.wrapped,
+      nights_for_full_cycle: Math.max(1, Math.ceil(sweep.total / SWEEP_CAP)),
+    },
+    daily_analysis: {
+      entitled: analysis.total,
+      this_run: ran,
+      wrapped: analysis.wrapped,
+      nights_for_full_cycle: Math.max(1, Math.ceil(analysis.total / ANALYSIS_CAP)),
+    },
+  };
+
+  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, heartbeat, scheduledWorkflows, alertsEmailed, collectionsSent, coverage });
 }

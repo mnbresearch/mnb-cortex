@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { buildPriorities } from "@/lib/ai/priorities";
 import { getBusinessContext, getMetrics, getUserAndOrg } from "@/lib/data";
 import { enforce } from "@/lib/ratelimit";
+import { cachedByInput } from "@/lib/ai/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,8 +39,27 @@ export async function POST() {
   try {
     const [ctx, metrics] = await Promise.all([getBusinessContext(), getMetrics()]);
     const hasData = Array.isArray(metrics) && metrics.length > 0;
-    const res = await buildPriorities(ctx, hasData);
-    return NextResponse.json({ ok: true, ...res });
+
+    /*
+      Cached on the INPUT, not on a timer.
+
+      next-best-actions.tsx calls this from a useEffect on the dashboard, which
+      is the landing page — so every view, refresh, back-navigation and second
+      tab was a Gemini call and two to ten seconds of latency for a card nobody
+      clicked. The rate limit above caps abuse per workspace but does nothing
+      about the cost of ordinary use across many workspaces.
+
+      The context reads still run on every request; only the model call is
+      skipped, and only when the context is byte-for-byte what it was last time.
+      So the advice updates the moment the underlying numbers do, which a TTL
+      could not promise without also recomputing constantly. Six hours is a
+      ceiling for changes the fingerprint cannot see, like a new prompt.
+    */
+    const { value: res, hit } = await cachedByInput(
+      orgId, "priorities", { ctx, hasData }, 6 * 60 * 60,
+      () => buildPriorities(ctx, hasData),
+    );
+    return NextResponse.json({ ok: true, ...res, cached: hit });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || "Could not build priorities.", priorities: [], mode: "none" });
   }

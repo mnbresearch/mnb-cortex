@@ -1,11 +1,37 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient, hasSupabase, serviceClient } from "@/lib/supabase/server";
 import { demoMetrics, demoInsights, demoAlerts, demoContext } from "@/lib/demo";
 import { SUPER_ADMINS } from "@/lib/operators";
 import type { HealthMetric, AIInsight, Alert } from "@/types";
 
-export async function getUserAndOrg() {
+/**
+ * Who is signed in, and which workspace they are looking at.
+ *
+ * MEMOISED PER REQUEST, and it matters more than it looks.
+ *
+ * This is called from roughly a dozen places during a single dashboard render
+ * — the layout alone does getOrgProfile, isSuperAdmin, getMyOrgs,
+ * getBillingStatus and ConnectBanner, and every one of those calls this first,
+ * then the page does it again for each of its own data functions. Uncached,
+ * each call costs a round trip to GoTrue for auth.getUser() plus a memberships
+ * query. That is ~12 sequential network hops before a single business row is
+ * read, on every page view, for information that cannot change mid-render.
+ *
+ * React's cache() is REQUEST-scoped, not time-scoped: the memo lives for one
+ * render pass and is thrown away. So this is not a staleness risk in the way a
+ * TTL cache would be — two different users, or the same user after switching
+ * workspace, never share an entry.
+ *
+ * The one pattern that would break is a request that changes the active
+ * workspace and then reads it back in the same pass. /api/org/switch sets the
+ * cortex_org cookie and returns immediately without calling this, so that
+ * pattern does not exist today. If a future action sets the cookie and then
+ * needs the new org in the same request, it must read the cookie directly
+ * rather than expecting this to have noticed.
+ */
+export const getUserAndOrg = cache(async function getUserAndOrg() {
   if (!hasSupabase()) return { user: null, orgId: null as string | null };
   try {
     const sb = createClient();
@@ -35,7 +61,7 @@ export async function getUserAndOrg() {
     } catch { /* RLS or missing columns — fall through to first */ }
     return { user, orgId: ids[0] };
   } catch { return { user: null, orgId: null }; }
-}
+});
 
 /** Integration state for the current workspace: connections, plan, and permissions. */
 export async function getIntegrationState() {
