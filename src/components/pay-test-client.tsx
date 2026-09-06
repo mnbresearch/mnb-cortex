@@ -137,6 +137,42 @@ export function PayTestClient({ packId, price, before }: { packId: string; price
         </div>
       )}
 
+      {/*
+        THE REFUND CHECK, which costs nothing and is the only way to exercise
+        the reversal path for real.
+
+        Nothing about handleRefundEvent has ever run against a live event: not
+        the signature, not the routing that keeps REFUND_SUCCESS away from the
+        grant path, not the clawback, not the alert. Refunding the ₹1 that is
+        already paid exercises all of it, and returns the rupee.
+      */}
+      <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+        <div className="text-sm font-medium">Next: verify the refund path (free)</div>
+        <ol className="text-xs text-muted-foreground space-y-1 list-decimal pl-4">
+          <li>Cashfree dashboard → Transactions → the ₹{price} payment → <b>Refund</b></li>
+          <li>Wait ~30 seconds for the webhook, then press <b>Re-check without paying</b></li>
+        </ol>
+        <p className="text-xs text-muted-foreground">
+          Expected: credits drop back by 1, the payment row reads <code>refunded:reversed</code>,
+          a red billing alert appears, and a <code>refund_reversal:</code> ledger row records the
+          clawback. If credits do <b>not</b> drop, the reversal did not run — which is the failure
+          that lets someone buy, spend, charge back and keep everything.
+        </p>
+      </div>
+
+      {detail?.refunded && (
+        <div className="rounded-lg border border-success/30 bg-success/5 p-3 text-sm space-y-1">
+          <p className="text-success font-medium">Refund detected.</p>
+          <p className="text-xs font-mono">{detail.payment?.status}</p>
+          <p className="text-xs">
+            {detail.reversalLedger
+              ? <>Clawback recorded: <code>{detail.reversalLedger}</code></>
+              : <span className="text-danger">No reversal ledger row — the credits were NOT clawed back.</span>}
+          </p>
+          {detail.refundAlert && <p className="text-xs text-muted-foreground">Alert: {detail.refundAlert}</p>}
+        </div>
+      )}
+
       {after !== null && (
         <div className="space-y-2 text-sm">
           <Row label="Credits before" value={before.toLocaleString("en-IN")} />

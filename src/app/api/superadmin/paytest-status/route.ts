@@ -58,5 +58,36 @@ export async function GET() {
     ledgerReason = l ? `${l.reason} (delta ${l.delta}, balance ${l.balance_after})` : "NOT FOUND";
   }
 
-  return NextResponse.json({ ok: true, credits, payment, claimCount, ledgerReason });
+  /*
+    Refund state, so the reversal path can be verified without spending
+    anything: refunding the existing ₹1 in the Cashfree dashboard fires
+    REFUND_SUCCESS, which is the only way to exercise handleRefundEvent for
+    real. Everything about it — the event reaching us, the signature, the
+    routing away from settleOrder, the clawback, the alert — is untested until
+    a genuine refund happens.
+
+    `reversalLedger` is the proof. A status of "refunded:*" only says our
+    handler ran; the negative ledger row says the credits actually came back.
+  */
+  let reversalLedger: string | null = null;
+  let refundAlert: string | null = null;
+  if (payment?.order_id) {
+    const { data: rev } = await svc.from("credit_ledger")
+      .select("reason, delta, balance_after")
+      .eq("org_id", orgId).eq("reason", `refund_reversal:${payment.order_id}`).limit(1);
+    const r = (rev as any[])?.[0];
+    reversalLedger = r ? `${r.reason} (delta ${r.delta}, balance ${r.balance_after})` : null;
+
+    const { data: al } = await svc.from("alerts")
+      .select("title, body, created_at").eq("org_id", orgId).eq("module", "billing")
+      .order("created_at", { ascending: false }).limit(1);
+    const a = (al as any[])?.[0];
+    refundAlert = a ? `${a.title}: ${a.body}` : null;
+  }
+
+  return NextResponse.json({
+    ok: true, credits, payment, claimCount, ledgerReason,
+    refunded: String(payment?.status || "").startsWith("refunded"),
+    reversalLedger, refundAlert,
+  });
 }
