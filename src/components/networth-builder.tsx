@@ -30,7 +30,7 @@ function Ledger({ title, rows, setRows, tone }: { title: string; rows: Row[]; se
         <div key={r.id} className="flex items-center gap-2">
           <input className={I + " flex-1"} value={r.label} onChange={(e) => setRows(rows.map((x) => x.id === r.id ? { ...x, label: e.target.value } : x))} />
           <input className={I + " w-32"} type="number" value={r.amount} onChange={(e) => setRows(rows.map((x) => x.id === r.id ? { ...x, amount: Number(e.target.value) } : x))} />
-          <button onClick={() => setRows(rows.filter((x) => x.id !== r.id))} className="text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setRows(rows.filter((x) => x.id !== r.id))} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button>
         </div>
       ))}
       <div className={`flex items-center justify-between border-t pt-2 font-semibold ${tone}`}><span>Total {title.toLowerCase()}</span><span className="tabular-nums">{inr(total)}</span></div>

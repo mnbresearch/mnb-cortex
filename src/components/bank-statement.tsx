@@ -132,7 +132,7 @@ export function BankStatementPanel() {
         )}
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4}
           className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-          placeholder="…or paste your transaction rows here (date, description, amount, type)" />
+          placeholder="…or paste your transaction rows here (date, description, amount, type)" aria-label="…or paste your transaction rows here (date, description, amount, type)" />
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Button onClick={run} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Landmark className="h-4 w-4" />} {loading ? "Reading your money…" : "Analyse statement"}

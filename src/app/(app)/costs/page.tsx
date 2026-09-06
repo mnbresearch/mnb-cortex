@@ -40,7 +40,7 @@ export default async function Costs() {
           </div>
         </Section>
         <Section title="Run a cost-optimization pass" desc="Cortex finds savings and flags what not to cut">
-          <AIPanel mode="costs" placeholder="Optional: focus (e.g. 'overheads only' or 'supply chain')" cta="Find cost savings" saveMode="strategy" />
+          <AIPanel mode="costs" placeholder="Optional: focus (e.g. 'overheads only' or 'supply chain')" aria-label="Optional: focus (e.g. 'overheads only' or 'supply chain')" cta="Find cost savings" saveMode="strategy" />
         </Section>
       </PageShell>
     </>

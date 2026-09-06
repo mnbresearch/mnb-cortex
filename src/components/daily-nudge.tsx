@@ -31,7 +31,7 @@ export function DailyNudge({ status, daysLeft }: { status: string; daysLeft: num
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center bg-black/40 backdrop-blur-sm p-4" onClick={dismiss}>
       <div {...dlg} className="max-w-sm w-full rounded-2xl border bg-card p-6 shadow-2xl text-center relative outline-none" onClick={(e) => e.stopPropagation()}>
-        <button onClick={dismiss} className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+        <button onClick={dismiss} className="absolute right-3 top-3 text-muted-foreground hover:text-foreground min-h-11 min-w-11 p-2" aria-label="Close"><X aria-hidden="true" className="h-4 w-4" /></button>
         <div className="h-12 w-12 rounded-2xl brand-gradient grid place-items-center text-white mx-auto animate-float"><Sparkles className="h-6 w-6" /></div>
         <h2 className="mt-3 font-semibold text-lg">
           {daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left on your plan` : "Your plan is ending"}

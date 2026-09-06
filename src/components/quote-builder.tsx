@@ -87,10 +87,10 @@ export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
     <Card className="p-5 space-y-4">
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="space-y-2"><div className="text-sm font-medium">From</div><input className={I + " w-full"} value={from.name} onChange={(e) => setFrom({ ...from, name: e.target.value })} /><input className={I + " w-full"} value={from.detail} onChange={(e) => setFrom({ ...from, detail: e.target.value })} /></div>
-        <div className="space-y-2"><div className="text-sm font-medium">To</div><input className={I + " w-full"} value={to.name} onChange={(e) => setTo({ ...to, name: e.target.value })} /><input className={I + " w-full"} placeholder="Client details" value={to.detail} onChange={(e) => setTo({ ...to, detail: e.target.value })} /></div>
+        <div className="space-y-2"><div className="text-sm font-medium">To</div><input className={I + " w-full"} value={to.name} onChange={(e) => setTo({ ...to, name: e.target.value })} /><input className={I + " w-full"} placeholder="Client details" aria-label="Client details" value={to.detail} onChange={(e) => setTo({ ...to, detail: e.target.value })} /></div>
       </div>
       <div className="flex flex-wrap gap-3 items-center">
-        <input className={I} value={meta.no} onChange={(e) => setMeta({ ...meta, no: e.target.value })} placeholder="Quote #" />
+        <input className={I} value={meta.no} onChange={(e) => setMeta({ ...meta, no: e.target.value })} placeholder="Quote #" aria-label="Quote #" />
         <input className={I} type="date" value={meta.date} onChange={(e) => setMeta({ ...meta, date: e.target.value })} />
         <label className="text-sm text-muted-foreground flex items-center gap-1">Valid <input className={I + " w-16"} type="number" value={meta.validity} onChange={(e) => setMeta({ ...meta, validity: Number(e.target.value) })} /> days</label>
         <label className="text-sm text-muted-foreground flex items-center gap-1">GST <input aria-label="GST percent" aria-invalid={gstRateWarning(gst) ? true : undefined} className={I + " w-16" + (gstRateWarning(gst) ? " border-warning" : "")} type="number" value={gst} onChange={(e) => setGst(Number(e.target.value))} /> %</label>
@@ -104,12 +104,12 @@ export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
             <input className={I + " flex-1"} value={it.desc} onChange={(e) => upd(it.id, "desc", e.target.value)} />
             <input className={I + " w-16"} type="number" value={it.qty} onChange={(e) => upd(it.id, "qty", e.target.value)} title="Qty" />
             <input className={I + " w-28"} type="number" value={it.rate} onChange={(e) => upd(it.id, "rate", e.target.value)} title="Rate" />
-            <button onClick={() => del(it.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-4 w-4" /></button>
+            <button onClick={() => del(it.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button>
           </div>
         ))}
         <Button variant="outline" size="sm" onClick={add}><Plus className="h-4 w-4" /> Add line</Button>
       </div>
-      <textarea className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Terms & notes" />
+      <textarea className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Terms & notes" aria-label="Terms & notes" />
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
         <div className="text-sm"><div className="text-muted-foreground">Subtotal {rupee(totals.sub)} · GST {rupee(totals.tax)}</div><div className="text-lg font-bold">Total: {rupee(totals.grand)}</div></div>
         <div className="flex flex-wrap items-center gap-2">

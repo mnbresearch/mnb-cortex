@@ -104,7 +104,7 @@ export function CsvImport() {
         <Button onClick={doImport} disabled={!rows.length || loading}><CheckCircle2 className="h-4 w-4" /> {loading ? "Importing…" : `Import ${rows.length || ""} rows`}</Button>
       </div>
       <div className="flex items-center gap-2 pt-1 border-t">
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="…or paste a public Google Sheets / CSV link" className="flex-1 rounded-lg border bg-background px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-ring" />
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="…or paste a public Google Sheets / CSV link" aria-label="…or paste a public Google Sheets / CSV link" className="flex-1 rounded-lg border bg-background px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-ring" />
         <Button variant="outline" onClick={doUrlImport} disabled={!url.trim() || loading}>Import from URL</Button>
       </div>
       {msg && <p className="text-sm">{msg}</p>}

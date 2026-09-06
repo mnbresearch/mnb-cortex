@@ -65,7 +65,7 @@ export function CommissionCalc({ seed }: { seed?: Rep[] } = {}) {
                 <td className="py-1.5 pr-2"><input className={I + " w-28"} type="number" value={p.sales} onChange={(e) => upd(p.id, "sales", e.target.value)} /></td>
                 <td className={`py-1.5 pr-2 font-medium ${p.attainment >= 100 ? "text-success" : p.attainment >= 80 ? "text-warning" : "text-danger"}`}>{p.attainment.toFixed(0)}%</td>
                 <td className="py-1.5 pr-2 text-muted-foreground">{p.effRate.toFixed(1)}%</td>
-                <td className="py-1.5"><div className="flex items-center gap-1"><span className="font-medium">{inr(p.payout)}</span><button onClick={() => del(p.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button></div></td>
+                <td className="py-1.5"><div className="flex items-center gap-1"><span className="font-medium">{inr(p.payout)}</span><button onClick={() => del(p.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button></div></td>
               </tr>
             ))}
           </tbody>

@@ -40,9 +40,9 @@ export function DecisionJournal() {
     <div className="space-y-4">
       <Card className="p-5 space-y-3">
         <div className="font-semibold flex items-center gap-2"><Gavel className="h-4 w-4 text-primary" /> Log a decision</div>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="The decision (e.g. Enter the UAE market in Q3)"
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="The decision (e.g. Enter the UAE market in Q3)" aria-label="The decision (e.g. Enter the UAE market in Q3)"
           className="w-full rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
-        <textarea value={rationale} onChange={(e) => setRationale(e.target.value)} rows={3} placeholder="Why — your reasoning and the key assumptions"
+        <textarea value={rationale} onChange={(e) => setRationale(e.target.value)} rows={3} placeholder="Why — your reasoning and the key assumptions" aria-label="Why — your reasoning and the key assumptions"
           className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
         <Button onClick={add}><Plus className="h-4 w-4" /> Save decision</Button>
       </Card>
@@ -57,7 +57,7 @@ export function DecisionJournal() {
               <div className="text-xs text-muted-foreground">{new Date(d.date).toLocaleDateString("en-IN")}</div>
               {d.rationale && <p className="text-sm text-muted-foreground mt-1">{d.rationale}</p>}
             </div>
-            <button onClick={() => del(d.id)} className="text-muted-foreground hover:text-danger shrink-0"><Trash2 className="h-4 w-4" /></button>
+            <button onClick={() => del(d.id)} className="text-muted-foreground hover:text-danger shrink-0 min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {(["considering", "decided", "revisit"] as const).map((s) => (

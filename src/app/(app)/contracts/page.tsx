@@ -28,7 +28,7 @@ export default function Contracts() {
           ))}
         </div>
         <Section title="Review a contract" desc="Upload a PDF or paste the text — the AI flags obligations, dates and red flags">
-          <AIPanel mode="contract" placeholder="Paste the clause or contract text here…" cta="Review this contract" multiline allowFile saveMode="strategy" />
+          <AIPanel mode="contract" placeholder="Paste the clause or contract text here…" aria-label="Paste the clause or contract text here" cta="Review this contract" multiline allowFile saveMode="strategy" />
           <p className="text-xs text-muted-foreground mt-2">General guidance only — not legal advice. Have a lawyer confirm anything material before you sign.</p>
         </Section>
       </PageShell>

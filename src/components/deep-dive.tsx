@@ -102,7 +102,7 @@ export function DeepDivePanel() {
           <input value={question} onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !loading) run(); }}
             className="flex-1 bg-transparent text-sm outline-none"
-            placeholder="Optional: a specific question (e.g. “why did margin drop last month?”)" />
+            placeholder="Optional: a specific question (e.g. “why did margin drop last month?”)" aria-label="Optional: a specific question (e.g. “why did margin drop last month?”)" />
         </div>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Button onClick={run} disabled={loading}>

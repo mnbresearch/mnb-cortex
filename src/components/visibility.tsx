@@ -56,10 +56,10 @@ export function VisibilityPanel() {
     <div className="space-y-4">
       <Card className="p-4 space-y-3">
         <div className="grid sm:grid-cols-2 gap-3">
-          <input className={IN} placeholder="Your brand name *" value={brand} onChange={(e) => setBrand(e.target.value)} />
-          <input className={IN} placeholder="Category (e.g. gold jewellery exporter)" value={category} onChange={(e) => setCategory(e.target.value)} />
-          <input className={IN} placeholder="City / region (optional)" value={location} onChange={(e) => setLocation(e.target.value)} />
-          <input className={IN} placeholder="Competitors, comma-separated (optional)" value={competitors} onChange={(e) => setCompetitors(e.target.value)} />
+          <input className={IN} placeholder="Your brand name *" aria-label="Your brand name *" value={brand} onChange={(e) => setBrand(e.target.value)} />
+          <input className={IN} placeholder="Category (e.g. gold jewellery exporter)" aria-label="Category (e.g. gold jewellery exporter)" value={category} onChange={(e) => setCategory(e.target.value)} />
+          <input className={IN} placeholder="City / region (optional)" aria-label="City / region (optional)" value={location} onChange={(e) => setLocation(e.target.value)} />
+          <input className={IN} placeholder="Competitors, comma-separated (optional)" aria-label="Competitors, comma-separated (optional)" value={competitors} onChange={(e) => setCompetitors(e.target.value)} />
         </div>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Button onClick={run} disabled={loading}>

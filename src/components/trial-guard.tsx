@@ -60,7 +60,7 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
             {daysLeft > 0 ? <><b>{daysLeft}</b> {daysLeft === 1 ? "day" : "days"} left on your plan</> : "Choose a plan to continue"}
           </span>
           <Link href="/billing" className="rounded-full brand-gradient text-white px-3 py-1 text-xs font-medium shrink-0">Upgrade</Link>
-          <button onClick={() => setDismissed(true)} className="text-muted-foreground hover:text-foreground shrink-0"><X className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setDismissed(true)} className="text-muted-foreground hover:text-foreground shrink-0 min-h-11 min-w-11 p-2" aria-label="Close"><X aria-hidden="true" className="h-3.5 w-3.5" /></button>
         </div>
       </div>
     );
@@ -79,7 +79,7 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
             {daysLeft > 0 ? <>Your plan renews in <b>{daysLeft}</b> {daysLeft === 1 ? "day" : "days"}</> : "Your plan ends today"}
           </span>
           <Link href="/billing" className="rounded-full brand-gradient text-white px-3 py-1 text-xs font-medium shrink-0">Renew</Link>
-          <button onClick={() => setDismissed(true)} className="text-muted-foreground hover:text-foreground shrink-0"><X className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setDismissed(true)} className="text-muted-foreground hover:text-foreground shrink-0 min-h-11 min-w-11 p-2" aria-label="Close"><X aria-hidden="true" className="h-3.5 w-3.5" /></button>
         </div>
       </div>
     );

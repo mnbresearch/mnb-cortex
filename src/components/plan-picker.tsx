@@ -63,7 +63,7 @@ export function PlanPicker({ currentPlan = "", savedPhone = "" }: { currentPlan?
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             inputMode="numeric"
-            placeholder="98765 43210"
+            placeholder="98765 43210" aria-label="98765 43210"
             className="rounded-lg border bg-background px-3 h-10 text-sm flex-1 outline-none focus:ring-2 focus:ring-ring"
           />
           {phoneOk && <span className="text-xs text-success">✓</span>}

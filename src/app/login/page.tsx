@@ -184,7 +184,7 @@ export default function Login() {
                     <label htmlFor="login-company" className="text-sm font-medium block mb-1">
                       Business name <span className="text-muted-foreground font-normal">(optional)</span>
                     </label>
-                    <input id="login-company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Sharma Steel"
+                    <input id="login-company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Sharma Steel" aria-label="Sharma Steel"
                       className="w-full rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
                   </div>
                 )}
@@ -193,7 +193,7 @@ export default function Login() {
                   <div className="relative">
                     <Mail aria-hidden="true" className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                     <input id="login-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@business.com" autoComplete="email"
+                      placeholder="you@business.com" aria-label="you@business.com" autoComplete="email"
                       aria-invalid={err ? true : undefined} aria-describedby={err ? "login-error" : undefined}
                       className="w-full rounded-lg border bg-background pl-9 pr-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
                   </div>

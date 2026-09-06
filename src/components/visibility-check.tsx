@@ -70,11 +70,11 @@ export function VisibilityCheck() {
   return (
     <form onSubmit={run} className="rounded-2xl border bg-card p-6 lg:p-8 max-w-2xl">
       <div className="grid sm:grid-cols-2 gap-3">
-        <input className={IN} placeholder="Your name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
-        <input className={IN} type="email" placeholder="Work email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
-        <input className={`${IN} sm:col-span-2`} placeholder="Your brand / business name" value={f.brand} onChange={(e) => setF({ ...f, brand: e.target.value })} required />
-        <input className={IN} placeholder="What you do (e.g. gold jewellery exporter)" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} />
-        <input className={IN} placeholder="City / region (optional)" value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} />
+        <input className={IN} placeholder="Your name" aria-label="Your name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
+        <input className={IN} type="email" placeholder="Work email" aria-label="Work email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
+        <input className={`${IN} sm:col-span-2`} placeholder="Your brand / business name" aria-label="Your brand / business name" value={f.brand} onChange={(e) => setF({ ...f, brand: e.target.value })} required />
+        <input className={IN} placeholder="What you do (e.g. gold jewellery exporter)" aria-label="What you do (e.g. gold jewellery exporter)" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} />
+        <input className={IN} placeholder="City / region (optional)" aria-label="City / region (optional)" value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} />
       </div>
       {res?.error && <p className="text-sm text-danger mt-3">{res.error}</p>}
       <button disabled={loading} className="mt-4 inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>

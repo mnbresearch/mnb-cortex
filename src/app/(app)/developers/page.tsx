@@ -56,7 +56,7 @@ export default async function Developers() {
         {live && (
           <Section title="API keys" desc="Use in the x-api-key header. Keep secret.">
             <form action={generateApiKey} className="flex flex-wrap items-end gap-2 mb-4">
-              <div className="flex-1 min-w-[200px]"><Field name="label" label="Label" placeholder="e.g. Zapier, backend" /></div>
+              <div className="flex-1 min-w-[200px]"><Field name="label" label="Label" placeholder="e.g. Zapier, backend" aria-label="e.g. Zapier, backend" /></div>
               <button className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90"><KeyRound className="h-4 w-4" /> Generate key</button>
             </form>
             <div className="space-y-2">
@@ -64,7 +64,7 @@ export default async function Developers() {
               {rows.map((k) => (
                 <div key={k.id} className="flex items-center justify-between rounded-lg border p-3">
                   <div><div className="text-sm font-medium">{k.label}</div><code className="text-xs text-muted-foreground break-all">{k.key}</code></div>
-                  <form action={deleteApiKey}><input type="hidden" name="id" value={k.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10"><Trash2 className="h-4 w-4" /></button></form>
+                  <form action={deleteApiKey}><input type="hidden" name="id" value={k.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></form>
                 </div>
               ))}
             </div>
@@ -102,9 +102,9 @@ export default async function Developers() {
           </div>
 
           <CollapsibleForm title="Add webhook endpoint" action={addWebhook}>
-            <Field name="url" label="HTTPS endpoint" placeholder="https://your-app.com/hooks/cortex" required />
-            <Field name="label" label="Label (optional)" placeholder="Zapier, internal ERP…" />
-            <Field name="events" label="Events (comma-separated, blank = all)" placeholder="alert.created, payment.succeeded" />
+            <Field name="url" label="HTTPS endpoint" placeholder="https://your-app.com/hooks/cortex" aria-label="https://your-app.com/hooks/cortex" required />
+            <Field name="label" label="Label (optional)" placeholder="Zapier, internal ERP…" aria-label="Zapier, internal ERP" />
+            <Field name="events" label="Events (comma-separated, blank = all)" placeholder="alert.created, payment.succeeded" aria-label="alert.created, payment.succeeded" />
           </CollapsibleForm>
 
           <div className="space-y-2 mt-3">

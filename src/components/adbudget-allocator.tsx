@@ -60,7 +60,7 @@ export function AdBudgetAllocator() {
                   <td className="py-1.5 pr-2"><input className={I + " w-16"} type="number" value={c.conversions} onChange={(e) => upd(c.id, "conversions", e.target.value)} /></td>
                   <td className={`py-1.5 pr-2 font-medium tabular-nums ${c.roas >= 3 ? "text-success" : c.roas < 1 ? "text-danger" : ""}`}>{c.roas.toFixed(2)}×</td>
                   <td className="py-1.5 pr-2 tabular-nums text-muted-foreground">{inr(c.cac)}</td>
-                  <td className="py-1.5"><button onClick={() => del(c.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button></td>
+                  <td className="py-1.5"><button onClick={() => del(c.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button></td>
                 </tr>
               ))}
             </tbody>

@@ -35,7 +35,7 @@ export default async function DataExplorer({ searchParams }: { searchParams: { t
               <form className="flex items-center gap-2 rounded-lg border px-3 h-9 w-full sm:w-72" action="/data">
                 <input type="hidden" name="table" value={table} />
                 <Search className="h-4 w-4 text-muted-foreground" />
-                <input name="q" defaultValue={q} placeholder={`Search ${LABEL[table]}…`} className="flex-1 bg-transparent text-sm outline-none" />
+                <input name="q" defaultValue={q} placeholder={`Search ${LABEL[table]}…`} className="flex-1 bg-transparent text-sm outline-none"  aria-label="Search"/>
               </form>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground flex items-center gap-1"><Database className="h-3.5 w-3.5" /> {total} total</span>

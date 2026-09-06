@@ -21,7 +21,7 @@ export function Shortcuts() {
   return (
     <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm grid place-items-center p-4" onClick={() => setOpen(false)}>
       <div className="w-full max-w-sm rounded-xl border bg-card p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3"><span className="font-semibold">Keyboard shortcuts</span><button onClick={() => setOpen(false)}><X className="h-4 w-4 text-muted-foreground" /></button></div>
+        <div className="flex items-center justify-between mb-3"><span className="font-semibold">Keyboard shortcuts</span><button onClick={() => setOpen(false)} aria-label="Close" style={{ minHeight: 44, minWidth: 44 }}><X aria-hidden="true" className="h-4 w-4 text-muted-foreground" /></button></div>
         <div className="space-y-2">{SHORTCUTS.map((s) => <div key={s.d} className="flex items-center justify-between text-sm"><span className="text-muted-foreground">{s.d}</span><kbd className="text-xs border rounded px-2 py-0.5 bg-secondary">{s.k}</kbd></div>)}</div>
       </div>
     </div>

@@ -88,7 +88,7 @@ export function AIPanel({ mode, placeholder, cta, multiline = false, allowFile =
         <form action={saveArtifact} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="mode" value={saveMode} />
           <input type="hidden" name="content" value={out} />
-          <input name="title" placeholder="Title to save as…" defaultValue={input.slice(0, 60)} className="rounded-lg border bg-background px-3 h-9 text-sm flex-1 min-w-[200px] outline-none focus:ring-2 focus:ring-ring" />
+          <input name="title" placeholder="Title to save as…" defaultValue={input.slice(0, 60)} className="rounded-lg border bg-background px-3 h-9 text-sm flex-1 min-w-[200px] outline-none focus:ring-2 focus:ring-ring"  aria-label="Title to save as"/>
           <Button type="submit" variant="outline"><Save className="h-4 w-4" /> Save to workspace</Button>
         </form>
       )}

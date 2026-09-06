@@ -15,7 +15,7 @@ export default function Sops() {
       <Topbar title="SOP Builder" subtitle="Turn how-you-do-things into repeatable processes" />
       <PageShell>
         <Section title="Write an SOP" desc="Describe the process — Cortex writes a clear, team-ready procedure">
-          <AIPanel mode="sop" placeholder="e.g. How we approve and raise a purchase order for raw materials" cta="Generate the SOP" multiline saveMode="strategy" />
+          <AIPanel mode="sop" placeholder="e.g. How we approve and raise a purchase order for raw materials" aria-label="e.g. How we approve and raise a purchase order for raw materials" cta="Generate the SOP" multiline saveMode="strategy" />
         </Section>
         <Section title="Common SOPs to create" desc="Tap one, paste it above, and generate">
           <div className="flex flex-wrap gap-2">{ideas.map((i) => <Badge key={i} className="border-border text-muted-foreground">{i}</Badge>)}</div>

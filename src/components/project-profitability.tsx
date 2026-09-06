@@ -93,7 +93,7 @@ export function ProjectProfitability() {
                 <td className="py-1.5 pr-2 text-muted-foreground">₹{r.effRate.toFixed(0)}</td>
                 <td className={`py-1.5 pr-2 font-medium ${r.profit >= 0 ? "text-success" : "text-danger"}`}>{inr(r.profit)}</td>
                 <td className="py-1.5"><div className="flex items-center gap-1"><Badge className={tone(r.margin)}>{r.margin.toFixed(0)}%</Badge>
-                  <button onClick={() => del(r.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button></div></td>
+                  <button onClick={() => del(r.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button></div></td>
               </tr>
             ))}
           </tbody>

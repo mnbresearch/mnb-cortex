@@ -92,9 +92,9 @@ export function EmailConsole() {
             <option value="welcome">Welcome</option>
           </select>
         </div>
-        <input className={I} placeholder="To — person@company.com" value={to} onChange={(e) => setTo(e.target.value)} />
-        <input className={I} placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
-        <textarea rows={7} placeholder="Write your message…" value={body} onChange={(e) => setBody(e.target.value)}
+        <input className={I} placeholder="To — person@company.com" aria-label="To — person@company.com" value={to} onChange={(e) => setTo(e.target.value)} />
+        <input className={I} placeholder="Subject" aria-label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
+        <textarea rows={7} placeholder="Write your message…" aria-label="Write your message" value={body} onChange={(e) => setBody(e.target.value)}
           className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
         <div className="flex flex-wrap gap-2">
           <Button onClick={send} disabled={sending}>{sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{sending ? "Sending…" : "Send email"}</Button>

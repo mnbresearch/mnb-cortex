@@ -128,7 +128,7 @@ export function CollectionsSettings({ policy, whatsappReady }: { policy: Policy;
               <span className="text-muted-foreground block mb-1">Your approved WhatsApp template name</span>
               <input className={I + " w-full"} name="whatsapp_template"
                 defaultValue={policy.whatsapp_template || ""}
-                placeholder="payment_reminder" autoCapitalize="none" spellCheck={false} />
+                placeholder="payment_reminder" aria-label="payment_reminder" autoCapitalize="none" spellCheck={false} />
             </label>
             <p className="text-xs text-muted-foreground">
               WhatsApp will not deliver a message to someone who has not messaged you first unless it
@@ -141,7 +141,7 @@ export function CollectionsSettings({ policy, whatsappReady }: { policy: Policy;
             <label className="text-sm block">
               <span className="text-muted-foreground block mb-1">Template language code</span>
               <input className={I + " w-32"} name="whatsapp_lang"
-                defaultValue={policy.whatsapp_lang || "en"} placeholder="en"
+                defaultValue={policy.whatsapp_lang || "en"} placeholder="en" aria-label="en"
                 autoCapitalize="none" spellCheck={false} />
               <span className="text-xs text-muted-foreground block mt-1">
                 Meta treats <code>en</code> and <code>en_US</code> as different templates. Copy
@@ -164,11 +164,11 @@ export function CollectionsSettings({ policy, whatsappReady }: { policy: Policy;
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="text-sm block">
             <span className="text-muted-foreground block mb-1">Sign off as</span>
-            <input className={I + " w-full"} name="signature" defaultValue={policy.signature || ""} placeholder="Ramesh, Accounts — Sharma Steel" />
+            <input className={I + " w-full"} name="signature" defaultValue={policy.signature || ""} placeholder="Ramesh, Accounts — Sharma Steel" aria-label="Ramesh, Accounts — Sharma Steel" />
           </label>
           <label className="text-sm block">
             <span className="text-muted-foreground block mb-1">How to pay</span>
-            <input className={I + " w-full"} name="payment_note" defaultValue={policy.payment_note || ""} placeholder="UPI: sharmasteel@hdfc · A/c 5011… IFSC HDFC0000…" />
+            <input className={I + " w-full"} name="payment_note" defaultValue={policy.payment_note || ""} placeholder="UPI: sharmasteel@hdfc · A/c 5011… IFSC HDFC0000…" aria-label="UPI: sharmasteel@hdfc · A/c 5011… IFSC HDFC0000" />
           </label>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">

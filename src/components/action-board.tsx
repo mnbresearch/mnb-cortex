@@ -105,7 +105,7 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
         <Button variant="outline" size="sm" onClick={generate} disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Generate from my business</Button>
       </div>
       <div className="flex gap-2">
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="Add a task…"
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="Add a task…" aria-label="Add a task"
           className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
         <Button onClick={add}><Plus className="h-4 w-4" /> Add</Button>
       </div>
@@ -121,9 +121,9 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
                     <span className={`flex-1 ${t.col === 2 ? "line-through text-muted-foreground" : ""}`}>{t.title}</span>
                   </div>
                   <div className="flex items-center gap-1 mt-2">
-                    <button onClick={() => move(t.id, -1)} disabled={t.col === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
-                    <button onClick={() => move(t.id, 1)} disabled={t.col === 2} className="text-muted-foreground hover:text-foreground disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
-                    <button onClick={() => del(t.id)} className="ml-auto text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => move(t.id, -1)} disabled={t.col === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 min-h-11 min-w-11 p-2" aria-label="Previous"><ChevronLeft aria-hidden="true" className="h-4 w-4" /></button>
+                    <button onClick={() => move(t.id, 1)} disabled={t.col === 2} className="text-muted-foreground hover:text-foreground disabled:opacity-30 min-h-11 min-w-11 p-2" aria-label="Next"><ChevronRight aria-hidden="true" className="h-4 w-4" /></button>
+                    <button onClick={() => del(t.id)} className="ml-auto text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
               ))}

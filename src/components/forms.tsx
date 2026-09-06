@@ -44,8 +44,7 @@ export function DeleteButton({ table, id, path }: { table: string; id: string; p
       <input type="hidden" name="table" value={table} />
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="path" value={path} />
-      <button type="submit" title="Delete" className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10">
-        <Trash2 className="h-4 w-4" />
+      <button type="submit" title="Delete" className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" />
       </button>
     </form>
   );

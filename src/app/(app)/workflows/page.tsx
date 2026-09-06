@@ -47,7 +47,7 @@ export default async function Workflows() {
         <CollapsibleForm title="New workflow" action={addWorkflow}>
           <Field name="name" label="Workflow name" required />
           <SelectField name="trigger" label="Trigger" options={["schedule","event","manual"]} />
-          <Field name="steps" label="Steps (comma-separated)" placeholder="recompute, receivables, email Daily digest" />
+          <Field name="steps" label="Steps (comma-separated)" placeholder="recompute, receivables, email Daily digest" aria-label="recompute, receivables, email Daily digest" />
         </CollapsibleForm>
 
         <div className="grid md:grid-cols-2 gap-3">

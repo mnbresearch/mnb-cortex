@@ -22,6 +22,16 @@ const check = (c, n, d = "") => (c ? pass++ : failures.push(`${n}\n      ${d}`))
 const root = resolve(import.meta.dirname, "..");
 const read = (f) => readFileSync(join(root, f), "utf8");
 
+/** Every .tsx under src, for the whole-codebase sweeps below. */
+function allTsx(dir = join(root, "src"), acc = []) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const fp = join(dir, e.name);
+    if (e.isDirectory()) allTsx(fp, acc);
+    else if (e.name.endsWith(".tsx")) acc.push(fp.slice(root.length + 1));
+  }
+  return acc;
+}
+
 /* ------------------------------------------------ landmarks and skip link */
 
 const shell = read("src/components/page-shell.tsx");
@@ -133,6 +143,106 @@ check(!!m, "parse: --brand-2-deep");
 if (m) {
   const r = ratio(hsl2rgb(+m[1], +m[2], +m[3]), [255, 255, 255]);
   check(r >= 4.5, `white on the gradient's end stop is ${r.toFixed(2)}:1`, "needs 4.5:1");
+}
+
+/* ========================================================================= */
+/* Tranche 2: touch targets, the combobox, disclosures, and control names.    */
+/* ========================================================================= */
+
+/*
+  TOUCH TARGETS — WCAG 2.5.5. Every Button size token was under 44px: default
+  40, sm 32, icon 40. 149 render sites inherit them, 71 of those size="sm", so
+  this one file was the highest-leverage fix in the codebase.
+
+  `sm` keeps a 32px painted height and reaches 44px through an ::after overlay
+  rather than growing, because min-h would beat h-8 and reflow every toolbar it
+  appears in. Asserting the mechanism, not just a number, since "44" appearing
+  somewhere in the file proves nothing.
+*/
+{
+  const btn = read("src/components/ui/button.tsx");
+  check(/default: "h-11/.test(btn), "Button default is 44px", "was h-10 (40px)");
+  check(/icon: "h-11 w-11"/.test(btn), "Button icon is 44x44", "was h-10 w-10");
+  check(/sm:[^\n]*after:h-11/.test(btn),
+    "Button sm reaches 44px via an ::after overlay",
+    "sm must not use min-h — min-height beats height and would reflow 71 toolbars");
+  check(/sm:[^\n]*\bh-8\b/.test(btn) && !/sm:[^\n]*min-h-11/.test(btn),
+    "...while keeping its 32px painted height");
+}
+
+/*
+  THE COMMAND PALETTE — primary navigation for 122 modules, and to a screen
+  reader it was a text box next to some buttons. Selection lived in React state
+  and was drawn only as a background colour, so arrow keys moved a highlight
+  nobody was told about and Enter fired an unannounced item.
+*/
+{
+  const cp = read("src/components/command-palette.tsx");
+  check(/role="combobox"/.test(cp), "palette input is a combobox");
+  check(/aria-controls=\{listId\}/.test(cp), "...and owns its list");
+  check(/aria-activedescendant/.test(cp),
+    "...and names the highlighted option",
+    "without this, arrow keys announce nothing — the core defect");
+  check(/role="listbox"/.test(cp) && /role="option"/.test(cp), "results are a listbox of options");
+  check(/aria-selected=\{idx === i\}/.test(cp), "the highlighted option is marked selected");
+  check(/tabIndex=\{-1\}/.test(cp),
+    "options are not in the tab order",
+    "focus must stay in the input for aria-activedescendant to work");
+  check(/role="status"[\s\S]{0,80}aria-live="polite"|aria-live="polite"[\s\S]{0,80}role="status"/.test(cp),
+    "async result count is announced");
+  check(/role="dialog"/.test(cp) && /aria-modal="true"/.test(cp), "the palette is a dialog");
+}
+
+/*
+  DISCLOSURES. aria-expanded existed in exactly two places app-wide. The sidebar
+  group toggle (six groups, every page) and the notification bell had none.
+*/
+{
+  const sb = read("src/components/sidebar.tsx");
+  check(/aria-expanded=\{isOpen\}/.test(sb), "sidebar groups report expanded state");
+  check(/aria-controls=\{`nav-group-/.test(sb), "...and point at the region they control");
+
+  const nb = read("src/components/notifications.tsx");
+  check(/aria-label=\{unread > 0/.test(nb),
+    "the notification bell is named, with its unread count",
+    "the aria-label was on the 'Mark all read' button, which already had visible text — the bell itself was nameless");
+  check(!/<button aria-label="Notifications" aria-haspopup/.test(nb),
+    "...and the misplaced attributes are gone from the wrong element");
+}
+
+/*
+  ICON-ONLY BUTTONS. 39 had no accessible name; most were per-row delete
+  controls rendered inside .map(), at 14x14px. An unlabelled 14px control that
+  destroys data is the worst combination in the audit.
+*/
+{
+  let nameless = 0, tiny = 0;
+  for (const f of allTsx()) {
+    const s = read(f);
+    for (const m of s.matchAll(/<button((?:[^<>]|\{[^{}]*\})*?)>\s*((?:<[A-Z]\w*[^<>]*\/>\s*)+)<\/button>/g)) {
+      if (!/aria-label/.test(m[1]) && !/sr-only/.test(m[2])) nameless++;
+      /* className can be a string OR a template literal. Reading only the
+         first made every `className={`...`}` look empty, which reported a
+         correctly-sized button as too small. */
+      const cls = (m[1].match(/className="([^"]*)"/) || m[1].match(/className=\{`([^`]*)`/) || [, ""])[1];
+      if (/aria-label/.test(m[1]) && !/min-h-11|h-9|h-10|h-11|h-12|h-14|size="icon"/.test(cls) && !/minHeight/.test(m[1])) tiny++;
+    }
+  }
+  check(nameless === 0, `every icon-only button has a name (${nameless} without)`);
+  check(tiny === 0, `every icon-only button has a 44px target (${tiny} too small)`);
+}
+
+/* No element may carry two display utilities — one pass added inline-flex to
+   buttons that already used grid, which silently changed their layout. */
+{
+  let clash = 0;
+  for (const f of allTsx()) {
+    for (const m of read(f).matchAll(/className="([^"]*)"/g)) {
+      const t = m[1].split(/\s+/).filter((x) => ["grid","flex","inline-flex","block","inline-block","hidden"].includes(x));
+      if (t.length > 1) clash++;
+    }
+  }
+  check(clash === 0, `no conflicting display utilities (${clash} found)`);
 }
 
 console.log(`\na11y: ${pass} passed, ${failures.length} failed`);

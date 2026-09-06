@@ -21,15 +21,30 @@ export function Notifications() {
   const unread = read ? 0 : alerts.filter((a) => a.severity !== "green").length;
   return (
     <div className="relative" ref={ref}>
-      <Button variant="ghost" size="icon" onClick={() => setOpen((o) => !o)} className="relative">
-        <Bell className="h-4 w-4" />
-        {unread > 0 && <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-danger" />}
+      {/*
+        The aria-label and aria-haspopup used to sit on the "Mark all read"
+        button below, which already has visible text — so the attributes did
+        nothing there, and the bell that actually opens the panel had no name at
+        all. It is on every page of the app.
+
+        The unread count goes in the name rather than being left as a bare red
+        dot, which is invisible to a screen reader and is the only thing that
+        distinguishes "you have alerts" from "you do not".
+      */}
+      <Button
+        variant="ghost" size="icon" onClick={() => setOpen((o) => !o)} className="relative"
+        aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        <Bell className="h-4 w-4" aria-hidden="true" />
+        {unread > 0 && <span aria-hidden="true" className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-danger" />}
       </Button>
       {open && (
         <div className="absolute right-0 mt-2 w-80 rounded-xl border bg-card shadow-lg z-50 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <span className="font-medium text-sm">Notifications</span>
-            <button aria-label="Notifications" aria-haspopup="true" className="text-xs text-primary" onClick={() => setRead(true)}>Mark all read</button>
+            <button className="text-xs text-primary" onClick={() => setRead(true)}>Mark all read</button>
           </div>
           <div className="max-h-80 overflow-y-auto p-2 space-y-1.5">
             {alerts.length === 0 && <p className="text-sm text-muted-foreground p-3">No alerts.</p>}

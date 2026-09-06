@@ -23,7 +23,7 @@ export default async function Leads() {
             <Field name="email" label="Email" type="email" />
             <Field name="phone" label="Phone" />
             <Field name="plan" label="Interested in" />
-            <Field name="source" label="Source" placeholder="referral, call, trade show…" />
+            <Field name="source" label="Source" placeholder="referral, call, trade show…" aria-label="referral, call, trade show" />
           </CollapsibleForm>
         )}
         {live && (
@@ -69,7 +69,7 @@ export default async function Leads() {
                               <input type="hidden" name="id" value={l.id} />
                               <button className="text-xs text-primary px-2 py-1 rounded-md hover:bg-primary/10 whitespace-nowrap">Make customer</button>
                             </form>
-                            <form action={deleteLead}><input type="hidden" name="id" value={l.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10"><Trash2 className="h-4 w-4" /></button></form>
+                            <form action={deleteLead}><input type="hidden" name="id" value={l.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></form>
                           </div>
                         </td>
                       </tr>

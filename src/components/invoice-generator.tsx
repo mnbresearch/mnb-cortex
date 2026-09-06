@@ -104,19 +104,19 @@ export function InvoiceGenerator({ saved = [] }: { saved?: SavedInvoice[] }) {
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <div className="text-sm font-medium">Seller</div>
-          <input className={I + " w-full"} value={seller.name} onChange={(e) => setSeller({ ...seller, name: e.target.value })} placeholder="Your company" />
-          <input className={I + " w-full"} value={seller.gstin} onChange={(e) => setSeller({ ...seller, gstin: e.target.value })} placeholder="GSTIN" />
-          <input className={I + " w-full"} value={seller.addr} onChange={(e) => setSeller({ ...seller, addr: e.target.value })} placeholder="Address / state" />
+          <input className={I + " w-full"} value={seller.name} onChange={(e) => setSeller({ ...seller, name: e.target.value })} placeholder="Your company" aria-label="Your company" />
+          <input className={I + " w-full"} value={seller.gstin} onChange={(e) => setSeller({ ...seller, gstin: e.target.value })} placeholder="GSTIN" aria-label="GSTIN" />
+          <input className={I + " w-full"} value={seller.addr} onChange={(e) => setSeller({ ...seller, addr: e.target.value })} placeholder="Address / state" aria-label="Address / state" />
         </div>
         <div className="space-y-2">
           <div className="text-sm font-medium">Buyer</div>
-          <input className={I + " w-full"} value={buyer.name} onChange={(e) => setBuyer({ ...buyer, name: e.target.value })} placeholder="Customer name" />
-          <input className={I + " w-full"} value={buyer.gstin} onChange={(e) => setBuyer({ ...buyer, gstin: e.target.value })} placeholder="GSTIN (optional)" />
-          <input className={I + " w-full"} value={buyer.addr} onChange={(e) => setBuyer({ ...buyer, addr: e.target.value })} placeholder="Address / state" />
+          <input className={I + " w-full"} value={buyer.name} onChange={(e) => setBuyer({ ...buyer, name: e.target.value })} placeholder="Customer name" aria-label="Customer name" />
+          <input className={I + " w-full"} value={buyer.gstin} onChange={(e) => setBuyer({ ...buyer, gstin: e.target.value })} placeholder="GSTIN (optional)" aria-label="GSTIN (optional)" />
+          <input className={I + " w-full"} value={buyer.addr} onChange={(e) => setBuyer({ ...buyer, addr: e.target.value })} placeholder="Address / state" aria-label="Address / state" />
         </div>
       </div>
       <div className="flex flex-wrap gap-3 items-center">
-        <input className={I} value={meta.no} onChange={(e) => setMeta({ ...meta, no: e.target.value })} placeholder="Invoice #" />
+        <input className={I} value={meta.no} onChange={(e) => setMeta({ ...meta, no: e.target.value })} placeholder="Invoice #" aria-label="Invoice #" />
         <label className="text-sm flex items-center gap-1.5"><span className="text-muted-foreground">Issued</span>
           <input className={I} type="date" value={meta.date} onChange={(e) => setMeta({ ...meta, date: e.target.value })} /></label>
         {/* Due date drives receivables ageing and DSO. Without it a saved
@@ -141,7 +141,7 @@ export function InvoiceGenerator({ saved = [] }: { saved?: SavedInvoice[] }) {
                 <input aria-label={`Item ${n + 1} quantity`} className={I + " w-16"} type="number" value={it.qty} onChange={(e) => upd(it.id, "qty", e.target.value)} title="Qty" />
                 <input aria-label={`Item ${n + 1} rate`} className={I + " w-24"} type="number" value={it.rate} onChange={(e) => upd(it.id, "rate", e.target.value)} title="Rate" />
                 <input aria-label={`Item ${n + 1} GST percent`} aria-invalid={warn ? true : undefined} className={I + " w-16" + (warn ? " border-warning" : "")} type="number" value={it.gst} onChange={(e) => upd(it.id, "gst", e.target.value)} title="GST %" />
-                <button aria-label={`Remove item ${n + 1}`} onClick={() => del(it.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-4 w-4" /></button>
+                <button aria-label={`Remove item ${n + 1}`} onClick={() => del(it.id)} className="text-muted-foreground hover:text-danger p-2 min-h-11 min-w-11 inline-flex items-center justify-center"><Trash2 className="h-4 w-4" /></button>
               </div>
               {warn && <p className="text-xs text-warning pl-1">{warn}</p>}
             </div>

@@ -105,7 +105,7 @@ export function CapacityPlanner() {
                 <td className="py-1.5">
                   <div className="flex items-center gap-1">
                     <Badge className={tone(p.util)}>{p.util.toFixed(0)}%</Badge>
-                    <button onClick={() => del(p.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => del(p.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button>
                   </div>
                 </td>
               </tr>

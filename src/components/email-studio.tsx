@@ -96,7 +96,7 @@ function Replies() {
         <Button onClick={createWebhook} disabled={busy === "setup"} className="w-full">{busy === "setup" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Webhook className="h-4 w-4" />} Create / refresh webhook</Button>
         <div className="pt-2">
           <div className="text-xs text-muted-foreground mb-1">Receiving address (reply-to)</div>
-          <input className={I} placeholder="something@id.resend.app" value={address} onChange={(e) => setAddress(e.target.value)} />
+          <input className={I} placeholder="something@id.resend.app" aria-label="something@id.resend.app" value={address} onChange={(e) => setAddress(e.target.value)} />
           <Button variant="outline" size="sm" className="mt-2 w-full" onClick={saveAddress} disabled={busy === "addr"}><Mail className="h-3.5 w-3.5" /> Save address</Button>
         </div>
         <div className="rounded-lg border p-3 text-xs text-muted-foreground">
@@ -105,7 +105,7 @@ function Replies() {
         <div className="pt-1">
           <div className="text-xs text-muted-foreground mb-1">Simulate a reply (test)</div>
           <div className="flex gap-2">
-            <input className={I} placeholder="recipient@company.com" value={simFrom} onChange={(e) => setSimFrom(e.target.value)} />
+            <input className={I} placeholder="recipient@company.com" aria-label="recipient@company.com" value={simFrom} onChange={(e) => setSimFrom(e.target.value)} />
             <Button variant="outline" size="sm" onClick={simulate} disabled={busy === "sim"}>Test</Button>
           </div>
         </div>
@@ -206,7 +206,7 @@ function Compose({ templates, leads }: { templates: Template[]; leads: Lead[] })
             </select>
           )}
         </div>
-        <input className={I} placeholder="Subject — Hi {{first_name}}, a quick note" value={subject} onChange={(e) => setSubject(e.target.value)} />
+        <input className={I} placeholder="Subject — Hi {{first_name}}, a quick note" aria-label="Subject — Hi {{first_name}}, a quick note" value={subject} onChange={(e) => setSubject(e.target.value)} />
         <div className="flex flex-wrap gap-1">
           {TOKENS.map((t) => <button key={t} onClick={() => insertToken(t)} className="text-xs rounded border px-2 py-1 text-muted-foreground hover:bg-accent font-mono">{t}</button>)}
         </div>
@@ -246,7 +246,7 @@ function Compose({ templates, leads }: { templates: Template[]; leads: Lead[] })
         )}
         <div>
           <div className="text-xs text-muted-foreground mb-1">Add more emails (comma or newline separated)</div>
-          <textarea rows={2} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="person@company.com, another@company.com"
+          <textarea rows={2} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="person@company.com, another@company.com" aria-label="person@company.com, another@company.com"
             className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
         </div>
         <p className="text-xs text-muted-foreground">Each person gets their own copy — merge tokens are filled in per recipient, and an invisible pixel tracks opens.</p>
@@ -285,7 +285,7 @@ function Templates({ templates }: { templates: Template[] }) {
               <div className="min-w-0"><div className="font-medium text-sm truncate">{t.name}</div><div className="text-xs text-muted-foreground truncate">{t.subject}</div></div>
               <div className="flex gap-1 shrink-0">
                 <button onClick={() => setEditing(t)} className="text-xs text-primary px-1">Edit</button>
-                <button onClick={() => remove(t.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button>
+                <button onClick={() => remove(t.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button>
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2 line-clamp-3 whitespace-pre-wrap">{t.body.slice(0, 160)}</p>
@@ -298,10 +298,10 @@ function Templates({ templates }: { templates: Template[] }) {
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => !busy && setEditing(null)}>
           <Card className="w-full max-w-lg p-5 space-y-3 animate-scale-in" onClick={(e) => e.stopPropagation()}>
             <div {...dlg} className="font-semibold outline-none">{editing.id ? "Edit template" : "New template"}</div>
-            <input className={I} placeholder="Template name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-            <input className={I} placeholder="Subject (use {{first_name}} etc.)" value={editing.subject} onChange={(e) => setEditing({ ...editing, subject: e.target.value })} />
+            <input className={I} placeholder="Template name" aria-label="Template name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+            <input className={I} placeholder="Subject (use {{first_name}} etc.)" aria-label="Subject (use {{first_name}} etc.)" value={editing.subject} onChange={(e) => setEditing({ ...editing, subject: e.target.value })} />
             <div className="flex flex-wrap gap-1">{TOKENS.map((t) => <button key={t} onClick={() => setEditing({ ...editing, body: editing.body + " " + t })} className="text-xs rounded border px-2 py-1 text-muted-foreground hover:bg-accent font-mono">{t}</button>)}</div>
-            <textarea rows={8} placeholder="Body" value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })}
+            <textarea rows={8} placeholder="Body" aria-label="Body" value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })}
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>

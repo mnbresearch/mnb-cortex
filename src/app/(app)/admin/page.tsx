@@ -33,7 +33,7 @@ export default async function Admin() {
           </div>
           {live && (
             <form action={inviteMember} className="mt-4 flex flex-wrap items-end gap-2">
-              <input name="email" type="email" required placeholder="teammate@company.com" className={`${inp} flex-1 min-w-[200px]`} />
+              <input name="email" type="email" required placeholder="teammate@company.com" className={`${inp} flex-1 min-w-[200px]`}  aria-label="teammate@company.com"/>
               <select name="role" defaultValue="analyst" className={inp}>{["admin","manager","analyst","viewer"].map((r)=><option key={r} value={r}>{r}</option>)}</select>
               <button className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90"><UserPlus className="h-4 w-4" /> Send invite</button>
             </form>
@@ -44,7 +44,7 @@ export default async function Admin() {
               {invites.filter((i:any)=>i.status==="pending").map((i: any) => (
                 <div key={i.id} className="flex items-center justify-between rounded-lg border border-dashed p-3 text-sm">
                   <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> {i.email} <Badge className="border-border capitalize">{i.role}</Badge></div>
-                  <form action={cancelInvite}><input type="hidden" name="id" value={i.id} /><button className="text-muted-foreground hover:text-danger"><X className="h-4 w-4" /></button></form>
+                  <form action={cancelInvite}><input type="hidden" name="id" value={i.id} /><button className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Close"><X aria-hidden="true" className="h-4 w-4" /></button></form>
                 </div>
               ))}
             </div>

@@ -75,7 +75,7 @@ export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesH
                   <td className="py-1.5 pr-2"><input className={I + " w-44"} value={b.vendor} onChange={(e) => upd(b.id, "vendor", e.target.value)} /></td>
                   <td className="py-1.5 pr-2"><input className={I + " w-28"} type="number" value={b.amount} onChange={(e) => upd(b.id, "amount", e.target.value)} /></td>
                   <td className="py-1.5 pr-2"><input className={I + " w-20"} type="number" value={b.days} onChange={(e) => upd(b.id, "days", e.target.value)} /></td>
-                  <td className="py-1.5"><button onClick={() => del(b.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button></td>
+                  <td className="py-1.5"><button onClick={() => del(b.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button></td>
                 </tr>
               ))}
             </tbody>

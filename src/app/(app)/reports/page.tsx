@@ -29,7 +29,7 @@ export default async function Reports() {
           <CollapsibleForm title="Schedule a report" action={addScheduledReport}>
             <SelectField name="mode" label="Report" options={MODES} />
             <SelectField name="cadence" label="How often" options={["weekly", "daily", "monthly"]} />
-            <Field name="send_to" label="Send to (blank = workspace owner)" placeholder="you@company.com" />
+            <Field name="send_to" label="Send to (blank = workspace owner)" placeholder="you@company.com" aria-label="you@company.com" />
           </CollapsibleForm>
 
           <div className="space-y-2 mt-3">

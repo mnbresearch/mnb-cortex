@@ -145,10 +145,10 @@ export function HealthCheckClient() {
             <div className="font-display text-xl tracking-tightest">Get your detailed report + a fix plan</div>
             <p className="text-sm text-muted-foreground mt-1">We&rsquo;ll email the full breakdown and show you what Cortex would do with your numbers.</p>
             <form onSubmit={submit} className="mt-4 grid sm:grid-cols-2 gap-3">
-              <input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={FIELD} />
-              <input required type="email" placeholder="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={FIELD} />
-              <input required type="tel" inputMode="tel" autoComplete="tel" placeholder="Phone / WhatsApp" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={FIELD} />
-              <input placeholder="Business name (optional)" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} className={FIELD} />
+              <input required placeholder="Full name" aria-label="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={FIELD} />
+              <input required type="email" placeholder="Work email" aria-label="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={FIELD} />
+              <input required type="tel" inputMode="tel" autoComplete="tel" placeholder="Phone / WhatsApp" aria-label="Phone / WhatsApp" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={FIELD} />
+              <input placeholder="Business name (optional)" aria-label="Business name (optional)" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} className={FIELD} />
               {status === "error" && <p className="text-xs text-danger sm:col-span-2">Something went wrong — please try again.</p>}
               <button disabled={status === "sending"} className="sm:col-span-2 rounded-full btn-ink h-11 text-sm font-medium">{status === "sending" ? "Sending…" : "Email me the report"}</button>
               <p className="text-[11px] text-muted-foreground sm:col-span-2">

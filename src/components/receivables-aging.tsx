@@ -148,7 +148,7 @@ export function ReceivablesAging({
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground flex items-center gap-1">Monthly credit sales ₹
               <input className={I + " w-28"} type="number" value={creditSales ?? ""}
-                placeholder="e.g. 850000"
+                placeholder="e.g. 850000" aria-label="e.g. 850000"
                 onChange={(e) => setCreditSales(e.target.value === "" ? null : Number(e.target.value))} /></label>
             <Button variant="outline" size="sm" onClick={add}><Plus className="h-4 w-4" /> Add</Button>
           </div>
@@ -170,7 +170,7 @@ export function ReceivablesAging({
                     <td className="py-1.5 pr-2"><input className={I + " w-40"} value={i.client} onChange={(e) => upd(i.id, "client", e.target.value)} /></td>
                     <td className="py-1.5 pr-2"><input className={I + " w-28"} type="number" value={i.amount} onChange={(e) => upd(i.id, "amount", e.target.value)} /></td>
                     <td className="py-1.5 pr-2"><input className={I + " w-20"} type="number" value={i.days} onChange={(e) => upd(i.id, "days", e.target.value)} /></td>
-                    <td className="py-1.5"><div className="flex items-center gap-2"><span className={`text-xs font-medium ${b.tone}`}>{b.label}</span><button onClick={() => del(i.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button></div></td>
+                    <td className="py-1.5"><div className="flex items-center gap-2"><span className={`text-xs font-medium ${b.tone}`}>{b.label}</span><button onClick={() => del(i.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button></div></td>
                   </tr>
                 );
               })}

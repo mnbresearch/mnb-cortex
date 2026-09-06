@@ -59,7 +59,7 @@ export function GbpStudio({ businessName }: { businessName?: string | null }) {
 
         <div>
           <label className="text-xs text-muted-foreground">City / area you serve</label>
-          <input className={I + " mt-1"} value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Karol Bagh, Delhi" />
+          <input className={I + " mt-1"} value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Karol Bagh, Delhi" aria-label="e.g. Karol Bagh, Delhi" />
         </div>
 
         {spec.needsDetail && (

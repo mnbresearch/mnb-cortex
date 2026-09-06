@@ -67,7 +67,7 @@ export default async function Risks() {
         </Section>
 
         <Section title="Generate a fresh risk assessment" desc="Cortex re-scans your live data for emerging risks">
-          <AIPanel mode="risk" placeholder="Optional: focus (e.g. 'supply chain' or 'financial risk')" cta="Run risk assessment" saveMode="strategy" />
+          <AIPanel mode="risk" placeholder="Optional: focus (e.g. 'supply chain' or 'financial risk')" aria-label="Optional: focus (e.g. 'supply chain' or 'financial risk')" cta="Run risk assessment" saveMode="strategy" />
         </Section>
       </PageShell>
     </>

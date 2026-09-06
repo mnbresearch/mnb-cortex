@@ -32,7 +32,7 @@ export function Toaster() {
         <div key={a.id + i} className={cn("rounded-xl border shadow-lg p-3 flex items-start gap-2", statusBg[a.severity])}>
           <AlertTriangle aria-hidden="true" className="h-4 w-4 mt-0.5 shrink-0" />
           <div className="flex-1"><p className="text-sm font-medium">{a.title}</p><p className="text-xs opacity-80">{a.body}</p></div>
-          <button type="button" aria-label={`Dismiss: ${a.title}`} onClick={() => setToasts((t) => t.filter((_, j) => j !== i))}><X aria-hidden="true" className="h-3.5 w-3.5 opacity-70" /></button>
+          <button type="button" aria-label={`Dismiss: ${a.title}`} className="p-2 min-h-11 min-w-11 inline-flex items-center justify-center" onClick={() => setToasts((t) => t.filter((_, j) => j !== i))}><X aria-hidden="true" className="h-3.5 w-3.5 opacity-70" /></button>
         </div>
       ))}
     </div>

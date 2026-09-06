@@ -29,15 +29,14 @@ export function Copilot() {
   return (
     <>
       {!open && (
-        <button onClick={() => setOpen(true)} title="AI Copilot" className="fixed bottom-24 lg:bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg grid place-items-center hover:scale-105 transition-transform no-print">
-          <Sparkles className="h-6 w-6" />
+        <button onClick={() => setOpen(true)} title="AI Copilot" className="fixed bottom-24 lg:bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg grid place-items-center hover:scale-105 transition-transform no-print min-h-11 min-w-11 p-2" aria-label="Ask AI"><Sparkles aria-hidden="true" className="h-6 w-6" />
         </button>
       )}
       {open && (
         <div className="fixed bottom-6 right-6 z-[80] w-[92vw] max-w-sm h-[70vh] max-h-[560px] rounded-2xl border bg-card shadow-2xl flex flex-col overflow-hidden no-print">
           <div className="flex items-center justify-between px-4 h-12 border-b bg-primary/5">
             <div className="flex items-center gap-2 text-sm font-medium"><Sparkles className="h-4 w-4 text-primary" /> AI Copilot</div>
-            <button onClick={() => setOpen(false)}><X className="h-4 w-4 text-muted-foreground" /></button>
+            <button onClick={() => setOpen(false)} aria-label="Close" style={{ minHeight: 44, minWidth: 44 }}><X aria-hidden="true" className="h-4 w-4 text-muted-foreground" /></button>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {messages.length === 0 && (
@@ -58,8 +57,8 @@ export function Copilot() {
             <div ref={endRef} />
           </div>
           <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="border-t p-2 flex items-center gap-2">
-            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask your COO…" className="flex-1 rounded-lg border bg-background px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-ring" />
-            <button className="h-9 w-9 rounded-lg bg-primary text-primary-foreground grid place-items-center" disabled={loading}><Send className="h-4 w-4" /></button>
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask your COO…" aria-label="Ask your COO" className="flex-1 rounded-lg border bg-background px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            <button className="h-9 w-9 rounded-lg bg-primary text-primary-foreground grid place-items-center" disabled={loading} aria-label="Send"><Send aria-hidden="true" className="h-4 w-4" /></button>
           </form>
         </div>
       )}

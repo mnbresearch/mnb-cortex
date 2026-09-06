@@ -68,7 +68,7 @@ export function PnlBuilder() {
           <div key={l.id} className="flex items-center gap-2">
             <input className="rounded-md border bg-background px-2 h-8 text-sm flex-1 outline-none focus:ring-2 focus:ring-ring" value={l.label} onChange={(e) => upd(l.id, "label", e.target.value)} />
             <input className={I + " w-28"} type="number" value={l.amount} onChange={(e) => upd(l.id, "amount", e.target.value)} />
-            <button onClick={() => del(l.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button>
+            <button onClick={() => del(l.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button>
           </div>
         ))}
         <Button variant="outline" size="sm" onClick={add}><Plus className="h-4 w-4" /> Add cost line</Button>

@@ -118,7 +118,7 @@ export function GstReturnPanel() {
         )}
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4}
           className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-          placeholder="…or paste your GSTR-3B / GSTR-1 / 2B summary here" />
+          placeholder="…or paste your GSTR-3B / GSTR-1 / 2B summary here" aria-label="…or paste your GSTR-3B / GSTR-1 / 2B summary here" />
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Button onClick={run} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />} {loading ? "Reading your return…" : "Analyse GST return"}

@@ -175,7 +175,7 @@ export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]
             </div>
             <form action={deleteGoal}>
               <input type="hidden" name="id" value={g.id} />
-              <button type="submit" className="text-muted-foreground hover:text-danger" aria-label="Delete goal"><Trash2 className="h-4 w-4" /></button>
+              <button type="submit" className="text-muted-foreground hover:text-danger p-2 min-h-11 min-w-11 inline-flex items-center justify-center" aria-label="Delete goal"><Trash2 className="h-4 w-4" /></button>
             </form>
           </div>
         ))}

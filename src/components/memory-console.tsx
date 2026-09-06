@@ -114,7 +114,7 @@ export function MemoryConsole({ initialMemories, entities: initialEntities, prof
       <Card className="p-4">
         <div className="flex items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
-          <input className={I + " flex-1"} placeholder="Ask memory anything — “what did we decide about pricing?”" value={q}
+          <input className={I + " flex-1"} placeholder="Ask memory anything — “what did we decide about pricing?”" aria-label="Ask memory anything — “what did we decide about pricing?”" value={q}
             onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} />
           <Button size="sm" onClick={search} disabled={busy === "search"}>{busy === "search" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Recall"}</Button>
           <Button size="sm" variant="outline" onClick={() => { setQ(""); reload(); }}>All</Button>
@@ -153,10 +153,10 @@ export function MemoryConsole({ initialMemories, entities: initialEntities, prof
         <Card className="p-5 space-y-3">
           <div className="font-semibold flex items-center gap-2"><Plus className="h-4 w-4 text-primary" /> Remember something</div>
           <textarea className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" rows={2}
-            placeholder="e.g. We always give Reliance 45-day credit terms." value={cContent} onChange={(e) => setCContent(e.target.value)} />
+            placeholder="e.g. We always give Reliance 45-day credit terms." aria-label="e.g. We always give Reliance 45-day credit terms" value={cContent} onChange={(e) => setCContent(e.target.value)} />
           <div className="flex flex-wrap gap-2">
             <select className={I} value={cKind} onChange={(e) => setCKind(e.target.value)}>{KINDS.map((k) => <option key={k} value={k}>{k}</option>)}</select>
-            <input className={I + " flex-1 min-w-[140px]"} placeholder="entities (comma-sep)" value={cEntities} onChange={(e) => setCEntities(e.target.value)} />
+            <input className={I + " flex-1 min-w-[140px]"} placeholder="entities (comma-sep)" aria-label="entities (comma-sep)" value={cEntities} onChange={(e) => setCEntities(e.target.value)} />
             <select className={I} value={cImportance} onChange={(e) => setCImportance(Number(e.target.value))}>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>importance {n}</option>)}</select>
           </div>
           <Button size="sm" onClick={capture} disabled={busy === "capture"}>{busy === "capture" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Remember</Button>
@@ -200,8 +200,8 @@ export function MemoryConsole({ initialMemories, entities: initialEntities, prof
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={() => pin(m)} title="Pin" className={`p-1 rounded hover:bg-accent ${m.pinned ? "text-primary" : "text-muted-foreground"}`}><Pin className="h-4 w-4" /></button>
-                  <button onClick={() => archive(m)} title="Archive" className="p-1 rounded hover:bg-accent text-muted-foreground"><Archive className="h-4 w-4" /></button>
+                  <button onClick={() => pin(m)} title="Pin" aria-label={m.pinned ? "Unpin this memory" : "Pin this memory"} className={`p-2 min-h-11 min-w-11 inline-flex items-center justify-center rounded hover:bg-accent ${m.pinned ? "text-primary" : "text-muted-foreground"}`}><Pin className="h-4 w-4" /></button>
+                  <button onClick={() => archive(m)} title="Archive" aria-label="Archive this memory" className="p-2 min-h-11 min-w-11 inline-flex items-center justify-center rounded hover:bg-accent text-muted-foreground"><Archive className="h-4 w-4" /></button>
                 </div>
               </div>
             </Card>

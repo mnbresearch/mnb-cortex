@@ -157,7 +157,7 @@ export function PWA() {
           <button
             onClick={dismissInstall}
             aria-label="Dismiss install prompt"
-            className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+            className="absolute top-2 right-2 text-muted-foreground hover:text-foreground p-2 min-h-11 min-w-11 inline-flex items-center justify-center"
           >
             <X className="h-4 w-4" />
           </button>

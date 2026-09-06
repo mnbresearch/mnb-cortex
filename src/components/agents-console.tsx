@@ -201,7 +201,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
                 <div className="border-t pt-3">
                   <div className="text-sm font-medium mb-1">Revise the video</div>
                   <div className="flex gap-2">
-                    <input className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. slower pace, show the label close up" value={revise} onChange={(e) => setRevise(e.target.value)} />
+                    <input className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. slower pace, show the label close up" aria-label="e.g. slower pace, show the label close up" value={revise} onChange={(e) => setRevise(e.target.value)} />
                     <Button variant="outline" disabled={busy === "run" || !revise.trim()} onClick={() => run(revise)}><RefreshCw className="h-4 w-4" /> Revise</Button>
                   </div>
                 </div>
@@ -224,7 +224,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
             <div className="border-t pt-3">
               <div className="text-sm font-medium mb-1">Revise the image</div>
               <div className="flex gap-2">
-                <input className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. warmer gold, cleaner background" value={revise} onChange={(e) => setRevise(e.target.value)} />
+                <input className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. warmer gold, cleaner background" aria-label="e.g. warmer gold, cleaner background" value={revise} onChange={(e) => setRevise(e.target.value)} />
                 <Button variant="outline" disabled={busy === "run" || !revise.trim()} onClick={() => run(revise)}><RefreshCw className="h-4 w-4" /> Revise</Button>
               </div>
             </div>
@@ -245,7 +245,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
             <div className="border-t pt-3">
               <div className="text-sm font-medium mb-1">Not quite right? Revise it.</div>
               <div className="flex gap-2">
-                <input className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. make it shorter and more premium" value={revise} onChange={(e) => setRevise(e.target.value)} />
+                <input className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="e.g. make it shorter and more premium" aria-label="e.g. make it shorter and more premium" value={revise} onChange={(e) => setRevise(e.target.value)} />
                 <Button variant="outline" disabled={busy === "run" || !revise.trim()} onClick={() => run(revise)}><RefreshCw className="h-4 w-4" /> Revise</Button>
               </div>
             </div>
@@ -272,8 +272,8 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
           <Card className="p-5 space-y-3 border-primary/30 bg-primary/5">
             <div className="flex items-center gap-2 font-semibold"><WandSparkles className="h-4 w-4 text-primary" /> Let Cortex build agents for you</div>
             <div className="grid sm:grid-cols-2 gap-2">
-              <input className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Your business (e.g. artisan soap brand)" value={biz} onChange={(e) => setBiz(e.target.value)} />
-              <input className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Goals (e.g. more online orders)" value={goals} onChange={(e) => setGoals(e.target.value)} />
+              <input className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Your business (e.g. artisan soap brand)" aria-label="Your business (e.g. artisan soap brand)" value={biz} onChange={(e) => setBiz(e.target.value)} />
+              <input className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Goals (e.g. more online orders)" aria-label="Goals (e.g. more online orders)" value={goals} onChange={(e) => setGoals(e.target.value)} />
             </div>
             <Button size="sm" onClick={build} disabled={busy === "build"}>{busy === "build" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Build my agents</Button>
             {buildMsg && <p className="text-sm text-muted-foreground">{buildMsg}</p>}

@@ -33,7 +33,7 @@ export function MobileNav() {
       {open && (
         <div className="lg:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setOpen(false)}>
           <div className="absolute bottom-0 inset-x-0 rounded-t-2xl bg-card border-t max-h-[80vh] overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3"><span className="font-semibold">All modules</span><button onClick={() => setOpen(false)}><X className="h-5 w-5 text-muted-foreground" /></button></div>
+            <div className="flex items-center justify-between mb-3"><span className="font-semibold">All modules</span><button onClick={() => setOpen(false)} aria-label="Close" style={{ minHeight: 44, minWidth: 44 }}><X aria-hidden="true" className="h-5 w-5 text-muted-foreground" /></button></div>
             {groups.map((g) => (
               <div key={g} className="mb-3">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">{g}</div>

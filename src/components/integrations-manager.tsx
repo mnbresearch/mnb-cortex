@@ -113,7 +113,7 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search integrations…"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search integrations…" aria-label="Search integrations"
             className="w-full rounded-lg border bg-background pl-9 pr-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
         </div>
         <select value={cat} onChange={(e) => setCat(e.target.value)} className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring">
@@ -187,7 +187,7 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
                 <div className="font-semibold">Connect {open.name}</div>
                 <div className="text-sm text-muted-foreground">{open.desc}</div>
               </div>
-              <button onClick={() => setOpen(null)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+              <button onClick={() => setOpen(null)} className="text-muted-foreground hover:text-foreground min-h-11 min-w-11 p-2" aria-label="Close"><X aria-hidden="true" className="h-4 w-4" /></button>
             </div>
 
             {open.fields.map((f) => (

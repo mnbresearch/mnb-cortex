@@ -57,7 +57,7 @@ export function OnboardingWizard() {
       {step === 0 && (
         <div className="space-y-3">
           <h2 className="text-lg font-semibold flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /> Tell us about your company</h2>
-          <input className={inp} placeholder="Company name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <input className={inp} placeholder="Company name" aria-label="Company name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <select className={inp} value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })}>
             {SECTORS.map((sec) => {
               const inSector = INDUSTRIES.filter((o) => o.sector === sec);

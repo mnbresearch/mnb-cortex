@@ -62,7 +62,7 @@ export function OnboardingTour({ signedIn }: { signedIn: boolean }) {
       <style>{`@keyframes tourIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}@keyframes tourFade{from{opacity:0}to{opacity:1}}`}</style>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" style={{ animation: "tourFade .25s ease" }} onClick={done} />
       <div key={anim} className="relative w-full max-w-md rounded-2xl border bg-card p-7 shadow-2xl" style={{ animation: "tourIn .4s cubic-bezier(.19,1,.22,1)" }}>
-        <button onClick={done} className="absolute top-4 right-4 h-8 w-8 grid place-items-center rounded-full hover:bg-accent text-muted-foreground" aria-label="Skip tour"><X className="h-4 w-4" /></button>
+        <button onClick={done} className="absolute top-4 right-4 h-11 w-11 grid place-items-center rounded-full hover:bg-accent text-muted-foreground" aria-label="Skip tour"><X className="h-4 w-4" /></button>
 
         <div className="h-14 w-14 rounded-2xl brand-gradient grid place-items-center text-white"><Icon className="h-7 w-7" /></div>
         <div className="mt-5 text-xs font-medium text-primary">Step {step + 1} of {STEPS.length}</div>

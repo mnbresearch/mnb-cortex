@@ -118,13 +118,13 @@ export function WorkforceGraph() {
       <div className="absolute z-10 top-3 left-3 right-3 flex items-center justify-between gap-2 pointer-events-none">
         <div className="pointer-events-auto flex items-center gap-1 rounded-lg border bg-background/90 px-2 h-9 backdrop-blur">
           <Search className="h-4 w-4 text-muted-foreground" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search agents…" className="bg-transparent text-sm outline-none w-40" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search agents…" aria-label="Search agents" className="bg-transparent text-sm outline-none w-40" />
         </div>
         <div className="pointer-events-auto flex items-center gap-1">
-          <button onClick={() => zoomAroundCenter(view.s - 0.25)} className="h-9 w-9 grid place-items-center rounded-lg border bg-background/90 backdrop-blur hover:bg-accent"><Minus className="h-4 w-4" /></button>
+          <button onClick={() => zoomAroundCenter(view.s - 0.25)} aria-label="Zoom out" className="h-9 w-9 min-h-11 min-w-11 grid place-items-center rounded-lg border bg-background/90 backdrop-blur hover:bg-accent"><Minus className="h-4 w-4" /></button>
           <div className="h-9 px-2 grid place-items-center rounded-lg border bg-background/90 backdrop-blur text-xs tabular-nums">{Math.round(view.s * 100)}%</div>
-          <button onClick={() => zoomAroundCenter(view.s + 0.25)} className="h-9 w-9 grid place-items-center rounded-lg border bg-background/90 backdrop-blur hover:bg-accent"><Plus className="h-4 w-4" /></button>
-          <button onClick={resetView} className="h-9 px-2 grid place-items-center rounded-lg border bg-background/90 backdrop-blur hover:bg-accent inline-flex gap-1 text-xs"><Maximize2 className="h-3.5 w-3.5" /> Fit</button>
+          <button onClick={() => zoomAroundCenter(view.s + 0.25)} aria-label="Zoom in" className="h-9 w-9 min-h-11 min-w-11 grid place-items-center rounded-lg border bg-background/90 backdrop-blur hover:bg-accent"><Plus aria-hidden="true" className="h-4 w-4" /></button>
+          <button onClick={resetView} className="h-9 px-3 min-h-11 rounded-lg border bg-background/90 backdrop-blur hover:bg-accent inline-flex items-center gap-1 text-xs"><Maximize2 aria-hidden="true" className="h-3.5 w-3.5" /> Fit</button>
         </div>
       </div>
 

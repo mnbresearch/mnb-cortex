@@ -79,7 +79,7 @@ export default async function Settings() {
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-3">Logo URL (white-label)
-                  <input className={inp} name="logo_url" placeholder="https://…/logo.png" defaultValue={profile?.logo_url || ""} />
+                  <input className={inp} name="logo_url" placeholder="https://…/logo.png" aria-label="https://…/logo.png" defaultValue={profile?.logo_url || ""} />
                 </label>
                 <div className="sm:col-span-3"><button className={btn} type="submit"><Building2 className="h-4 w-4" /> Save profile</button></div>
               </form>

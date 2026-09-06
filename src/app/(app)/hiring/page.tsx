@@ -48,7 +48,7 @@ export default async function Hiring() {
         </Section>
 
         <Section title="Ask the hiring advisor" desc="Should you hire? Which role? What's the payback?">
-          <AIPanel mode="hiring" placeholder="e.g. Should I hire 2 salespeople now, or wait a quarter?" cta="Get hiring advice" multiline saveMode="strategy" />
+          <AIPanel mode="hiring" placeholder="e.g. Should I hire 2 salespeople now, or wait a quarter?" aria-label="e.g. Should I hire 2 salespeople now, or wait a quarter?" cta="Get hiring advice" multiline saveMode="strategy" />
         </Section>
       </PageShell>
     </>

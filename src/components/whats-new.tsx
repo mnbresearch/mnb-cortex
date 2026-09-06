@@ -18,7 +18,7 @@ export function WhatsNew() {
   return (
     <div className="fixed inset-0 z-[95] bg-black/40 backdrop-blur-sm grid place-items-center p-4" onClick={dismiss}>
       <div {...dlg} className="w-full max-w-sm rounded-2xl border bg-card p-6 relative outline-none" onClick={(e) => e.stopPropagation()}>
-        <button onClick={dismiss} className="absolute right-4 top-4 text-muted-foreground"><X className="h-4 w-4" /></button>
+        <button onClick={dismiss} className="absolute right-4 top-4 text-muted-foreground min-h-11 min-w-11 p-2" aria-label="Close"><X aria-hidden="true" className="h-4 w-4" /></button>
         <div className="h-11 w-11 rounded-xl bg-primary/15 grid place-items-center"><Sparkles className="h-6 w-6 text-primary" /></div>
         <h2 className="mt-3 text-lg font-semibold">What's new · v{APP_VERSION}</h2>
         <ul className="mt-3 space-y-1.5 text-sm text-muted-foreground">{HIGHLIGHTS.map((h) => <li key={h} className="flex gap-2"><span className="text-primary">•</span>{h}</li>)}</ul>

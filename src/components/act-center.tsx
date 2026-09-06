@@ -85,10 +85,10 @@ export function ActCenter() {
         <Card className="p-4 space-y-3">
           <div className="flex items-center gap-1.5 text-xs font-medium text-primary"><Sparkles className="h-3.5 w-3.5" /> Cortex drafted this — review and edit before you send</div>
           <div className="grid sm:grid-cols-2 gap-3">
-            <input className={IN} placeholder="Recipient email" value={to} onChange={(e) => setTo(e.target.value)} />
-            <input className={IN} placeholder="Phone for WhatsApp (optional, e.g. 9198…)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <input className={IN} placeholder="Recipient email" aria-label="Recipient email" value={to} onChange={(e) => setTo(e.target.value)} />
+            <input className={IN} placeholder="Phone for WhatsApp (optional, e.g. 9198…)" aria-label="Phone for WhatsApp (optional, e.g. 9198…)" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
-          <input className={IN} placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
+          <input className={IN} placeholder="Subject" aria-label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
           <textarea className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" rows={9} value={body} onChange={(e) => setBody(e.target.value)} />
 
           {sent ? (

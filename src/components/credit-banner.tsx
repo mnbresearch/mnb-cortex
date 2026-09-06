@@ -27,7 +27,7 @@ export function CreditBanner() {
           {out ? "You're out of AI credits." : `Low on AI credits — ${state.balance} left.`}{" "}
           <Link href="/usage" className="font-medium text-primary underline underline-offset-2">Top up</Link>
         </span>
-        <button onClick={() => setHidden(true)} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+        <button onClick={() => setHidden(true)} className="text-muted-foreground hover:text-foreground min-h-11 min-w-11 p-2" aria-label="Close"><X aria-hidden="true" className="h-3.5 w-3.5" /></button>
       </div>
     </div>
   );

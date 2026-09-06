@@ -78,7 +78,7 @@ export default async function Billing() {
               {links.rows.map((l: any) => (
                 <div key={l.id} className="flex items-center justify-between rounded-lg border p-3">
                   <a href={`/r/${l.token}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary break-all">mnb-cortex.vercel.app/r/{l.token}</a>
-                  <form action={revokeReportLink}><input type="hidden" name="id" value={l.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10"><Trash2 className="h-4 w-4" /></button></form>
+                  <form action={revokeReportLink}><input type="hidden" name="id" value={l.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></form>
                 </div>
               ))}
               {links.rows.length === 0 && <p className="text-xs text-muted-foreground">No share links yet.</p>}

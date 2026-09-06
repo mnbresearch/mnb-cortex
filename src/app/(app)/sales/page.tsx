@@ -114,7 +114,7 @@ export default async function Sales() {
         <DataTable title="Sales orders" rows={rows} live={live} table="sales_orders" path="/sales"
           cols={[{key:"order_no",label:"Order #"},{key:"customer_name",label:"Customer"},{key:"region",label:"Region"},{key:"product",label:"Product"},{key:"amount",label:"Amount",kind:"inr"},{key:"status",label:"Status"},{key:"order_date",label:"Date",kind:"date"}]} />
 
-        <AIPanel mode="outreach" multiline placeholder="Describe the customer or deal to write outreach for..." cta="Draft outreach (WhatsApp + email)" />
+        <AIPanel mode="outreach" multiline placeholder="Describe the customer or deal to write outreach for..." aria-label="Describe the customer or deal to write outreach for" cta="Draft outreach (WhatsApp + email)" />
         <div className="grid md:grid-cols-2 gap-3">{insights.map((i) => <InsightCard key={i.id} ins={i} />)}</div>
       </PageShell>
     </>

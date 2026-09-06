@@ -73,18 +73,32 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
           const hasActive = items.some((n) => n.href === path);
           return (
             <div key={g}>
+              {/*
+                A disclosure, so it must say whether it is open. Six groups on
+                every page of the app announced only their label before, and the
+                chevron that conveys the state visually is invisible to a screen
+                reader.
+
+                The count is folded into the accessible name — "Money, 42
+                modules" — because on its own the number was read as a bare
+                digit appended to the group name ("Money 42") with nothing
+                explaining it.
+              */}
               <button
                 onClick={() => toggle(g)}
+                aria-expanded={isOpen}
+                aria-controls={`nav-group-${g.replace(/\s+/g, "-").toLowerCase()}`}
+                aria-label={`${g}, ${items.length} module${items.length === 1 ? "" : "s"}`}
                 className={cn(
                   "w-full flex items-center justify-between rounded-lg px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors",
                   hasActive && !isOpen ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
                 )}
               >
-                <span className="flex items-center gap-2">{g}<span className="text-[10px] font-normal opacity-50">{items.length}</span></span>
-                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", isOpen ? "" : "-rotate-90")} />
+                <span aria-hidden="true" className="flex items-center gap-2">{g}<span className="text-[10px] font-normal opacity-50">{items.length}</span></span>
+                <ChevronDown aria-hidden="true" className={cn("h-3.5 w-3.5 transition-transform duration-200", isOpen ? "" : "-rotate-90")} />
               </button>
               {isOpen && (
-                <div className="mt-0.5 mb-1 space-y-0.5">
+                <div id={`nav-group-${g.replace(/\s+/g, "-").toLowerCase()}`} className="mt-0.5 mb-1 space-y-0.5">
                   {items.map((n, i) => {
                     const active = path === n.href;
                     const Icon = n.icon;

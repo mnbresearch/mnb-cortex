@@ -15,7 +15,7 @@ export function StatusBoard() {
         {allOk ? <CheckCircle2 className="h-6 w-6 text-success" /> : <AlertTriangle className="h-6 w-6 text-warning" />}
         <div className="flex-1"><div className="font-semibold">{loading ? "Checking…" : allOk ? "All systems operational" : "Some systems degraded"}</div>
           <div className="text-xs text-muted-foreground">{data?.updated ? new Date(data.updated).toLocaleString() : ""}</div></div>
-        <button onClick={load} className="text-muted-foreground hover:text-foreground"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button>
+        <button onClick={load} className="text-muted-foreground hover:text-foreground min-h-11 min-w-11 p-2" aria-label="Refresh"><RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button>
       </div>
       <div className="rounded-2xl border divide-y">
         {services.map((s: any) => (

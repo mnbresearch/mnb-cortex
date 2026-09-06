@@ -79,7 +79,7 @@ export function RfmSegments({ seed }: { seed?: Cust[] } = {}) {
                   <td className="py-1.5 pr-2"><input className={I + " w-16"} type="number" value={c.frequency} onChange={(e) => upd(c.id, "frequency", e.target.value)} /></td>
                   <td className="py-1.5 pr-2"><input className={I + " w-24"} type="number" value={c.monetary} onChange={(e) => upd(c.id, "monetary", e.target.value)} /></td>
                   <td className="py-1.5 pr-2 text-muted-foreground font-mono">{c.r}{c.f}{c.m}</td>
-                  <td className="py-1.5"><div className="flex items-center gap-1"><Badge className={c.seg.tone}>{c.seg.name}</Badge><button onClick={() => del(c.id)} className="text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button></div></td>
+                  <td className="py-1.5"><div className="flex items-center gap-1"><Badge className={c.seg.tone}>{c.seg.name}</Badge><button onClick={() => del(c.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button></div></td>
                 </tr>
               ))}
             </tbody>

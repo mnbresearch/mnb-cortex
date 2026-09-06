@@ -88,7 +88,7 @@ export function GrantAccessForm({ orgs }: { orgs: Org[] }) {
       </label>
       <label className="text-sm">
         <span className="text-muted-foreground block mb-1">Email</span>
-        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="person@company.com" className={I + " min-w-[220px]"} />
+        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="person@company.com" aria-label="person@company.com" className={I + " min-w-[220px]"} />
       </label>
       <label className="text-sm">
         <span className="text-muted-foreground block mb-1">Role</span>
@@ -135,9 +135,9 @@ export function ProvisionCustomerForm() {
 
   return (
     <form onSubmit={go} className="grid sm:grid-cols-2 gap-3 max-w-2xl">
-      <input required type="email" placeholder="Customer email" value={email} onChange={(e) => setEmail(e.target.value)} className={`${INPUT} sm:col-span-2`} />
-      <input placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} className={INPUT} />
-      <input placeholder="Company / workspace name (optional)" value={company} onChange={(e) => setCompany(e.target.value)} className={INPUT} />
+      <input required type="email" placeholder="Customer email" aria-label="Customer email" value={email} onChange={(e) => setEmail(e.target.value)} className={`${INPUT} sm:col-span-2`} />
+      <input placeholder="Name (optional)" aria-label="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} className={INPUT} />
+      <input placeholder="Company / workspace name (optional)" aria-label="Company / workspace name (optional)" value={company} onChange={(e) => setCompany(e.target.value)} className={INPUT} />
       <label className="text-sm">
         <span className="text-xs text-muted-foreground">Plan</span>
         <select value={plan} onChange={(e) => setPlan(e.target.value)} className={`${INPUT} w-full mt-1`}>

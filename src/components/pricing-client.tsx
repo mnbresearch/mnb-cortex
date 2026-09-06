@@ -128,7 +128,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
           <div {...dlg} className="w-full max-w-md rounded-2xl border bg-card p-6 outline-none" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-lg font-semibold">Request the {plan} plan</h3>
-              <button onClick={() => setOpen(false)} aria-label="Close"><X className="h-5 w-5 text-muted-foreground" /></button>
+              <button onClick={() => setOpen(false)} aria-label="Close" className="p-2 min-h-11 min-w-11 inline-flex items-center justify-center"><X className="h-5 w-5 text-muted-foreground" /></button>
             </div>
             <p className="text-sm text-muted-foreground mb-4">Leave your details — we&rsquo;ll set up your access, or message us on WhatsApp instantly.</p>
             {status === "done" ? (
@@ -140,9 +140,9 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
               </div>
             ) : (
               <form onSubmit={submit} className="space-y-3">
-                <input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
-                <input required type="email" placeholder="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
-                <input placeholder="Phone number" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <input required placeholder="Full name" aria-label="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <input required type="email" placeholder="Work email" aria-label="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <input placeholder="Phone number" aria-label="Phone number" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
                 <select value={plan} onChange={(e) => setPlan(e.target.value)} className="w-full rounded-lg border bg-background px-3 h-10 text-sm">
                   {PLANS.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
                 </select>
