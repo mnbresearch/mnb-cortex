@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUserAndOrg, getOrgProfile } from "@/lib/data";
 import { creditDenial, requireWorkspace } from "@/lib/api-guard";
-import { chargeForMode, refundForMode, videoGenGate } from "@/lib/credits";
+import { chargeForMode, refundIfCharged, videoGenGate } from "@/lib/credits";
 import { startVideo, pollVideo, fetchVideo, hasVideoProvider } from "@/lib/ai/video";
 import { buildVideoPrompt } from "@/lib/ai/visual-prompts";
 
@@ -45,10 +45,24 @@ export async function POST(req: Request) {
     return NextResponse.json(d.body, { status: d.status });
   }
 
+  /*
+    EVERYTHING PAST THE CHARGE IS WRAPPED — and on the most expensive action in
+    the product, this handler had no try/catch at all.
+
+    Veo is roughly ₹77 a clip and `agent_video` is priced to match. startVideo()
+    is a call to a third-party API that takes one to three minutes to accept a
+    job; a timeout, a DNS blip or a malformed response threw straight out of the
+    route as an unhandled 500 with the credits already gone. The two careful
+    `if (!started.ok)` and `if (!prompt)` refunds below made the omission easy
+    to miss: the branches that were thought about were covered, and the branch
+    nobody thinks about — the throw — was not.
+  */
+  try {
+
   const b = await req.json().catch(() => ({} as any));
   const prompt = String(b.prompt || "").trim();
   if (!prompt) {
-    if (gate.enforced) await refundForMode("agent_video");
+    await refundIfCharged(gate, "agent_video");
     return NextResponse.json({ ok: false, error: "Describe the video you want." }, { status: 200 });
   }
 
@@ -71,7 +85,7 @@ export async function POST(req: Request) {
 
   if (!started.ok) {
     // Nothing was generated — never bill for it.
-    if (gate.enforced) await refundForMode("agent_video");
+    await refundIfCharged(gate, "agent_video");
     return NextResponse.json({ ok: false, error: started.error }, { status: 200 });
   }
 
@@ -82,6 +96,10 @@ export async function POST(req: Request) {
     charged: gate.enforced ? gate.cost : 0,
     balance: gate.balance,
   });
+  } catch (e: any) {
+    await refundIfCharged(gate, "agent_video");
+    return NextResponse.json({ ok: false, error: (e?.message || "The video agent could not start.") + " Your credits have not been used." }, { status: 200 });
+  }
 }
 
 export async function GET(req: Request) {

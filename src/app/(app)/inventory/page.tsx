@@ -51,7 +51,13 @@ export default async function Inventory() {
             {/* Was labelled "Generate PO for RM-204" for everyone. generatePO()
                 now picks whichever of YOUR items is furthest below its reorder
                 level, so the label can't name a SKU that isn't yours. */}
-            <ActionForm action={generatePO} label="Draft a purchase order for my lowest stock (AI)" primary />
+            {/* The "(AI)" came off. generatePO() ranks items by on_hand against
+                reorder_level and orders back up to the level plus a fortnight of
+                consumption — arithmetic, and better for being arithmetic, since
+                a reorder quantity should be reproducible and not vary between
+                runs. Calling it AI oversold a function that is more trustworthy
+                than the label implied. */}
+            <ActionForm action={generatePO} label="Draft a purchase order for my lowest stock" primary />
           </div>
           {signedIn && !atRisk.length && (
             <p className="text-xs text-muted-foreground mt-2">Nothing is below its reorder level right now, so there's no PO to draft.</p>

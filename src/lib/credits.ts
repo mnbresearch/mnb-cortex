@@ -230,11 +230,69 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
  * cost straight back to the current workspace so a failed run is never billed.
  */
 export async function refundForMode(mode: string): Promise<void> {
-  const cost = creditCost(mode);
-  if (cost <= 0) return;
-  const { user, orgId } = await getUserAndOrg();
-  if (!orgId) return;
-  try { await grantCredits(orgId, cost, "refund:" + String(mode || "").toLowerCase(), user?.id); } catch { /* best effort */ }
+  /*
+    Nothing in here may throw.
+
+    Every call site is an error path — a catch block, or the branch that runs
+    when the model returned nothing. If the refund itself threw, it would
+    replace the caller's careful "couldn't read that statement, try a clearer
+    export" with an unhandled 500, and the customer would lose both the credits
+    AND the explanation. `getUserAndOrg()` reads cookies and hits the network,
+    so it is entirely capable of throwing; it used to sit outside the try.
+  */
+  try {
+    const cost = creditCost(mode);
+    if (cost <= 0) return;
+    const { user, orgId } = await getUserAndOrg();
+    if (!orgId) return;
+    await grantCredits(orgId, cost, "refund:" + String(mode || "").toLowerCase(), user?.id);
+  } catch { /* best effort — never mask the caller's own error */ }
+}
+
+/*
+  The gate-aware refund, and the one that call sites should reach for.
+
+  Two mistakes are easy to make with the bare refundForMode() above, and both
+  cost real money in opposite directions:
+
+    1. Refunding when nothing was charged. `enforced` is false for a
+       bring-your-own-key workspace, an unlimited plan, or a database that has
+       not had the metering migration applied. Refunding those GRANTS free
+       credits out of nowhere — a slow leak that looks like generosity until
+       someone notices the balance climbing on an account that never paid.
+
+    2. Refunding twice. Several of these routes have a failure branch AND a
+       surrounding catch, and it is genuinely hard to see, while editing a
+       dozen files, which paths can reach both. A double refund hands back more
+       than was taken.
+
+  So this checks `enforced` for (1), and marks the gate object for (2) — the
+  gate is per-request and per-charge, which makes it exactly the right place to
+  record "this one has already been given back".
+*/
+const REFUNDED = Symbol.for("cortex.credits.refunded");
+
+export async function refundIfCharged(gate: ChargeResult | null | undefined, mode: string): Promise<void> {
+  /*
+    `enforced` ALONE IS NOT "money was taken".
+
+    chargeForMode returns `enforced: true` on all three refusals — anonymous,
+    lapsed, and insufficient — and charge_credits returns -1 WITHOUT debiting
+    the row in the insufficient case. So a gate can be enforced and unpaid at
+    the same time, and gating on `enforced` by itself would mint credits for a
+    workspace that was just refused for not having any.
+
+    Today that is prevented only by call-site ordering: every route returns on
+    `!gate.ok` before reaching a refund. But in four routes the denial branch
+    sits INSIDE the try whose catch refunds, so a throw while building the
+    denial response would hand free credits to the workspace that could not
+    afford the action. `ok` is the flag that means the charge succeeded.
+  */
+  if (!gate || !gate.ok || !gate.enforced) return;
+  const g = gate as ChargeResult & { [REFUNDED]?: boolean };
+  if (g[REFUNDED]) return;
+  g[REFUNDED] = true;
+  await refundForMode(mode);
 }
 
 /** Add credits to a workspace via the audited RPC (used by top-up + super-admin). */

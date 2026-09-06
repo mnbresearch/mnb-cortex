@@ -6,9 +6,12 @@ import { hasRole } from "@/lib/roles";
 import { DeleteWorkspace } from "@/components/delete-workspace";
 import { Card } from "@/components/ui/card";
 import { Field, ActionForm } from "@/components/forms";
+import { SubmitButton } from "@/components/form-buttons";
 import { getOrgProfile, getUserAndOrg } from "@/lib/data";
 import { updateOrgProfile, seedDemoData, clearDemoData, hasDemoData, signOut } from "@/lib/actions";
-import { APP_VERSION } from "@/lib/config";
+import { APP_VERSION, planIncludes, lowestPlanWith } from "@/lib/config";
+import { getBillingStatus } from "@/lib/billing";
+import { isSuperAdmin } from "@/lib/superadmin";
 import { ACCENT_NAMES } from "@/lib/utils";
 import { INDUSTRIES as AGENT_INDUSTRIES, SECTORS } from "@/lib/agents/catalog";
 import { BackupButton } from "@/components/backup-button";
@@ -25,6 +28,20 @@ export default async function Settings() {
   const { user } = await getUserAndOrg();
   const profile = await getOrgProfile();
   const demoPresent = await hasDemoData();
+
+  /*
+    The same gate the app layout applies, asked here so the form can tell the
+    truth about itself. Previously both fields accepted input on every plan:
+    the accent silently worked (though it was sold as a paid differentiator),
+    and the logo silently did nothing at all on every plan including the ones
+    that paid for it. Saving a value and having nothing happen, with no
+    explanation, is worse than not offering the field.
+  */
+  const billing = await getBillingStatus();
+  // `isOwner`-style super-admin allowance, matching the app layout and the
+  // server action. All three must agree or the operator sees branding they
+  // cannot save.
+  const brandable = (await isSuperAdmin()) || planIncludes(billing.plan, "whitelabel");
   const inp = "rounded-lg border bg-background px-3 h-9 text-sm w-full outline-none focus:ring-2 focus:ring-ring";
   const btn = "inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90";
 
@@ -74,14 +91,28 @@ export default async function Settings() {
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">Brand accent
-                  <select className={inp} name="accent" defaultValue={profile?.accent || "gold"}>
+                  <select className={inp} name="accent" defaultValue={profile?.accent || "gold"} disabled={!brandable}>
                     {ACCENT_NAMES.map((c)=> <option key={c} value={c}>{c}</option>)}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-3">Logo URL (white-label)
-                  <input className={inp} name="logo_url" placeholder="https://…/logo.png" aria-label="https://…/logo.png" defaultValue={profile?.logo_url || ""} />
+                  <input className={inp} name="logo_url" placeholder="https://…/logo.png" aria-label="Logo URL" defaultValue={profile?.logo_url || ""} disabled={!brandable} />
                 </label>
-                <div className="sm:col-span-3"><button className={btn} type="submit"><Building2 className="h-4 w-4" /> Save profile</button></div>
+                {/* Say which plan, rather than leaving two dead fields on the
+                    page. The disabled state is the honest one — these inputs
+                    used to accept a value and then quietly change nothing. */}
+                {!brandable && (
+                  <p className="sm:col-span-3 -mt-1 text-xs text-muted-foreground">
+                    Your accent colour and logo appear across the workspace on the{" "}
+                    <b className="text-foreground">{lowestPlanWith("whitelabel")}</b> plan and above.{" "}
+                    <a href="/pricing" className="text-primary underline">See plans</a>
+                  </p>
+                )}
+                {/* The last plain submit button in the app. Everything else
+                    routes through SubmitButton, which disables while the server
+                    action is in flight; without it this form could be submitted
+                    twice on a slow connection. */}
+                <div className="sm:col-span-3"><SubmitButton className={btn}><Building2 className="h-4 w-4" /> Save profile</SubmitButton></div>
               </form>
             </Section>
 

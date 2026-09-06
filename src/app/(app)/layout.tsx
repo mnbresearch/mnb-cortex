@@ -15,12 +15,36 @@ import { OnboardingTour } from "@/components/onboarding-tour";
 import { getOrgProfile, getMyOrgs, getUserAndOrg } from "@/lib/data";
 import { isSuperAdmin } from "@/lib/superadmin";
 import { getBillingStatus } from "@/lib/billing";
+import { planIncludes } from "@/lib/config";
 import { TrialGuard } from "@/components/trial-guard";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const [profile, superAdmin, orgs, { orgId }, billing] = await Promise.all([
     getOrgProfile(), isSuperAdmin(), getMyOrgs(), getUserAndOrg(), getBillingStatus(),
   ]);
+
+  /*
+    WHITE-LABEL, FINALLY ENFORCED AND FINALLY DELIVERED.
+
+    `planIncludes(plan, "whitelabel")` had no call sites anywhere in the app —
+    the capability was declared on three plans, listed in the pricing table as
+    "Custom accent colour & logo" (Command, ₹39,999) and "Your accent colour
+    across the workspace" (Practice, ₹29,999), and enforced nowhere. Both halves
+    of that were wrong at once, in opposite directions:
+
+      - The ACCENT was applied for every workspace regardless of plan, so a
+        ₹4,999 customer already had the thing ₹29,999 was charging for.
+      - The LOGO was captured in Settings, written to organizations.logo_url,
+        and read by nothing. Nobody on any plan ever saw it.
+
+    So the more expensive plan's differentiator was free, and its headline
+    feature did not exist. This is the one place that decides both.
+  */
+  const brandable = superAdmin || planIncludes(billing.plan, "whitelabel");
+  const logoUrl = brandable && typeof profile?.logo_url === "string" && profile.logo_url.startsWith("https://")
+    ? profile.logo_url
+    : null;
+
   return (
     <div className="flex min-h-screen">
       {/*
@@ -35,12 +59,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         Skip to content
       </a>
       <NavProgress />
-      <Sidebar superAdmin={superAdmin} orgs={orgs} activeOrgId={orgId} />
+      <Sidebar superAdmin={superAdmin} orgs={orgs} activeOrgId={orgId} logoUrl={logoUrl} brandName={brandable ? (profile?.name || null) : null} />
       <div className="flex-1 min-w-0 app-canvas">{children}</div>
       <MobileNav />
       <CommandPalette />
       <PWA />
-      <Branding accent={profile?.accent} />
+      <Branding accent={brandable ? profile?.accent : undefined} />
       <ConsentBanner />
       <Copilot />
       <Shortcuts />

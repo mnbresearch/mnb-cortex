@@ -16,7 +16,12 @@ import { useTheme } from "next-themes";
 
 const OPEN_KEY = "cortex_nav_open_v1";
 
-export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: { superAdmin?: boolean; orgs?: { id: string; name: string }[]; activeOrgId?: string | null }) {
+export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null, logoUrl = null, brandName = null }: {
+  superAdmin?: boolean; orgs?: { id: string; name: string }[]; activeOrgId?: string | null;
+  // Null unless the workspace's plan includes the whitelabel capability. The
+  // layout decides that; this component only renders what it is handed.
+  logoUrl?: string | null; brandName?: string | null;
+}) {
   const path = usePathname();
   const groups = Array.from(new Set(NAV.map((n) => n.group)));
   const activeGroup = NAV.find((n) => n.href === path)?.group;
@@ -38,11 +43,33 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null }: {
 
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r sidebar-surface h-screen sticky top-0">
+      {/*
+        The white-label header. organizations.logo_url was collected in Settings
+        and rendered nowhere — this is where the plan bullet "Custom accent
+        colour & logo" becomes a real thing on screen.
+
+        A plain <img>, deliberately: next/image would route the URL through
+        /_next/image, whose remotePatterns list only trusted hosts, so an
+        arbitrary customer domain would 400. The URL is validated as https on
+        save and again in the layout.
+
+        "on MNB Cortex" stays underneath. White-labelling the workspace for a
+        practice's own clients is what was sold; pretending the software is not
+        Cortex is not, and a customer who cannot tell what they are looking at
+        cannot get support for it.
+      */}
       <div className="flex items-center gap-2.5 px-5 h-16 border-b">
-        <Logo size={34} />
-        <div>
-          <div className="font-semibold leading-none tracking-tight">MNB Cortex</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">Early warning for your business</div>
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt={brandName ? `${brandName} logo` : "Workspace logo"} className="h-[34px] w-auto max-w-[34px] object-contain rounded" />
+        ) : (
+          <Logo size={34} />
+        )}
+        <div className="min-w-0">
+          <div className="font-semibold leading-none tracking-tight truncate">{brandName || "MNB Cortex"}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+            {brandName ? "on MNB Cortex" : "Early warning for your business"}
+          </div>
         </div>
       </div>
       <OrgSwitcher orgs={orgs} activeId={activeOrgId} />

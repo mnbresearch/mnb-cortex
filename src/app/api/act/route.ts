@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { draftOutreach } from "@/lib/ai/act";
 import { creditDenial } from "@/lib/api-guard";
-import { chargeForMode, refundForMode } from "@/lib/credits";
+import { chargeForMode, refundIfCharged, type ChargeResult } from "@/lib/credits";
 import { getUserAndOrg, getBusinessContext } from "@/lib/data";
 import { sendEmail } from "@/lib/email";
 import { brandFrom } from "@/lib/branded-email";
@@ -25,17 +25,32 @@ export const maxDuration = 60;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export async function POST(req: Request) {
+  /*
+    ONE GATE, AT FUNCTION SCOPE, SO THE CATCH CAN REACH IT.
+
+    Each of the three branches below declared its own `const gate`, which meant
+    the outer catch had nothing to refund. draftOutreach(), sendEmail(),
+    sendText() and sendTemplate() are all network calls that can throw after
+    the charge, and every one of those throws kept the customer's credits and
+    returned a bare "Failed." All three ops charge the same "act" mode, so a
+    single hoisted gate covers them.
+  */
+  let gate: ChargeResult | null = null;
   try {
     const b = await req.json().catch(() => ({} as any));
     const op = String(b.op || "");
 
     if (op === "draft") {
-      const gate = await chargeForMode("act");
+      gate = await chargeForMode("act");
       if (!gate.ok) { const d = creditDenial(gate, "Drafting"); return NextResponse.json(d.body, { status: d.status }); }
       let context = "";
       try { context = await getBusinessContext(); } catch {}
       const draft = await draftOutreach(String(b.kind || "custom"), String(b.brief || ""), context);
-      if (!draft) return NextResponse.json({ ok: false, error: "Couldn't draft that — check the AI key." }, { status: 200 });
+      if (!draft) {
+        // No draft is no product. This branch billed for it.
+        await refundIfCharged(gate, "act");
+        return NextResponse.json({ ok: false, error: "Couldn't draft that — check the AI key. Your credits have not been used." }, { status: 200 });
+      }
       return NextResponse.json({ ok: true, draft, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
     }
 
@@ -55,7 +70,7 @@ export async function POST(req: Request) {
       if (overLimit) {
         return NextResponse.json({ ok: false, rateLimited: true, error: "You've reached the daily send limit for this workspace (50). It resets in 24 hours." }, { status: 429 });
       }
-      const gate = await chargeForMode("act");
+      gate = await chargeForMode("act");
       if (!gate.ok) { const d = creditDenial(gate, "Sending an email"); return NextResponse.json(d.body, { status: d.status }); }
 
       const html = `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:auto;font-size:15px;line-height:1.65;color:#111">
@@ -70,8 +85,8 @@ export async function POST(req: Request) {
       const senderReplyTo = user.email || null;
       const res = await sendEmail(to, subject, html, { from: brandFrom(), replyTo: senderReplyTo });
       if (!res.sent) {
-        if (gate.enforced) await refundForMode("act"); // nothing left the building — don't bill
-        return NextResponse.json({ ok: false, error: res.reason || "Send failed. Check that email is configured (RESEND_API_KEY)." }, { status: 200 });
+        await refundIfCharged(gate, "act"); // nothing left the building — don't bill
+        return NextResponse.json({ ok: false, error: (res.reason || "Send failed. Check that email is configured (RESEND_API_KEY).") + " Your credits have not been used." }, { status: 200 });
       }
       return NextResponse.json({ ok: true, to, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
     }
@@ -97,7 +112,7 @@ export async function POST(req: Request) {
       const over = await enforce([{ key: `act:whatsapp:org:${orgId}`, limit: 100, windowSecs: 86_400 }]);
       if (over) return NextResponse.json({ ok: false, rateLimited: true, error: "Daily WhatsApp limit reached for this workspace (100)." }, { status: 429 });
 
-      const gate = await chargeForMode("act");
+      gate = await chargeForMode("act");
       if (!gate.ok) { const d = creditDenial(gate, "Sending a WhatsApp message"); return NextResponse.json(d.body, { status: d.status }); }
 
       const res = template
@@ -105,14 +120,15 @@ export async function POST(req: Request) {
         : await sendText(to, text, orgId);
 
       if (!res.sent) {
-        if (gate.enforced) await refundForMode("act");
-        return NextResponse.json({ ok: false, needsSetup: res.needsSetup, error: res.error }, { status: 200 });
+        await refundIfCharged(gate, "act");
+        return NextResponse.json({ ok: false, needsSetup: res.needsSetup, error: (res.error || "Could not send.") + " Your credits have not been used." }, { status: 200 });
       }
       return NextResponse.json({ ok: true, to, id: res.id, charged: gate.enforced ? gate.cost : 0 });
     }
 
     return NextResponse.json({ ok: false, error: "Unknown operation." }, { status: 400 });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || "Failed." }, { status: 200 });
+    await refundIfCharged(gate, "act");
+    return NextResponse.json({ ok: false, error: (e?.message || "Failed.") + " Your credits have not been used." }, { status: 200 });
   }
 }

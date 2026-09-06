@@ -5,7 +5,7 @@ import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
 import { AIPanel } from "@/components/ai-panel";
-import { DataTable } from "@/components/data-table";
+import { SavedAnalyses } from "@/components/saved-analyses";
 import { getMeetingsList } from "@/lib/data";
 import { Video, CheckSquare } from "lucide-react";
 
@@ -43,8 +43,9 @@ export default async function Meetings() {
         <AIPanel mode="meeting" saveMode="meeting" multiline
           placeholder="Paste a meeting transcript or rough notes — the AI writes minutes, decisions and assigned action items."
           cta="Generate minutes & actions" />
-        <DataTable title="Saved meetings" rows={rows} live={live} table="meetings" path="/meetings"
-          cols={[{key:"title",label:"Title"},{key:"platform",label:"Source"},{key:"created_at",label:"Saved",kind:"date"}]} />
+        <SavedAnalyses title="Saved meetings" rows={rows} live={live} table="meetings" path="/meetings"
+          titleKey="title" metaKey="platform" textKey="summary"
+          emptyHint="Generate minutes above and choose “Save to workspace” — the decisions and action items will be here in full." />
         <Section title="Example: Weekly Ops Review" desc="auto-transcribed" right={<Badge className="border-success/30 text-success">MOM ready</Badge>}>
           <p className="text-sm text-muted-foreground">Reviewed Line B stockout risk and agreed to approve the RM-204 PO and add a backup supplier. Sales confirmed Premium-X ramp; agreed to send the UAE pilot proposal.</p>
           <div className="mt-4">

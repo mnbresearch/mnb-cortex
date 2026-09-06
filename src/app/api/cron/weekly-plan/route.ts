@@ -4,7 +4,15 @@ import { cronAuthorised } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+/*
+  300s, matching the autopilot cron this shares its work with.
+
+  sendWeeklyPlans() spends a model call per workspace and budgets itself to 90
+  seconds of that, plus the surrounding reads and the paced Resend batches. At
+  60s this endpoint could not finish a real run: it would time out mid-loop,
+  having claimed workspaces for the week that it then never emailed.
+*/
+export const maxDuration = 300;
 
 // Per-workspace "plan for the week" email.
 //   ?test=1  → render + send ONE to contact@mnbresearch.com (no customer blast)

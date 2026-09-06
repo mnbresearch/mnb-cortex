@@ -134,7 +134,40 @@ export function renderWeeklyText(firstName: string, bullets: Bullet[], unsub: st
 }
 
 /* ---- recipients ---------------------------------------------------------- */
+/*
+  SCOPED TO MNB CORTEX USERS, and it has to be.
+
+  This Supabase project hosts more than one product, and they share
+  `auth.users`. Before this, the recipient list was every confirmed account in
+  the project — so a customer of the OTHER product, who has never seen MNB
+  Cortex, would have received a Cortex changelog blast containing the sentence
+  "You're receiving this because you have an account with MNB Cortex."
+
+  That sentence would have been false, which is the part that matters: it is
+  not a mailing-list annoyance but a claim about a relationship that does not
+  exist, sent to someone who never consented to it. Under the DPDP Act the
+  purpose you collected an address for is the purpose you may use it for.
+
+  `memberships` is the fact that makes someone a Cortex user — it is what the
+  entitlement, the workspace and the billing all key off. So the membership
+  table decides the audience, and `auth.users` is consulted only to resolve
+  those ids to confirmed addresses.
+*/
 async function listUserRecipients(sb: any): Promise<Recipient[]> {
+  // Who belongs to a Cortex workspace? Anyone else is not our audience.
+  const cortexUserIds = new Set<string>();
+  try {
+    const { data, error } = await sb.from("memberships").select("user_id");
+    if (error) return [];                       // fail CLOSED — send to nobody
+    for (const m of (data as any[]) || []) {
+      const id = String((m as any)?.user_id || "");
+      if (id) cortexUserIds.add(id);
+    }
+  } catch {
+    return [];                                  // same: silence beats mis-sending
+  }
+  if (!cortexUserIds.size) return [];
+
   const out: Recipient[] = [];
   const seen = new Set<string>();
   for (let page = 1; page <= 25; page++) {
@@ -142,6 +175,7 @@ async function listUserRecipients(sb: any): Promise<Recipient[]> {
     if (error) break;
     const users: any[] = data?.users || [];
     for (const u of users) {
+      if (!cortexUserIds.has(String(u?.id || ""))) continue;
       const email = String(u?.email || "").toLowerCase().trim();
       if (!email || seen.has(email)) continue;
       // Only real, confirmed accounts — never invited-but-unconfirmed shells.

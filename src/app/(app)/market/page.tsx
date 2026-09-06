@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Globe } from "lucide-react";
 import { AIPanel } from "@/components/ai-panel";
-import { DataTable } from "@/components/data-table";
+import { SavedAnalyses } from "@/components/saved-analyses";
 import { getMarketList } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,9 @@ export default async function Market() {
           </Card>
         )}
         <AIPanel mode="market" placeholder="Should I enter Saudi Arabia? Which city should I expand into? Which product to launch?" cta="Research this market" saveMode="market" />
-        <DataTable title="Saved market briefs" rows={rows} live={live} table="market_reports" path="/market" cols={[{key:"title",label:"Title"},{key:"created_at",label:"Saved",kind:"date"}]} />
+        <SavedAnalyses title="Saved market briefs" rows={rows} live={live} table="market_reports" path="/market"
+          titleKey="title" metaKey="query" textKey="recommendation"
+          emptyHint="Research a market above and choose “Save to workspace” — the full brief and recommendation will be here." />
 
         <Section title="UAE expansion scan" desc="Example brief — use the AI panel above to generate one for your market" right={<Badge className="border-success/30 text-success">Recommended: Enter H2</Badge>}>
           <div className="grid sm:grid-cols-3 gap-3">

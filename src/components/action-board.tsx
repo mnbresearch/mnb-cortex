@@ -34,11 +34,30 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
   const [tasks, setTasks] = useState<Task[]>(initial);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
+  /*
+    THE BOARD NEVER SAID ANYTHING WHEN IT FAILED.
+
+    Two silences, both of which look identical to a bug in the user's eyes:
+
+      - persist() caught every write error and restored the previous state. A
+        task the user typed simply vanished a moment after appearing, with no
+        message. The rollback was right; doing it wordlessly was not.
+      - generate() had `catch {}` — a literally empty handler — around the
+        whole AI call. Out of credits, no API key, a network failure: the
+        spinner stopped and nothing else happened. "Generate from my business"
+        appeared to be a button that does nothing, which is exactly how a
+        customer describes a product they are about to stop paying for.
+  */
+  const [err, setErr] = useState("");
 
   useEffect(() => { setTasks(initial); }, [initial]);
 
-  async function persist(fn: () => Promise<void>, rollback: Task[]) {
-    try { await fn(); } catch { setTasks(rollback); }   // put it back if the write failed
+  async function persist(fn: () => Promise<void>, rollback: Task[], what: string) {
+    try { setErr(""); await fn(); }
+    catch (e: any) {
+      setTasks(rollback);
+      setErr(e?.message ? `Couldn't ${what}: ${e.message}` : `Couldn't ${what} — check your connection and try again.`);
+    }
   }
 
   async function add() {
@@ -50,7 +69,7 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
     const tmp: Task = { id: "tmp" + Date.now(), title, col: 0, source: "user" };
     setTasks((t) => [...t, tmp]);
     const fd = new FormData(); fd.set("title", title);
-    await persist(() => addTask(fd), before);
+    await persist(() => addTask(fd), before, "save that task");
   }
 
   async function move(id: string, dir: -1 | 1) {
@@ -61,7 +80,7 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, col } : t)));
     if (id.startsWith("tmp")) return;   // not saved yet; nothing to move server-side
     const fd = new FormData(); fd.set("id", id); fd.set("col", String(col));
-    await persist(() => moveTask(fd), before);
+    await persist(() => moveTask(fd), before, "move that task");
   }
 
   async function del(id: string) {
@@ -69,21 +88,40 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
     setTasks((ts) => ts.filter((t) => t.id !== id));
     if (id.startsWith("tmp")) return;
     const fd = new FormData(); fd.set("id", id);
-    await persist(() => deleteTask(fd), before);
+    await persist(() => deleteTask(fd), before, "delete that task");
   }
 
   async function generate() {
     setLoading(true);
+    setErr("");
     try {
       const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "actions", input: "" }) });
-      const j = await r.json();
+      const j = await r.json().catch(() => ({} as any));
+
+      /*
+        The credit denial arrives as a 402 whose body carries the real
+        explanation ("You're out of credits — top up to keep going"). That
+        message was being fed straight into the bullet regex below, which of
+        course matches nothing, so the most actionable error in the product
+        was silently discarded and the board just stayed empty.
+      */
+      if (!r.ok || j?.ok === false || j?.error) {
+        setErr(String(j?.error || j?.text || "Cortex couldn't generate actions right now. Try again in a moment."));
+        return;
+      }
+
       const lines: string[] = String(j.text || "").split("\n").filter((l) => /^\s*(\d+\.|[-*]|\*\*\[)/.test(l));
       const parsed: Task[] = lines.slice(0, 8).map((l, i) => {
         const pr = (l.match(/\[(P[123])\]/) || [])[1] as any;
         const title = l.replace(/^\s*(\d+\.|[-*])\s*/, "").replace(/\*\*/g, "").replace(/\[P[123]\]\s*/, "").split("—")[0].trim().slice(0, 90);
         return { id: "tmp" + Date.now() + i, title, col: 0 as const, priority: pr, source: "ai" };
       }).filter((t) => t.title);
-      if (parsed.length) {
+      if (!parsed.length) {
+        // The model answered, but not in a shape with any actions in it.
+        setErr("Cortex didn't find any clear actions from your current numbers. Add or import more data and try again.");
+        return;
+      }
+      {
         setTasks((t) => [...parsed, ...t]);
         // Persist each one, tagged source:"ai" so the follow-up loop can later
         // tell what Cortex suggested from what the owner wrote himself.
@@ -95,7 +133,9 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
           try { await addTask(fd); } catch { /* keep the rest */ }
         }
       }
-    } catch {} finally { setLoading(false); }
+    } catch (e: any) {
+      setErr(e?.message ? `Couldn't reach Cortex: ${e.message}` : "Couldn't reach Cortex — check your connection and try again.");
+    } finally { setLoading(false); }
   }
 
   return (
@@ -109,6 +149,13 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
           className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
         <Button onClick={add}><Plus className="h-4 w-4" /> Add</Button>
       </div>
+      {/* role="alert" so a screen reader is told immediately — a failure the
+          user cannot see is worse than one they can. */}
+      {err && (
+        <p role="alert" className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">
+          {err}
+        </p>
+      )}
       <div className="grid sm:grid-cols-3 gap-3">
         {COLS.map((name, ci) => (
           <div key={name} className="rounded-lg border bg-background/40 p-3">

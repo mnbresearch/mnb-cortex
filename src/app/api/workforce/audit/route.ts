@@ -3,7 +3,7 @@ import { getUserAndOrg, getBusinessContext } from "@/lib/data";
 import { runCortex } from "@/lib/ai/cortex";
 import { recallContext } from "@/lib/memory";
 import { creditDenial } from "@/lib/api-guard";
-import { chargeForMode } from "@/lib/credits";
+import { chargeForMode, refundIfCharged } from "@/lib/credits";
 import { DEPARTMENTS } from "@/lib/agents/catalog";
 
 export const runtime = "nodejs";
@@ -37,7 +37,17 @@ ${context}
 
 ${mem}`;
 
+  /*
+    The empty-catch here was the clearest case of the pattern: the model call
+    fails, `plan` stays "", and the route cheerfully returns a polite sentence
+    asking the customer to try again in a moment — having already taken the
+    full cost of a report. Trying again in a moment costs them again.
+  */
   let plan = "";
   try { plan = await runCortex([{ role: "user", content: prompt }], ""); } catch { plan = ""; }
-  return NextResponse.json({ ok: Boolean(plan), plan: plan || "Could not generate the audit right now — try again in a moment." });
+  if (!String(plan || "").trim()) {
+    await refundIfCharged(gate, "report");
+    return NextResponse.json({ ok: false, plan: "", error: "Could not generate the audit right now — try again in a moment. Your credits have not been used." });
+  }
+  return NextResponse.json({ ok: true, plan });
 }

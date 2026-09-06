@@ -84,11 +84,27 @@ export default async function Finance() {
           />
         </Section>
 
-        <Section title="AI actions" desc="The COO executes — these write real records">
+        {/*
+          BOTH LABELS PROMISED MORE THAN EITHER ACTION DOES.
+
+          "Generate invoice (AI)" runs no AI — createInvoiceAI() is a redirect
+          to the invoice builder, and deliberately so: Cortex must never invent
+          a legal document. "Send payment reminders" sends nothing to anyone who
+          owes money; it emails YOU the list. The section heading then stood
+          over both of them claiming "The COO executes — these write real
+          records".
+
+          Chasing debtors happens in Collections, where a human approves each
+          message before it goes out. These two are the way in.
+        */}
+        <Section title="Receivables actions" desc="Prepare the work here — nothing is sent to a customer without your approval">
           <div className="flex flex-wrap gap-2">
-            <ActionForm action={createInvoiceAI} label="Generate invoice (AI)" primary />
-            <ActionForm action={sendReminderAI} label="Send payment reminders" />
+            <ActionForm action={createInvoiceAI} label="Create an invoice" primary />
+            <ActionForm action={sendReminderAI} label="Email me my overdue list" />
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            To actually chase these customers, open <Link href="/collections" className="text-primary underline">Collections</Link> — Cortex drafts each message and waits for you to approve it.
+          </p>
         </Section>
 
         <CollapsibleForm title="Add invoice" action={addInvoice}>

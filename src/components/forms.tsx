@@ -1,5 +1,8 @@
-import { Trash2, Plus, Sparkles } from "lucide-react";
+import { Plus } from "lucide-react";
 import { deleteRecord } from "@/lib/actions";
+// The buttons live in a client module because useFormStatus has to run in the
+// browser; everything else on this page stays a server component.
+import { SubmitButton, DeleteSubmit } from "@/components/form-buttons";
 
 const inp = "rounded-lg border bg-background px-3 h-9 text-sm w-full outline-none focus:ring-2 focus:ring-ring";
 const btn = "inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90";
@@ -12,7 +15,7 @@ export function CollapsibleForm({ title, action, children }: { title: string; ac
       </summary>
       <form action={action} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0">
         {children}
-        <div className="sm:col-span-2 lg:col-span-3"><button className={btn} type="submit">Save</button></div>
+        <div className="sm:col-span-2 lg:col-span-3"><SubmitButton className={btn}>Save</SubmitButton></div>
       </form>
     </details>
   );
@@ -44,8 +47,7 @@ export function DeleteButton({ table, id, path }: { table: string; id: string; p
       <input type="hidden" name="table" value={table} />
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="path" value={path} />
-      <button type="submit" title="Delete" className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" />
-      </button>
+      <DeleteSubmit />
     </form>
   );
 }
@@ -53,11 +55,15 @@ export function DeleteButton({ table, id, path }: { table: string; id: string; p
 export function ActionForm({ action, label, primary = false }: { action: () => Promise<void>; label: string; primary?: boolean }) {
   return (
     <form action={action}>
-      <button type="submit" className={primary
-        ? "inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-10 px-4 text-sm font-medium hover:opacity-90"
-        : "inline-flex items-center gap-2 rounded-lg border bg-transparent h-10 px-4 text-sm font-medium hover:bg-accent"}>
-        <Sparkles className="h-4 w-4" /> {label}
-      </button>
+      <SubmitButton
+        icon
+        pendingLabel="Working…"
+        className={primary
+          ? "inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-10 px-4 text-sm font-medium hover:opacity-90 disabled:opacity-60"
+          : "inline-flex items-center gap-2 rounded-lg border bg-transparent h-10 px-4 text-sm font-medium hover:bg-accent disabled:opacity-60"}
+      >
+        {label}
+      </SubmitButton>
     </form>
   );
 }

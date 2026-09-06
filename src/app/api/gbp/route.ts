@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUserAndOrg, getOrgProfile } from "@/lib/data";
 import { creditDenial } from "@/lib/api-guard";
-import { chargeForMode } from "@/lib/credits";
+import { chargeForMode, refundIfCharged, type ChargeResult } from "@/lib/credits";
 import { runCortex } from "@/lib/ai/cortex";
 import { FAST, STANDARD } from "@/lib/ai/generation";
 import { buildGbpPrompt, GBP_KINDS, type GbpKind } from "@/lib/gbp";
@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+  let gate: ChargeResult | null = null;
   try {
     const b = await req.json().catch(() => ({} as any));
     const kind = String(b.kind || "") as GbpKind;
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Unknown content type." }, { status: 200 });
     }
 
-    const gate = await chargeForMode("gbp");
+    gate = await chargeForMode("gbp");
     if (!gate.ok) {
       const d = creditDenial(gate, "Google Business Profile content");
       return NextResponse.json({ ...d.body, text: d.body.error }, { status: d.status });
@@ -34,7 +35,14 @@ export async function POST(req: Request) {
     const [{ orgId }, profile] = await Promise.all([getUserAndOrg(), getOrgProfile().catch(() => null)]);
     const business = String(b.business || (profile as any)?.name || "").trim();
     if (!business) {
-      return NextResponse.json({ ok: false, error: "Set your company name in Settings first." }, { status: 200 });
+      /*
+        A VALIDATION failure, billed. The charge happens above, and this check
+        needs the profile that is only loaded below it, so a workspace that had
+        not filled in its company name was charged for the privilege of being
+        told to go and fill it in — repeatedly, since the button stays there.
+      */
+      await refundIfCharged(gate, "gbp");
+      return NextResponse.json({ ok: false, error: "Set your company name in Settings first — nothing was generated, so your credits have not been used." }, { status: 200 });
     }
 
     const prompt = buildGbpPrompt({
@@ -59,8 +67,14 @@ export async function POST(req: Request) {
     const profileToUse = kind === "services" || kind === "qanda" ? STANDARD : FAST;
     const text = await runCortex([{ role: "user", content: prompt }], context, profileToUse);
 
+    if (!String(text || "").trim()) {
+      await refundIfCharged(gate, "gbp");
+      return NextResponse.json({ ok: false, error: "The AI returned nothing — try again. Your credits have not been used." }, { status: 200 });
+    }
+
     return NextResponse.json({ ok: true, text, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || "Could not generate." }, { status: 200 });
+    await refundIfCharged(gate, "gbp");
+    return NextResponse.json({ ok: false, error: (e?.message || "Could not generate.") + " Your credits have not been used." }, { status: 200 });
   }
 }

@@ -183,9 +183,38 @@ export async function GET(req: Request) {
     }
   } catch (e: any) { weekly = { error: e?.message }; }
 
+  /*
+    ON BY DEFAULT, because the landing page sells it.
+
+    page.tsx promises "One email on Monday: the three things worth your
+    attention this week", and the onboarding finish screen repeats it under
+    "Here is what happens without you doing anything else". This is the code
+    that delivers exactly that — buildPriorities() per workspace, emailed to
+    its members — and it was gated behind an env var that is set nowhere, so
+    the answer to "what happens without you doing anything else" was: nothing.
+
+    The weekly BRIEF does ship (scheduled_reports, default-on), but it is a
+    general narrative on a drifting ~6.5-day cycle, so it satisfies neither the
+    "Monday" nor the "three things" half of the promise.
+
+    So the flag is inverted: opt OUT with WEEKLY_PLAN_ENABLED=0. The send is
+    already safe to leave running — it skips workspaces with no health_metrics
+    ("nothing honest to send"), honours email_optouts, and the istDay check
+    keeps it to Monday IST.
+  */
   let plan: any = null;
   try {
-    if (process.env.WEEKLY_PLAN_ENABLED === "1" && istDay === 1) {
+    if (process.env.WEEKLY_PLAN_ENABLED !== "0") {
+      /*
+        RUNS EVERY DAY, sends at most once per workspace per week.
+
+        The Monday-only gate that used to be here was what made the 60-workspace
+        cap a silent truncation: one shot a week, and anything past 60 was
+        simply never mailed. sendWeeklyPlans() now records what it sent against
+        an ISO week, so a daily run is safe — Monday does the bulk of the work
+        and the following days drain whatever the budget deferred, with the
+        ledger guaranteeing nobody is mailed twice in the same week.
+      */
       const { sendWeeklyPlans } = await import("@/lib/plan-email");
       plan = await sendWeeklyPlans({});
     }

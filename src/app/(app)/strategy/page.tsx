@@ -5,7 +5,7 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AIPanel } from "@/components/ai-panel";
-import { DataTable } from "@/components/data-table";
+import { SavedAnalyses } from "@/components/saved-analyses";
 import { getStrategyList } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export default async function Strategy() {
           </Card>
         )}
         <AIPanel mode="strategy" placeholder="Why is revenue flat? Should we change pricing? How do we hit 30% growth?" cta="Build the analysis" saveMode="strategy" />
-        <DataTable title="Saved analyses" rows={rows} live={live} table="strategy_docs" path="/strategy" cols={[{key:"question",label:"Question"},{key:"framework",label:"Type"},{key:"created_at",label:"Saved",kind:"date"}]} />
+        <SavedAnalyses rows={rows} live={live} table="strategy_docs" path="/strategy" />
         <Card className="p-4">
           <div className="text-sm font-medium">Frameworks Cortex can apply</div>
           <div className="flex flex-wrap gap-2 mt-2">{frameworks.map((f) => <Badge key={f} className="border-border text-muted-foreground">{f}</Badge>)}</div>

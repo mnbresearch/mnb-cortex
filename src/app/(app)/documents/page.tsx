@@ -5,7 +5,7 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AIPanel } from "@/components/ai-panel";
-import { DataTable } from "@/components/data-table";
+import { SavedAnalyses } from "@/components/saved-analyses";
 import { getDocumentsList } from "@/lib/data";
 import { FileText, FileSpreadsheet, AlertTriangle } from "lucide-react";
 
@@ -33,8 +33,9 @@ export default async function Documents() {
         <AIPanel mode="document" saveMode="document" multiline allowFile
           placeholder="Paste a contract, invoice, GST return or report — or upload a PDF above. The AI summarizes and flags risks."
           cta="Analyze document" />
-        <DataTable title="Saved documents" rows={rows} live={live} table="documents" path="/documents"
-          cols={[{key:"name",label:"Name"},{key:"type",label:"Type"},{key:"created_at",label:"Saved",kind:"date"}]} />
+        <SavedAnalyses title="Saved documents" rows={rows} live={live} table="documents" path="/documents"
+          titleKey="name" metaKey="type" textKey="summary"
+          emptyHint="Analyse a document above and choose “Save to workspace” — the summary and the risk flags will be here in full." />
         <Section title="Example analyses">
           <div className="space-y-2">
             {sample.map((d) => (

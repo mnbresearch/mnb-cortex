@@ -120,12 +120,104 @@ export async function hasDemoData(): Promise<boolean> {
 export async function updateOrgProfile(fd: FormData) {
   const { orgId } = await requireRole("admin");
   const sb = createClient();
-  const patch: any = { name: str(fd.get("name")) };
+  /*
+    `str(null)` is "", never undefined — so this line used to blank the company
+    name on any submission that did not carry the field. Latent while the input
+    was `required` and always present, but no longer harmless: `name` is now
+    rendered as the white-label brand in the sidebar, so wiping it empties the
+    branded header too. Same defect as the logo_url one described below; it was
+    sitting one line above it.
+  */
+  const patch: any = {};
+  if (fd.has("name")) {
+    const nm = str(fd.get("name"));
+    if (!nm) throw new Error("Your company name cannot be empty.");
+    patch.name = nm;
+  }
   const industry = str(fd.get("industry")); if (industry) patch.industry = industry;
   const rev = num(fd.get("annual_revenue_cr")); if (rev) patch.annual_revenue_cr = rev;
   const currency = str(fd.get("currency")); if (currency) patch.currency = currency;
-  const accent = str(fd.get("accent")); if (accent) patch.accent = accent;
-  const logo = str(fd.get("logo_url")); if (logo !== undefined) patch.logo_url = logo || null;
+  /*
+    BRANDING IS PLAN-GATED, AND THE GATE IS SERVER-SIDE.
+
+    The Settings form disables both fields when the plan does not include
+    `whitelabel`, but a disabled input is a courtesy, not a control — it is
+    absent from the POST rather than rejected, and a hand-made request can
+    include whatever it likes. The check belongs here, where the write happens.
+
+    The second bug is subtler and is the one that would have bitten a real
+    customer. `str()` maps a missing field to "", never to undefined, so the
+    old `if (logo !== undefined)` was ALWAYS true: any profile save with the
+    field absent from the form set logo_url to null. Once the field became
+    conditionally disabled, that turned into silent data loss — a Command
+    customer editing their company name on a page where the input had been
+    disabled would have had their logo deleted without being told.
+
+    `fd.has()` distinguishes "the user cleared this" from "the form never sent
+    it", which is the distinction that was missing.
+  */
+  const { getBillingStatus } = await import("@/lib/billing");
+  const { isSuperAdmin } = await import("@/lib/superadmin");
+  const [billing, superAdmin] = await Promise.all([getBillingStatus(), isSuperAdmin()]);
+  // `superAdmin ||` matches the app layout, which renders branded chrome for
+  // super-admins. Without it they could see the branding and not save it.
+  const brandable = superAdmin || planIncludes(billing.plan, "whitelabel");
+
+  /*
+    SAY SO RATHER THAN SILENTLY DROPPING IT.
+
+    The Settings form disables these inputs when the plan does not include
+    whitelabel, so a legitimate save from an unentitled workspace simply omits
+    them and never reaches this branch. Which means if the fields DID arrive
+    and we are not entitled, one of two things is true: someone hand-made the
+    request, or getBillingStatus() fell back to `plan: "starter"` after a
+    transient read error (billing.ts catches and defaults). The second is the
+    one that matters — a paying Command customer would otherwise have their
+    accent and logo edits dropped while the page reported success.
+  */
+  if (!brandable && (fd.has("accent") || fd.has("logo_url"))) {
+    // The throw happens before the update, so NOTHING is saved — which is what
+    // the message has to say. "those fields were skipped, the rest went through"
+    // would be a nicer sentence and a false one.
+    throw new Error(
+      `Your accent colour and logo are part of the ${lowestPlanWith("whitelabel")} plan and above. Nothing was saved — remove those fields and try again, or upgrade to keep them.`,
+    );
+  }
+
+  if (brandable && fd.has("accent")) {
+    const accent = str(fd.get("accent")); if (accent) patch.accent = accent;
+  }
+
+  /*
+    The logo is now RENDERED (sidebar, mobile header), so its URL has to be
+    checked rather than stored verbatim. It was previously write-only, which is
+    the only reason an unvalidated string was harmless.
+
+    https only, and nothing else. A `javascript:` or `data:` value in an <img>
+    src is not an XSS vector on its own, but it is not a logo either, and the
+    field has no legitimate use for any other scheme. Rejecting loudly beats
+    silently saving something that will never render.
+  */
+  if (brandable && fd.has("logo_url")) {
+    const trimmed = str(fd.get("logo_url"));
+    if (!trimmed) patch.logo_url = null;              // the user genuinely cleared it
+    else {
+      /*
+        NORMALISE, don't just validate.
+
+        `new URL()` accepts "HTTPS://x.com/logo.png" and reports protocol
+        "https:", but the layout's render-time guard is a case-sensitive
+        startsWith("https://"). Storing the raw string meant the save reported
+        success and the logo then silently never appeared — the exact
+        write-only behaviour this change set exists to end, reintroduced by a
+        mismatch between two checks. Storing `u.href` makes the two agree.
+      */
+      let href = "";
+      try { const u = new URL(trimmed); if (u.protocol === "https:") href = u.href; } catch { href = ""; }
+      if (!href) throw new Error("The logo URL must be a full https:// address, for example https://yourdomain.com/logo.png");
+      patch.logo_url = href;
+    }
+  }
   const { error } = await sb.from("organizations").update(patch).eq("id", orgId);
   if (error) throw new Error(error.message);
   revalidatePath("/settings");
@@ -273,13 +365,40 @@ export async function sendReminderAI() {
     .map((i) => `<li>${i.party || "Unnamed party"} — ₹${Number(i.amount || 0).toLocaleString("en-IN")}${i.due_date ? ` (${days(i.due_date)} days)` : ""}</li>`)
     .join("");
 
-  let note = `Queued reminders for ${overdue.length} overdue invoice${overdue.length === 1 ? "" : "s"} worth ₹${total.toLocaleString("en-IN")}.`;
+  /*
+    IT SAID "QUEUED REMINDERS", AND NOTHING WAS QUEUED.
+
+    This action reads the ledger and emails the OWNER a summary. It has never
+    contacted a single debtor — there is no queue, no scheduled send, no
+    message addressed to the party that owes the money. The alert it wrote said
+    "Queued reminders for 7 overdue invoices worth ₹18,40,000", which a
+    business owner reads exactly one way: those seven customers have been
+    chased. They have not been. Worse, believing it means NOT chasing them
+    yourself, so the product's false claim actively delays the recovery it
+    claims to have started.
+
+    Chasing debtors is a real, built feature — it lives in /collections, where
+    messages are drafted, approved by a human, and sent as the customer, with a
+    thread per debtor and a stop-on-payment rule. This action's honest job is
+    to be the front door to that: here is who owes you, go and chase them.
+
+    So the wording now describes what happened (a summary was prepared and
+    emailed to you) and points at the thing that does the chasing.
+  */
+  const note = `${overdue.length} overdue invoice${overdue.length === 1 ? "" : "s"} worth ₹${total.toLocaleString("en-IN")} need chasing. No one has been contacted yet — open Collections to draft and approve the messages.`;
+  let emailed = "";
   if (user?.email) {
     const res = await sendEmail(user.email, "MNB Cortex — your overdue receivables",
-      `<h2>${overdue.length} overdue invoice${overdue.length === 1 ? "" : "s"}, ₹${total.toLocaleString("en-IN")} outstanding</h2><ul>${top}</ul>`);
-    if (res.sent) note += ` Summary emailed to ${user.email}.`;
+      `<h2>${overdue.length} overdue invoice${overdue.length === 1 ? "" : "s"}, ₹${total.toLocaleString("en-IN")} outstanding</h2>
+       <p>This is your list, not a reminder to them — nobody has been contacted yet.</p>
+       <ul>${top}</ul>
+       <p><a href="${(process.env.NEXT_PUBLIC_APP_URL || "https://cortex.mnbresearch.com").replace(/\/$/, "")}/collections">Open Collections</a> to draft the chase messages and approve them before they go out.</p>`);
+    emailed = res.sent ? ` The list was emailed to ${user.email}.` : "";
   }
-  const { error } = await sb.from("alerts").insert({ org_id: orgId, severity: "yellow", module: "finance", title: "Overdue receivables", body: note });
+  const { error } = await sb.from("alerts").insert({
+    org_id: orgId, severity: "yellow", module: "finance",
+    title: "Overdue receivables — not yet chased", body: note + emailed,
+  });
   if (error) throw new Error(error.message);
   // /alerts is where these land — it was not revalidated, so a reminder
   // raised an alert the alerts page would not show until something else

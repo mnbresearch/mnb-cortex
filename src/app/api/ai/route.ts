@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { generateFor } from "@/lib/ai/cortex";
 import { getBusinessContext, getUserAndOrg } from "@/lib/data";
 import { creditDenial } from "@/lib/api-guard";
-import { chargeForMode } from "@/lib/credits";
+import { chargeForMode, refundIfCharged, type ChargeResult } from "@/lib/credits";
 import { recallContext } from "@/lib/memory";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,10 +20,17 @@ export const dynamic = "force-dynamic";
  */
 export const maxDuration = 60;
 export async function POST(req: Request) {
+  /*
+    Both hoisted so the catch can refund. The mode matters as much as the gate:
+    costs differ per mode (14-24 credits here), so refunding a hardcoded mode
+    would give back the wrong amount.
+  */
+  let gate: ChargeResult | null = null;
+  let m = "pulse";
   try {
     const { mode, input } = await req.json();
-    const m = String(mode || "pulse");
-    const gate = await chargeForMode(m);
+    m = String(mode || "pulse");
+    gate = await chargeForMode(m);
     if (!gate.ok) {
       const d = creditDenial(gate, "This action");
       return NextResponse.json({ ...d.body, text: d.body.error }, { status: d.status });
@@ -38,8 +45,18 @@ export async function POST(req: Request) {
     const mem = await recallContext(orgId, String(input || m), 8);
     const fullContext = mem ? `${context}\n\n${mem}` : context;
     const text = await generateFor(m, String(input || ""), fullContext);
+
+    // An empty completion is a failure that does not throw: the provider
+    // answered, it just answered with nothing. Billing for a blank panel is
+    // the same as billing for an exception.
+    if (!String(text || "").trim()) {
+      await refundIfCharged(gate, m);
+      return NextResponse.json({ ok: false, text: "The AI returned an empty answer — try running that again. Your credits have not been used." }, { status: 200 });
+    }
+
     return NextResponse.json({ text, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
-    return NextResponse.json({ text: "Could not run the AI — check the API key.", error: e?.message }, { status: 200 });
+    await refundIfCharged(gate, m);
+    return NextResponse.json({ text: "Could not run the AI — check the API key. Your credits have not been used.", error: e?.message }, { status: 200 });
   }
 }
