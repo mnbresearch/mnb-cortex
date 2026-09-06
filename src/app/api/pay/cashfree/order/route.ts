@@ -17,6 +17,17 @@ export async function POST(req: Request) {
   if (b.kind === "credits") {
     const pack = CREDIT_PACKS.find((p) => p.id === b.packId);
     if (!pack) return NextResponse.json({ ok: false, error: "Unknown pack." });
+
+    /*
+      A hidden pack is operator tooling and must not be orderable by knowing its
+      id. Checked HERE, on the server, rather than by leaving it out of the UI —
+      the pack list is a client bundle, so "not rendered" is not a control.
+    */
+    if (pack.hidden) {
+      const { isSuperAdmin } = await import("@/lib/superadmin");
+      if (!(await isSuperAdmin())) return NextResponse.json({ ok: false, error: "Unknown pack." });
+    }
+
     amount = pack.price; note = `credits:${pack.id}`; returnPath = "/usage";
   } else {
     const plan = PLANS.find((p) => p.id === b.plan || p.name === b.plan);

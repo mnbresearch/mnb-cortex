@@ -132,6 +132,10 @@ export function creditFloor(): { value: number; source: string } {
   let best: { value: number; source: string } | null = null;
 
   for (const p of CREDIT_PACKS) {
+    /* Hidden packs are operator tooling, not a way a customer can obtain
+       credits, so they must not be able to move the floor the whole product is
+       priced against. */
+    if (p.hidden) continue;
     const v = p.price / p.credits;
     if (!best || v < best.value) best = { value: v, source: `pack ${p.id}` };
   }

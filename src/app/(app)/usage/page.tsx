@@ -9,7 +9,7 @@ import { getUserAndOrg } from "@/lib/data";
 // creditCost() applies DEFAULT_CREDIT_COST for anything unlisted. This page
 // hardcoded `?? 2`, which was the OLD default and would have shown a price the
 // product no longer charges.
-import { CREDIT_COSTS, CREDIT_PACKS, creditCost } from "@/lib/config";
+import { CREDIT_COSTS, PUBLIC_CREDIT_PACKS, creditCost } from "@/lib/config";
 import { Coins, Infinity as InfinityIcon, Sparkles, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -90,7 +90,7 @@ export default async function Usage() {
         )}
 
         <Section title="Top up credits" desc="One-time credit packs — added instantly on payment">
-          <UsagePanel packs={CREDIT_PACKS} />
+          <UsagePanel packs={PUBLIC_CREDIT_PACKS} />
         </Section>
 
         <Section title="What each action costs" desc="Heavier AI generations use more credits">

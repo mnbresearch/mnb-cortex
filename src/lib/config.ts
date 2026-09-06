@@ -380,7 +380,20 @@ export function lowestPlanWith(cap: Capability): string {
 }
 
 // Buyable top-up packs (one-time). Price in INR.
-export type CreditPack = { id: string; label: string; credits: number; price: number; per: string };
+export type CreditPack = {
+  id: string; label: string; credits: number; price: number; per: string;
+  /**
+   * Never shown to a customer, never orderable except by a super-admin, and
+   * excluded from the margin floor.
+   *
+   * Exists so the payment chain can be exercised end to end with real money for
+   * a token amount — order creation, Cashfree checkout, webhook signature,
+   * event routing, idempotency claim, grant, ledger — without any of it being
+   * a simulation. Everything upstream of the grant is third-party
+   * infrastructure that cannot be honestly mocked.
+   */
+  hidden?: boolean;
+};
 export const CREDIT_PACKS: CreditPack[] = [
   /*
     ₹0.90 is THE FLOOR THE WHOLE PRODUCT IS PRICED AGAINST. Every entry in
@@ -397,7 +410,27 @@ export const CREDIT_PACKS: CreditPack[] = [
   { id: "pack_500", label: "Small", credits: 500, price: 599, per: "₹1.20 / credit" },
   { id: "pack_2k", label: "Standard", credits: 2000, price: 1999, per: "₹1.00 / credit" },
   { id: "pack_10k", label: "Bulk", credits: 10000, price: 8999, per: "₹0.90 / credit" },
+
+  /*
+    LIVE PAYMENT TEST. ₹1 for 1 credit.
+
+    Hidden from every customer surface, refused to anyone who is not a
+    super-admin (see api/pay/cashfree/order), and skipped by creditFloor() so it
+    cannot move the ₹0.90 margin floor. At ₹1.00/credit it would not undercut
+    the floor anyway, but excluding it means a future change to this row can
+    never quietly reprice the product.
+
+    Kept in the catalogue rather than special-cased, because settleOrder() looks
+    the pack up here to decide what to grant — a test that bypassed that lookup
+    would not be testing the real path, which is the entire point.
+
+    Safe to delete once the chain has been verified in production.
+  */
+  { id: "pack_test", label: "Live payment test", credits: 1, price: 1, per: "₹1.00 / credit", hidden: true },
 ];
+
+/** The packs a customer may see and buy. */
+export const PUBLIC_CREDIT_PACKS: CreditPack[] = CREDIT_PACKS.filter((p) => !p.hidden);
 
 /*
   REPOSITIONED AND REPRICED.

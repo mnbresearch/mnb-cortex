@@ -210,5 +210,54 @@ console.log("\nSTILL TRUE — the parts that were already right");
   check("the subscription branch still asks for retries", /cashfree-sub[\s\S]{0,200}status: 500/.test(wh));
 }
 
+/* ========================================================================= */
+console.log("\nTHE ₹1 TEST PACK MUST NOT LEAK");
+/* ========================================================================= */
+{
+  /*
+    A hidden pack is operator tooling that charges real money. Three ways it
+    could escape, each checked: shown to a customer, orderable by knowing its
+    id, or dragging the margin floor down with it.
+  */
+  const config = src("src/lib/config.ts");
+  check("the test pack is marked hidden", /id: "pack_test"[^\n]*hidden: true/.test(config));
+  check("PUBLIC_CREDIT_PACKS filters hidden packs", /CREDIT_PACKS\.filter\(\(p\) => !p\.hidden\)/.test(config));
+
+  const usage = src("src/app/(app)/usage/page.tsx");
+  check("the usage page renders only public packs",
+        /PUBLIC_CREDIT_PACKS/.test(usage) && !/packs=\{CREDIT_PACKS\}/.test(usage));
+
+  const order = src("src/app/api/pay/cashfree/order/route.ts");
+  check("ordering a hidden pack requires super-admin",
+        /pack\.hidden[\s\S]{0,220}isSuperAdmin/.test(order));
+  check("...and the refusal is indistinguishable from an unknown pack",
+        /pack\.hidden[\s\S]{0,300}Unknown pack/.test(order));
+
+  const model = src("src/lib/pricing-model.ts");
+  check("the margin floor skips hidden packs", /if \(p\.hidden\) continue;/.test(model));
+
+  /* Executed: the floor must still be ₹0.90 from pack_10k, not ₹1.00 from the
+     test pack — and more importantly, a hidden pack priced BELOW the floor must
+     not move it either, which is the case a price typo would create. */
+  const packs = [
+    { id: "pack_10k", credits: 10000, price: 8999 },
+    { id: "pack_test", credits: 1, price: 1, hidden: true },
+    { id: "pack_typo", credits: 1000, price: 1, hidden: true },
+  ];
+  let floor = null;
+  for (const p of packs) {
+    if (p.hidden) continue;
+    const v = p.price / p.credits;
+    if (floor === null || v < floor) floor = v;
+  }
+  check(`the floor stays ₹0.90 even beside a ₹0.001 hidden pack (got ${floor})`,
+        Math.abs(floor - 0.8999) < 0.001);
+
+  const status = src("src/app/api/superadmin/paytest-status/route.ts");
+  check("the result is read from the ledger, not the checkout response",
+        /credit_ledger/.test(status) && /claimCount/.test(status));
+  check("the status route is super-admin only", /isSuperAdmin/.test(status));
+}
+
 console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
