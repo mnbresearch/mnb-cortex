@@ -25,15 +25,45 @@ const securityHeaders = [
       object-src 'none'   — no <object>/<embed> plugin execution
       base-uri 'self'     — an injected <base> cannot re-point every relative
                             script URL at an attacker's host
-      form-action 'self'  — an injected <form> cannot POST the user's input
-                            off-site (verified: no form in this app posts to an
-                            external origin; Cashfree checkout is a redirect)
+      form-action         — an injected <form> cannot POST the user's input
+                            off-site. Cashfree is allow-listed; see below.
       frame-ancestors     — clickjacking, and unlike X-Frame-Options this one
                             is still honoured by modern browsers
+
+    THE CASHFREE ALLOW-LIST, and why it is not optional.
+
+    This directive read `form-action 'self'`, with a comment claiming "no form
+    in this app posts to an external origin; Cashfree checkout is a redirect".
+    That claim was wrong, and it broke every payment the product could take.
+
+    Cashfree's v3 SDK does not redirect in `_modal` mode. It creates an iframe
+    and SUBMITS A FORM into it, at
+    https://api.cashfree.com/pg/view/sessions/checkout. `form-action 'self'`
+    blocks exactly that. The browser fires a securitypolicyviolation, the
+    iframe never navigates, and `cf.checkout()` neither resolves nor rejects —
+    so the customer watches a spinner forever, the "modal closed" catch in
+    checkout-client.ts never fires, and nothing anywhere reports an error.
+    Silent, total, and indistinguishable from a slow network.
+
+    Verified in production with the live CSP:
+      directive:  form-action
+      blockedURI: https://api.cashfree.com/pg/view/sessions/checkout
+
+    Both hosts are listed because cfMode() picks between them, and a sandbox
+    deployment must not fail in a different way from production.
+
+    Nothing is loosened beyond this: the whole point of form-action is to stop
+    an injected form exfiltrating input to an arbitrary host, and naming two
+    payment hosts keeps that property against every other origin.
   */
   {
     key: "Content-Security-Policy",
-    value: "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
+    value: [
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self' https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com",
+      "frame-ancestors 'self'",
+    ].join("; "),
   },
 ];
 const nextConfig = {

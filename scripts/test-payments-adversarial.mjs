@@ -259,5 +259,85 @@ console.log("\nTHE ₹1 TEST PACK MUST NOT LEAK");
   check("the status route is super-admin only", /isSuperAdmin/.test(status));
 }
 
+/* ========================================================================= */
+console.log("\nCSP MUST NOT BLOCK CHECKOUT — this broke every payment");
+/* ========================================================================= */
+{
+  /*
+    Found by running a real ₹1 payment in production. The CSP was
+    `form-action 'self'`, added with a comment asserting "no form in this app
+    posts to an external origin; Cashfree checkout is a redirect".
+
+    It is not a redirect. Cashfree's v3 SDK submits a form into its modal
+    iframe at https://api.cashfree.com/pg/view/sessions/checkout, which
+    form-action 'self' forbids. Confirmed live:
+
+      directive:  form-action
+      blockedURI: https://api.cashfree.com/pg/view/sessions/checkout
+
+    The iframe never navigated, cf.checkout() never settled, and the customer
+    saw a spinner forever with no error anywhere. Every payment the product
+    could take was blocked, silently, for as long as that header shipped.
+
+    No unit test could have caught this: the CSP is a response header, the SDK
+    is third-party, and the failure is a promise that never settles. Hence the
+    live test. These assertions stop it regressing.
+  */
+  /*
+    Assert on the COMPUTED header, by importing next.config.mjs — not on its
+    source text.
+
+    Two reasons, both learned the hard way in the last ten minutes:
+
+      the config now carries a long comment containing the words "form-action",
+      and a regex over the source matched the PROSE, reporting the policy as a
+      wildcard (the same comment-matching trap as test-ai-profiles and
+      test-income-tax);
+
+      and that comment contained a nested close-comment marker, which ended the
+      block early and left the remaining prose as live JavaScript. The file was syntactically
+      broken and would have failed the production build. A source-text regex
+      cannot see that; importing the module fails loudly.
+  */
+  const cfgMod = await import(new URL("../next.config.mjs", import.meta.url).href);
+  const headerGroups = await cfgMod.default.headers();
+  const allHeaders = headerGroups.flatMap((g) => g.headers);
+  const cspHeader = allHeaders.find((h) => h.key === "Content-Security-Policy");
+  const cspValue = cspHeader ? cspHeader.value : "";
+
+  check("next.config.mjs is valid and returns a CSP", Boolean(cspValue));
+
+  const directives = Object.fromEntries(
+    cspValue.split(";").map((d) => d.trim()).filter(Boolean)
+      .map((d) => { const [name, ...rest] = d.split(/\s+/); return [name, rest]; }),
+  );
+  const formAction = directives["form-action"] || [];
+
+  check(`form-action is not 'self' alone (${formAction.join(" ")})`, formAction.length > 1);
+  check("production checkout host is allowed", formAction.includes("https://api.cashfree.com"));
+  check("sandbox checkout host is allowed too", formAction.includes("https://sandbox.cashfree.com"));
+  check("form-action still starts from 'self'", formAction[0] === "'self'");
+  check("...and is not a wildcard", !formAction.includes("*") && !formAction.includes("https:"));
+  check("the other three directives survive",
+        directives["object-src"]?.includes("'none'")
+        && directives["base-uri"]?.includes("'self'")
+        && directives["frame-ancestors"]?.includes("'self'"));
+
+  /* The exact URL the browser reported must now be permitted, and an unrelated
+     origin must still be refused. */
+  const permits = (url) => formAction.some((a) => a !== "'self'" && url.startsWith(a));
+  check("the URL blocked in production would now be allowed",
+        permits("https://api.cashfree.com/pg/view/sessions/checkout"));
+  check("an unrelated origin is still refused", !permits("https://evil.example.com/collect"));
+
+  const client = src("src/lib/pay/checkout-client.ts");
+  check("checkout no longer swallows failures into an empty catch",
+        !/\} catch \{ \/\* modal closed — fall through to verify \*\/ \}/.test(client));
+  check("a CSP violation is detected and surfaced",
+        /securitypolicyviolation/.test(client) && /security policy/.test(client));
+  check("a never-settling checkout is timed out rather than awaited forever",
+        /Promise\.race/.test(client) && /__stalled__/.test(client));
+}
+
 console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
