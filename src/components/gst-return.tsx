@@ -125,7 +125,7 @@ export function GstReturnPanel() {
           </Button>
           <span className="text-xs text-muted-foreground">Read on your device + AI · 8 credits</span>
         </div>
-        {err && <div className="flex items-start gap-2 text-sm text-danger"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
+        {err && <div className="flex items-start gap-2 text-sm text-danger" role="alert"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
       </Card>
 
       {a && (

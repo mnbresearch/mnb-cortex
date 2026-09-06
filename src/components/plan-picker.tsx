@@ -109,7 +109,7 @@ export function PlanPicker({ currentPlan = "", savedPhone = "" }: { currentPlan?
         })}
       </div>
 
-      {msg && <p className="text-sm text-danger">{msg}</p>}
+      {msg && <p className="text-sm text-danger" role="alert">{msg}</p>}
       <p className="text-xs text-muted-foreground">
         Secure payment via Cashfree. Plans run for the period you buy — 30 days monthly, 365 days annual — and stack if you renew early.
       </p>

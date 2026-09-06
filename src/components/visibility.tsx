@@ -68,7 +68,7 @@ export function VisibilityPanel() {
           </Button>
           <span className="text-xs text-muted-foreground">Runs your buyer questions through live AI · 10 credits</span>
         </div>
-        {err && <div className="flex items-start gap-2 text-sm text-danger"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
+        {err && <div className="flex items-start gap-2 text-sm text-danger" role="alert"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
       </Card>
 
       {report && (

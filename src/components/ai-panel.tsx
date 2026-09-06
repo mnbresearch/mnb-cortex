@@ -81,9 +81,38 @@ export function AIPanel({ mode, placeholder, cta, multiline = false, allowFile =
           onKeyDown={(e) => { if (e.key === "Enter") run(); }}
           className="w-full rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
       )}
-      <Button onClick={run} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Working…" : cta}</Button>
-      {loading && <p className="text-sm text-muted-foreground">Cortex is analysing…</p>}
-      {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
+      <Button onClick={run} disabled={loading}><Sparkles className="h-4 w-4" aria-hidden="true" /> {loading ? "Working…" : cta}</Button>
+
+      {/*
+        ANNOUNCED, because this is the product's main interaction and it was
+        completely silent.
+
+        The user presses the button, a model call runs for several seconds, and
+        markdown is then injected into the panel below. Nothing told a screen
+        reader that anything was happening, that it had finished, or that it had
+        failed — the only feedback was visual. AIPanel is used on 27 pages, so
+        this one region covers most of the app's async surface.
+
+        `aria-busy` marks the pending state; the polite live region announces
+        the transition. Polite rather than assertive because the result is not
+        an interruption — the user asked for it and is waiting.
+
+        The status line is separate from the output div on purpose: announcing
+        the whole rendered markdown would read the entire analysis aloud the
+        moment it lands, over whatever the user was doing. They are told it is
+        ready and can then read it at their own pace.
+      */}
+      <p role="status" aria-live="polite" className={loading ? "text-sm text-muted-foreground" : "sr-only"}>
+        {loading ? "Cortex is analysing…" : out ? "Analysis ready." : ""}
+      </p>
+
+      {out && (
+        <div
+          aria-busy={loading}
+          className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: mdToHtml(out) }}
+        />
+      )}
       {out && saveMode && (
         <form action={saveArtifact} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="mode" value={saveMode} />

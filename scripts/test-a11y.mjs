@@ -245,6 +245,35 @@ if (m) {
   check(clash === 0, `no conflicting display utilities (${clash} found)`);
 }
 
+/*
+  LIVE REGIONS. 61 components manage a loading/saving state; only 3 announced
+  anything. The dominant shape is: press a button, wait several seconds for a
+  model call, then inject markdown — with no signal at any point that work
+  started, finished, or failed.
+
+  AIPanel is the leverage point: it is used on 27 pages, so one region there
+  covers most of the app's async surface. Errors are separate — a failed save
+  that says nothing is worse than a slow one, because the user believes it
+  worked.
+*/
+{
+  const panel = read("src/components/ai-panel.tsx");
+  check(/role="status"[\s\S]{0,60}aria-live="polite"/.test(panel),
+    "AIPanel announces its async state (27 pages)",
+    "press, wait, result injected — previously silent end to end");
+  check(/aria-busy=\{loading\}/.test(panel), "...and marks the output busy while working");
+
+  let alerts = 0;
+  for (const f of allTsx()) alerts += (read(f).match(/role="alert"/g) || []).length;
+  check(alerts >= 12, `errors are announced (${alerts} role="alert" regions)`,
+    "a failed save that says nothing is worse than a slow one — the user believes it worked");
+
+  /* The toaster is the app-wide announcer and must stay polite: assertive
+     would interrupt whatever the user is reading for every routine toast. */
+  const toaster = read("src/components/toaster.tsx");
+  check(/aria-live="polite"/.test(toaster), "the toaster stays polite");
+}
+
 console.log(`\na11y: ${pass} passed, ${failures.length} failed`);
 if (failures.length) { console.log("\nFAILURES:"); failures.forEach((f) => console.log("  ✗ " + f)); process.exit(1); }
 console.log("  Landmarks, headings, no keyboard traps, labelled forms, announced results, reduced motion, readable buttons.");

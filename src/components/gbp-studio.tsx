@@ -88,7 +88,7 @@ export function GbpStudio({ businessName }: { businessName?: string | null }) {
         <Button onClick={run} disabled={busy} className="w-full">
           {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Writing…</> : <><Sparkles className="h-4 w-4" /> Generate</>}
         </Button>
-        {err && <p className="text-xs text-danger">{err}</p>}
+        {err && <p className="text-xs text-danger" role="alert">{err}</p>}
       </Card>
 
       <Card className="p-5 min-h-[320px] flex flex-col">

@@ -115,7 +115,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
         })}
       </div>
 
-      {payErr && <p className="text-center text-sm text-danger mt-6">{payErr}</p>}
+      {payErr && <p role="alert" className="text-center text-sm text-danger mt-6">{payErr}</p>}
 
       {cur === "USD" && (
         <p className="text-center text-xs text-muted-foreground mt-6 max-w-xl mx-auto">
@@ -150,7 +150,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
                   <input type="checkbox" required className="mt-0.5" />
                   <span>I agree to be contacted about MNB Cortex and consent to my details being processed for this request.</span>
                 </label>
-                {status === "error" && <p className="text-xs text-danger">Something went wrong sending the email — please use WhatsApp below.</p>}
+                {status === "error" && <p role="alert" className="text-xs text-danger">Something went wrong sending the email — please use WhatsApp below.</p>}
                 <button disabled={status === "sending"} className="w-full rounded-full btn-ink h-11 text-sm font-medium">{status === "sending" ? "Sending…" : "Request access"}</button>
                 <a href={waLink} target="_blank" rel="noopener noreferrer" className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] text-white h-11 text-sm font-medium"><MessageCircle className="h-4 w-4" /> Message on WhatsApp</a>
               </form>

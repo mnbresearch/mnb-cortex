@@ -97,7 +97,7 @@ export function GoogleSignIn({ onSignedIn }: { onSignedIn: () => void | Promise<
           using their widget rather than a lookalike. */}
       <div ref={holder} className={busy ? "opacity-60 pointer-events-none" : ""} />
       {busy && <p className="text-xs text-muted-foreground">Signing you in…</p>}
-      {err && <p className="text-xs text-danger">{err}</p>}
+      {err && <p className="text-xs text-danger" role="alert">{err}</p>}
     </div>
   );
 }

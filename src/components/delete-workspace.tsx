@@ -111,7 +111,7 @@ export function DeleteWorkspace({ orgName }: { orgName: string }) {
       </div>
 
       {msg && (
-        <div className={`text-sm ${msg.ok ? "text-success" : "text-danger"}`}>{msg.text}</div>
+        <div role={msg.ok ? "status" : "alert"} aria-live={msg.ok ? "polite" : "assertive"} className={`text-sm ${msg.ok ? "text-success" : "text-danger"}`}>{msg.text}</div>
       )}
     </Card>
   );

@@ -322,7 +322,7 @@ export function BackupButton() {
         {busy ? "Backing up…" : "Download a backup now"}
       </Button>
       {msg && (
-        <p className={`text-xs mt-2 ${warn ? "text-danger" : "text-muted-foreground"}`}>{msg}</p>
+        <p role={warn ? "alert" : "status"} aria-live={warn ? "assertive" : "polite"} className={`text-xs mt-2 ${warn ? "text-danger" : "text-muted-foreground"}`}>{msg}</p>
       )}
     </div>
   );

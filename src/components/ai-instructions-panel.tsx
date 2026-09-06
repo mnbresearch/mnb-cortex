@@ -141,7 +141,7 @@ export function AiInstructionsPanel({ canEdit = true }: { canEdit?: boolean }) {
             </div>
           </div>
 
-          {err && <p className="mt-2 text-sm text-danger">{err}</p>}
+          {err && <p className="mt-2 text-sm text-danger" role="alert">{err}</p>}
           {!canEdit && (
             <p className="mt-2 text-xs text-muted-foreground">
               These apply to everyone in the workspace, so only an admin or owner can change them.

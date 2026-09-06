@@ -78,7 +78,7 @@ export function ActCenter() {
         <Button onClick={draft} disabled={drafting}>
           {drafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} {drafting ? "Cortex is writing…" : "Draft with Cortex"}
         </Button>
-        {err && !subject && <div className="flex items-start gap-2 text-sm text-danger"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
+        {err && !subject && <div className="flex items-start gap-2 text-sm text-danger" role="alert"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
       </Card>
 
       {(subject || body) && (
@@ -101,7 +101,7 @@ export function ActCenter() {
               </Button>
               {confirm && <button onClick={() => setConfirm(false)} className="text-sm text-muted-foreground">Cancel</button>}
               {phone.trim() && <a href={waLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-md bg-[#25D366] text-white h-9 px-4 text-sm font-medium"><MessageCircle className="h-4 w-4" /> WhatsApp</a>}
-              {err && <span className="text-sm text-danger flex items-center gap-1"><AlertTriangle className="h-4 w-4" /> {err}</span>}
+              {err && <span className="text-sm text-danger flex items-center gap-1" role="alert"><AlertTriangle className="h-4 w-4" /> {err}</span>}
             </div>
           )}
           <p className="text-xs text-muted-foreground">You approve every send. Email goes from your verified domain with replies routed to you.</p>

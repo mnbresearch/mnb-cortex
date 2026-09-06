@@ -120,7 +120,7 @@ export function DeepDivePanel() {
             ))}
           </div>
         )}
-        {err && <div className="flex items-start gap-2 text-sm text-danger"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
+        {err && <div className="flex items-start gap-2 text-sm text-danger" role="alert"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
       </Card>
 
       {sections.length > 0 && (
