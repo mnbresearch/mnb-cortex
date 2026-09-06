@@ -36,6 +36,10 @@ export const WEBHOOK_EVENTS = [
   "workflow.completed",
   "invoice.overdue",
   "payment.succeeded",
+  /* Emitted by lib/pay/refund.ts. A customer's own systems need to know a
+     payment reversed just as much as they need to know it succeeded — and
+     before this existed, a refund produced no signal anywhere at all. */
+  "payment.refunded",
   "report.generated",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];

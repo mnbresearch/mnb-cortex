@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { settleOrder } from "@/lib/pay/settle";
+import { handleRefundEvent } from "@/lib/pay/refund";
 import { verifyCashfreeWebhook } from "@/lib/pay/cashfree-webhook";
 
 export const runtime = "nodejs";
@@ -53,9 +54,61 @@ export async function POST(req: Request) {
   const type = String(body?.type || "");
   const orderId = String(body?.data?.order?.order_id || body?.data?.order_id || "");
 
-  // Only act on a successful payment; ack everything else so Cashfree stops retrying.
-  if (orderId && /PAYMENT_SUCCESS|SUCCESS/i.test(type)) {
-    try { await settleOrder(orderId); } catch { /* settle is idempotent; safe to drop */ }
+  /*
+    EVENT MATCHING, precisely.
+
+    This was `/PAYMENT_SUCCESS|SUCCESS/i`, and `REFUND_SUCCESS` matches
+    `/SUCCESS/i`. So a refund notification called settleOrder() — the grant
+    path. Today the idempotency row absorbs it, but that is luck: any path that
+    releases the claim (a failed grant, a retry) leaves a window where a refund
+    re-grants the thing being refunded. A regex that matches the opposite of
+    what it means is a bug even while something downstream happens to save it.
+
+    Refunds and disputes are handled below, on their own terms.
+  */
+  const isRefund = /REFUND|DISPUTE|CHARGEBACK/i.test(type);
+  const isOrderPaid = !isRefund && /PAYMENT_SUCCESS/i.test(type);
+
+  if (orderId && isOrderPaid) {
+    /*
+      RETRY ON FAILURE.
+
+      This was `try { await settleOrder(orderId); } catch {}` followed by a 200.
+      Cashfree hears "handled" and never retries, so a customer whose grant
+      failed paid and received nothing, silently, forever. The subscription
+      branch immediately below already got this right; the order branch was
+      left behind.
+
+      Only genuinely retryable failures ask for a retry — see SettleResult.
+      A permanent refusal still acks, because retrying it forever would bury
+      the real signal.
+    */
+    let res: Awaited<ReturnType<typeof settleOrder>> | null = null;
+    try {
+      res = await settleOrder(orderId);
+    } catch (e: any) {
+      console.error("[cashfree] settleOrder threw, requesting retry:", e?.message);
+      return NextResponse.json({ ok: false, error: "temporary failure" }, { status: 500 });
+    }
+    if (res && !res.ok && res.retryable) {
+      console.error("[cashfree] grant failed, requesting retry:", orderId, res.error);
+      return NextResponse.json({ ok: false, error: "temporary failure" }, { status: 500 });
+    }
+    if (res && !res.ok && !res.pending) {
+      /* Permanent. Ack so Cashfree stops, but make it findable — money came in
+         and no entitlement went out, which nobody should have to discover from
+         a customer email. */
+      console.error("[cashfree] settle refused (no retry):", orderId, res.error);
+    }
+  }
+
+  if (isRefund) {
+    try {
+      await handleRefundEvent(type, body, orderId);
+    } catch (e: any) {
+      console.error("[cashfree-refund] handler failed, requesting retry:", e?.message);
+      return NextResponse.json({ ok: false, error: "temporary failure" }, { status: 500 });
+    }
   }
 
   // Recurring debits arrive as SUBSCRIPTION_* events rather than orders. Each

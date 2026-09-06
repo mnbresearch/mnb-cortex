@@ -9,6 +9,30 @@ import { rewardReferral } from "@/lib/referrals";
 export type SettleResult = {
   ok: boolean;
   pending?: boolean;
+  /**
+   * The caller should ASK FOR A RETRY rather than acknowledge.
+   *
+   * Set only when the money is confirmed taken and the entitlement did not
+   * land — a released claim waiting to be re-settled. Deliberately NOT set for
+   * permanent refusals (unknown plan, wrong amount, no workspace on the order),
+   * because retrying those forever achieves nothing and buries the real signal
+   * in Cashfree's retry log.
+   *
+   * This distinction is the whole point: the webhook returned 200 for every
+   * outcome, so a customer whose grant failed paid and received nothing, and
+   * Cashfree was told it had been handled.
+   */
+  retryable?: boolean;
+  /**
+   * Which workspace this order belongs to, taken from the order's own
+   * customer_id — never from the caller.
+   *
+   * The verify route needs it to refuse reporting on another workspace's
+   * order. No entitlement was ever divertible (the grant is keyed to this same
+   * value), but the RESULT was returned to whoever asked, which let any
+   * signed-in user probe an order id for its plan, amount and state.
+   */
+  orgId?: string;
   already?: boolean;
   kind?: "plan" | "credits";
   plan?: string;
@@ -37,7 +61,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
   if (!order.paid) return { ok: false, pending: true, error: "Payment not completed yet." };
 
   const orgId = (order.customerId || "").trim();
-  if (!orgId) return { ok: false, error: "Order is not linked to a workspace." };
+  if (!orgId) return { orgId, ok: false, error: "Order is not linked to a workspace." };
 
   const [type, ref, cycle] = order.note.split(":");
 
@@ -51,13 +75,20 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
     const pk = CREDIT_PACKS.find((x) => x.id === ref);
     expected = pk ? pk.price : 0;
   }
-  if (expected > 0 && order.amount + 1 < expected) {
+  /*
+    Tolerance was ₹1, which is not a rounding allowance — it is a discount.
+    We set the order amount ourselves from the same catalogue constant, so the
+    only legitimate difference is sub-paisa float representation. One paisa is
+    the smallest unit that exists in INR; anything more is either tampering or
+    a genuine mismatch, and both should refuse rather than quietly grant.
+  */
+  if (expected > 0 && order.amount + 0.01 < expected) {
     // Underpaid — record for audit, do NOT grant.
     await svc.from("payments").upsert(
       { order_id: orderId, org_id: orgId, kind: type, ref, amount: order.amount, status: "amount_mismatch" },
       { onConflict: "order_id", ignoreDuplicates: true },
     );
-    return { ok: false, error: "Payment amount did not match the plan price." };
+    return { orgId, ok: false, error: "Payment amount did not match the plan price." };
   }
 
   // Claim the order idempotently. If a row already existed, `data` is empty and
@@ -66,7 +97,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
     { order_id: orderId, org_id: orgId, kind: type, ref, amount: order.amount, status: "paid" },
     { onConflict: "order_id", ignoreDuplicates: true },
   ).select("order_id");
-  if (claimErr) return { ok: false, error: claimErr.message };
+  if (claimErr) return { orgId, ok: false, error: claimErr.message };
   const isNew = Array.isArray(claimed) && claimed.length > 0;
 
   // If we didn't claim it, make sure the existing row is actually a PAID one.
@@ -76,7 +107,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
     const { data: prior } = await svc.from("payments").select("status").eq("order_id", orderId).maybeSingle();
     const priorStatus = String((prior as any)?.status || "");
     if (priorStatus && priorStatus !== "paid") {
-      return { ok: false, error: `This order was previously recorded as "${priorStatus}" and cannot be activated. Please contact support.` };
+      return { orgId, ok: false, error: `This order was previously recorded as "${priorStatus}" and cannot be activated. Please contact support.` };
     }
   }
 
@@ -87,7 +118,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
   };
 
   if (type === "plan") {
-    if (!PLANS.find((x) => x.id === ref)) return { ok: false, error: "Unknown plan." };
+    if (!PLANS.find((x) => x.id === ref)) return { orgId, ok: false, error: "Unknown plan." };
     if (isNew) {
       // A paid plan runs for a fixed period and then lapses — one payment must not
       // buy the product forever. If the workspace is already inside a paid period,
@@ -126,14 +157,40 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
             const sameInstant = landed && new Date(landed).getTime() === new Date(endsAt).getTime();
             if ((check as any)?.plan === ref && sameInstant) {
               emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
-              return { ok: true, kind: "plan", plan: ref, cycle, endsAt };
+              return { orgId, ok: true, kind: "plan", plan: ref, cycle, endsAt };
             }
-          } catch { /* couldn't verify — fall through and release */ }
+          } catch {
+            /*
+              THE READ-BACK ITSELF FAILED, so we do not know whether the update
+              landed. This used to fall through and release the claim, which
+              picks the worse of the two outcomes:
+
+                released, but the update HAD committed  -> the retry stacks a
+                  second paid period on the first (`from = max(existing, now)`
+                  above). One payment, two periods, no error anywhere.
+
+                kept, but the update had NOT committed  -> the customer paid and
+                  has no plan. Visible to them immediately, and support can fix
+                  it from the payments row.
+
+              The first is silent revenue loss that nobody discovers; the second
+              is a complaint that gets resolved. So keep the claim, and mark the
+              row so it is findable rather than looking like a normal payment.
+            */
+            try {
+              await svc.from("payments")
+                .update({ status: "grant_unverified" }).eq("order_id", orderId);
+            } catch { /* best effort — the status is a signal, not the control */ }
+            return { orgId,
+              ok: false,
+              error: "We could not confirm the activation. Your payment is recorded — contact support and quote order " + orderId + ".",
+            };
+          }
           await releaseClaim(); // let the webhook retry settle this order properly
-          return { ok: false, error: withPeriod.message || "Could not activate the plan." };
+          return { orgId, ok: false, retryable: true, error: withPeriod.message || "Could not activate the plan." };
         }
         const retry = await svc.from("organizations").update(patch).eq("id", orgId);
-        if (retry.error) { await releaseClaim(); return { ok: false, error: retry.error.message }; }
+        if (retry.error) { await releaseClaim(); return { orgId, ok: false, retryable: true, error: retry.error.message }; }
       }
 
       try { await svc.from("subscriptions").insert({ org_id: orgId, plan: ref, status: "active", provider: "cashfree", amount: order.amount, reference: orderId }); } catch { /* audit only */ }
@@ -151,14 +208,14 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       */
       try { await rewardReferral(orgId); } catch { /* never block activation */ }
       emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
-      return { ok: true, kind: "plan", plan: ref, cycle, endsAt };
+      return { orgId, ok: true, kind: "plan", plan: ref, cycle, endsAt };
     }
-    return { ok: true, already: true, kind: "plan", plan: ref, cycle };
+    return { orgId, ok: true, already: true, kind: "plan", plan: ref, cycle };
   }
 
   if (type === "credits") {
     const pack = CREDIT_PACKS.find((p) => p.id === ref);
-    if (!pack) return { ok: false, error: "Unknown credit pack." };
+    if (!pack) return { orgId, ok: false, error: "Unknown credit pack." };
     if (isNew) {
       // The ledger reason carries the order id, which makes the grant itself
       // idempotent. That matters because releaseClaim() below re-opens the order
@@ -174,24 +231,24 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       };
 
       const prior = await alreadyGranted();
-      if (prior !== null) return { ok: true, already: true, kind: "credits", credits: pack.credits, balance: prior };
+      if (prior !== null) return { orgId, ok: true, already: true, kind: "credits", credits: pack.credits, balance: prior };
 
       try {
         const balance = await grantCredits(orgId, pack.credits, reason, null);
-        return { ok: true, kind: "credits", credits: pack.credits, balance };
+        return { orgId, ok: true, kind: "credits", credits: pack.credits, balance };
       } catch (e: any) {
         // Did it actually land before the error? If so, this was a lost response,
         // not a failed grant — keep the claim and report success.
         const landed = await alreadyGranted();
-        if (landed !== null) return { ok: true, kind: "credits", credits: pack.credits, balance: landed };
+        if (landed !== null) return { orgId, ok: true, kind: "credits", credits: pack.credits, balance: landed };
 
         // Genuinely not credited. Release the claim so the webhook retry can.
         await releaseClaim();
-        return { ok: false, error: e?.message || "Could not add the credits. Please contact support." };
+        return { orgId, ok: false, retryable: true, error: e?.message || "Could not add the credits. Please contact support." };
       }
     }
-    return { ok: true, already: true, kind: "credits", credits: pack.credits };
+    return { orgId, ok: true, already: true, kind: "credits", credits: pack.credits };
   }
 
-  return { ok: false, error: "Unknown order type." };
+  return { orgId, ok: false, error: "Unknown order type." };
 }
