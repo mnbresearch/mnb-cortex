@@ -45,6 +45,47 @@
   nothing legitimate changes; this makes the database agree with the app.
 */
 
+/*
+  ---------------------------------------------------------------------------
+  FIRST: remove every policy this file does not own.
+
+  This was the bug. The original version of this migration dropped policies BY
+  EXACT NAME ("tenant read integrations" and so on) and created four new ones.
+  But `supabase/migration_integrations.sql`, which predates the rank system,
+  had already created two policies under different names:
+
+      "tenant integrations"       for all, org_id in (memberships of auth.uid())
+      "admin manage integrations" for all, role in ('admin','owner')
+
+  Nothing dropped those, so they survived. And PERMISSIVE policies are OR'd:
+  "tenant integrations" grants SELECT/INSERT/UPDATE/DELETE to ANY MEMBER of the
+  workspace — viewer and analyst included — which is precisely the access this
+  file exists to remove. The four admin-only policies were decoration next to
+  it. The lockdown reported success and changed nothing.
+
+  So drop by exclusion rather than by name. This table holds credentials; it
+  should have exactly the four policies below and nothing else, whatever some
+  older migration called its own. Anything dropped is raised as a notice.
+*/
+do $$
+declare
+  p record;
+  expected text[] := array[
+    'tenant read integrations', 'tenant insert integrations',
+    'tenant update integrations', 'tenant delete integrations'];
+begin
+  if to_regclass('public.integrations') is null then return; end if;
+
+  for p in
+    select policyname from pg_policies
+    where schemaname = 'public' and tablename = 'integrations'
+      and not (policyname = any(expected))
+  loop
+    raise notice 'dropping unexpected policy on integrations: %', p.policyname;
+    execute format('drop policy if exists %I on integrations;', p.policyname);
+  end loop;
+end $$;
+
 do $$
 declare t text;
 begin

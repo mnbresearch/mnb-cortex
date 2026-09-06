@@ -83,6 +83,60 @@ end $$;
 
 
 /* ---------------------------------------------------------------------------
+   STEP 1b — DROP EVERY POLICY THIS SCRIPT DOES NOT OWN.
+
+   The first run of this script reported "5 policies found" where it creates
+   four, and separately "4 of 4 require rank >= 4". Those two facts together
+   mean a fifth policy existed that required neither.
+
+   It came from `supabase/migration_integrations.sql`, which predates the rank
+   system and created two policies under names this script never dropped:
+
+       "tenant integrations"        for all, any member of the workspace
+       "admin manage integrations"  for all, role in ('admin','owner')
+
+   PERMISSIVE policies are OR'd. "tenant integrations" grants SELECT, INSERT,
+   UPDATE and DELETE to ANY MEMBER — viewer and analyst included — which is
+   exactly the access this file exists to remove. Alongside it the four
+   admin-only policies did nothing at all. The run reported success and the
+   exfiltration path stayed open.
+
+   Dropping by exclusion instead of by name. This table holds credentials; it
+   should carry these four policies and nothing else, whatever an older
+   migration named its own. Each drop is announced in the Messages/Notices tab.
+   --------------------------------------------------------------------------- */
+do $$
+declare
+  p record;
+  n int := 0;
+  expected text[] := array[
+    'tenant read integrations', 'tenant insert integrations',
+    'tenant update integrations', 'tenant delete integrations'];
+begin
+  if to_regclass('public.integrations') is null then return; end if;
+
+  for p in
+    select policyname, permissive, cmd, roles::text as roles
+    from pg_policies
+    where schemaname = 'public' and tablename = 'integrations'
+      and not (policyname = any(expected))
+  loop
+    n := n + 1;
+    raise notice 'DROPPING unexpected policy: "%" (%, cmd=%, roles=%)',
+      p.policyname, p.permissive, p.cmd, p.roles;
+    execute format('drop policy if exists %I on integrations;', p.policyname);
+  end loop;
+
+  if n = 0 then
+    raise notice 'No stray policies — nothing to drop.';
+  else
+    raise notice 'Dropped % stray policy/policies. If any was PERMISSIVE and '
+                 'broadly scoped, the previous lockdown was not in effect.', n;
+  end if;
+end $$;
+
+
+/* ---------------------------------------------------------------------------
    STEP 2 — ADMIN-ONLY RLS.
 
    Read is included deliberately. `credentials_encrypted` and the masked hint
@@ -185,14 +239,40 @@ from (
       where tablename = 'integrations'
         and (coalesce(qual, '') like '%>= 2%' or coalesce(with_check, '') like '%>= 2%')), 'none')
   union all
+  /*
+    Compared against the TOTAL, not against a hardcoded 4.
+
+    This is what hid the bypass last time. The old version counted policies
+    matching ">= 4", found four, compared it to the literal 4 and printed
+    "4 of 4 — OK" while a fifth policy granting any member full access sat
+    right beside it. The check could not fail for the reason that mattered:
+    a stray policy adds to the total but not to the match count, so only a
+    total-vs-matched comparison notices it.
+  */
   select
-    '4. Every policy requires rank >= 4',
-    (select count(*) from pg_policies
-      where tablename = 'integrations'
-        and (coalesce(qual, '') like '%>= 4%' or coalesce(with_check, '') like '%>= 4%')) = 4,
-    (select count(*)::text || ' of 4' from pg_policies
-      where tablename = 'integrations'
-        and (coalesce(qual, '') like '%>= 4%' or coalesce(with_check, '') like '%>= 4%'))
+    '4. EVERY policy requires rank >= 4 (none exempt)',
+    (select count(*) from pg_policies where tablename = 'integrations')
+      = (select count(*) from pg_policies
+         where tablename = 'integrations'
+           and (coalesce(qual, '') like '%>= 4%' or coalesce(with_check, '') like '%>= 4%')),
+    (select
+       (select count(*)::text from pg_policies where tablename = 'integrations'
+          and (coalesce(qual, '') like '%>= 4%' or coalesce(with_check, '') like '%>= 4%'))
+       || ' of '
+       || (select count(*)::text from pg_policies where tablename = 'integrations'))
+  union all
+  /* Name the offenders outright, so a FAIL says which policy to look at. */
+  select
+    '4b. No policy outside the expected four',
+    not exists (
+      select 1 from pg_policies where tablename = 'integrations'
+        and policyname not in ('tenant read integrations', 'tenant insert integrations',
+                               'tenant update integrations', 'tenant delete integrations')),
+    coalesce((select string_agg(policyname || ' [' || permissive || ', ' || cmd || ']', '; ')
+      from pg_policies where tablename = 'integrations'
+        and policyname not in ('tenant read integrations', 'tenant insert integrations',
+                               'tenant update integrations', 'tenant delete integrations')),
+      'none')
   union all
   select
     '5. Plaintext-AI-key CHECK exists',

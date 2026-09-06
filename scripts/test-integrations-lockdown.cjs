@@ -44,7 +44,7 @@ returns int language sql stable as $$ select 5 $$;
 `;
 
 (async () => {
-  const sql = readFileSync(join(ROOT, "supabase/migrations/2026_integrations_lockdown.sql"), "utf8");
+  const sql = readFileSync(join(ROOT, "supabase/RUN-integrations-lockdown.sql"), "utf8");
 
   /* ---------------------------------------------------------------- */
   console.log("\nCLEAN DATABASE — the happy path");
@@ -142,6 +142,58 @@ returns int language sql stable as $$ select 5 $$;
       where provider = 'ai' and config ?| array['gemini','openai','anthropic','groq',
         'GEMINI_API_KEY','OPENAI_API_KEY','ANTHROPIC_API_KEY','GROQ_API_KEY']`);
     check("the pre-flight query finds it", q.rows[0].n === 1);
+    await db.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  console.log("\nLEGACY POLICIES — the bypass this suite missed the first time");
+  {
+    /*
+      Reproducing the real production state. `supabase/migration_integrations.sql`
+      predates the rank system and created two policies under names the lockdown
+      never dropped, because it dropped by exact name. Permissive policies are
+      OR'd, so "tenant integrations" — any member, for all commands — granted
+      exactly the access the lockdown exists to remove, while the lockdown
+      reported success.
+
+      The original version of THIS TEST started from a clean database and so
+      could never have caught it. That is the real defect: the fixture was
+      cleaner than production.
+    */
+    const db = new PGlite();
+    await db.exec(STUB);
+    await db.exec(`
+      create table memberships (user_id uuid, org_id uuid, role text);
+      alter table integrations enable row level security;
+      create policy "tenant integrations" on integrations for all
+        using (org_id in (select org_id from memberships where user_id = auth_uid()))
+        with check (org_id in (select org_id from memberships where user_id = auth_uid()));
+      create policy "admin manage integrations" on integrations for all
+        using (org_id in (select org_id from memberships
+               where user_id = auth_uid() and role in ('admin','owner')));
+    `.replace(/auth_uid\(\)/g, "'00000000-0000-0000-0000-000000000000'::uuid"));
+
+    const before = await db.query(`select count(*)::int n from pg_policies where tablename='integrations'`);
+    check(`fixture starts with the 2 legacy policies (got ${before.rows[0].n})`, before.rows[0].n === 2);
+
+    await db.exec(sql);
+
+    const after = await db.query(
+      `select policyname from pg_policies where tablename='integrations' order by policyname`);
+    const names = after.rows.map((r) => r.policyname);
+    check(`ends with exactly 4 policies (got ${names.length})`, names.length === 4);
+    check("the any-member policy is GONE", !names.includes("tenant integrations"));
+    check("the legacy admin policy is gone too", !names.includes("admin manage integrations"));
+
+    /* The property that actually matters: nothing is exempt from rank >= 4.
+       Counting matches against a hardcoded 4 is what let the bypass read OK. */
+    const tot = await db.query(`
+      select
+        (select count(*)::int from pg_policies where tablename='integrations') as total,
+        (select count(*)::int from pg_policies where tablename='integrations'
+           and (coalesce(qual,'') like '%>= 4%' or coalesce(with_check,'') like '%>= 4%')) as gated`);
+    check(`every policy is rank-gated (${tot.rows[0].gated}/${tot.rows[0].total})`,
+          tot.rows[0].total === tot.rows[0].gated && tot.rows[0].total > 0);
     await db.close();
   }
 
