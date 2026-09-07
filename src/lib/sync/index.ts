@@ -2,6 +2,7 @@ import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { decryptSecret } from "@/lib/crypto";
 import { recomputeQuietly } from "@/lib/metrics";
+import type { Budget } from "@/lib/cron-budget";
 
 /**
  * Integration data sync.
@@ -406,13 +407,16 @@ export async function syncProvider(orgId: string, provider: string, days = 90): 
 }
 
 /** Nightly sweep across every workspace with a syncable integration. */
-export async function syncAll(limit = 100): Promise<{ ran: number; ok: number }> {
+export async function syncAll(limit = 100, budget?: Budget): Promise<{ ran: number; ok: number }> {
   const svc = serviceClient();
   if (!svc) return { ran: 0, ok: 0 };
   let ran = 0, ok = 0;
   try {
     const { data } = await svc.from("integrations").select("org_id, provider").in("provider", SYNCABLE).limit(limit);
     for (const row of ((data as any[]) || [])) {
+      // A provider pull is an external HTTP call with no timeout of its own:
+      // budget generously and stop rather than risk the whole run.
+      if (budget && !budget.ok(4_000)) break;
       ran++;
       if ((await syncProvider(row.org_id, row.provider)).ok) ok++;
     }

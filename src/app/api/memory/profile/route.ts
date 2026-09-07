@@ -6,6 +6,23 @@ import { chargeForMode, refundIfCharged } from "@/lib/credits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/*
+  60s, NOT the 15s platform default.
+
+  This route calls runCortex() through lib/memory.ts — a model call with a
+  retry chain and no fetch timeout of its own, so 3-10s is normal and longer is
+  possible. Against a 15s default it 504s.
+
+  The billing consequence is what makes this urgent rather than annoying:
+  chargeForMode() runs BEFORE the model call, and refundIfCharged() lives in
+  the catch. A Vercel timeout kills the function rather than throwing, so the
+  catch never runs and the customer is charged for a request that returned an
+  error page. Every refund guarantee in this codebase depends on the function
+  living long enough to execute its own catch block.
+
+  api/memory/ingest already declares 60. These three were the outliers.
+*/
+export const maxDuration = 60;
 
 export async function GET() {
   const { orgId } = await getUserAndOrg();

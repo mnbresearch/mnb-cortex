@@ -151,10 +151,18 @@ async function checkAI(): Promise<Check> {
 /** Is the Resend key valid right now? */
 async function checkEmail(): Promise<Check> {
   const key = envKey("RESEND_API_KEY");
-  if (!key) return { name: "Email", status: "down", detail: "RESEND_API_KEY not configured" };
+  /*
+    Email is critical. Every outbound path in the product runs through Resend —
+    renewal notices, KPI alerts, collections messages to the customer's own
+    debtors, receipts. There is no retry queue and no dead-letter: a send that
+    fails is, in most paths, simply lost. So an invalid key is an outage that
+    silently destroys work, and it should page someone rather than sit in a
+    body field nobody parses.
+  */
+  if (!key) return { name: "Email", status: "down", detail: "RESEND_API_KEY not configured", critical: true };
   const r = await ping("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${key}` } });
-  if (r.ok) return { name: "Email", status: "operational" };
-  return { name: "Email", status: r.status === 401 || r.status === 403 ? "down" : "degraded", detail: r.error || `HTTP ${r.status}` };
+  if (r.ok) return { name: "Email", status: "operational", critical: true };
+  return { name: "Email", status: r.status === 401 || r.status === 403 ? "down" : "degraded", detail: r.error || `HTTP ${r.status}`, critical: true };
 }
 
 /** Are the payment credentials live? */
@@ -229,7 +237,21 @@ async function checkCron(): Promise<Check> {
       return { name: "Scheduled jobs", status: "degraded", detail: "Not run since this was deployed — first run is 08:00 IST" };
     }
     const hours = (Date.now() - new Date(String(last)).getTime()) / 3_600_000;
-    if (hours > 48) return { name: "Scheduled jobs", status: "down", detail: `Last ran ${Math.round(hours)}h ago` };
+    /*
+      `critical: true` ON THE DOWN BRANCH, and this is the highest-leverage
+      line in the file.
+
+      checkCron already DETECTED a dead cron — it just did not make the
+      endpoint fail. criticalDown drives the HTTP status, so /api/health
+      returned 200 with `{status:"degraded"}` in the body and any uptime
+      monitor keyed on the status code stayed green through the entire outage.
+
+      A silently dead cron is the most likely failure this system has: it means
+      no renewal reminders, no alert emails, no KPI refresh and no weekly plan,
+      and nothing else in the product would say so. 48 hours is already two
+      missed nights; that is not a warning, it is an incident.
+    */
+    if (hours > 48) return { name: "Scheduled jobs", status: "down", detail: `Last ran ${Math.round(hours)}h ago`, critical: true };
     if (hours > 26) return { name: "Scheduled jobs", status: "degraded", detail: `Last ran ${Math.round(hours)}h ago` };
     return { name: "Scheduled jobs", status: "operational", detail: `Last ran ${Math.round(hours)}h ago` };
   } catch (e: any) {

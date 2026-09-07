@@ -3,6 +3,7 @@ import { serviceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import { brandFrom, brandReplyTo } from "@/lib/branded-email";
 import { PLANS } from "@/lib/config";
+import type { Budget } from "@/lib/cron-budget";
 
 /**
  * Renewal reminders.
@@ -95,7 +96,7 @@ async function billingContact(svc: any, orgId: string): Promise<{ email: string;
 
 export type RenewalResult = { checked: number; sent: number; skipped: number; errors: number };
 
-export async function sendRenewalReminders(): Promise<RenewalResult> {
+export async function sendRenewalReminders(budget?: Budget): Promise<RenewalResult> {
   const out: RenewalResult = { checked: 0, sent: 0, skipped: 0, errors: 0 };
   const svc = serviceClient();
   if (!svc) return out;
@@ -113,6 +114,10 @@ export async function sendRenewalReminders(): Promise<RenewalResult> {
   const now = Date.now();
 
   for (const o of orgs) {
+    // Claim plus send is ~1.5s. This step is deliberately given an early slice
+    // of the night: a renewal notice that misses its one-day window is never
+    // sent at all, and the customer's plan lapses with no warning.
+    if (budget && !budget.ok(2_000)) break;
     const end = new Date(o.subscription_ends_at).getTime();
     if (!Number.isFinite(end)) continue;
     out.checked++;

@@ -3,6 +3,7 @@ import { serviceClient } from "@/lib/supabase/server";
 import { brandFrom } from "@/lib/branded-email";
 import { buildPriorities, type Priority } from "@/lib/ai/priorities";
 import { unsubToken } from "@/lib/weekly-update";
+import type { Budget } from "@/lib/cron-budget";
 
 // "Your plan for the week" — a per-workspace email built from the SAME prioritizer
 // as the in-app command center. Each owner gets the few actions that matter, from
@@ -94,7 +95,7 @@ async function listUsers(sb: any): Promise<{ map: Map<string, { email: string; f
   return { map, partial };
 }
 async function optedOut(sb: any): Promise<Set<string>> {
-  try { const { data } = await sb.from("email_optouts").select("email"); return new Set((data as any[] || []).map((r) => String(r.email || "").toLowerCase())); }
+  try { const { data } = await sb.from("email_optouts").select("email").limit(100_000); return new Set((data as any[] || []).map((r) => String(r.email || "").toLowerCase())); }
   catch { return new Set(); }
 }
 
@@ -139,7 +140,7 @@ export function istWeekKey(now: Date = new Date()): string {
 const PER_RUN = 25;
 const BUDGET_MS = 90_000;
 
-export async function sendWeeklyPlans(opts?: { test?: boolean; now?: Date }): Promise<PlanSendResult> {
+export async function sendWeeklyPlans(opts?: { test?: boolean; now?: Date; budget?: Budget }): Promise<PlanSendResult> {
   const test = !!opts?.test;
   const sb = serviceClient();
   if (!sb) return { skipped: true, reason: "no SUPABASE_SERVICE_ROLE_KEY" };
@@ -216,7 +217,19 @@ export async function sendWeeklyPlans(opts?: { test?: boolean; now?: Date }): Pr
 
   let stoppedEarly = false;
   for (const o of queue) {
-    if (processed >= PER_RUN || Date.now() - startedAt > BUDGET_MS) { stoppedEarly = true; break; }
+    /*
+      TWO CLOCKS, AND THE TIGHTER ONE WINS.
+
+      BUDGET_MS is this step's own limit; `opts.budget` is the share the whole
+      nightly run has allotted it. Honouring only the local one is how a step
+      overruns a function that has twelve other things to do — and every
+      workspace this loop starts is CLAIMED in weekly_plan_sends before the
+      email is sent, so overrunning does not delay those emails, it cancels
+      them for the week.
+    */
+    const overLocal = Date.now() - startedAt > BUDGET_MS;
+    const overShared = Boolean(opts?.budget && !opts.budget.ok(11_000));
+    if (processed >= PER_RUN || overLocal || overShared) { stoppedEarly = true; break; }
 
     const { data: m } = await sb.from("health_metrics").select("label,value,unit,delta_pct,status").eq("org_id", o.id);
     if (!m?.length) continue;                       // only workspaces with real data

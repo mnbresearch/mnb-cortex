@@ -1,6 +1,7 @@
 import "server-only";
 import crypto from "crypto";
 import { serviceClient } from "@/lib/supabase/server";
+import type { Budget } from "@/lib/cron-budget";
 
 /**
  * Outbound webhooks.
@@ -138,10 +139,11 @@ async function attempt(svc: any, deliveryId: string, endpoint: any, event: strin
 }
 
 /** Retry sweep for the daily cron. Returns how many pending deliveries succeeded. */
-export async function retryPending(limit = 200): Promise<{ tried: number; delivered: number }> {
+export async function retryPending(limit = 200, budget?: Budget): Promise<{ tried: number; delivered: number; stoppedEarly?: boolean }> {
   const svc = serviceClient();
   if (!svc) return { tried: 0, delivered: 0 };
   let tried = 0, delivered = 0;
+  let stoppedEarly = false;
   try {
     const { data } = await svc.from("webhook_deliveries")
       .select("id, endpoint_id, event, payload, attempts")
@@ -149,6 +151,14 @@ export async function retryPending(limit = 200): Promise<{ tried: number; delive
       .order("created_at", { ascending: true }).limit(limit);
 
     for (const d of ((data as any[]) || [])) {
+      /*
+        Each retry is a delivery that ALREADY failed, so the 8s timeout is the
+        expected duration rather than the tail. 200 of them is 1,600s inside a
+        300s function — one customer with a dead endpoint could starve every
+        other customer's nightly run. The rest stay pending and are retried
+        tomorrow, which is what pending means.
+      */
+      if (budget && !budget.ok(8_500)) { stoppedEarly = true; break; }
       const { data: ep } = await svc.from("webhook_endpoints")
         .select("id, url, secret, is_active").eq("id", d.endpoint_id).maybeSingle();
       if (!ep || !(ep as any).is_active) continue;
@@ -156,7 +166,7 @@ export async function retryPending(limit = 200): Promise<{ tried: number; delive
       if (await attempt(svc, d.id, ep, d.event, d.payload)) delivered++;
     }
   } catch { /* swept again tomorrow */ }
-  return { tried, delivered };
+  return { tried, delivered, stoppedEarly };
 }
 
 /** Fire-and-forget: a webhook must never break the action that triggered it. */

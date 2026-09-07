@@ -6,6 +6,7 @@ import { sendEmail } from "@/lib/email";
 import { brandFrom } from "@/lib/branded-email";
 import { mdToHtml } from "@/lib/utils";
 import { emitQuietly } from "@/lib/webhooks";
+import type { Budget } from "@/lib/cron-budget";
 
 /**
  * Scheduled reports — "Custom dashboards & auto-reports" on the Premium plan,
@@ -77,7 +78,7 @@ async function contextFor(svc: any, orgId: string): Promise<string | null> {
 
 export type ReportRun = { checked: number; sent: number; skipped: number; errors: number };
 
-export async function runScheduledReports(): Promise<ReportRun> {
+export async function runScheduledReports(budget?: Budget): Promise<ReportRun> {
   const out: ReportRun = { checked: 0, sent: 0, skipped: 0, errors: 0 };
   const svc = serviceClient();
   if (!svc) return out;
@@ -90,6 +91,9 @@ export async function runScheduledReports(): Promise<ReportRun> {
   } catch { return out; }
 
   for (const r of rows) {
+    // A report is an AI call plus an email: up to ~8s. `last_sent` is the guard,
+    // so anything skipped is still due tomorrow.
+    if (budget && !budget.ok(9_000)) break;
     out.checked++;
     if (!isDue(r.cadence, r.last_sent)) { out.skipped++; continue; }
 

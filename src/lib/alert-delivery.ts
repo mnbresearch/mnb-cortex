@@ -2,6 +2,7 @@ import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import { brandFrom, renderBrandedEmail } from "@/lib/branded-email";
+import type { Budget } from "@/lib/cron-budget";
 
 /**
  * Send the alerts that have been raised, instead of waiting to be noticed.
@@ -66,7 +67,7 @@ const SEVERITY_LABEL: Record<string, string> = {
   green: "For information",
 };
 
-export async function deliverAlerts(origin?: string): Promise<DeliveryResult> {
+export async function deliverAlerts(origin?: string, budget?: Budget): Promise<DeliveryResult> {
   const svc = serviceClient();
   if (!svc) return { orgs: 0, sent: 0, alerts: 0 };
 
@@ -107,6 +108,9 @@ export async function deliverAlerts(origin?: string): Promise<DeliveryResult> {
   const now = Date.now();
 
   for (const [orgId, list] of Array.from(byOrg).slice(0, MAX_ORGS)) {
+    // One workspace is an owner lookup plus a send: ~1.5s. Unsent alerts keep
+    // their null notified_at and are picked up tomorrow.
+    if (budget && !budget.ok(2_000)) break;
     /*
       Mark as notified BEFORE sending, exactly as the workflow scheduler claims
       before running. If the send throws after a successful delivery, the worst
@@ -159,7 +163,27 @@ export async function deliverAlerts(origin?: string): Promise<DeliveryResult> {
         : `Cortex: ${ordered.length} alerts need your attention`;
       const res = await sendEmail(to, subject, html, { from: brandFrom() });
       if (res.sent) { sent++; alerts += ordered.length; }
-    } catch { /* claimed already; do not retry into a loop */ }
+      else {
+        /*
+          RELEASE THE CLAIM WHEN NOTHING WAS SENT.
+
+          The claim above is correct — marking before sending is what stops the
+          same digest going out every night. But it was never released, so a
+          Resend outage marked these alerts notified forever and the owner was
+          never told a KPI had crossed a line they set. On an early-warning
+          product, an alert silently marked "delivered" and never delivered is
+          the single worst state a row can be in.
+
+          renewal-email.ts already does this correctly; alert delivery did not.
+          Releasing only on a KNOWN failure keeps the duplicate-suppression
+          property: if the send threw after Resend accepted it, we still leave
+          the claim in place and prefer a missed repeat over a daily repeat.
+        */
+        try {
+          await svc.from("alerts").update({ notified_at: null }).in("id", ids);
+        } catch { /* it will age out of the window; nothing better to do */ }
+      }
+    } catch { /* threw after a possible delivery — keep the claim, see above */ }
   }
 
   return { orgs: byOrg.size, sent, alerts };

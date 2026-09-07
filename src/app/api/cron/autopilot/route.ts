@@ -6,6 +6,7 @@ import { withOrgAiKeys } from "@/lib/ai/byo";
 import { recomputeMetrics } from "@/lib/metrics";
 import { statusOf, isLapsed } from "@/lib/entitlement";
 import { rotate } from "@/lib/cron-rotation";
+import { createBudget, SHARE } from "@/lib/cron-budget";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -27,6 +28,23 @@ export async function GET(req: Request) {
   let alertsEmailed = 0;
   let collectionsSent = 0;
   if (!cronAuthorised(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+
+  /*
+    ONE CLOCK, STARTED HERE.
+
+    Thirteen steps run in sequence inside a single 300-second function, and each
+    used to enforce its own cap as though it were the only thing running. Summed
+    with realistic latencies that breaches 300s at roughly twenty paying
+    workspaces — and two individual steps could breach it alone (200 webhook
+    retries at an 8s timeout is 1,600s).
+
+    A timeout here does not defer work, it destroys it: several steps claim
+    their rows before doing the work, so the claim commits and the email never
+    sends. Every loop below now asks this budget before starting another
+    iteration and stops cleanly, leaving tomorrow's run something to pick up.
+  */
+  const budget = createBudget(300_000);
+
   const sb = serviceClient();
   if (!sb) return NextResponse.json({ ok: true, ran: 0, note: "add SUPABASE_SERVICE_ROLE_KEY to enable scheduled autopilot" });
 
@@ -44,7 +62,7 @@ export async function GET(req: Request) {
   let renewals: any = null;
   try {
     const { sendRenewalReminders } = await import("@/lib/renewal-email");
-    renewals = await sendRenewalReminders();
+    renewals = await sendRenewalReminders(budget.slice(SHARE.renewals));
   } catch (e: any) { renewals = { error: e?.message }; }
 
   // 1c. Scheduled reports. Each row decides for itself whether it's due, using
@@ -52,7 +70,7 @@ export async function GET(req: Request) {
   let reports: any = null;
   try {
     const { runScheduledReports } = await import("@/lib/scheduled-reports");
-    reports = await runScheduledReports();
+    reports = await runScheduledReports(budget.slice(SHARE.reports));
   } catch (e: any) { reports = { error: e?.message }; }
 
   // 1d. Retry any webhook delivery that hasn't landed yet.
@@ -66,7 +84,7 @@ export async function GET(req: Request) {
     */
     try {
       const { runScheduledWorkflows } = await import("@/lib/workflow-schedule");
-      const wf = await runScheduledWorkflows();
+      const wf = await runScheduledWorkflows(budget.slice(SHARE.workflows));
       scheduledWorkflows = wf.ran;
     } catch { /* never let this take the cron down */ }
 
@@ -123,7 +141,12 @@ export async function GET(req: Request) {
             on = (ordered.data as any[]) || [];
           }
         }
+        const cBudget = budget.slice(SHARE.collections);
         for (const row of (on || [])) {
+          // ~17s worst case per workspace (drafting plus sends). Stopping
+          // before starting one we cannot finish is what keeps the rotation
+          // honest: an unswept workspace stays at the head of the queue.
+          if (!cBudget.ok(17_000)) break;
           const oid = String(row.org_id);
           try {
             const { data: o } = await svcC.from("organizations").select("name").eq("id", oid).single();
@@ -151,13 +174,19 @@ export async function GET(req: Request) {
     */
     try {
       const { deliverAlerts } = await import("@/lib/alert-delivery");
-      const d = await deliverAlerts(new URL(req.url).origin);
+      const d = await deliverAlerts(new URL(req.url).origin, budget.slice(SHARE.alerts));
       alertsEmailed = d.sent;
     } catch { /* same */ }
 
     try {
+    /*
+      The step that could take the whole night on its own: 200 retries at an 8s
+      timeout is 1,600s, and these are deliveries that ALREADY failed, so the
+      timeout is the expected case. One customer with a dead endpoint URL used
+      to be able to starve every other customer's cron.
+    */
     const { retryPending } = await import("@/lib/webhooks");
-    webhooks = await retryPending();
+    webhooks = await retryPending(200, budget.slice(SHARE.webhooks));
   } catch (e: any) { webhooks = { error: e?.message }; }
 
   // 1e. Pull fresh data from every connected integration, before the KPI sweep
@@ -165,7 +194,7 @@ export async function GET(req: Request) {
   let synced: any = null;
   try {
     const { syncAll } = await import("@/lib/sync");
-    synced = await syncAll();
+    synced = await syncAll(100, budget.slice(SHARE.sync));
   } catch (e: any) { synced = { error: e?.message }; }
 
   // 2. Housekeeping on the public rate-limit buckets.
@@ -216,7 +245,7 @@ export async function GET(req: Request) {
         ledger guaranteeing nobody is mailed twice in the same week.
       */
       const { sendWeeklyPlans } = await import("@/lib/plan-email");
-      plan = await sendWeeklyPlans({});
+      plan = await sendWeeklyPlans({ budget: budget.slice(SHARE.weeklyPlan) });
     }
   } catch (e: any) { plan = { error: e?.message }; }
 
@@ -225,7 +254,24 @@ export async function GET(req: Request) {
   const { data: orgs } = await sb
     .from("organizations")
     .select("id,subscription_status,trial_ends_at,subscription_ends_at,autorenew_status")
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    /*
+      EXPLICIT, because the absence of a limit is not the absence of a limit.
+
+      PostgREST applies db-max-rows — 1,000 by default on Supabase — to any
+      select that does not set its own range. So this silently returned the
+      1,000 OLDEST workspaces, and rotate() then rotated within that truncated
+      list, meaning its cursor could never reach workspace 1,001. That
+      workspace would never be swept and never analysed, for as long as it
+      existed, and `coverage.metrics_sweep.workspaces` would report 1000 —
+      the honesty mechanism written to catch exactly this reporting a false
+      number at exactly the scale it was built for.
+
+      20,000 is a ceiling that says so out loud rather than one inherited from
+      a server default. If it is ever reached, the log line below is the signal
+      to move this loop to pagination.
+    */
+    .limit(20_000);
 
   // 3. Safety-net metrics sweep. Every write path recomputes inline, so this only
   //    catches workspaces whose inline recompute failed, and keeps time-sensitive
@@ -248,16 +294,34 @@ export async function GET(req: Request) {
     never swept. The cap is still needed (300s function limit); what was missing
     is that the window has to move. See lib/cron-rotation.ts.
   */
+  if (((orgs as any[]) || []).length >= 20_000) {
+    console.error("[cron] organizations hit the 20,000 read cap — the sweep is no longer covering every workspace; paginate this query.");
+  }
+
   const SWEEP_CAP = 200, BATCH = 5;
   const sweep = await rotate("metrics_sweep", (orgs as any[]) || [], SWEEP_CAP);
+  const sBudget = budget.slice(SHARE.sweep);
   let recomputed = 0;
+  let swept = 0;
   for (let i = 0; i < sweep.batch.length; i += BATCH) {
+    // A batch of five recomputes is ~2.5s. Stop on the batch boundary rather
+    // than mid-batch so the cursor below records exactly what was done.
+    if (!sBudget.ok(3_000)) break;
     const results = await Promise.all(sweep.batch.slice(i, i + BATCH).map(async (o: any) => {
       try { return (await recomputeMetrics(o.id)).ok; } catch { return false; }
     }));
     recomputed += results.filter(Boolean).length;
+    swept += sweep.batch.slice(i, i + BATCH).length;
   }
-  await sweep.commit(sweep.batch.length);
+  /*
+    COMMIT WHAT WAS ACTUALLY SWEPT, not the size of the batch we intended.
+
+    `sweep.commit(sweep.batch.length)` advanced the rotation cursor past
+    workspaces the loop never reached, so a run that ran out of time skipped
+    them until the cursor wrapped all the way round again. The cursor has to
+    reflect work done, not work planned.
+  */
+  await sweep.commit(swept);
 
   // 4. Daily analysis — only for workspaces that are actually entitled to it.
   //    Running the model for expired/suspended workspaces is money spent on
@@ -279,10 +343,21 @@ export async function GET(req: Request) {
   const skipped = (((orgs as any[]) || []).length) - entitledOrgs.length;
   const analysis = await rotate("daily_analysis", entitledOrgs, ANALYSIS_CAP);
 
-  const deadline = Date.now() + 200_000;
+  /*
+    ANCHORED TO THE RUN, NOT TO THIS LINE.
+
+    This was `Date.now() + 200_000`, evaluated here. If the twelve steps above
+    had already spent 250s, this permitted the analysis loop to keep going
+    until t=450s — 150 seconds past the point Vercel kills the function. The one
+    deadline guard in the whole cron could not fire in the situation it existed
+    for.
+  */
+  const aBudget = budget.slice(SHARE.analysis);
   let ran = 0;
   for (const o of analysis.batch) {
-    if (ran >= ANALYSIS_CAP || Date.now() > deadline) break;
+    // One analysis is a model call: 4-8s. Do not start a tenth one with five
+    // seconds left — the alert and activity writes after it would be lost.
+    if (ran >= ANALYSIS_CAP || !aBudget.ok(9_000)) break;
     const { data: m } = await sb.from("health_metrics").select("label,value,unit,delta_pct,status").eq("org_id", o.id);
     if (!m?.length) continue;
     // Same null-delta guard as getBusinessContext(): "null%" is not a change.
@@ -368,5 +443,13 @@ export async function GET(req: Request) {
     },
   };
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, heartbeat, scheduledWorkflows, alertsEmailed, collectionsSent, coverage });
+  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, heartbeat, scheduledWorkflows, alertsEmailed, collectionsSent, coverage,
+    /*
+      How long the run took and whether it finished with room to spare. If
+      `budget_left_ms` trends towards zero, the caps in lib/cron-budget.ts need
+      raising or the cron needs to run more than once a day — and that should
+      be a decision made from this number, not a discovery made from a customer
+      complaint.
+    */
+    timing: { spent_ms: budget.spentMs(), budget_left_ms: budget.remaining() } });
 }

@@ -4,6 +4,16 @@ import { getHealth } from "@/lib/health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/*
+  Bounded, because this route is PUBLIC and UNAUTHENTICATED by design — it is
+  meant to be embedded as an <img> on other people's pages. getHealth() is
+  cached and de-duplicated, so the usual path is trivial, but a cold cache
+  triggers the full provider fan-out (every Gemini text, image and video model
+  at a 20s timeout each). Without a declared budget that inherits the platform
+  default and a burst of badge renders on a cold cache could hold open a lot of
+  invocations pinging the AI providers.
+*/
+export const maxDuration = 30;
 
 /** Live status badge (SVG) — embed anywhere with <img src="/api/badge" />. */
 export async function GET(req: Request) {
@@ -38,6 +48,16 @@ export async function GET(req: Request) {
 </svg>`;
 
   return new Response(svg, {
-    headers: { "Content-Type": "image/svg+xml", "Cache-Control": "no-cache, no-store, must-revalidate" },
+    headers: {
+      "Content-Type": "image/svg+xml",
+      /*
+        Was `no-cache, no-store, must-revalidate`, which on an embedded image
+        means every page view anywhere reaches this function. A status badge
+        does not need to be accurate to the second, and 60s of shared caching
+        is the difference between a badge and an amplifier. stale-while-
+        revalidate keeps it feeling live without a cold read on the hot path.
+      */
+      "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=300",
+    },
   });
 }

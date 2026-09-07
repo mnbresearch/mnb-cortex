@@ -157,7 +157,7 @@ async function listUserRecipients(sb: any): Promise<Recipient[]> {
   // Who belongs to a Cortex workspace? Anyone else is not our audience.
   const cortexUserIds = new Set<string>();
   try {
-    const { data, error } = await sb.from("memberships").select("user_id");
+    const { data, error } = await sb.from("memberships").select("user_id").limit(100_000);
     if (error) return [];                       // fail CLOSED — send to nobody
     for (const m of (data as any[]) || []) {
       const id = String((m as any)?.user_id || "");
@@ -189,7 +189,7 @@ async function listUserRecipients(sb: any): Promise<Recipient[]> {
 }
 async function optedOutSet(sb: any): Promise<Set<string>> {
   try {
-    const { data } = await sb.from("email_optouts").select("email");
+    const { data } = await sb.from("email_optouts").select("email").limit(100_000);
     return new Set((data as any[] || []).map((r) => String(r.email || "").toLowerCase()));
   } catch { return new Set(); }
 }

@@ -2,6 +2,7 @@ import "server-only";
 import { ownerEmail } from "@/lib/alert-delivery";
 import { serviceClient } from "@/lib/supabase/server";
 import { executeWorkflow } from "@/lib/workflows";
+import type { Budget } from "@/lib/cron-budget";
 
 /**
  * Run the workflows that say they are scheduled.
@@ -43,7 +44,7 @@ const MAX_PER_RUN = 50;
 
 export type ScheduleResult = { considered: number; ran: number; failed: number };
 
-export async function runScheduledWorkflows(): Promise<ScheduleResult> {
+export async function runScheduledWorkflows(budget?: Budget): Promise<ScheduleResult> {
   const svc = serviceClient();
   if (!svc) return { considered: 0, ran: 0, failed: 0 };
 
@@ -62,6 +63,9 @@ export async function runScheduledWorkflows(): Promise<ScheduleResult> {
   const now = Date.now();
 
   for (const wf of rows) {
+    // A workflow can contain an AI step, so budget for the slow case. Skipped
+    // workflows keep their old last_run and are due again tomorrow.
+    if (budget && !budget.ok(9_000)) break;
     const last = wf.last_run ? new Date(wf.last_run).getTime() : 0;
     if (last && now - last < MIN_GAP_MS) continue;
 
