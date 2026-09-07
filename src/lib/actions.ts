@@ -576,6 +576,55 @@ async function writeImported(sb: any, table: string, mapped: any[]): Promise<{ w
   return { written };
 }
 
+/*
+  ONE MAPPER FOR BOTH IMPORT PATHS.
+
+  This logic lived inline in importRows() and was simply absent from
+  importFromUrl(), so four separate correctness fixes — the "won" default, the
+  invoice status/type case-folding, the unknown-type fallback, and numeric
+  cleaning — applied to file uploads and not to Google Sheets. The two paths
+  write to the same tables and are read by the same queries; they cannot be
+  allowed to disagree about what a row means.
+
+  `picked` is the row AFTER header resolution, so this function never sees the
+  customer's original column names.
+*/
+function mapImportedRow(table: string, spec: { cols: string[]; nums: string[] }, orgId: string, picked: Record<string, any>): any {
+  const o: any = { org_id: orgId };
+  for (const c of spec.cols) {
+    const v = picked[c];
+    if (v === undefined || v === "") continue;
+    o[c] = spec.nums.includes(c) ? (parseFloat(String(v).replace(/[^0-9.-]/g, "")) || 0) : String(v);
+  }
+
+  /*
+    An imported sales order with no status contributes ZERO revenue, because
+    metrics.ts counts only status === "won". The manual "Add sales order" form
+    defaults to "won"; the importer did not, so importing 500 orders produced
+    "Orders (MTD): 500" beside "Revenue (MTD): ₹0" and nothing explained why.
+  */
+  if (table === "sales_orders" && !o.status) o.status = "won";
+
+  /*
+    Normalise the two columns that are COMPARED rather than displayed.
+
+    Every read in this codebase tests `status <> 'paid'` and
+    `type = 'receivable'` case-sensitively. A Tally or Vyapar export writes
+    "Paid", "PAID" or "Receivable", so an invoice the customer had already
+    settled came through as unpaid — and would then be CHASED by the collections
+    agent, which is the worst outcome this product can produce. It also inflated
+    the 43B(h) tax exposure with bills that were paid.
+  */
+  if (table === "invoices") {
+    if (o.status) o.status = String(o.status).trim().toLowerCase();
+    if (o.type) o.type = String(o.type).trim().toLowerCase();
+    // Anything that is not a known receivable/payable value is a receivable,
+    // which is the existing column default.
+    if (o.type && !["receivable", "payable"].includes(o.type)) o.type = "receivable";
+  }
+  return o;
+}
+
 export async function importRows(fd: FormData): Promise<{
   inserted: number; error?: string;
   matched?: number; totalCols?: number; missing?: string[];
@@ -611,45 +660,7 @@ export async function importRows(fd: FormData): Promise<{
       };
     }
 
-    const mapped = rows.slice(0, 1000).map((r) => {
-      const o: any = { org_id: orgId };
-      const picked = applyMapping(r, match);
-      for (const c of spec.cols) {
-        const v = picked[c];
-        if (v === undefined || v === "") continue;
-        o[c] = spec.nums.includes(c) ? (parseFloat(String(v).replace(/[^0-9.-]/g, "")) || 0) : String(v);
-      }
-      /*
-        An imported sales order with no status contributes ZERO revenue, because
-        metrics.ts only counts status === "won". The manual "Add sales order"
-        form defaults to "won"; the importer did not, so importing 500 orders
-        produced "Orders (MTD): 500" beside "Revenue (MTD): \u20b90" and nothing
-        anywhere explained why. The two paths now agree.
-      */
-      if (table === "sales_orders" && !o.status) o.status = "won";
-
-      /*
-        Normalise the two columns that are COMPARED rather than displayed.
-
-        Every read in this codebase tests `status <> 'paid'` and
-        `type = 'receivable'` case-sensitively. A Tally or Vyapar export writes
-        "Paid", "PAID" or "Receivable", so an invoice the customer has already
-        settled came through as unpaid — and would then have been CHASED by the
-        collections agent, which is the worst outcome this product can produce.
-        It also inflated the 43B(h) tax exposure with bills that were paid.
-
-        Normalised at the point of writing rather than at every read, because
-        there are a dozen reads and one importer.
-      */
-      if (table === "invoices") {
-        if (o.status) o.status = String(o.status).trim().toLowerCase();
-        if (o.type) o.type = String(o.type).trim().toLowerCase();
-        // Anything that is not a known receivable/payable value is a receivable,
-        // which is the existing column default.
-        if (o.type && !["receivable", "payable"].includes(o.type)) o.type = "receivable";
-      }
-      return o;
-    });
+    const mapped = rows.slice(0, 1000).map((r) => mapImportedRow(table, spec, orgId, applyMapping(r, match)));
     const sb = createClient();
     const wrote = await writeImported(sb, table, mapped);
     if (wrote.error) {
@@ -689,11 +700,39 @@ export async function importFromUrl(fd: FormData): Promise<{ inserted: number; e
     if (!res.ok) return { inserted: 0, error: `Could not fetch (${res.status}). Make sure the sheet/link is public.` };
     const rows = parseCsv(await res.text());
     if (!rows.length) return { inserted: 0, error: "No rows found at that URL" };
-    const mapped = rows.slice(0, 1000).map((r) => {
-      const o: any = { org_id: orgId };
-      for (const c of spec.cols) { if (r[c] === undefined || r[c] === "") continue; o[c] = spec.nums.includes(c) ? (parseFloat(String(r[c]).replace(/[^0-9.-]/g, "")) || 0) : String(r[c]); }
-      return o;
-    });
+    /*
+      THE SAME IMPORT, WITH NONE OF THE FIXES.
+
+      This path read `r[c]` verbatim — no resolveHeaders, no matched-zero
+      refusal, no sales_orders status default, no case-normalisation of invoice
+      status and type. Every one of those was found and fixed on the file-upload
+      path and never carried across, so the URL path kept all four bugs:
+
+        - A Google Sheet with human headings ("Invoice No", "Party Name",
+          "Amount") matched nothing, produced N objects containing only org_id,
+          and reported "Imported N rows". Blank records, cheerfully counted.
+        - Orders imported without a status contributed zero revenue, because
+          metrics.ts counts only status === "won" — giving "Orders 500, Revenue
+          ₹0" with nothing to explain it.
+        - "Paid" or "PAID" from a Tally export failed the case-sensitive
+          `status <> 'paid'` test everywhere, so a settled invoice read as
+          unpaid — and would have been CHASED by the collections agent, which is
+          the worst thing this product can do to a customer's customer.
+
+      Both paths now share one mapper, so a fix to either is a fix to both.
+    */
+    const headers = Object.keys(rows[0] || {});
+    const match = resolveHeaders(table, headers);
+    if (match.matched === 0) {
+      return {
+        inserted: 0,
+        error: `None of the columns at that URL were recognised (found: ${headers.slice(0, 6).join(", ")}${headers.length > 6 ? "…" : ""}). `
+          + `Expected something like: ${spec.cols.slice(0, 4).join(", ")}.`,
+      };
+    }
+
+    const mapped = rows.slice(0, 1000).map((r) => mapImportedRow(table, spec, orgId, applyMapping(r, match)));
+
     const sb = createClient();
     const wrote = await writeImported(sb, table, mapped);
     if (wrote.error) {

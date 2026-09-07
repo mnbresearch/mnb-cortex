@@ -17,18 +17,59 @@ import { updateOrgProfile, seedDemoData } from "@/lib/actions";
 import { Check, Sparkles, ArrowRight, Building2, Database } from "lucide-react";
 import { Logo } from "@/components/logo";
 
-export function OnboardingWizard() {
+export function OnboardingWizard({
+  initialName = "",
+  initialIndustry = "",
+  initialCurrency = "INR",
+}: { initialName?: string; initialIndustry?: string; initialCurrency?: string } = {}) {
+  /*
+    SEEDED FROM WHAT IS ALREADY SAVED.
+
+    These were hardcoded to `{ name: "", industry: "manufacturing", currency:
+    "INR" }`. Coming back to this page — which is now possible, since setup is
+    reachable from the nav and no longer a single post-signup redirect — showed
+    an empty company field and silently reset the industry picker to
+    manufacturing. Saving from that state would overwrite a retailer's real
+    answer with a default they never chose.
+  */
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ name: "", industry: "manufacturing", currency: "INR" });
+  const [err, setErr] = useState("");
+  const [form, setForm] = useState({
+    name: initialName,
+    industry: initialIndustry || "manufacturing",
+    currency: initialCurrency || "INR",
+  });
   const inp = "w-full rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring";
 
   async function saveProfile() {
+    /*
+      A company name is the one answer this step cannot invent. It used to fall
+      back to "My Company" when the field was blank — which is exactly the
+      placeholder the setup checklist treats as "not done", so a customer could
+      press Continue, see the step stay unfinished, and have no idea why.
+    */
+    const name = form.name.trim();
+    if (!name) { setErr("What is your business called? Cortex puts this on your receipts and reports."); return; }
     setBusy(true);
-    try { const fd = new FormData(); fd.set("name", form.name || "My Company"); fd.set("industry", form.industry); fd.set("currency", form.currency); await updateOrgProfile(fd); setStep(1); }
-    catch (e: any) { alert(e.message || "Please sign in first."); } finally { setBusy(false); }
+    setErr("");
+    try {
+      const fd = new FormData();
+      fd.set("name", name); fd.set("industry", form.industry); fd.set("currency", form.currency);
+      await updateOrgProfile(fd);
+      setStep(1);
+    } catch (e: any) {
+      // Was `alert()`. A browser dialog on the first screen of a paid product
+      // reads as a crash; this reads as a form telling you what went wrong.
+      setErr(e?.message || "Could not save that — please check you are signed in and try again.");
+    } finally { setBusy(false); }
   }
-  async function loadDemo() { setBusy(true); try { await seedDemoData(); setStep(2); } catch (e: any) { alert(e.message); } finally { setBusy(false); } }
+  async function loadDemo() {
+    setBusy(true); setErr("");
+    try { await seedDemoData(); setStep(2); }
+    catch (e: any) { setErr(e?.message || "Could not load the sample dataset."); }
+    finally { setBusy(false); }
+  }
 
   return (
     <Card className="relative p-6 max-w-xl mx-auto overflow-hidden">
@@ -75,6 +116,7 @@ export function OnboardingWizard() {
           <select className={inp} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
             {["INR", "USD", "EUR", "GBP", "AED", "SGD"].map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
+          {err && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
           <Button onClick={saveProfile} disabled={busy} className="w-full">{busy ? "Saving…" : <>Continue <ArrowRight className="h-4 w-4" /></>}</Button>
         </div>
       )}
@@ -96,6 +138,7 @@ export function OnboardingWizard() {
             <Sparkles className="h-4 w-4" /> {busy ? "Loading…" : "Load a sample dataset instead"}
           </Button>
           <p className="text-xs text-muted-foreground">Sample rows are tagged, never mixed into your figures permanently, and can be removed from Settings at any time.</p>
+          {err && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
           <button onClick={() => setStep(2)} className="text-xs text-muted-foreground">Skip for now</button>
         </div>
       )}

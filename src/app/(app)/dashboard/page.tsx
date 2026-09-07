@@ -23,11 +23,16 @@ import { CortexScore } from "@/components/cortex-score";
 import { InstallCTA } from "@/components/install-cta";
 import Link from "next/link";
 
+import { getFirstRun } from "@/lib/first-run";
+import { SetupPath } from "@/components/setup-path";
+
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
   const { orgId } = await getUserAndOrg();
-  const [metrics, insights, alerts, fin, profile] = await Promise.all([getMetrics(), getInsights(), getAlerts(), getFinanceSeries(), getOrgProfile()]);
+  const [metrics, insights, alerts, fin, profile, firstRun] = await Promise.all([
+    getMetrics(), getInsights(), getAlerts(), getFinanceSeries(), getOrgProfile(), getFirstRun(),
+  ]);
   const isReal = Boolean(orgId);                 // signed-in workspace vs public demo preview
   const hasMetrics = metrics.length > 0;
   // Only looked up when there is nothing to show — the healthy path pays nothing.
@@ -73,19 +78,32 @@ export default async function Dashboard() {
                     ? `You're tracking ${metrics.length} metric${metrics.length === 1 ? "" : "s"} — ${reds} need attention and ${greens} healthy. Ask me anything and I'll answer from your real data.`
                     : "This is a live demo with sample data. Sign in and import your numbers to see your own business here."}
               </p>
-              {isReal && !hasMetrics ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Link href="/bank" className="inline-flex items-center gap-1.5 rounded-lg border px-3 h-9 text-sm hover:bg-accent"><Landmark className="h-4 w-4 text-primary" /> Upload bank statement</Link>
-                  <Link href="/gst-reader" className="inline-flex items-center gap-1.5 rounded-lg border px-3 h-9 text-sm hover:bg-accent"><ReceiptText className="h-4 w-4 text-primary" /> Read GST return</Link>
-                  <Link href="/import" className="inline-flex items-center gap-1.5 rounded-lg border px-3 h-9 text-sm hover:bg-accent"><UploadIcon className="h-4 w-4 text-primary" /> Import CSV / Excel</Link>
-                </div>
-              ) : (
+              {/*
+                THREE EQUAL BUTTONS BECAME NONE.
+
+                This offered "Upload bank statement", "Read GST return" and
+                "Import CSV / Excel" side by side, weighted identically — three
+                ways to start, no indication which one a first-time owner
+                should pick, and two of them cost 45 credits on an account that
+                by design has zero. The single ordered path now lives in
+                SetupPath below, where it can also say which steps are already
+                done. Repeating the choice here would put the user back in front
+                of a menu.
+              */}
+              {isReal && !hasMetrics ? null : (
                 <Link href="/chat" className="inline-flex text-sm text-primary font-medium mt-2">Ask: “How is my business?” →</Link>
               )}
               <AIPulse />
             </div>
           </div>
         </Card>
+
+        {/*
+          The single ordered path from signup to the first real warning. Hides
+          itself the moment all four steps are done, so an established workspace
+          never sees it.
+        */}
+        <SetupPath run={firstRun} />
 
         {/* Guided command layer: turns 130 modules into the few that matter now. */}
         <NextBestActions />
@@ -143,10 +161,22 @@ export default async function Dashboard() {
               </div>
             </Card>
           ) : (
+            /*
+              This card was the largest thing on an empty dashboard and had NO
+              LINK ON IT — it described what the customer was missing and gave
+              them no way to fix it, while nine CTAs competed elsewhere on the
+              page. It now points at whatever the setup path says is next, so
+              the two can never disagree.
+            */
             <Card className="p-8 text-center">
               <Landmark className="h-8 w-8 text-primary mx-auto" />
               <p className="mt-3 font-medium">No business data yet</p>
-              <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">Connect your real numbers and your whole dashboard, AI chat and reports come alive. It takes under a minute.</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">Your KPIs appear here as soon as Cortex can see your numbers.</p>
+              {firstRun.next && (
+                <Link href={firstRun.next.href} className="mt-4 inline-flex h-10 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90">
+                  {firstRun.next.cta}
+                </Link>
+              )}
             </Card>
           )
         ) : null}

@@ -10,14 +10,22 @@ import { useState, useEffect } from "react";
 import { PRODUCT_NAV as NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/logo";
-import { KeyRound, ShieldAlert, Mail, ChevronDown, Sun, Moon, Search } from "lucide-react";
+import { KeyRound, ShieldAlert, Mail, ChevronDown, Sun, Moon, Search, Rocket } from "lucide-react";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { useTheme } from "next-themes";
 
 const OPEN_KEY = "cortex_nav_open_v1";
 
-export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null, logoUrl = null, brandName = null }: {
+export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null, logoUrl = null, brandName = null, setupIncomplete = false }: {
   superAdmin?: boolean; orgs?: { id: string; name: string }[]; activeOrgId?: string | null;
+  /*
+    Setup had NO nav entry at all. It was reachable only by the one post-signup
+    redirect, so a customer who closed the tab halfway through could never get
+    back to it — there was no link anywhere in the product. This appears while
+    setup is unfinished and disappears when it is done, which is the only time
+    either state is useful.
+  */
+  setupIncomplete?: boolean;
   // Null unless the workspace's plan includes the whitelabel capability. The
   // layout decides that; this component only renders what it is handed.
   logoUrl?: string | null; brandName?: string | null;
@@ -73,6 +81,21 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null, log
         </div>
       </div>
       <OrgSwitcher orgs={orgs} activeId={activeOrgId} />
+
+      {setupIncomplete && (
+        <div className="px-3 pt-3">
+          <Link
+            href="/onboarding"
+            className={cn(
+              "flex w-full items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-2.5 h-9 text-sm font-medium transition-colors hover:bg-primary/10",
+              path === "/onboarding" ? "text-primary" : "text-foreground",
+            )}
+          >
+            <Rocket aria-hidden="true" className="h-4 w-4 text-primary" />
+            Finish setting up
+          </Link>
+        </div>
+      )}
 
       {/*
         A visible front door to the command palette. It already searched every

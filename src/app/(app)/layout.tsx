@@ -16,11 +16,12 @@ import { getOrgProfile, getMyOrgs, getUserAndOrg } from "@/lib/data";
 import { isSuperAdmin } from "@/lib/superadmin";
 import { getBillingStatus } from "@/lib/billing";
 import { planIncludes } from "@/lib/config";
+import { getFirstRun } from "@/lib/first-run";
 import { TrialGuard } from "@/components/trial-guard";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [profile, superAdmin, orgs, { orgId }, billing] = await Promise.all([
-    getOrgProfile(), isSuperAdmin(), getMyOrgs(), getUserAndOrg(), getBillingStatus(),
+  const [profile, superAdmin, orgs, { orgId }, billing, firstRun] = await Promise.all([
+    getOrgProfile(), isSuperAdmin(), getMyOrgs(), getUserAndOrg(), getBillingStatus(), getFirstRun(),
   ]);
 
   /*
@@ -59,7 +60,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         Skip to content
       </a>
       <NavProgress />
-      <Sidebar superAdmin={superAdmin} orgs={orgs} activeOrgId={orgId} logoUrl={logoUrl} brandName={brandable ? (profile?.name || null) : null} />
+      <Sidebar superAdmin={superAdmin} orgs={orgs} activeOrgId={orgId} logoUrl={logoUrl} brandName={brandable ? (profile?.name || null) : null} setupIncomplete={firstRun.known && !firstRun.complete} />
       <div className="flex-1 min-w-0 app-canvas">{children}</div>
       <MobileNav />
       <CommandPalette />

@@ -10,8 +10,28 @@ const PLANS = ALL_PLANS
   .filter((p) => ["watch", "watchpro", "command"].includes(p.id))
   .map((p) => ({ name: p.name, price: "₹" + p.monthly.toLocaleString("en-IN"), note: p.tagline, highlight: p.id === "watchpro" }));
 
-// Pages that must stay reachable so a locked user can actually pay.
-const ALLOW = ["/billing", "/settings", "/pricing"];
+/*
+  Pages that must stay reachable so a locked user can actually pay — AND finish
+  setting up.
+
+  /onboarding was missing, and that was a deadlock rather than an inconvenience.
+  TRIAL_DAYS is 0 by design (this is a paid product with no free tier), so
+  ensureWorkspace() stamps `trial_ends_at = now` on every new workspace,
+  entitlement immediately reads "expired", and billing marks it locked. The
+  post-signup redirect then sends the user to /onboarding — a page this
+  component covered with a full-screen modal.
+
+  So the first screen a paying customer ever saw was a lock over a welcome
+  wizard they could not reach, asking them to choose a plan before they had been
+  told what the product does. Every destination that wizard links to was behind
+  the same wall.
+
+  Onboarding is not product usage: it writes a company name and an industry and
+  costs nothing to run. Being asked to pay before you can even say who you are
+  is the wrong order, and it was not a decision anyone made — it was a list that
+  had not been updated.
+*/
+const ALLOW = ["/billing", "/settings", "/pricing", "/onboarding"];
 
 export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = false, subscriptionEndsAt = null }: { status: string; daysLeft: number; locked: boolean; lapsedSubscription?: boolean; subscriptionEndsAt?: string | null }) {
   const path = usePathname();
