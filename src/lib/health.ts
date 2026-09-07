@@ -289,6 +289,23 @@ async function checkSchema(): Promise<Check> {
     ["referrals", "status", "2026_referrals"],
     ["action_tasks", "col", "2026_action_board"],
     ["decisions", "title", "2026_action_board"],
+    /*
+      THE PRODUCT SHOULD ANSWER "HAS THE SQL BEEN RUN", not the operator's
+      memory.
+
+      weekly_plan_sends is the ledger that makes the Monday plan email
+      exactly-once. Without it, sendWeeklyPlans() deliberately falls back to
+      Monday-only and reports `ledger: false` in the cron response — correct,
+      but invisible unless somebody reads that JSON. The feature is on by
+      default and the landing page sells it ("One email on Monday: the three
+      things worth your attention"), so an operator who forgot to run
+      RUN-weekly-plan-sends.sql has a promise going unmet with nothing on
+      screen to say so.
+
+      Named for the file to run rather than the migration, because the answer
+      to "this is missing" should be the command that fixes it.
+    */
+    ["weekly_plan_sends", "week", "RUN-weekly-plan-sends.sql"],
   ];
   const missing: string[] = [];
   for (const [table, col, name] of probes) {
