@@ -6,7 +6,7 @@ import { SUPER_ADMINS } from "@/lib/operators";
 import { generateFor } from "@/lib/ai/cortex";
 import { sendEmail } from "@/lib/email";
 import { recomputeQuietly } from "@/lib/metrics";
-import { resolveHeaders, applyMapping } from "@/lib/import-map";
+import { resolveHeaders, applyMapping, IMPORT_COLS, mapImportedRow } from "@/lib/import-map";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -504,18 +504,6 @@ export async function updateStatus(fd: FormData) {
   ["/approvals", "/inventory", "/finance", "/sales", path].forEach((p) => revalidatePath(p));
 }
 
-const IMPORT_COLS: Record<string, { cols: string[]; nums: string[] }> = {
-  sales_orders: { cols: ["order_no", "customer_name", "region", "product", "amount", "status"], nums: ["amount"] },
-  invoices: { cols: ["invoice_no", "party", "amount", "issue_date", "due_date", "status", "type"], nums: ["amount"] },
-  inventory_items: { cols: ["sku", "name", "category", "on_hand", "reorder_level", "unit_cost", "supplier"], nums: ["on_hand", "reorder_level", "unit_cost"] },
-  employees: { cols: ["name", "department", "role", "monthly_ctc", "performance"], nums: ["monthly_ctc", "performance"] },
-  // Leads were not importable, and no code path could create one belonging to a
-  // customer's workspace at all — so /leads was permanently empty for every
-  // paying customer while telling them to "share your pricing page".
-  leads: { cols: ["name", "email", "phone", "plan", "source"], nums: [] },
-  production_runs: { cols: ["machine", "shift", "run_date", "planned_qty", "actual_qty", "reject_qty", "downtime_min", "oee"], nums: ["planned_qty", "actual_qty", "reject_qty", "downtime_min", "oee"] },
-  customers: { cols: ["name", "company", "email", "phone", "status", "value"], nums: ["value"] },
-};
 
 /**
  * Write imported rows.
@@ -574,55 +562,6 @@ async function writeImported(sb: any, table: string, mapped: any[]): Promise<{ w
     written += rest.length;
   }
   return { written };
-}
-
-/*
-  ONE MAPPER FOR BOTH IMPORT PATHS.
-
-  This logic lived inline in importRows() and was simply absent from
-  importFromUrl(), so four separate correctness fixes — the "won" default, the
-  invoice status/type case-folding, the unknown-type fallback, and numeric
-  cleaning — applied to file uploads and not to Google Sheets. The two paths
-  write to the same tables and are read by the same queries; they cannot be
-  allowed to disagree about what a row means.
-
-  `picked` is the row AFTER header resolution, so this function never sees the
-  customer's original column names.
-*/
-function mapImportedRow(table: string, spec: { cols: string[]; nums: string[] }, orgId: string, picked: Record<string, any>): any {
-  const o: any = { org_id: orgId };
-  for (const c of spec.cols) {
-    const v = picked[c];
-    if (v === undefined || v === "") continue;
-    o[c] = spec.nums.includes(c) ? (parseFloat(String(v).replace(/[^0-9.-]/g, "")) || 0) : String(v);
-  }
-
-  /*
-    An imported sales order with no status contributes ZERO revenue, because
-    metrics.ts counts only status === "won". The manual "Add sales order" form
-    defaults to "won"; the importer did not, so importing 500 orders produced
-    "Orders (MTD): 500" beside "Revenue (MTD): ₹0" and nothing explained why.
-  */
-  if (table === "sales_orders" && !o.status) o.status = "won";
-
-  /*
-    Normalise the two columns that are COMPARED rather than displayed.
-
-    Every read in this codebase tests `status <> 'paid'` and
-    `type = 'receivable'` case-sensitively. A Tally or Vyapar export writes
-    "Paid", "PAID" or "Receivable", so an invoice the customer had already
-    settled came through as unpaid — and would then be CHASED by the collections
-    agent, which is the worst outcome this product can produce. It also inflated
-    the 43B(h) tax exposure with bills that were paid.
-  */
-  if (table === "invoices") {
-    if (o.status) o.status = String(o.status).trim().toLowerCase();
-    if (o.type) o.type = String(o.type).trim().toLowerCase();
-    // Anything that is not a known receivable/payable value is a receivable,
-    // which is the existing column default.
-    if (o.type && !["receivable", "payable"].includes(o.type)) o.type = "receivable";
-  }
-  return o;
 }
 
 export async function importRows(fd: FormData): Promise<{

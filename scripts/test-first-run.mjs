@@ -202,10 +202,25 @@ check(
 
 const actions = read("src/lib/actions.ts");
 
+/*
+  The mapper has since moved from lib/actions.ts into lib/import-map.ts so it
+  can be EXECUTED by scripts/test-importer.mjs — actions.ts is a "use server"
+  module that reaches the database, which made the riskiest logic in the product
+  reachable only by reading it. This check therefore asserts the property (one
+  shared mapper, used by both paths) rather than the file it happens to sit in;
+  the first version failed the moment the code got better, which is a test
+  measuring the wrong thing.
+*/
+const importMap = read("src/lib/import-map.ts");
 check(
   "there is one shared row mapper",
-  /function mapImportedRow\(/.test(actions),
+  /export function mapImportedRow\(/.test(importMap),
   "the URL importer had none of the file importer's four correctness fixes",
+);
+check(
+  "and it lives somewhere a test can execute it",
+  !/server-only/.test(importMap),
+  "a pure function behind a server boundary can only ever be verified by reading",
 );
 
 check(
