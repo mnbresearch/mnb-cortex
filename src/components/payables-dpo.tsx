@@ -23,7 +23,32 @@ const SEED: Bill[] = [
 export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesHint?: number } = {}) {
   const isReal = Boolean(seed && seed.length);
   const [bills, setBills] = useState<Bill[]>(isReal ? seed! : SEED);
-  const [purchases, setPurchases] = useState(purchasesHint && purchasesHint > 0 ? purchasesHint : 5_000_000);
+
+  /*
+    THE DENOMINATOR WAS INVENTED, AND THE WARNING WAS SUPPRESSED FOR EXACTLY
+    THE PEOPLE WHO NEEDED IT.
+
+    The page hands `purchasesHint` only when there are at least three payables
+    in 90 days. Below that it passes undefined and this component silently fell
+    back to ₹50,00,000 — then divided the customer's REAL bill total by it and
+    rendered "DPO — N days" highlighted, plus "Monthly purchases ₹50.00 L", as
+    fact. And the "these are example bills" banner is gated on `!isReal`, so a
+    workspace WITH real bills and too little history got the fabricated
+    denominator and no caveat at all.
+
+    Concretely: ₹3 L of real bills against ₹5 L of real monthly purchases is a
+    DPO of 18 days. The page said 2. An owner reading "we pay in 2 days"
+    negotiates longer terms he already has.
+
+    DPO is now simply not computed until the denominator is known — either
+    derived from the workspace's own history, or typed in. An unanswerable
+    question gets no answer rather than a confident wrong one.
+  */
+  const derived = Boolean(purchasesHint && purchasesHint > 0);
+  const [purchases, setPurchases] = useState(derived ? purchasesHint! : 0);
+  const [touched, setTouched] = useState(false);
+  const purchasesKnown = (derived || touched) && purchases > 0;
+
   // early payment discount terms
   const [discPct, setDiscPct] = useState(2);
   const [discDays, setDiscDays] = useState(10);
@@ -31,13 +56,19 @@ export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesH
 
   const m = useMemo(() => {
     const total = bills.reduce((s, b) => s + b.amount, 0);
-    const dpo = purchases > 0 ? (total / purchases) * 30 : 0;
-    // Effective annualised cost of NOT taking the discount
+    const dpo = purchasesKnown ? (total / purchases) * 30 : null;
+    /*
+      A 100% discount divides by zero and rendered "an effective Infinity%" in
+      confident green. Anything at or above 100 is not a discount term, so it
+      is refused rather than answered.
+    */
     const held = Math.max(netDays - discDays, 1);
-    const effAnnual = (discPct / (100 - discPct)) * (365 / held) * 100;
-    const worthTaking = effAnnual > 12; // vs ~12% cost of capital
+    const effAnnual = discPct > 0 && discPct < 100
+      ? (discPct / (100 - discPct)) * (365 / held) * 100
+      : null;
+    const worthTaking = effAnnual !== null && effAnnual > 12; // vs ~12% cost of capital
     return { total, dpo, effAnnual, worthTaking };
-  }, [bills, purchases, discPct, discDays, netDays]);
+  }, [bills, purchases, purchasesKnown, discPct, discDays, netDays]);
 
   function upd(id: string, k: keyof Bill, v: string) { setBills((xs) => xs.map((b) => b.id === id ? { ...b, [k]: k === "vendor" ? v : Number(v) } : b)); }
   function add() { setBills((xs) => [...xs, { id: "b" + Date.now(), vendor: "New vendor", amount: 100000, days: 30 }]); }
@@ -51,10 +82,19 @@ export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesH
           These are <b>example bills</b>, not yours — add payable invoices or purchase orders and this page will compute your real DPO.
         </div>
       )}
+      {isReal && !purchasesKnown && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
+          These are <b>your real bills</b>, but there is not enough purchase history yet to work out your monthly purchases —
+          so DPO cannot be calculated. Enter your typical monthly purchases below and it will compute.
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <Stat label="Total payable" value={inr(m.total)} />
-        <Stat label="DPO" value={`${m.dpo.toFixed(0)} days`} highlight />
-        <Stat label="Monthly purchases" value={inr(purchases)} />
+        <Stat label="DPO" value={m.dpo === null ? "—" : `${m.dpo.toFixed(0)} days`} highlight />
+        <Stat
+          label={derived ? "Monthly purchases (from your last 90 days)" : "Monthly purchases"}
+          value={purchasesKnown ? inr(purchases) : "not set"}
+        />
       </div>
 
       <Card className="p-5 space-y-3">
@@ -62,7 +102,8 @@ export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesH
           <div className="font-semibold">Open vendor bills</div>
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground flex items-center gap-1">Monthly purchases ₹
-              <input className={I + " w-28"} type="number" value={purchases} onChange={(e) => setPurchases(Number(e.target.value))} /></label>
+              <input className={I + " w-28"} type="number" value={purchases || ""} placeholder="e.g. 500000"
+                onChange={(e) => { setTouched(true); setPurchases(Number(e.target.value)); }} /></label>
             <Button variant="outline" size="sm" onClick={add}><Plus className="h-4 w-4" /> Add</Button>
           </div>
         </div>
@@ -91,11 +132,13 @@ export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesH
           <input className={I + " w-16"} type="number" value={netDays} onChange={(e) => setNetDays(Number(e.target.value))} /> days
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Stat label="Effective annual return of paying early" value={`${m.effAnnual.toFixed(0)}%`} cls={m.worthTaking ? "text-success" : "text-warning"} highlight />
+          <Stat label="Effective annual return of paying early" value={m.effAnnual === null ? "—" : `${m.effAnnual.toFixed(0)}%`} cls={m.worthTaking ? "text-success" : "text-warning"} highlight />
           <div className="rounded-lg border p-3 flex items-center text-sm">
-            {m.worthTaking
-              ? <span><b className="text-success">Take the discount.</b> It beats your cost of capital — paying early earns an effective {m.effAnnual.toFixed(0)}%.</span>
-              : <span><b className="text-warning">Hold the cash.</b> The discount is worth less than keeping the money working elsewhere.</span>}
+            {m.effAnnual === null
+              ? <span className="text-muted-foreground">Enter a discount between 0 and 100% to compare it against holding the cash.</span>
+              : m.worthTaking
+                ? <span><b className="text-success">Take the discount.</b> It beats your cost of capital — paying early earns an effective {m.effAnnual.toFixed(0)}%.</span>
+                : <span><b className="text-warning">Hold the cash.</b> The discount is worth less than keeping the money working elsewhere.</span>}
           </div>
         </div>
         <p className="text-xs text-muted-foreground">A “2/10 net 30” term is a ~37% annualised return if you pay on day 10 instead of 30 — almost always worth taking when you have the cash.</p>

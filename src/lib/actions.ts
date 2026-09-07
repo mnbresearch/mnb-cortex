@@ -109,7 +109,18 @@ export async function hasDemoData(): Promise<boolean> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return false;
   const sb = createClient();
-  for (const t of ["sales_orders", "finance_ledger", "inventory_items"]) {
+  /*
+    health_metrics was missing from this list, and it is the table whose demo
+    rows are most visible.
+
+    The sample dataset seeds four KPIs that recomputeMetrics never derives —
+    net_profit, gross_margin, csat and Cash Runway. Nothing else writes them, so
+    they persist on the dashboard after a customer has imported real data. With
+    only the three transactional tables probed here, deleting the sample orders
+    and ledger made Settings report "no sample data" while those four cards were
+    still on screen, and the customer had no way left to remove them.
+  */
+  for (const t of ["sales_orders", "finance_ledger", "inventory_items", "health_metrics"]) {
     const { count } = await sb.from(t).select("id", { count: "exact", head: true })
       .eq("org_id", orgId).eq("is_demo", true);
     if ((count || 0) > 0) return true;

@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 export function InventoryTurns() {
   const [cogs, setCogs] = useState(24_000_000);
@@ -24,6 +25,7 @@ export function InventoryTurns() {
 
   return (
     <div className="space-y-4">
+      <ExampleFigures what="stock figures" />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-3 gap-3">
           {F("Annual COGS", cogs, setCogs)}

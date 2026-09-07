@@ -26,7 +26,16 @@ function fmt(m: HealthMetric, value: number = m.value) {
 }
 
 export function KpiCard({ m, i = 0 }: { m: HealthMetric; i?: number }) {
-  const up = m.delta_pct >= 0;
+  /*
+    `m.delta_pct >= 0` was true for null as well as for 0, because JavaScript
+    coerces null to 0 in a relational comparison. So a metric with no prior
+    period rendered a green upward arrow and "+0.0%" — a claim that things are
+    steady or improving, made from the absence of any comparison at all.
+
+    A missing comparison is now shown as a missing comparison.
+  */
+  const known = typeof m.delta_pct === "number" && Number.isFinite(m.delta_pct);
+  const up = known && (m.delta_pct as number) >= 0;
   /*
     A dashboard renders a whole GRID of these, so the staggered entrance is a
     dozen tiles moving at once — the case that actually triggers vestibular
@@ -46,11 +55,26 @@ export function KpiCard({ m, i = 0 }: { m: HealthMetric; i?: number }) {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className={cn("h-2 w-2 rounded-full", dot[m.status])} />
             {m.label}
+            {/* Sample rows are seeded by "Load a sample dataset" and survive
+                until it is removed. They sat on the dashboard styled exactly
+                like derived KPIs, so a workspace that had since imported real
+                data could not tell which was which. */}
+            {m.is_demo && (
+              <span className="rounded-full border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                Sample
+              </span>
+            )}
           </div>
-          <span className={cn("flex items-center text-xs font-medium", up ? "text-success" : "text-danger")}>
-            {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-            {pct(m.delta_pct)}
-          </span>
+          {known ? (
+            <span className={cn("flex items-center text-xs font-medium", up ? "text-success" : "text-danger")}>
+              {up ? <ArrowUpRight aria-hidden="true" className="h-3 w-3" /> : <ArrowDownRight aria-hidden="true" className="h-3 w-3" />}
+              {pct(m.delta_pct as number)}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground" title="Point-in-time figure — there is no previous period to compare it against.">
+              no change data
+            </span>
+          )}
         </div>
         <div className="mt-2 flex items-end justify-between">
           <div className="text-2xl font-semibold tracking-tight tabular">

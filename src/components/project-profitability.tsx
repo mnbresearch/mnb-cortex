@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Plus, Trash2 } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 type Proj = { id: string; client: string; fee: number; hours: number; costRate: number; expenses: number };
 
@@ -55,6 +56,7 @@ export function ProjectProfitability() {
 
   return (
     <Card className="p-5 space-y-4">
+      <ExampleFigures what="projects and fees" />
       <div className="flex items-center justify-between">
         <div>
           <div className="font-semibold">Project & client profitability</div>

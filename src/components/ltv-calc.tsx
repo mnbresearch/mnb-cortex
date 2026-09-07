@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 export function LtvCalc() {
   const [arpu, setArpu] = useState(2500);
@@ -27,6 +28,7 @@ export function LtvCalc() {
 
   return (
     <div className="space-y-4">
+      <ExampleFigures what="customer value figures" />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {F("Avg revenue / customer / mo", arpu, setArpu)}

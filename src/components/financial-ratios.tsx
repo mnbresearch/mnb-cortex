@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { mdToHtml } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 export function FinancialRatios() {
   const [v, setV] = useState({
@@ -58,6 +59,7 @@ export function FinancialRatios() {
 
   return (
     <div className="grid lg:grid-cols-2 gap-4">
+      <ExampleFigures what="balance-sheet figures" />
       <Card className="p-5 space-y-3">
         <div className="font-semibold">Inputs (₹)</div>
         <div className="grid grid-cols-2 gap-2">

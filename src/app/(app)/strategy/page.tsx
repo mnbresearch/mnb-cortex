@@ -25,12 +25,19 @@ export default async function Strategy() {
     <>
       <Topbar title="AI Strategy Consultant" subtitle="Thinks like McKinsey · BCG · Bain" />
       <PageShell>
-        {signedIn && (
+        {/*
+          THE LABEL WAS GATED ON BEING SIGNED IN, WHICH IS BACKWARDS.
+
+          `{signedIn && (...)}` meant a logged-out visitor — the person with the
+          least context about whose data this is — saw the worked example with
+          no disclaimer at all, while the signed-in customer who could at least
+          tell it apart from their own dashboard got the warning. The example is
+          equally not-your-data in both cases, so it is stated in both cases.
+        */}
           <Card className="p-4 text-sm text-muted-foreground">
             The worked example below is illustrative — it is not your data. Use the AI panel on this page to get the
             same analysis built from your own numbers.
           </Card>
-        )}
         <AIPanel mode="strategy" placeholder="Why is revenue flat? Should we change pricing? How do we hit 30% growth?" cta="Build the analysis" saveMode="strategy" />
         <SavedAnalyses rows={rows} live={live} table="strategy_docs" path="/strategy" />
         <Card className="p-4">
@@ -39,7 +46,7 @@ export default async function Strategy() {
           <p className="text-xs text-muted-foreground mt-2">Name one in your question above and the analysis will use it.</p>
         </Card>
 
-        <Section title="Issue tree — “Why is net profit down 7%?”" desc="MECE decomposition">
+        <Section title="Issue tree — “Why is net profit down 7%?”" desc="MECE decomposition — a worked example, not your numbers">
           <div className="text-sm space-y-2">
             <div className="font-medium">Profit ↓ = Revenue effect (+) ⟂ Cost effect (−)</div>
             <div className="pl-4 border-l-2 border-primary/30 space-y-1 text-muted-foreground">
@@ -61,7 +68,7 @@ export default async function Strategy() {
           </div>
         </Section>
 
-        <Section title="Recommended roadmap" desc="Sequenced, with KPIs">
+        <Section title="Recommended roadmap" desc="Part of the same worked example — not a plan for your business">
           <ol className="text-sm space-y-2 list-decimal pl-5">
             <li>Reprice low-elasticity SKUs +4% — KPI: gross margin back to 33% in 60 days.</li>
             <li>Approve RM-204 PO + add backup supplier — KPI: zero Line-B stockouts.</li>

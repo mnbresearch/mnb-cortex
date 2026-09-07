@@ -264,6 +264,32 @@ console.log("\nAlert raising (the bug that shipped silently)");
   check("once resolved, the same rule can raise again", n2, 2);
 }
 
+/* ---------------------------------------------------------------------------
+   The overdue cutoff must be IST in the database, as it is in the TypeScript.
+
+   WHY THIS IS ASSERTED ON THE SOURCE RATHER THAN ON A RESULT
+
+   The divergence only shows between 18:30 and 24:00 UTC, so a value-based test
+   would pass for eighteen hours a day and fail for six — the worst possible
+   test. What matters is which definition survived, and pg_proc can be asked
+   that directly at any hour.
+
+   AND WHY IT MATTERS THAT IT SURVIVED. Migrations here are applied in sorted
+   filename order and have no sequence numbers. The fix was first written as
+   2026_aggregate_ist_overdue.sql, which sorts at position 3 — BEFORE
+   2026_tenancy_aggregate.sql at position 44 — so the old UTC definition simply
+   overwrote it and every test still passed. Renaming it to sort last is the
+   whole fix, and this check is what would have caught the mistake.
+--------------------------------------------------------------------------- */
+{
+  const r = await db.query(`select prosrc from pg_proc where proname = 'cortex_aggregate'`);
+  const src = r.rows.map((x) => x.prosrc || "").join("\n");
+  const overdue = src.split("\n").filter((l) => l.includes("due_date <")).join(" | ");
+  check("cortex_aggregate exists after every migration has been applied", r.rows.length >= 1 ? 1 : 0, 1);
+  check("its overdue cutoff is IST, matching lib/metrics.ts", /Asia\/Kolkata/.test(overdue) ? 1 : 0, 1);
+  check("no UTC overdue cutoff survives a later migration", /time zone 'utc'\)::date/.test(overdue) ? 1 : 0, 0);
+}
+
 console.log("");
 if (fail) { console.log(`${fail} FAILED, ${pass} passed — the database and the app DISAGREE.`); process.exit(1); }
 console.log(`all ${pass} passed — the in-database aggregate matches the TypeScript exactly.`);

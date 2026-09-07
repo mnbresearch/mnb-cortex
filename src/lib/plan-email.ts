@@ -21,7 +21,11 @@ function firstNameOf(email: string, meta?: any): string {
   return w ? w.charAt(0).toUpperCase() + w.slice(1) : "there";
 }
 function ctxFromMetrics(m: any[]): string {
-  return "KEY METRICS:\n" + m.map((x) => `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + (x.unit || "")} (${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, ${x.status})`).join("\n");
+  return "KEY METRICS:\n" + m.map((x) => {
+    const d = typeof x.delta_pct === "number" && Number.isFinite(x.delta_pct)
+      ? `${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, ` : "";
+    return `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + (x.unit || "")} (${d}${x.status})`;
+  }).join("\n");
 }
 
 function renderHtml(firstName: string, plan: Priority[], unsub: string): string {

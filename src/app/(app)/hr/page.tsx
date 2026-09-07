@@ -64,7 +64,7 @@ export default async function HR() {
           <Field name="performance" label="Performance (1-5)" type="number" />
         </CollapsibleForm>
         <DataTable title="Employees" rows={rows} live={live} table="employees" path="/hr"
-          cols={[{key:"name",label:"Name"},{key:"department",label:"Dept"},{key:"role",label:"Role"},{key:"performance",label:"Perf"},{key:"attrition_risk",label:"Attrition risk"},{key:"monthly_ctc",label:"CTC",kind:"inr"}]} />
+          cols={[{key:"name",label:"Name"},{key:"department",label:"Dept"},{key:"role",label:"Role"},{key:"performance",label:"Perf"},{key:"attrition_risk",label:"Attrition risk",kind:"ratio"},{key:"monthly_ctc",label:"CTC",kind:"inr"}]} />
 
         <div className="grid md:grid-cols-2 gap-3">{insights.map((i) => <InsightCard key={i.id} ins={i} />)}</div>
       </PageShell>

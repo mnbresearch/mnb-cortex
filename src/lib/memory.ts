@@ -124,8 +124,20 @@ export async function recallContext(orgId: string | null, query: string, limit =
   if (!mems.length) return "";
   const svc = serviceClient();
   if (svc) { try { await svc.rpc("bump_memory_refs", { p_ids: mems.map((m) => m.id) }); } catch {} }
-  const lines = mems.map((m) => `- [${m.kind}${m.pinned ? "★" : ""}] ${m.title ? m.title + ": " : ""}${m.content}`);
-  return `WHAT CORTEX REMEMBERS (long-term memory — treat as trusted context):\n${lines.join("\n")}`;
+  /*
+    DATE EVERY REMEMBERED LINE.
+
+    "treat as trusted context" with no timestamp invites the model to state a
+    remembered fact as a present one. Most memories are durable — who a
+    customer is, how this business prices — but some age, and the model cannot
+    tell which is which without knowing when it was learned. The date is the
+    cheapest possible way to let it hedge correctly.
+  */
+  const lines = mems.map((m) => {
+    const when = (m as any).created_at ? ` (noted ${String((m as any).created_at).slice(0, 10)})` : "";
+    return `- [${m.kind}${m.pinned ? "★" : ""}] ${m.title ? m.title + ": " : ""}${m.content}${when}`;
+  });
+  return `WHAT CORTEX REMEMBERS (long-term memory — these are things learned on the dates shown, not live figures; the KEY METRICS section above is the current position):\n${lines.join("\n")}`;
 }
 
 export async function listMemories(orgId: string, filters: { kind?: string; entity?: string; status?: string; q?: string; limit?: number } = {}) {
@@ -287,14 +299,31 @@ export async function ingestBusinessData(orgId: string, author?: string | null) 
       lines.push(`Team member ${name}${bits.length ? " — " + bits.join(", ") : ""}`);
     }
   } catch {}
-  try {
-    const { data } = await svc.from("health_metrics").select("label,value,unit,status").eq("org_id", orgId).limit(40);
-    for (const m of ((data as any[]) || [])) lines.push(`KPI ${m.label}: ${m.value}${m.unit ? " " + m.unit : ""}${m.status ? ` (${m.status})` : ""}`);
-  } catch {}
-  try {
-    const { data } = await svc.from("ai_insights").select("title,detail").eq("org_id", orgId).limit(20);
-    for (const i of ((data as any[]) || [])) lines.push(`Insight — ${i.title}: ${i.detail}`);
-  } catch {}
+  /*
+    KPI VALUES AND INSIGHTS ARE DELIBERATELY NOT INGESTED ANY MORE.
+
+    "Teach Cortex from my data" used to write lines like
+    `KPI Receivables past due: 7200000 INR` into the `memories` table. Memories
+    are durable by design — recallContext() prefixes them "long-term memory —
+    treat as trusted context" with no date — and they are injected into chat,
+    Deep Dive, every agent run and the GBP writer. So a receivables figure from
+    the day the customer clicked that button was still being asserted to the
+    model as current months later, long after the invoices had been paid.
+
+    Worse, `memories` is not in DEMO_TABLES and is not touched by the metrics
+    cleanup, so this reproduced the exact production failure those two
+    mechanisms were built to stop, through a door neither of them covers.
+
+    Nothing is lost by removing it. Live KPIs already reach every AI surface
+    through getBusinessContext(), freshly read on each request — which is both
+    current and, unlike a memory, able to disappear when the underlying rows
+    do. Memory's job is durable facts: who the customers are, which vendors
+    supply what, how this business likes to work. A number that changes every
+    week is the one thing it should never hold.
+
+    Entities, customers, vendors and team members above are still ingested,
+    because those genuinely are durable.
+  */
 
   let memories = 0;
   if (lines.length) {

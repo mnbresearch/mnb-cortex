@@ -2,12 +2,23 @@ import { Card } from "@/components/ui/card";
 import { DeleteButton } from "@/components/forms";
 import { ExportButton, ExcelButton } from "@/components/export-button";
 
-export type Col = { key: string; label: string; kind?: "inr" | "pct" | "text" | "date" | "score" };
+/*
+  "ratio" renders a 0..1 column as a percentage.
+
+  attrition_risk is stored 0..1 (schema.sql, the seed and the CSV importer all
+  agree). The HR page's Stat card multiplies by 100 and shows "62%", and the
+  insight text says "Average attrition risk is 62%" — but the table on the same
+  screen printed the raw "0.62". Two scales for one quantity, a few hundred
+  pixels apart, is the kind of inconsistency that makes a customer distrust
+  both numbers rather than pick one.
+*/
+export type Col = { key: string; label: string; kind?: "inr" | "pct" | "text" | "date" | "score" | "ratio" };
 
 function fmt(v: any, kind?: string) {
   if (v == null) return "—";
   if (kind === "inr") { const n = Number(v); if (n >= 1e7) return `₹${(n/1e7).toFixed(2)} Cr`; if (n >= 1e5) return `₹${(n/1e5).toFixed(2)} L`; return `₹${n.toLocaleString("en-IN")}`; }
   if (kind === "pct") return `${v}%`;
+  if (kind === "ratio") { const n = Number(v); return Number.isFinite(n) ? `${Math.round(n * 100)}%` : "—"; }
   if (kind === "date") return String(v).slice(0, 10);
   return String(v);
 }

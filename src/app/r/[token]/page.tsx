@@ -23,13 +23,38 @@ export default async function PublicReport({ params }: { params: { token: string
         ) : (
           <>
             <h1 className="text-3xl font-semibold tracking-tight">{data.company} — Business Snapshot</h1>
-            <p className="text-muted-foreground mt-1">Powered by MNB Cortex — the early-warning system for Indian businesses.</p>
+            {/*
+              DATE THE SNAPSHOT.
+
+              This page is sent to bankers, investors and buyers, and it carried
+              no date at all — so figures from an import three months ago read
+              as today's position. The database has stamped every metric with
+              `as_of` since the metrics layer was built; the reader was simply
+              never shown it.
+            */}
+            <p className="text-muted-foreground mt-1">
+              {data.as_of
+                ? <>Figures as at <b className="text-foreground">{String(data.as_of).slice(0, 10)}</b>. </>
+                : null}
+              Powered by MNB Cortex — the early-warning system for Indian businesses.
+            </p>
+            {(data.metrics || []).length === 0 && (
+              <p className="mt-6 rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+                This workspace has no live figures to share yet.
+              </p>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-8">
               {(data.metrics || []).map((m: any, i: number) => (
                 <div key={i} className="rounded-xl border p-4 bg-card">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground"><span className={`h-2 w-2 rounded-full ${dot[m.status] || "bg-muted"}`} />{m.label}</div>
                   <div className="text-2xl font-semibold mt-1">{fmt(m.value, m.unit)}</div>
-                  <div className={`text-xs ${m.delta_pct >= 0 ? "text-success" : "text-danger"}`}>{m.delta_pct > 0 ? "+" : ""}{m.delta_pct}%</div>
+                  {/* null (no prior period) used to render "null%" in green,
+                      because `null >= 0` is true in JavaScript. */}
+                  {typeof m.delta_pct === "number" && Number.isFinite(m.delta_pct) ? (
+                    <div className={`text-xs ${m.delta_pct >= 0 ? "text-success" : "text-danger"}`}>{m.delta_pct > 0 ? "+" : ""}{m.delta_pct}%</div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">no change data</div>
+                  )}
                 </div>
               ))}
             </div>

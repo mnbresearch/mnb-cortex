@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 export function RateCard() {
   const [targetIncome, setTargetIncome] = useState(1_800_000); // desired annual take-home
@@ -28,6 +29,7 @@ export function RateCard() {
 
   return (
     <div className="space-y-4">
+      <ExampleFigures what="hours and rates" />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {F("Target take-home / year", targetIncome, setTargetIncome)}

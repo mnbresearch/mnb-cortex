@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, RotateCcw } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 const ANNUAL_REVENUE = 510_000_000; // ~₹51 Cr annualised
 const COGS = ANNUAL_REVENUE * 0.69;
@@ -49,6 +50,7 @@ export function CashflowSimulator() {
 
   return (
     <Card className="p-5 space-y-5">
+      <ExampleFigures what="revenue and cycle figures" />
       <div className="flex items-center justify-between">
         <div>
           <div className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Working-capital simulator</div>

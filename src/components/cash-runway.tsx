@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 export function CashRunway() {
   const [cash, setCash] = useState(8_000_000);
@@ -40,6 +41,7 @@ export function CashRunway() {
 
   return (
     <div className="space-y-4">
+      <ExampleFigures what="cash and burn figures" />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {F("Cash in bank", cash, setCash)}

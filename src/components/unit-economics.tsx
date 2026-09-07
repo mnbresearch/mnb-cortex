@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 function Field({ label, value, onChange, prefix = "₹" }: { label: string; value: number; onChange: (n: number) => void; prefix?: string }) {
   return (
@@ -33,6 +34,7 @@ export function UnitEconomics() {
 
   return (
     <Card className="p-5 space-y-5">
+      <ExampleFigures what="price and cost figures" />
       <div>
         <div className="font-semibold">Unit economics & break-even</div>
         <div className="text-sm text-muted-foreground">Enter your numbers per unit and per month.</div>

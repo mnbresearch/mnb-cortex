@@ -23,12 +23,19 @@ export default async function Vendors() {
     <>
       <Topbar title="Vendor Scorecard" subtitle="Grade your suppliers — de-risk your supply chain" />
       <PageShell>
-        {signedIn && (
+        {/*
+          THE LABEL WAS GATED ON BEING SIGNED IN, WHICH IS BACKWARDS.
+
+          `{signedIn && (...)}` meant a logged-out visitor — the person with the
+          least context about whose data this is — saw the worked example with
+          no disclaimer at all, while the signed-in customer who could at least
+          tell it apart from their own dashboard got the warning. The example is
+          equally not-your-data in both cases, so it is stated in both cases.
+        */}
           <Card className="p-4 text-sm text-muted-foreground">
             The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
             built from your own numbers.
           </Card>
-        )}
         <Section title="Current suppliers" desc="Weighted on price, quality, reliability, lead time, terms and risk">
           <div className="space-y-2">
             {vendors.map((v) => (

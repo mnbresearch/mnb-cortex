@@ -235,7 +235,17 @@ export async function getBusinessContext(): Promise<string> {
 Do NOT invent, assume, or state any figures. You have no revenue, cash, inventory or customer numbers for this business.
 When answering: say plainly that you don't have their numbers yet, then tell them the fastest ways to give you real data — upload a bank statement (Bank Statement Intelligence), a GST return (GST Return Reader), or import a CSV/Excel. Keep it to 2–3 helpful sentences.`;
   }
-  const lines = m.map((x) => `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + x.unit} (${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, status ${x.status})`);
+  /*
+    A null delta_pct means there is no prior period. Interpolated directly it
+    produced "(null%, status green)" — and the model, reasonably, treats that
+    as a figure. Point-in-time metrics now say nothing about change rather than
+    saying something false about it.
+  */
+  const lines = m.map((x) => {
+    const d = typeof x.delta_pct === "number" && Number.isFinite(x.delta_pct)
+      ? `${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, ` : "";
+    return `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + x.unit} (${d}status ${x.status})`;
+  });
   const ins = await getInsights();
   const insLines = ins.map((i) => `- [${i.severity}] ${i.title}: ${i.detail}`);
 

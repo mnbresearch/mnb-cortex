@@ -41,7 +41,22 @@ function monthKey(dateish: any): string {
 
 type Metric = {
   metric_key: string; label: string; value: number; unit: string;
-  delta_pct: number; status: "green" | "yellow" | "red"; trend: number[];
+  /*
+    NULL MEANS "NO PRIOR PERIOD", AND IT HAD TO STOP BEING 0.
+
+    Seven metrics — receivables past due, working capital, inventory cover,
+    productivity, attendance, cash runway and risk score — are point-in-time
+    figures with nothing to compare against. They all wrote `delta_pct: 0`, and
+    KpiCard renders `delta_pct >= 0` as a green upward arrow reading "+0.0%".
+
+    So seven of the eleven cards on the dashboard made a confident claim that
+    nothing had worsened, from data that said nothing at all. On an
+    early-warning product that is the exact failure mode that matters: a
+    reassurance nobody computed. movement.ts already models this correctly and
+    its own comment says a 0% change "reads as 'nothing is wrong' and is
+    exactly the false reassurance an early-warning product must never give".
+  */
+  delta_pct: number | null; status: "green" | "yellow" | "red"; trend: number[];
 };
 
 /** Percentage change, guarding divide-by-zero. */
@@ -352,7 +367,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
         to tell which to believe.
       */
       metric_key: "receivables", label: "Receivables past due", value: +overdueRecv.toFixed(0), unit: "INR",
-      delta_pct: 0,
+      delta_pct: null,
       status: openRecv > 0 ? band((overdueRecv / openRecv) * 100, 10, 30, false) : "green",
       trend: [],
     });
@@ -362,14 +377,14 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     const wc = openRecv + stockValue - openPay;
     metrics.push({
       metric_key: "working_capital", label: "Working Capital", value: +wc.toFixed(0), unit: "INR",
-      delta_pct: 0, status: wc >= 0 ? "green" : "red", trend: [],
+      delta_pct: null, status: wc >= 0 ? "green" : "red", trend: [],
     });
   }
 
   if (coverDays !== null) {
     metrics.push({
       metric_key: "inventory", label: "Inventory Cover", value: coverDays, unit: "days",
-      delta_pct: 0, status: band(coverDays, 15, 7), trend: [],
+      delta_pct: null, status: band(coverDays, 15, 7), trend: [],
     });
   }
 
@@ -378,13 +393,13 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
       const idx = +((avgPerf / 5) * 100).toFixed(0);
       metrics.push({
         metric_key: "productivity", label: "Employee Productivity", value: idx, unit: "index",
-        delta_pct: 0, status: band(idx, 75, 55), trend: [],
+        delta_pct: null, status: band(idx, 75, 55), trend: [],
       });
     }
     if (avgAttend > 0) {
       metrics.push({
         metric_key: "attendance", label: "Average Attendance", value: +avgAttend.toFixed(1), unit: "%",
-        delta_pct: 0, status: band(avgAttend, 92, 85), trend: [],
+        delta_pct: null, status: band(avgAttend, 92, 85), trend: [],
       });
     }
   }
@@ -394,10 +409,41 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     const latest = cashRows[cashRows.length - 1];
     const closing = num(latest.cash_balance);
     const prev = cashRows.length > 1 ? num(cashRows[cashRows.length - 2].cash_balance) : 0;
+
+    /*
+      SAY WHICH MONTH THIS CASH IS FROM.
+
+      `hasBank` is "one of the last 24 ledger rows carries a cash_balance" —
+      there is no recency test anywhere. Upload a March statement and in
+      September the dashboard still printed "Cash Balance ₹22,00,000" with a
+      status dot and a sparkline, /cash13 used it as the opening balance of a
+      13-week FORWARD cash model, and Cortex stated a runway in months from
+      today. All from a number six months old, presented as the position now.
+
+      gst_turnover already does this correctly — its label reads "Turnover
+      (last GST return)". Cash, the figure a business owner acts on fastest,
+      had no such marker. The period is right there on the ledger row.
+    */
+    const period = String(latest.period || "").slice(0, 7);          // YYYY-MM
+    const asAt = period
+      ? new Date(period + "-01T00:00:00Z").toLocaleDateString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" })
+      : "";
+    const ageMonths = period
+      ? Math.max(0, Math.round((Date.now() - new Date(period + "-01T00:00:00Z").getTime()) / (30 * 86_400_000)))
+      : 0;
+    const stale = ageMonths >= 2;
+
     metrics.push({
-      metric_key: "cash_balance", label: "Cash Balance", value: +closing.toFixed(0), unit: "INR",
+      metric_key: "cash_balance",
+      label: asAt ? `Cash Balance (as at ${asAt})` : "Cash Balance",
+      value: +closing.toFixed(0), unit: "INR",
       delta_pct: delta(closing, prev),
-      status: closing > 0 ? (closing >= prev ? "green" : "yellow") : "red",
+      /*
+        A cash figure two months old cannot be green whatever its value — the
+        traffic light is a claim about the business right now, and this is a
+        claim about the business in a month that has ended.
+      */
+      status: stale ? "yellow" : (closing > 0 ? (closing >= prev ? "green" : "yellow") : "red"),
       trend: cashRows.slice(-7).map((r) => +num(r.cash_balance).toFixed(0)),
     });
 
@@ -408,8 +454,13 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     if (avgNet < 0 && closing > 0) {
       const months = +(closing / Math.abs(avgNet)).toFixed(1);
       metrics.push({
-        metric_key: "cash", label: "Cash Runway", value: months, unit: "months",
-        delta_pct: 0, status: band(months, 6, 3), trend: [],
+        metric_key: "cash",
+        // Runway counts forward from the balance it was computed on, not from
+        // today. Stating which month that was is the difference between a
+        // projection and a guess presented as a projection.
+        label: asAt ? `Cash Runway (from ${asAt})` : "Cash Runway",
+        value: months, unit: "months",
+        delta_pct: null, status: stale ? "yellow" : band(months, 6, 3), trend: [],
       });
     }
   }
@@ -437,7 +488,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     const risk = +(riskParts.reduce((a, b) => a + b, 0) / riskParts.length).toFixed(0);
     metrics.push({
       metric_key: "risk", label: "Risk Score", value: risk, unit: "score",
-      delta_pct: 0, status: band(risk, 25, 50, false), trend: [],
+      delta_pct: null, status: band(risk, 25, 50, false), trend: [],
     });
   }
 
@@ -454,8 +505,27 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
       // cards. A plain insert would now fail on every recompute after the
       // first. created_at is refreshed to `stamp`, so the stale-delete below
       // still removes only metrics this run did not produce.
+      /*
+        `is_demo: false` IS LOAD-BEARING, and its absence was a real corruption.
+
+        The unique index is on (org_id, metric_key), so a recompute that
+        produces a key the sample dataset also seeded UPDATES the seeded row.
+        Without is_demo in the payload that row keeps `is_demo = true` — and
+        the value in it is now the customer's real figure wearing a demo flag.
+        Two consequences, both bad and both silent:
+
+          - The stale sweep below only deletes `is_demo = false`, so that KPI
+            can never be removed again. Delete every sales order and "Revenue
+            (MTD)" keeps showing its last real value forever.
+          - "Remove sample data" deletes `is_demo = true` rows, so it would
+            delete the customer's real, recomputed metric.
+
+        A value this function derived from the workspace's own rows is real by
+        definition. Saying so on every write is what keeps the two populations
+        apart.
+      */
       const { error } = await svc.from("health_metrics")
-        .upsert(metrics.map((m) => ({ ...m, org_id: orgId, as_of: today, created_at: stamp })),
+        .upsert(metrics.map((m) => ({ ...m, org_id: orgId, as_of: today, created_at: stamp, is_demo: false })),
                 { onConflict: "org_id,metric_key" });
       if (error) return { ok: false, metrics: 0, months: 0, reason: error.message };
     }

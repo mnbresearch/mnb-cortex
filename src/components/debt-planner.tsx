@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 type Debt = { id: string; name: string; balance: number; rate: number; minPay: number };
 
@@ -55,6 +56,7 @@ export function DebtPlanner() {
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
     <div className="space-y-4">
+      <ExampleFigures what="loans" />
       <Card className="p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="font-semibold">Your loans · total {inr(totalBalance)}</div>

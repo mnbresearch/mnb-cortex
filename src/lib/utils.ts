@@ -6,7 +6,13 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function inr(n: number, compact = true): string {
-  if (n == null || isNaN(n)) return "—";
+  /*
+    Infinity has to be caught alongside NaN. `isNaN(Infinity)` is false, so a
+    divide-by-zero anywhere upstream produced "₹Infinity Cr" — which reads as a
+    rendering bug rather than a calculation that could not be performed, and on
+    a money figure that is the worst way to be wrong.
+  */
+  if (n == null || !Number.isFinite(Number(n))) return "—";
   if (compact) {
     if (Math.abs(n) >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`;
     if (Math.abs(n) >= 1e5) return `₹${(n / 1e5).toFixed(2)} L`;
@@ -16,7 +22,9 @@ export function inr(n: number, compact = true): string {
 }
 
 export function pct(n: number): string {
-  if (n == null) return "—";
+  // Same reasoning as inr(): null was guarded, NaN and Infinity were not, so
+  // "NaN%" and "+Infinity%" could reach the screen as if they were readings.
+  if (n == null || !Number.isFinite(Number(n))) return "—";
   return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
 }
 

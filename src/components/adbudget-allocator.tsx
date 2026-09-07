@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 type Ch = { id: string; name: string; spend: number; revenue: number; conversions: number };
 
@@ -36,6 +37,7 @@ export function AdBudgetAllocator() {
 
   return (
     <div className="space-y-4">
+      <ExampleFigures what="channels and spend" />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Total spend" value={inr(m.spend)} />
         <Stat label="Attributed revenue" value={inr(m.revenue)} />

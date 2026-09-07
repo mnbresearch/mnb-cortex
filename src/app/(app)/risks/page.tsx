@@ -31,12 +31,19 @@ export default async function Risks() {
     <>
       <Topbar title="Risk Radar" subtitle="What could go wrong — and the early warning signs" />
       <PageShell>
-        {signedIn && (
+        {/*
+          THE LABEL WAS GATED ON BEING SIGNED IN, WHICH IS BACKWARDS.
+
+          `{signedIn && (...)}` meant a logged-out visitor — the person with the
+          least context about whose data this is — saw the worked example with
+          no disclaimer at all, while the signed-in customer who could at least
+          tell it apart from their own dashboard got the warning. The example is
+          equally not-your-data in both cases, so it is stated in both cases.
+        */}
           <Card className="p-4 text-sm text-muted-foreground">
             The worked example below is illustrative — it is not your data. Use the AI panel on this page to get the
             same analysis built from your own numbers.
           </Card>
-        )}
         <Card className="p-4 border-danger/30 bg-danger/5">
           <div className="text-sm"><b className="text-danger">Example — how Risk Radar reads a situation:</b> &ldquo;Line B stockout on RM-204 within ~9 days: high likelihood, high impact, and a replenishment PO should be raised now.&rdquo; Run the AI panel below to get this for your own operation.</div>
         </Card>

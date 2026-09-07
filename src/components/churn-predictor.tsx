@@ -34,8 +34,16 @@ export function ChurnPredictor({ seed }: { seed?: Cust[] } = {}) {
   const [out, setOut] = useState("");
   const [loading, setLoading] = useState(false);
 
+  /*
+    `churnRisk()` returns PERCENTAGE POINTS (2..99) — it is rendered as
+    `{c.risk}%` in the table below. Multiplying it by a rupee value gave a
+    figure 100x too large. Nothing renders `atRisk` today, which is the only
+    reason this has not been seen; it sits on the page whose whole purpose is
+    "revenue at risk", so it would have been read as rupees the first time
+    anyone used it.
+  */
   const scored = useMemo(() =>
-    rows.map((c) => ({ ...c, risk: churnRisk(c), atRisk: churnRisk(c) * c.value }))
+    rows.map((c) => { const risk = churnRisk(c); return { ...c, risk, atRisk: (risk / 100) * c.value }; })
       .sort((a, b) => b.risk - a.risk), [rows]);
 
   const revenueAtRisk = useMemo(() => scored.filter((c) => c.risk >= 65).reduce((s, c) => s + c.value, 0), [scored]);

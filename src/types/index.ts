@@ -2,7 +2,10 @@ export type Status = "green" | "yellow" | "red";
 
 export interface HealthMetric {
   id: string; metric_key: string; label: string; value: number;
-  unit: string; delta_pct: number; status: Status; trend: number[];
+  // null = no prior period to compare against. Renderers must show that as
+  // "no comparison", never as a 0% change — see the note in lib/metrics.ts.
+  unit: string; delta_pct: number | null; status: Status; trend: number[];
+  is_demo?: boolean;
 }
 export interface AIInsight {
   id: string; module: string; severity: Status; title: string;

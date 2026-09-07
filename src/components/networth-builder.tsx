@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 type Row = { id: string; label: string; amount: number };
 const seed = (label: string, amount: number): Row => ({ id: Math.random().toString(36).slice(2), label, amount });
@@ -49,6 +50,7 @@ export function NetWorthBuilder() {
 
   return (
     <div className="space-y-4">
+      <ExampleFigures what="assets and liabilities" />
       <div className="grid lg:grid-cols-2 gap-4">
         <Ledger title="Assets" rows={assets} setRows={setAssets} tone="text-success" />
         <Ledger title="Liabilities" rows={liabs} setRows={setLiabs} tone="text-danger" />

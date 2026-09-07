@@ -23,12 +23,19 @@ export default async function Hiring() {
     <>
       <Topbar title="Hiring & Org Advisor" subtitle="Hire only where it creates the most value — tied to your cash" />
       <PageShell>
-        {signedIn && (
+        {/*
+          THE LABEL WAS GATED ON BEING SIGNED IN, WHICH IS BACKWARDS.
+
+          `{signedIn && (...)}` meant a logged-out visitor — the person with the
+          least context about whose data this is — saw the worked example with
+          no disclaimer at all, while the signed-in customer who could at least
+          tell it apart from their own dashboard got the warning. The example is
+          equally not-your-data in both cases, so it is stated in both cases.
+        */}
           <Card className="p-4 text-sm text-muted-foreground">
             The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
             built from your own numbers.
           </Card>
-        )}
         <Card className="p-4 border-warning/30 bg-warning/5">
           <div className="text-sm"><b className="text-warning">Example — the cash-aware view:</b> where runway is around five months, fund roles that return cash fast (collections, sales) before overhead hires, and use contractors for spiky work. The AI panel below applies this to your actual runway.</div>
         </Card>

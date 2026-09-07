@@ -51,8 +51,20 @@ async function buildSeed(): Promise<Cash13Seed> {
     /* Nothing to go on at all — say so, rather than open on a made-up number. */
     if (opening === null && recv === 0 && pay === 0) return empty;
 
+    /*
+      DATE THE OPENING BALANCE.
+
+      This is a 13-week FORWARD cash projection, and it opens on the closing
+      balance of the last bank statement the owner uploaded — which may be
+      months old. The basis line said "your last bank statement" with no date,
+      so a March balance silently became the starting point of a forecast read
+      in September. The metric label now carries the period; using it here is
+      what turns a misleading projection into a dated one.
+    */
+    const asAt = (cash?.label.match(/\(as at ([^)]+)\)/) || [])[1] || "";
+
     const parts: string[] = [];
-    if (opening !== null) parts.push("your last bank statement");
+    if (opening !== null) parts.push(asAt ? `your bank statement for ${asAt}` : "your last bank statement");
     if (recv > 0 || pay > 0) parts.push("your unpaid invoices spread over 13 weeks");
 
     return {

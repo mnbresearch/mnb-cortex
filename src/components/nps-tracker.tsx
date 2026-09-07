@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { mdToHtml } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 export function NpsTracker() {
   const [promoters, setPromoters] = useState(120);
@@ -41,6 +42,7 @@ export function NpsTracker() {
 
   return (
     <Card className="p-5 space-y-5">
+      <ExampleFigures what="survey responses" />
       <div>
         <div className="font-semibold">Net Promoter Score</div>
         <div className="text-sm text-muted-foreground">"How likely are you to recommend us?" — 9–10 promoters, 7–8 passives, 0–6 detractors.</div>

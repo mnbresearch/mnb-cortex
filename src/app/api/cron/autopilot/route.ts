@@ -285,7 +285,12 @@ export async function GET(req: Request) {
     if (ran >= ANALYSIS_CAP || Date.now() > deadline) break;
     const { data: m } = await sb.from("health_metrics").select("label,value,unit,delta_pct,status").eq("org_id", o.id);
     if (!m?.length) continue;
-    const ctx = "KEY METRICS:\n" + m.map((x: any) => `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + x.unit} (${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, ${x.status})`).join("\n");
+    // Same null-delta guard as getBusinessContext(): "null%" is not a change.
+    const ctx = "KEY METRICS:\n" + m.map((x: any) => {
+      const d = typeof x.delta_pct === "number" && Number.isFinite(x.delta_pct)
+        ? `${x.delta_pct > 0 ? "+" : ""}${x.delta_pct}%, ` : "";
+      return `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : " " + x.unit} (${d}${x.status})`;
+    }).join("\n");
     /*
       Each org's analysis must run on THAT org's AI key. Without this the
       nightly loop sent every customer's business context to our own Gemini

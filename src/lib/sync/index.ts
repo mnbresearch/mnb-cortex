@@ -26,14 +26,25 @@ export type SyncResult = {
   invoices: number;
   customers: number;
   error?: string;
+  /* What was deliberately NOT imported, and why — e.g. foreign-currency
+     charges skipped rather than booked at a guessed exchange rate. Surfaced
+     on the integrations page and stored on the row so it survives the sync. */
+  note?: string;
 };
 
 type Creds = Record<string, string>;
 type Connector = {
   id: string;
   label: string;
-  /** Pull recent records. `since` is an ISO timestamp bounding the window. */
-  pull: (c: Creds, since: string) => Promise<{ sales?: any[]; invoices?: any[]; customers?: any[] }>;
+  /**
+   * Pull recent records. `since` is an ISO timestamp bounding the window.
+   *
+   * `note` carries anything the customer needs to know about what was NOT
+   * imported — currently foreign-currency charges, which are skipped rather
+   * than booked at an invented exchange rate. A connector that silently drops
+   * rows is worse than one that says which rows it dropped and why.
+   */
+  pull: (c: Creds, since: string) => Promise<{ sales?: any[]; invoices?: any[]; customers?: any[]; note?: string }>;
 };
 
 const money = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -91,18 +102,36 @@ const razorpay: Connector = {
     const j = await r.json();
     const items: any[] = Array.isArray(j?.items) ? j.items : [];
 
-    // Razorpay reports amounts in paise.
+    /*
+      Razorpay reports amounts in paise — in the payment's own currency. It is
+      INR for the overwhelming majority of accounts, which is exactly why the
+      currency field is easy to forget; an account that has enabled
+      international payments would otherwise book a $1,000 charge as ₹1,000.
+      Same rule as Stripe: import INR, skip the rest, and say so.
+    */
+    const foreign = new Set<string>();
+    const invoices = items
+      .filter((p: any) => p.status === "captured")
+      .filter((p: any) => {
+        const cur = String(p.currency || "INR").toUpperCase();
+        if (cur === "INR") return true;
+        foreign.add(cur);
+        return false;
+      })
+      .map((p: any) => ({
+        invoice_no: `RZP-${p.id}`,
+        party: p.email || p.contact || "Razorpay payment",
+        amount: money(p.amount) / 100,
+        type: "receivable",
+        status: "paid",
+        due_date: day(new Date((p.created_at || 0) * 1000).toISOString()),
+      }));
+
     return {
-      invoices: items
-        .filter((p: any) => p.status === "captured")
-        .map((p: any) => ({
-          invoice_no: `RZP-${p.id}`,
-          party: p.email || p.contact || "Razorpay payment",
-          amount: money(p.amount) / 100,
-          type: "receivable",
-          status: "paid",
-          due_date: day(new Date((p.created_at || 0) * 1000).toISOString()),
-        })),
+      invoices,
+      note: foreign.size
+        ? `Skipped payments in ${[...foreign].join(", ")} — Cortex books in INR only, and converting at a guessed rate would put a wrong number in your ledger.`
+        : undefined,
     };
   },
 };
@@ -121,17 +150,41 @@ const stripe: Connector = {
     const j = await r.json();
     const items: any[] = Array.isArray(j?.data) ? j.data : [];
 
+    /*
+      CURRENCY. Stripe reports minor units in the charge's OWN currency, and
+      this ignored `p.currency` entirely — so a $1,000 charge was divided by 100
+      and written into invoices.amount as 1000, which every downstream surface
+      renders as ₹1,000. Roughly 90x understated, and it flows straight into
+      open receivables, overdue receivables and working capital.
+
+      There is no FX feed here, and inventing a rate would be a different kind
+      of wrong number. So: INR charges are imported, and anything else is
+      skipped and reported rather than silently mis-booked. A missing row a
+      customer can see explained is better than a wrong row they cannot.
+    */
+    const foreign = new Set<string>();
+    const invoices = items
+      .filter((p: any) => p.paid && !p.refunded)
+      .filter((p: any) => {
+        const cur = String(p.currency || "inr").toLowerCase();
+        if (cur === "inr") return true;
+        foreign.add(cur.toUpperCase());
+        return false;
+      })
+      .map((p: any) => ({
+        invoice_no: `STR-${p.id}`,
+        party: p.billing_details?.name || p.receipt_email || "Stripe payment",
+        amount: money(p.amount) / 100,
+        type: "receivable",
+        status: "paid",
+        due_date: day(new Date((p.created || 0) * 1000).toISOString()),
+      }));
+
     return {
-      invoices: items
-        .filter((p: any) => p.paid && !p.refunded)
-        .map((p: any) => ({
-          invoice_no: `STR-${p.id}`,
-          party: p.billing_details?.name || p.receipt_email || "Stripe payment",
-          amount: money(p.amount) / 100,
-          type: "receivable",
-          status: "paid",
-          due_date: day(new Date((p.created || 0) * 1000).toISOString()),
-        })),
+      invoices,
+      note: foreign.size
+        ? `Skipped charges in ${[...foreign].join(", ")} — Cortex books in INR only, and converting at a guessed rate would put a wrong number in your ledger.`
+        : undefined,
     };
   },
 };
@@ -323,11 +376,18 @@ export async function syncProvider(orgId: string, provider: string, days = 90): 
     out.salesOrders = await upsert(svc, "sales_orders", "order_no", orgId, pulled.sales || []);
     out.invoices = await upsert(svc, "invoices", "invoice_no", orgId, pulled.invoices || []);
     out.customers = await upsert(svc, "customers", "name", orgId, pulled.customers || []);
+    out.note = pulled.note;
     out.ok = true;
 
     try {
+      /*
+        A skip note is recorded in last_error so it reaches the integrations
+        page. It is not a failure — status stays "connected" — but a customer
+        whose international charges are being left out has to be told, and
+        this is the only field on the row that carries a message.
+      */
       await svc.from("integrations")
-        .update({ status: "connected", last_sync: new Date().toISOString(), last_error: null })
+        .update({ status: "connected", last_sync: new Date().toISOString(), last_error: out.note ? String(out.note).slice(0, 300) : null })
         .eq("org_id", orgId).eq("provider", id);
     } catch { /* column set may predate this */ }
 

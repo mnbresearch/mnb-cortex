@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Plus, Trash2 } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 type Line = { id: string; label: string; amount: number };
 
@@ -57,6 +58,7 @@ export function PnlBuilder() {
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring text-right";
   return (
     <div className="grid lg:grid-cols-2 gap-4">
+      <ExampleFigures what="P&L lines" />
       <Card className="p-5 space-y-3">
         <div className="font-semibold">Inputs (monthly)</div>
         <label className="flex items-center justify-between gap-2 text-sm"><span className="text-muted-foreground">Revenue</span>

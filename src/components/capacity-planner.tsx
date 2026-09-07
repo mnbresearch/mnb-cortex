@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Plus, Trash2 } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
 
 type Person = { id: string; name: string; capacity: number; booked: number; rate: number; cost: number };
 
@@ -61,6 +62,7 @@ export function CapacityPlanner() {
 
   return (
     <Card className="p-5 space-y-4">
+      <ExampleFigures what="roles and utilisation" />
       <div className="flex items-center justify-between">
         <div>
           <div className="font-semibold">Team capacity & utilisation</div>

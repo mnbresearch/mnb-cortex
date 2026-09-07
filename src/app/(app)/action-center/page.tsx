@@ -8,6 +8,7 @@ import { AIPanel } from "@/components/ai-panel";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { getUserAndOrg, getMetrics, getAlerts } from "@/lib/data";
+import { inr } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,13 @@ export default async function ActionCenter() {
           .map((m) => ({
             p: m.status === "red" ? "P1" : "P2",
             title: `${m.label} needs attention`,
-            why: `Currently ${m.value}${m.unit === "INR" ? "" : " " + m.unit}${m.delta_pct ? ` (${m.delta_pct > 0 ? "+" : ""}${m.delta_pct}% vs last period)` : ""}`,
+            /*
+              INR values were printed raw — "Currently 42000000" — because the
+              INR branch suppressed the unit suffix without substituting a
+              formatter. Every other surface in the app renders money through
+              inr(); this one dropped it in the branch that needed it most.
+            */
+            why: `Currently ${m.unit === "INR" ? inr(m.value) : `${m.value} ${m.unit}`}${typeof m.delta_pct === "number" && Number.isFinite(m.delta_pct) && m.delta_pct !== 0 ? ` (${m.delta_pct > 0 ? "+" : ""}${m.delta_pct}% vs last period)` : ""}`,
             impact: "Flagged by your live KPIs",
             href: "/dashboard",
           })),
