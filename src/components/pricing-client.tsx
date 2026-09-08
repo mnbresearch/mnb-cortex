@@ -2,7 +2,7 @@
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { useState } from "react";
 import { Check, Sparkles, X, MessageCircle } from "lucide-react";
-import { PLANS, WHATSAPP_NUMBER, CURRENCIES, formatMoney, planPrice, type CurrencyCode } from "@/lib/config";
+import { PLANS, PUBLIC_CREDIT_PACKS, WHATSAPP_NUMBER, CURRENCIES, formatMoney, planPrice, type CurrencyCode } from "@/lib/config";
 import { payCashfree } from "@/lib/pay/checkout-client";
 
 /**
@@ -22,8 +22,17 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
 
   async function choosePlan(p: (typeof PLANS)[number]) {
-    // Enterprise is bespoke, and Cashfree settles INR only — both stay a
-    // conversation with the team rather than a self-serve checkout.
+    /*
+      Enterprise is bespoke, and Cashfree settles INR only — both stay a
+      conversation with the team rather than a self-serve checkout.
+
+      That is a real constraint, but it used to be a SILENT one: an
+      international visitor switched the currency to USD, pressed the same
+      "Get started" button as everyone else, and got a lead-capture form
+      instead of a checkout, with nothing having warned them. The button now
+      says what it will do (see label below), so the currency switch is an
+      informed choice rather than a surprise.
+    */
     if (p.monthly === 0 || cur === "USD") { openForm(p.name); return; }
     // Checkout lives on /billing, which collects the mobile number the payment
     // gateway requires. Keeping ONE checkout path means the phone step can't be
@@ -105,7 +114,14 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
                 disabled={busy === p.id}
                 className={`w-full rounded-full h-11 text-sm font-medium transition-colors disabled:opacity-60 ${p.highlight ? "btn-ink" : "border hover:bg-accent"}`}
               >
-                {p.monthly === 0 || cur === "USD" ? p.cta : signedIn ? "Subscribe" : "Get started"}
+                {/*
+                  Say what the button will DO. In USD it opens a conversation,
+                  not a checkout — Cashfree settles INR only. Labelling it
+                  "Get started" and then showing a lead form is the kind of
+                  small dishonesty that costs the sale at the moment of most
+                  intent.
+                */}
+                {p.monthly === 0 ? p.cta : cur === "USD" ? "Talk to us" : signedIn ? "Subscribe" : "Get started"}
               </button>
               <ul className="mt-5 space-y-2 text-sm">
                 {p.features.map((f) => <li key={f} className="flex gap-2"><Check className="h-4 w-4 text-success shrink-0 mt-0.5" /><span>{f}</span></li>)}
@@ -116,6 +132,56 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
       </div>
 
       {payErr && <p role="alert" className="text-center text-sm text-danger mt-6">{payErr}</p>}
+
+      {/*
+        THE CHEAPEST WAY IN WAS INVISIBLE TO EVERYONE WHO HAD NOT ALREADY
+        SIGNED UP.
+
+        The ₹149 Taster pack is advertised on the landing page and named on
+        /billing, and PUBLIC_CREDIT_PACKS rendered in exactly one place:
+        (app)/usage — behind the login. So the lowest-friction, lowest-risk
+        entry point in the whole product could only be seen by people who had
+        already committed.
+
+        It belongs here, under the plans, framed honestly: it is not a plan and
+        it does not include the daily watching. It is a way to try the AI work
+        for the price of a coffee before deciding, and for a business with
+        irregular needs it is a legitimate permanent choice. Credits do not
+        expire on a subscription clock — see /usage — so a pack is not a
+        pressure tactic.
+
+        Only shown in INR, for the same Cashfree reason as the plans above.
+      */}
+      {cur === "INR" && PUBLIC_CREDIT_PACKS.length > 0 && (
+        <div className="mt-14 rounded-2xl border bg-card p-6 sm:p-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold">Not ready for a plan?</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+                Buy credits once and use them whenever you like — no subscription, nothing recurring.
+                You get the AI reads and the calculators; the daily watching and the email warnings come with a plan.
+              </p>
+            </div>
+            <a
+              href={signedIn ? "/usage" : "/login?next=%2Fusage"}
+              className="rounded-full border h-11 px-5 text-sm font-medium inline-flex items-center hover:bg-accent transition-colors"
+            >
+              {signedIn ? "Buy credits" : "Start with credits"}
+            </a>
+          </div>
+          <div className="mt-5 grid sm:grid-cols-3 gap-3">
+            {PUBLIC_CREDIT_PACKS.slice(0, 3).map((pk) => (
+              <div key={pk.id} className="rounded-xl border p-4">
+                <div className="text-sm font-medium">{pk.label}</div>
+                <div className="font-display text-2xl tracking-tightest mt-1">{formatMoney(pk.price, "INR")}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {pk.credits.toLocaleString("en-IN")} credits · {pk.per}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {cur === "USD" && (
         <p className="text-center text-xs text-muted-foreground mt-6 max-w-xl mx-auto">

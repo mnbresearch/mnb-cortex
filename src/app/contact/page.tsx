@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Mail, Phone, MessageCircle, MapPin, Clock } from "lucide-react";
 import { LegalShell, H2, P } from "@/components/legal-shell";
+import { ContactForm } from "@/components/contact-form";
 
 export const metadata = {
   title: "Contact Us — MNB Cortex",
@@ -25,6 +26,15 @@ export default function Contact() {
           </a>
         ))}
       </div>
+
+      {/*
+        The form comes FIRST, above the company details. Every "Talk to us"
+        button on the site lands here, and until now the page's answer was
+        "compose an email yourself" — three cards and nothing that captures a
+        name. The details below still matter, but they are reference, not the
+        action.
+      */}
+      <div className="not-prose mb-10"><ContactForm /></div>
 
       <H2>Company</H2>
       <P>
