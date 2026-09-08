@@ -3,6 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { Card } from "@/components/ui/card";
 import { getPractice } from "@/lib/practice";
 import { ClientSwitchLink } from "@/components/client-switch-link";
+import { ClientBrief } from "@/components/client-brief";
 import { AlertTriangle, Info, Building2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -135,7 +136,20 @@ export default async function Practice() {
                   Switching workspace is a POST (it sets a cookie server-side and
                   re-verifies membership), so this is a form rather than a link.
                 */}
-                <ClientSwitchLink orgId={c.orgId} />
+                {/*
+                  Two different jobs, side by side.
+
+                  "Open" is for the firm — go and look at this client's numbers.
+                  "Client brief" is the firm's DELIVERABLE — the same numbers as
+                  a letter in the firm's own name, which is what a practice
+                  actually gets paid for. Without it, acting on this console
+                  means retyping figures into Word twenty-five times a month,
+                  and so it does not happen.
+                */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <ClientBrief orgId={c.orgId} clientName={c.name} />
+                  <ClientSwitchLink orgId={c.orgId} />
+                </div>
               </div>
             </Card>
           ))}
