@@ -131,8 +131,14 @@ export const SHARE = {
 
   These sum to 280,000ms, inside 288,000 with room for the guard itself. The
   ordering and the relative weights are unchanged; every share is scaled down.
-  The assertion below fails the BUILD rather than the night, because a number
-  that is only wrong in production at 4am is a number nobody checks.
+  The assertion below throws at MODULE LOAD. Be precise about what that buys:
+  only the autopilot route imports a value from this file (everything else uses
+  `import type`, which is erased), and that route is force-dynamic — so Next
+  never evaluates it during a build. The throw would therefore surface as a 500
+  on the cron at 04:00, not as a failed build.
+
+  scripts/test-cron-budget.mjs is the real gate: it asserts the same sum and
+  runs in `npm test`. The throw is the belt.
 */
 export const SHARE_TOTAL_MS = Object.values(SHARE).reduce((a, b) => a + b, 0);
 

@@ -104,6 +104,31 @@ export const PAYWALL_ALLOW = [
 */
 export const PAYWALL_ALLOW_EXACT = ["/pricing"] as const;
 
+/*
+  WHERE THE COUNTDOWN AND RENEWAL BANNERS STAY QUIET — A DIFFERENT LIST, ON
+  PURPOSE.
+
+  The lock and the banners have OPPOSITE obligations, and collapsing them onto
+  one predicate was wrong. The lock must LET PEOPLE THROUGH on the setup and
+  payment pages. The banners must REACH THEM there — /dashboard is the app's
+  landing page, and a customer two days from lapsing is exactly who needs to
+  see it.
+
+  Reusing isAllowedWhileLocked() for the banners silently suppressed them on
+  /dashboard, /receivables, /import and /usage the moment that list grew from
+  four entries to eight. Nobody would have noticed until a renewal was missed.
+
+  A banner is only redundant where the user is ALREADY looking at the thing it
+  points to.
+*/
+export const BANNER_SUPPRESS = ["/billing", "/pricing", "/onboarding"] as const;
+
+/** Should the trial/renewal countdown banner stay quiet on this path? */
+export function isBannerSuppressed(path: string | null | undefined): boolean {
+  const p = String(path || "");
+  return BANNER_SUPPRESS.some((a) => (a === "/pricing" ? p === a : p.startsWith(a)));
+}
+
 /** Is this path reachable while the workspace is locked? */
 export function isAllowedWhileLocked(path: string | null | undefined): boolean {
   const p = String(path || "");

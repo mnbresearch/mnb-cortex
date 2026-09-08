@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Sparkles, Lock, Check, X } from "lucide-react";
 import { PLANS as ALL_PLANS } from "@/lib/config";
-import { isAllowedWhileLocked } from "@/lib/paywall";
+import { isAllowedWhileLocked, isBannerSuppressed } from "@/lib/paywall";
 
 // Real prices, straight from the pricing source of truth.
 /*
@@ -108,7 +108,7 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
   }
 
   // ---- Trial countdown banner ----
-  if (status === "trialing" && !dismissed && !isAllowedWhileLocked(path)) {
+  if (status === "trialing" && !dismissed && !isBannerSuppressed(path)) {
     const urgent = daysLeft <= 3;
     return (
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100%-2rem)]">
@@ -127,7 +127,7 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
   // ---- Renewal reminder for a paid plan about to lapse ----
   // Only when there IS a recorded end date: an active workspace without one
   // never expires and must never be nagged to renew.
-  if (status === "active" && subscriptionEndsAt && daysLeft <= 7 && !dismissed && !isAllowedWhileLocked(path)) {
+  if (status === "active" && subscriptionEndsAt && daysLeft <= 7 && !dismissed && !isBannerSuppressed(path)) {
     const urgent = daysLeft <= 2;
     return (
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100%-2rem)]">

@@ -141,7 +141,7 @@ export async function fetchVideo(uri: string): Promise<Response | null> {
     Generated files live under /v1beta/files/ or /v1/files/ and nowhere else, so
     pinning the prefix costs no legitimate call and closes the general proxy.
   */
-  if (!/^https:\/\/generativelanguage\.googleapis\.com\/v1(?:beta)?\/files\/[A-Za-z0-9_.:%-]+(?::download)?(?:\?|$)/.test(uri)) return null;
+  if (!/^https:\/\/generativelanguage\.googleapis\.com\/v1(?:beta)?\/files\/[A-Za-z0-9_.:%-]+(?:\/[A-Za-z0-9_.:%-]+)?(?::download)?(?:\?|$)/.test(uri)) return null;
   const sep = uri.includes("?") ? "&" : "?";
   try {
     return await fetch(`${uri}${sep}key=${encodeURIComponent(k)}`);

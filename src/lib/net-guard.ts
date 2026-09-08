@@ -64,7 +64,20 @@ function isPrivateV4(ip: string): boolean {
   if (a === 169 && b === 254) return true;        // link-local — AWS/GCP metadata lives here
   if (a === 172 && b >= 16 && b <= 31) return true;
   if (a === 192 && b === 168) return true;
-  if (a === 192 && b === 0) return true;          // 192.0.0.0/24 IETF protocol assignments
+  /*
+    /24, NOT /16 — the comment said /24 and the code said /16, and the code won.
+
+    Automattic owns 192.0.66.0/24, 192.0.77.0/24, 192.0.78.0/24 and
+    192.0.79.0/24 — ordinary public unicast. wordpress.com resolves to
+    192.0.78.9. So the /16 test refused every WordPress.com and WP VIP host: a
+    customer whose webhook endpoint, Shopify storefront or CSV lives there was
+    told their own public address was "on a private network", and the webhook
+    path recorded a delivery failure and retried into the same wall forever.
+
+    The reserved block is 192.0.0.0/24 (IETF protocol assignments) plus
+    192.0.2.0/24 (TEST-NET-1). Both named, nothing wider.
+  */
+  if (a === 192 && b === 0 && (p[2] === 0 || p[2] === 2)) return true;
   if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT — shared provider space
   if (a >= 224) return true;                      // multicast + reserved + broadcast
   return false;
@@ -125,9 +138,20 @@ export async function assertPublicUrl(raw: string, opts: { allowHttp?: boolean }
     throw new BlockedUrlError("That address is on a private network, so it can't be fetched from here.");
   }
 
+  /*
+    BOUNDED. The caller's AbortSignal reaches fetch() and not this, so a
+    customer's dead domain with a hanging resolver would stall here outside
+    every timeout the caller thinks it has — on webhooks.ts that is a loop over
+    200 pending deliveries inside a 20-second cron share, held up by one bad
+    endpoint.
+  */
   let addrs: { address: string }[];
-  try { addrs = await lookup(host, { all: true }); }
-  catch { throw new BlockedUrlError("That address could not be found."); }
+  try {
+    addrs = await Promise.race([
+      lookup(host, { all: true }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("dns timeout")), 5_000)),
+    ]);
+  } catch { throw new BlockedUrlError("That address could not be found."); }
 
   /*
     EVERY answer, not the first. A name can return one public and one private
@@ -157,6 +181,27 @@ export async function safeFetch(
     if (res.status < 300 || res.status > 399) return res;
     const loc = res.headers.get("location");
     if (!loc) return res;
+    /*
+      METHOD AND BODY ARE PRESERVED ACROSS A HOP, DELIBERATELY, EXCEPT ON 303.
+
+      Native fetch downgrades POST to GET on 301/302 for historical reasons.
+      Keeping the method is what a webhook receiver expects — a Slack or
+      customer endpoint that answers 302 should still receive the POST and its
+      body, not a bodyless GET that looks like a health check.
+
+      303 See Other is different: it means "the response is elsewhere, go GET
+      it", and re-POSTing to it is wrong. Handled explicitly rather than
+      inherited.
+
+      Note the consequence of preserving: our headers travel too, including
+      X-Cortex-Signature and the Shopify token. That is acceptable only because
+      every hop is re-validated as a public host — but it is why the redirect
+      budget is 4 and not unlimited.
+    */
+    if (res.status === 303) {
+      (rest as any).method = "GET";
+      delete (rest as any).body;
+    }
     /*
       Resolve relative Locations against the CURRENT url, then re-validate.
       A relative redirect cannot change host, but writing the general case is

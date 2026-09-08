@@ -222,15 +222,22 @@ export async function manageOrg(org_id: string, patch: {
         says their balance is wrong.
       */
       const { data: { user } } = await createClient().auth.getUser();
-      await sb.from("credit_ledger").insert({
+      const { error: ledErr } = await sb.from("credit_ledger").insert({
         org_id, delta: newCredits - prevCredits, balance_after: newCredits, reason,
         user_id: user?.id ?? null,
         meta: { actor },
       });
-    } catch {
-      // Retry without user_id rather than losing the ledger row entirely — the
-      // amount matters more than the attribution.
-      try { await sb.from("credit_ledger").insert({ org_id, delta: newCredits - prevCredits, balance_after: newCredits, reason, meta: {} }); } catch { /* not migrated */ }
+      /*
+        Checked, not caught. supabase-js RETURNS { error } rather than throwing,
+        so the fallback below was dead code — on a database without user_id the
+        ledger row was simply lost, quietly, which is the opposite of the point.
+      */
+      if (ledErr) {
+        const retry = await sb.from("credit_ledger").insert({ org_id, delta: newCredits - prevCredits, balance_after: newCredits, reason, meta: {} });
+        if (retry.error) console.error("[superadmin] credit_ledger insert failed:", retry.error.message);
+      }
+    } catch (e: any) {
+      console.error("[superadmin] credit_ledger insert threw:", e?.message);
     }
   }
 
@@ -246,15 +253,26 @@ export async function manageOrg(org_id: string, patch: {
     for (const k of Object.keys(updates)) {
       if ((before as any)[k] !== updates[k]) changed[k] = { from: (before as any)[k] ?? null, to: updates[k] };
     }
+    /*
+      CHECK `error`, DO NOT RELY ON A THROW.
+
+      supabase-js RETURNS { error } — it does not throw on a database error. So
+      the try/catch this replaces was unreachable for exactly the failures it
+      claimed to report ("loud in the logs if it fails"), and a missing table or
+      a constraint violation was swallowed as silently as before. A silent audit
+      trail is indistinguishable from no audit trail, which is the thing this
+      whole block exists to fix.
+    */
     try {
-      await sb.from("org_billing_log").insert({
+      const { error: logErr } = await sb.from("org_billing_log").insert({
         org_id,
         actor,
         action: Object.keys(changed).join(",") || "no-op",
         detail: { changed, requested: patch },
       });
+      if (logErr) console.error("[superadmin] org_billing_log insert failed:", logErr.message);
     } catch (e: any) {
-      console.error("[superadmin] org_billing_log insert failed:", e?.message);
+      console.error("[superadmin] org_billing_log insert threw:", e?.message);
     }
   }
 

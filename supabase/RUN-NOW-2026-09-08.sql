@@ -375,11 +375,26 @@ select check_name, result, detail from (
 -- 1. health_metrics.updated_at, and something to keep it current.
 -- ---------------------------------------------------------------------------
 
-alter table health_metrics add column if not exists updated_at timestamptz default now();
+/*
+  ADD IT WITHOUT A DEFAULT, BACKFILL, THEN SET THE DEFAULT.
 
-/* Backfill so existing rows sort sensibly rather than clustering at the moment
-   this migration ran. created_at is the closest truth we have for history. */
+  The first attempt was `add column ... default now()` followed by
+  `update ... where updated_at is null` — and Postgres fills every existing row
+  when a column is added WITH a default, so the where clause matched nothing.
+  Verified against real Postgres: "backfill rows touched: 0". The backfill was a
+  no-op and every row got the migration's own timestamp, which is precisely the
+  clustering the comment claimed to avoid.
+
+  It self-heals — the nightly recompute upserts each row and the trigger below
+  moves updated_at — but until then the Practice console would report every
+  client as active at the same instant, which is a different wrong answer, not
+  a right one.
+
+  Three steps, in this order, so existing rows keep their real history.
+*/
+alter table health_metrics add column if not exists updated_at timestamptz;
 update health_metrics set updated_at = created_at where updated_at is null;
+alter table health_metrics alter column updated_at set default now();
 
 create or replace function cortex_touch_updated_at()
 returns trigger

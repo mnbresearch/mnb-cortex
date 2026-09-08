@@ -2,6 +2,7 @@ import "server-only";
 import { TRIAL_DAYS } from "@/lib/config";
 import { createClient } from "@/lib/supabase/server";
 import { isLocked } from "@/lib/paywall";
+import { isHardStopped } from "@/lib/entitlement";
 import { getUserAndOrg } from "@/lib/data";
 
 const DAY = 86_400_000;
@@ -70,8 +71,14 @@ export async function getBillingStatus(): Promise<BillingStatus> {
 
   const now = Date.now();
 
-  // A super-admin can hard-block a customer regardless of any timing.
-  const blocked = subStatus === "suspended" || subStatus === "cancelled";
+  /*
+    A super-admin can hard-block a customer regardless of any timing — and this
+    must name the SAME statuses as isHardStopped() in entitlement.ts, or the UI
+    locks people the server would serve (or the reverse). `cancelled` is
+    deliberately not here: a churned workspace that buys a credit pack has to be
+    able to spend it, which is the whole point of /usage staying reachable.
+  */
+  const blocked = isHardStopped(subStatus);
 
   // A paid plan runs out at the end of the period it was bought for. The nightly
   // cron flips the row to 'expired', but we evaluate it live too so the paywall

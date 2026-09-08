@@ -34,10 +34,19 @@ export function isLapsed(status: string): boolean {
 /**
  * An operator-set hard stop, as opposed to a period simply running out.
  *
- * `expired` is a clock. `suspended` and `cancelled` are a decision someone made,
- * usually about a chargeback, an abuse report, or a customer who has left — and
- * a decision has to outrank both of the escape hatches that exist for the
- * clock: a leftover credit balance, and an allowance override.
+ * `expired` is a clock. `suspended` is a decision someone made — a chargeback,
+ * an abuse report — and a decision has to outrank both of the escape hatches
+ * that exist for the clock: a leftover credit balance, and an allowance
+ * override.
+ *
+ * `cancelled` IS NOT ONE OF THESE, and including it was a mistake caught in
+ * review. Cancelled is the churned customer, and the pay-as-you-go path exists
+ * precisely for them: /usage stays reachable while locked, /billing tells them
+ * to "start with a ₹149 credit pack", and settle.ts grants credits without ever
+ * touching subscription_status. So a cancelled workspace could pay for credits
+ * and then be refused by every single charge — money taken, nothing delivered,
+ * no way back inside the product. It stays `isLapsed`, so it still needs a
+ * balance to do anything; it is simply not hard-stopped.
  *
  * It did not. chargeForMode refused only when `isLapsed(status) && !hasOverride
  * && balance < cost`, so a suspended workspace holding credits kept working,
@@ -49,8 +58,7 @@ export function isLapsed(status: string): boolean {
  * were cut off.
  */
 export function isHardStopped(status: string): boolean {
-  const s = String(status || "").toLowerCase();
-  return s === "suspended" || s === "cancelled" || s === "canceled";
+  return String(status || "").toLowerCase() === "suspended";
 }
 
 

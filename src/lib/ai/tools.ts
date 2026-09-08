@@ -306,9 +306,13 @@ export async function runTool(name: string, args: any, orgId: string): Promise<T
           filter syntax. Same defect as searchAll in lib/data.ts; fixed the same
           way, in both places, because one of them being right is not a fix.
         */
-        const raw = String(args?.name || "").trim().replace(/[,()]/g, " ").trim();
+        const raw = String(args?.name || "").trim();
         if (!raw) return { ok: false, error: "No name given." };
-        const like = `%${likeLiteral(raw)}%`;
+        // Wildcard, not a space — see searchAll in lib/data.ts. This one matters
+        // more: the model passes a name it read out of the customer's OWN
+        // invoices, so a space would make the agent answer "no such party" for
+        // every debtor whose name contains a comma or brackets.
+        const like = `%${likeLiteral(raw).replace(/[,()]/g, "%")}%`;
         const [orders, invs, cust] = await Promise.all([
           sb.from("sales_orders").select("order_no, amount, status, created_at")
             .eq("org_id", orgId).ilike("customer_name", like)

@@ -427,11 +427,20 @@ export async function searchAll(q: string) {
     are FILTER metacharacters. Two different grammars, and escaping for one
     while sitting in the other is how this survived a previous review.
 
-    Both are applied: strip the filter syntax, then escape the LIKE pattern.
+    REPLACED WITH A WILDCARD, NOT A SPACE. This is the part that was wrong on
+    the first attempt: substituting a space turned "Sharma Steel (India) Pvt
+    Ltd" into the pattern `%Sharma Steel  India  Pvt Ltd%` — two spaces where
+    the brackets were — which matches nothing, because the stored value still
+    has the brackets. Indian company names are full of "(India)", "(P) Ltd" and
+    ", Delhi", so a large fraction of a customer's own ledger became
+    unsearchable, silently and with no error.
+
+    `%` is the LIKE wildcard, so it matches the removed characters instead of
+    replacing them with something that has to match literally. likeLiteral runs
+    FIRST — it escapes any % and _ the user actually typed — and the
+    substitution then introduces our own wildcards deliberately, after.
   */
-  const safeQ = q.replace(/[,()]/g, " ").trim();
-  if (safeQ.length < 2) return [] as any[];
-  const like = `%${likeLiteral(safeQ)}%`;
+  const like = `%${likeLiteral(q).replace(/[,()]/g, "%")}%`;
   const out: any[] = [];
   const push = (rows: any[], type: string, label: (r: any) => string, sub: (r: any) => string, href: string) => {
     for (const r of rows || []) out.push({ type, label: label(r), sub: sub(r), href });

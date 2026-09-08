@@ -277,7 +277,22 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
           await releaseClaim(); // let the webhook retry settle this order properly
           return { orgId, ok: false, retryable: true, error: withPeriod.message || "Could not activate the plan." };
         }
-        const retry = await svc.from("organizations").update(patch).eq("id", orgId);
+        /*
+          STRIP credits_reset_at TOO.
+
+          This fallback exists for a database where the subscription-period
+          columns have not been migrated yet. `patch` now also carries
+          credits_reset_at (the upgrade top-up), which arrives with
+          2026_credit_metering.sql — so on a database missing EITHER migration
+          the retry would re-send a column that does not exist, fail again,
+          release the claim, and let the webhook retry into the same wall. The
+          customer pays ₹39,999 and never gets a plan.
+
+          The fallback's job is to grant the plan with whatever columns DO
+          exist. Anything optional comes off.
+        */
+        const { credits_reset_at, ...core } = patch as any;
+        const retry = await svc.from("organizations").update(core).eq("id", orgId);
         if (retry.error) { await releaseClaim(); return { orgId, ok: false, retryable: true, error: retry.error.message }; }
       }
 
