@@ -3,6 +3,7 @@ import { parseCsv } from "@/lib/csv";
 import { resolveHeaders } from "@/lib/import-map";
 import { analyseLedger, parseAmount, type FreeCheckRow } from "@/lib/free-check";
 import { clientIp, enforce } from "@/lib/ratelimit";
+import { recordQuietly } from "@/lib/funnel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -111,6 +112,31 @@ export async function POST(req: Request) {
     }));
 
     const result = analyseLedger(rows);
+
+    /*
+      THE HIGHEST-INTENT ANONYMOUS STEP IN THE WHOLE FUNNEL.
+
+      Someone who exports their receivables and pastes them into a stranger's
+      website is closer to buying than anyone who merely read the pricing page.
+      Worth counting on its own, and worth knowing the shape of: `overdue`
+      tells us whether the people who reach this actually HAVE a problem we
+      solve, which decides whether the tool is attracting the right visitors or
+      just curious ones.
+
+      Row counts and rupee bands only — never the parties, never the amounts.
+      The whole promise of this endpoint is that the file is not kept.
+    */
+    recordQuietly("ledger_check_run", {
+      ip,
+      path: "/health-check",
+      meta: {
+        rows: result.rows,
+        usable: result.usable,
+        overdue: result.overdueCount,
+        hasOverdue: result.overdueValue > 0,
+        datesMissing: result.datesMissing,
+      },
+    });
 
     return NextResponse.json({
       ok: true,

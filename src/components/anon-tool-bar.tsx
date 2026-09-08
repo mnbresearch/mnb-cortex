@@ -84,8 +84,14 @@ export function AnonToolBar() {
           <Link href="/pricing" className="rounded-full btn-ink h-8 px-3 inline-flex items-center gap-1 text-xs font-medium">
             Plans from ₹799 <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
           </Link>
+          {/*
+            44px minimum target. A 16px icon with p-1.5 is a 28px tap area —
+            below WCAG 2.5.5 and genuinely hard to hit on the mid-range phones
+            this product is sold to. min-h-11/min-w-11 with the icon centred
+            keeps the bar visually compact while the target stays full size.
+          */}
           <button onClick={dismiss} aria-label="Hide this bar"
-            className="text-muted-foreground hover:text-foreground p-1.5 rounded-md">
+            className="text-muted-foreground hover:text-foreground rounded-md min-h-11 min-w-11 inline-flex items-center justify-center">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </span>

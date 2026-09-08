@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createOrder, hasCashfree } from "@/lib/pay/cashfree";
 import { getUserAndOrg, getOrgProfile } from "@/lib/data";
 import { PLANS, CREDIT_PACKS } from "@/lib/config";
+import { recordQuietly } from "@/lib/funnel";
+import { clientIp } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,6 +85,18 @@ export async function POST(req: Request) {
     } catch { /* not fatal — the order can still go through */ }
   }
   const customerPhone = phone || (profile as any)?.billing_phone || "";
+  /*
+    The step the funnel was most blind to. Until now nothing recorded that
+    someone reached checkout, so "how many started paying and did not finish"
+    had no answer at all — and that is the single most valuable number a
+    pre-revenue SaaS can look at.
+  */
+  recordQuietly("checkout_started", {
+    ip: clientIp(req),
+    orgId,
+    meta: { kind: b.kind === "credits" ? "credits" : "plan", ref: note.split(":")[1] || "", amount },
+  });
+
   const res = await createOrder({
     amount, note, returnUrl: `${origin}${returnPath}`,
     customer: {

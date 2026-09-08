@@ -5,6 +5,7 @@ import { grantCredits } from "@/lib/credits";
 import { PLANS, CREDIT_PACKS, PLAN_CREDITS } from "@/lib/config";
 import { PAYMENTS_TABLE } from "@/lib/pay/table";
 import { emitQuietly } from "@/lib/webhooks";
+import { recordQuietly as recordFunnel } from "@/lib/funnel";
 import { rewardReferral } from "@/lib/referrals";
 import { sendPaymentReceipt } from "@/lib/pay/receipt";
 
@@ -90,6 +91,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       { order_id: orderId, org_id: orgId, kind: type, ref, amount: order.amount, status: "amount_mismatch" },
       { onConflict: "order_id", ignoreDuplicates: true },
     );
+    recordFunnel("payment_failed", { orgId, meta: { reason: "amount_mismatch", ref, amount: order.amount } });
     return { orgId, ok: false, error: "Payment amount did not match the plan price." };
   }
 
@@ -126,6 +128,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       { order_id: orderId, org_id: orgId, kind: type || "unknown", ref: ref || null, amount: order.amount, status: "unknown_ref" },
       { onConflict: "order_id", ignoreDuplicates: true },
     );
+    recordFunnel("payment_failed", { orgId, meta: { reason: "unknown_ref", ref: ref || "", type: type || "" } });
     return { orgId, ok: false, error: `We could not match this payment to a current plan or pack. Your payment is recorded — contact support and quote order ${orderId}.` };
   }
 
@@ -239,6 +242,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
             const sameInstant = landed && new Date(landed).getTime() === new Date(endsAt).getTime();
             if ((check as any)?.plan === ref && sameInstant) {
               emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
+              recordFunnel("payment_succeeded", { orgId, meta: { kind: "plan", plan: ref, cycle, amount: order.amount } });
               /* Our own receipt, in our own name. The gateway's confirmation carries
                  the merchant ACCOUNT's identity, which is shared and is not the product
                  the customer bought. Best-effort: the grant has already committed and
@@ -331,6 +335,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       */
       try { await rewardReferral(orgId); } catch { /* never block activation */ }
       emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
+              recordFunnel("payment_succeeded", { orgId, meta: { kind: "plan", plan: ref, cycle, amount: order.amount } });
       /* Our own receipt, in our own name. The gateway's confirmation carries
          the merchant ACCOUNT's identity, which is shared and is not the product
          the customer bought. Best-effort: the grant has already committed and
@@ -364,6 +369,7 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
 
       try {
         const balance = await grantCredits(orgId, pack.credits, reason, null);
+        recordFunnel("payment_succeeded", { orgId, meta: { kind: "credits", pack: pack.id, amount: order.amount } });
         void sendPaymentReceipt({ orgId, orderId, amount: order.amount, kind: "credits", ref,
           label: `${pack.credits.toLocaleString("en-IN")} credits` });
         return { orgId, ok: true, kind: "credits", credits: pack.credits, balance };

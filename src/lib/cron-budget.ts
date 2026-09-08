@@ -111,7 +111,15 @@ export const SHARE = {
   weeklyUpdate: 15_000,
   weeklyPlan: 35_000,
   sweep: 15_000,
-  analysis: 45_000,
+  /*
+    Onboarding nudges. Small: this only ever scans workspaces created in the
+    last 20 days, and stops the moment someone is no longer stuck. Taken out of
+    `analysis`, which is the most deferrable step in the run — a workspace that
+    misses its AI read tonight gets it tomorrow, whereas a welcome email that
+    misses its day is simply never sent.
+  */
+  lifecycle: 15_000,
+  analysis: 30_000,
 } as const;
 
 /*

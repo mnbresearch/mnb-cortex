@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isSuperAdmin, getAllOrgs, getPortfolioStatus, currentEmail } from "@/lib/superadmin";
 import { getPlatformEconomics } from "@/lib/admin-metrics";
+import { getFunnel } from "@/lib/funnel";
 import { statusOf, isLapsed } from "@/lib/entitlement";
 import { inr } from "@/lib/utils";
 import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager, ProvisionCustomerForm, BackupButton } from "@/components/superadmin-panel";
@@ -38,7 +39,9 @@ export default async function SuperAdmin() {
     );
   }
 
-  const [{ rows, live, reason }, portfolio, econ] = await Promise.all([getAllOrgs(), getPortfolioStatus(), getPlatformEconomics()]);
+  const [{ rows, live, reason }, portfolio, econ, funnel] = await Promise.all([
+    getAllOrgs(), getPortfolioStatus(), getPlatformEconomics(), getFunnel(30),
+  ]);
 
   /*
     The collections switch. Read here rather than in the client component so the
@@ -118,6 +121,64 @@ export default async function SuperAdmin() {
                 <code> supabase/migrations/2026_collections_safety.sql</code> — until then there is no
                 way to stop collections except from the database.
               </Card>}
+        </Section>
+
+        {/*
+          THE FUNNEL, WHICH DID NOT EXIST IN ANY FORM UNTIL NOW.
+
+          Before this there was no page-view tracking, no signup-started, no
+          checkout-started — nothing. "How many people saw pricing and did not
+          buy" was unanswerable, so every decision about the funnel was a guess
+          and no change to it could be measured afterwards.
+
+          Two columns because they answer different questions. 400 pricing
+          views from 30 people is a very different business from 400 from 380,
+          and a single number hides which one you have.
+
+          Ordered by the funnel rather than by size: the SHAPE is the point,
+          and the row where the count collapses is the thing to go and fix.
+        */}
+        <Section title="Funnel" desc="Where people arrive, and where they stop — last 30 days">
+          <Card className="p-5">
+            {!funnel.available ? (
+              <p className="text-sm text-muted-foreground">
+                No events recorded yet. Run <code className="text-xs">supabase/migrations/2026_zzzb_funnel_events.sql</code> and
+                this fills in as people arrive.
+              </p>
+            ) : funnel.rows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                The table is live but nothing has been recorded in the last 30 days.
+              </p>
+            ) : (
+              <>
+                <div className="rounded-xl border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40 text-muted-foreground">
+                      <tr>
+                        <th scope="col" className="text-left px-3 py-2 font-medium">Step</th>
+                        <th scope="col" className="text-right px-3 py-2 font-medium">People</th>
+                        <th scope="col" className="text-right px-3 py-2 font-medium">Events</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {funnel.rows.map((r) => (
+                        <tr key={r.event} className="border-t">
+                          <td className="px-3 py-2">{r.event.replace(/_/g, " ")}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-medium">{r.people.toLocaleString("en-IN")}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{r.total.toLocaleString("en-IN")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground mt-3">
+                  &ldquo;People&rdquo; counts distinct visitors per day, from a salted hash of the IP that rotates daily —
+                  so someone visiting on two days counts twice. No cookies, no third-party script, no personal data
+                  stored. Events older than 90 days are pruned by the nightly cron.
+                </p>
+              </>
+            )}
+          </Card>
         </Section>
 
         <Section title="Money" desc="Revenue collected against estimated AI cost — the number that decides whether ads are worth it">

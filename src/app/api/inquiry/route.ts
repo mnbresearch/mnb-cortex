@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordQuietly } from "@/lib/funnel";
 import { sendEmail } from "@/lib/email";
 import { ADMIN_EMAIL } from "@/lib/operators";
 import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
@@ -169,6 +170,18 @@ In the meantime, reply to this email or message us on WhatsApp: https://wa.me/91
         ? `Your Business Health Check: ${score}/100 — ${band}`
         : "We received your MNB Cortex request",
     });
+
+    /*
+      Both steps, because they are different questions: "how many people gave
+      us details" and "how many of those came from the health check". The score
+      band goes in meta so the operator can see whether the at-risk cohort
+      converts differently from the healthy one — which is the whole reason the
+      score is worth keeping.
+    */
+    recordQuietly("lead_captured", { ip: clientIp(req), path: "/api/inquiry", meta: { source: src, plan: plan || "" } });
+    if (isHealthCheck) {
+      recordQuietly("healthcheck_done", { ip: clientIp(req), meta: { band, score } });
+    }
 
     const [adminRes, userRes] = await Promise.all([
       sendEmail(notifyTo, `New request: ${plan || "Cortex"} (${cur}) — ${name}`, adminHtml, { from: brandFrom(), replyTo: email }),

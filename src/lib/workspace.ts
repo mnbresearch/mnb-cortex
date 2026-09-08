@@ -5,6 +5,7 @@ import { attachReferral } from "@/lib/referrals";
 import { REFERRAL_COOKIE } from "@/lib/referral-shared";
 import { grantCredits } from "@/lib/credits";
 import { TRIAL_CREDITS, TRIAL_DAYS } from "@/lib/config";
+import { recordQuietly } from "@/lib/funnel";
 
 
 /**
@@ -56,6 +57,13 @@ export async function ensureWorkspace(opts?: { name?: string; industry?: string 
     if (error || !org) return { ok: false, error: error?.message || "Could not create your workspace." };
     orgId = String((org as any).id);
     created = true;
+    /*
+      The bottom of the anonymous funnel and the top of the activation one.
+      Until now nothing recorded that a workspace came into existence, so
+      "of the people who reached pricing, how many actually signed up" had no
+      answer — which is the first question anyone would ask about a funnel.
+    */
+    recordQuietly("workspace_created", { orgId, meta: { industry: opts?.industry || meta.industry || "" } });
     await svc.from("memberships").insert({ org_id: orgId, user_id: user.id, role: "owner" });
 
     /*

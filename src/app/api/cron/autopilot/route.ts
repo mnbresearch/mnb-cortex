@@ -65,6 +65,20 @@ export async function GET(req: Request) {
     renewals = await sendRenewalReminders(budget.slice(SHARE.renewals));
   } catch (e: any) { renewals = { error: e?.message }; }
 
+  /*
+    1b-ii. Onboarding lifecycle emails.
+
+    Placed immediately after renewals because both are one-shot and both are
+    lost if they miss their day — unlike reports or the AI analysis, which are
+    simply later. Every stage re-checks that the workspace is STILL stuck
+    before sending, so finishing setup on day 3 cancels the day-5 nudge.
+  */
+  let lifecycle: any = null;
+  try {
+    const { sendLifecycleEmails } = await import("@/lib/lifecycle");
+    lifecycle = await sendLifecycleEmails(budget.slice(SHARE.lifecycle));
+  } catch (e: any) { lifecycle = { error: e?.message }; }
+
   // 1c. Scheduled reports. Each row decides for itself whether it's due, using
   //     last_sent as the guard, so a double cron run can't double-send.
   let reports: any = null;
@@ -391,6 +405,26 @@ export async function GET(req: Request) {
   // than throwing — so the catch never fired, the write failed every run, and
   // the response still said ok:true. A monitoring signal that fails silently is
   // worse than none, because it looks like the thing it monitors is broken.
+  /*
+    PRUNE THE FUNNEL EVENTS.
+
+    Analytics rows are useful for weeks, not years, and an events table with no
+    ceiling is the one that quietly becomes the largest thing in the database —
+    on a free Supabase tier that is a real limit, not a tidiness preference.
+    90 days is enough to compare a month against the one before it.
+
+    Placed here, after every step that does customer-facing work and before the
+    heartbeat, deliberately: it is pure housekeeping and must never be the
+    reason a customer's alert did not go out. No budget check because a single
+    indexed DELETE over 90-day-old rows is milliseconds, and skipping it on a
+    busy night would just make tomorrow's larger.
+  */
+  let pruned = 0;
+  try {
+    const { data } = await sb.rpc("cortex_prune_funnel_events", { p_days: 90 });
+    pruned = Number(data) || 0;
+  } catch { /* table or function not migrated yet — nothing to prune */ }
+
   let heartbeat = "ok";
   try {
     const now = new Date().toISOString();
@@ -445,7 +479,7 @@ export async function GET(req: Request) {
     },
   };
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, heartbeat, scheduledWorkflows, alertsEmailed, collectionsSent, coverage,
+  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, collectionsSent, coverage,
     /*
       How long the run took and whether it finished with room to spare. If
       `budget_left_ms` trends towards zero, the caps in lib/cron-budget.ts need
