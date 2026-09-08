@@ -58,9 +58,28 @@ export function HealthCheckClient() {
         `Weak areas: ${weak}.`,
         `Answers: ${QUESTIONS.map((q) => `${q.area}=${answers[q.id] ?? "-"}`).join(", ")}.`,
       ].filter(Boolean).join("\n");
+      /*
+        `score` and `weak` are sent as STRUCTURED fields alongside the prose
+        note, because the note is for a human reading an email and these are
+        for the database. Until now only the note existed and the leads table
+        had nowhere to put it, so the score — the single most useful thing we
+        learn about a prospect — survived nowhere queryable. See
+        2026_zzza_lead_detail.sql.
+
+        They also drive the report email: /api/inquiry now sends the actual
+        breakdown instead of "our team will reach out shortly", which is what
+        this form has been promising on the next screen all along.
+      */
       const r = await fetch("/api/inquiry", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, plan: "Health Check", source: "health-check", note }),
+        body: JSON.stringify({
+          ...form,
+          plan: "Health Check",
+          source: "health-check",
+          note,
+          score,
+          weak: risks.map((x) => x.area),
+        }),
       });
       const j = await r.json();
       setStatus(j.ok ? "done" : "error");
@@ -137,8 +156,22 @@ export function HealthCheckClient() {
         {status === "done" ? (
           <div className="text-center py-2">
             <Check className="h-8 w-8 text-success mx-auto" />
-            <p className="mt-2 font-medium">Thanks, {form.name}! Your report is on its way.</p>
-            <Link href="/login" className="mt-4 inline-flex items-center gap-2 rounded-full btn-ink px-6 h-11 text-sm font-medium">Get started <ArrowUpRight className="h-4 w-4" /></Link>
+            {/*
+              This screen has always said the report is on its way. It now is —
+              /api/inquiry sends the score, the band and the named weak areas
+              rather than a generic acknowledgement. The next step offered is
+              the ledger check below rather than /login, because at this moment
+              the visitor has just been given a number about themselves and the
+              most useful thing we can do is show them a truer one, not ask
+              them to sign up.
+            */}
+            <p className="mt-2 font-medium">Thanks, {form.name.split(" ")[0]} — your report is on its way to {form.email}.</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              It has your score, your weakest areas, and an honest note about what a six-question check can and cannot tell you.
+            </p>
+            <a href="#ledger" className="mt-4 inline-flex items-center gap-2 rounded-full btn-ink px-6 h-11 text-sm font-medium">
+              Now check your real numbers <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            </a>
           </div>
         ) : (
           <>

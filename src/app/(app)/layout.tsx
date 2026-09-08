@@ -11,6 +11,7 @@ import { Toaster } from "@/components/toaster";
 import { WhatsNew } from "@/components/whats-new";
 import { CreditBanner } from "@/components/credit-banner";
 import { DailyNudge } from "@/components/daily-nudge";
+import { AnonToolBar } from "@/components/anon-tool-bar";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { getOrgProfile, getMyOrgs, getUserAndOrg } from "@/lib/data";
 import { isSuperAdmin } from "@/lib/superadmin";
@@ -61,7 +62,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </a>
       <NavProgress />
       <Sidebar superAdmin={superAdmin} orgs={orgs} activeOrgId={orgId} logoUrl={logoUrl} brandName={brandable ? (profile?.name || null) : null} setupIncomplete={firstRun.known && !firstRun.complete} />
-      <div className="flex-1 min-w-0 app-canvas">{children}</div>
+      <div className="flex-1 min-w-0 app-canvas">
+        {/*
+          Search traffic lands on the calculators — all 29 are public — inside
+          the logged-in application chrome, with no explanation and no way
+          onward. This says what the surrounding software is and offers a next
+          step, for logged-out visitors only, on the tool pages only. It never
+          covers or gates the calculator itself.
+        */}
+        {!orgId && <AnonToolBar />}
+        {children}
+      </div>
       <MobileNav />
       <CommandPalette />
       <PWA />

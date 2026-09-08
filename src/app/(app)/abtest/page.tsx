@@ -2,7 +2,10 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { AbTestCalc } from "@/components/abtest-calc";
 
+import { calcMetadata } from "@/lib/calculator-seo";
+
 export const dynamic = "force-dynamic";
+export const metadata = calcMetadata("/abtest");
 
 export default function AbTest() {
   return (
