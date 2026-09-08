@@ -37,7 +37,12 @@ export async function POST(req: Request) {
         ok: false, rateLimited: true,
         error: global
           ? "The free visibility check is at capacity for today. Please try again tomorrow, or start a trial for unlimited checks."
-          : "You've used your free visibility checks for today. Start a free trial to run unlimited checks on your brand.",
+          /*
+            There is no free trial to start — TRIAL_DAYS is 0. Offering one in
+            a rate-limit message is the same false claim the landing page
+            carried, in the one place a visitor is already mildly annoyed.
+          */
+          : "You've used your free visibility checks for today. Come back tomorrow, or create a workspace to run them whenever you like.",
       }, { status: 429 });
     }
 

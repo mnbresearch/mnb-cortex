@@ -444,7 +444,18 @@ export default function Home() {
 
           <div className="mt-10 flex flex-wrap gap-4">
             <Link href="/features" className="inline-flex items-center gap-1.5 text-sm font-medium link-sweep">See the full feature list <ArrowUpRight className="h-4 w-4" /></Link>
-            <Link href="/login" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary link-sweep">Try it free <ArrowUpRight className="h-4 w-4" /></Link>
+            {/*
+              "Try it free" was false. TRIAL_DAYS is 0 and TRIAL_CREDITS is 0 —
+              a new workspace is `expired` with nothing to spend from its first
+              second, so there is no free trial to try. The header carried the
+              same wording once and it was removed for exactly this reason; this
+              one and two others survived that pass.
+
+              Point at the thing that genuinely IS free instead. The health
+              check needs no card and no account, which is a better offer than
+              a trial we do not have.
+            */}
+            <Link href="/health-check" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary link-sweep">Start with the free health check <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
         </div>
       </section>

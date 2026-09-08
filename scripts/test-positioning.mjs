@@ -254,6 +254,73 @@ check(/early-warning/i.test(layout), "page metadata carries the new position");
   }
 }
 
+/*
+  ------------------------------------------------------------------
+  NOTHING MAY BE ADVERTISED AS FREE WHILE NOTHING IS FREE.
+
+  TRIAL_DAYS is 0 and TRIAL_CREDITS is 0, so a new workspace is `expired` with
+  an empty balance from its first second. "Try it free" and "start free" were
+  nonetheless live in three places — the landing page, the AI-visibility CTA,
+  and the rate-limit message that endpoint returns.
+
+  public-chrome.tsx records that this exact wording was already removed once
+  from the header, for Consumer Protection Act reasons. It came back in three
+  other files, which is what an un-asserted decision does.
+
+  Two genuinely free things exist and may say so: the Business Health Check
+  (no card, no account) and the AI Visibility check (rate-limited, no account).
+  So the rule is not "never say free" — it is "never offer a free TRIAL or a
+  free version of the paid product", because neither exists.
+
+  This check is coupled to TRIAL_DAYS: introduce a real trial and it relaxes
+  itself, which is the correct behaviour for an assertion about a promise.
+  ------------------------------------------------------------------
+*/
+{
+  /*
+    ARGUMENT ORDER. `check` in THIS file is check(condition, name, detail) — the
+    condition comes first, unlike every other test script in this repo, which
+    use check(name, condition, detail).
+
+    The first version of this block used the other order, so all 54 assertions
+    were passing a non-empty STRING as the condition and could never fail. It
+    reported 124 passed while "Try it free" was sitting in page.tsx. Caught by
+    mutation-testing it, which is the only reason anyone would ever notice.
+  */
+  const trialDays = Number((CONFIG_CODE.match(/TRIAL_DAYS\s*=\s*(\d+)/) || [])[1] ?? -1);
+  check(trialDays >= 0, "parse: read TRIAL_DAYS", `got ${trialDays}`);
+
+  if (trialDays === 0) {
+    /* Phrases that promise a free version of the PAID product. "free health
+       check" and "free visibility check" are deliberately not here. */
+    const FORBIDDEN = [
+      /try it free/i,
+      /start (?:a )?free trial/i,
+      /free trial/i,
+      /\bstart free\b/i,
+      /free for \d+ days/i,
+      /no credit card required/i,
+    ];
+    const files = [
+      "src/app/page.tsx", "src/app/pricing/page.tsx", "src/app/features/page.tsx",
+      "src/app/industries/page.tsx", "src/app/compare/page.tsx",
+      "src/components/visibility-check.tsx", "src/components/public-chrome.tsx",
+      "src/components/trial-guard.tsx", "src/app/api/visibility/public/route.ts",
+    ];
+    for (const f of files) {
+      let src;
+      try { src = readFileSync(f, "utf8"); } catch { continue; }
+      /* Comments explain the removal and must not re-trip it. */
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/^\s*\/\/.*$/gm, "");
+      for (const re of FORBIDDEN) {
+        check(!re.test(code),
+          `${f.replace("src/", "")} does not offer a free trial`,
+          `matched ${re} — TRIAL_DAYS is 0, so a visitor who accepts that offer gets a paywall instead`);
+      }
+    }
+  }
+}
+
 console.log(`\npositioning: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   console.log("\nFAILURES:");

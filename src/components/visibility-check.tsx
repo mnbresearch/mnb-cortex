@@ -61,7 +61,7 @@ export function VisibilityCheck() {
         <div className="mt-6 rounded-xl bg-primary/5 border border-primary/15 p-4">
           <div className="font-display text-lg tracking-tightest">This was just 3 questions.</div>
           <p className="text-sm text-muted-foreground mt-1">Inside Cortex you get the full check across more questions and engines, competitor tracking, and the AI‑ready content that gets you recommended.</p>
-          <Link href="/login" className="mt-3 inline-flex items-center gap-2 rounded-full btn-ink px-6 h-11 text-sm font-medium" data-cursor>Fix my AI visibility — start free <ArrowUpRight className="h-4 w-4" /></Link>
+          <Link href="/login" className="mt-3 inline-flex items-center gap-2 rounded-full btn-ink px-6 h-11 text-sm font-medium" data-cursor>Fix my AI visibility <ArrowUpRight className="h-4 w-4" /></Link>
         </div>
       </div>
     );
