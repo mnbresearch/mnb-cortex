@@ -54,6 +54,8 @@ const MODE_PROFILE: Record<string, GenProfile> = {
   critique: FAST,
   account: FAST,
   outreach: FAST,
+  // Kept in step with MODE_PROFILE_NAME in pricing-model.ts, which costs it.
+  improve_prompt: FAST,
   scenario: DEEP,
   forecast: DEEP,
   strategy: DEEP,

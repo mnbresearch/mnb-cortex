@@ -114,6 +114,18 @@ export const CREDIT_COSTS: Record<string, number> = {
   // FAST — short, single-pass, the user is waiting.
   pulse: 14, actions: 14, brief: 14, critique: 14,
   account: 14, outreach: 14, act: 14, gbp: 14,
+  /*
+    "Improve my prompt". Deliberately the FAST price and not less: it is one
+    short model call and should be costed like every other one. Pricing it at
+    zero would make it free to spam, and pricing it cheaper than its own COGS
+    would put the product's most-tapped button underwater — which is exactly
+    how 18 actions ended up loss-making the last time a number here was chosen
+    by feel rather than derived.
+
+    It costs a fifth of the image it improves (28) and a fortieth of a video
+    (571), so using it is always cheaper than generating twice.
+  */
+  improve_prompt: 14,
 
   // STANDARD — the default working answer.
   chat: 19, ask: 19, document: 19, meeting: 19,
@@ -151,7 +163,10 @@ export const IMAGE_WEEKLY: Record<string, number> = {
     negotiated price.
   */
   payg: 50,
-  watch: 0, watchpro: 500, practice: 500, command: 2000, enterprise: 5000,
+  // "try" sits alongside watch: no image/video quota. Those are premium
+  // actions on a premium plan, and an entry tier that included them would be
+  // selling ₹77-a-clip Veo output inside ₹799.
+  try: 0, watch: 0, watchpro: 500, practice: 500, command: 2000, enterprise: 5000,
   starter: 0, growth: 120, business: 500, aicoo: 2000,
   // legacy ids kept so an existing workspace never falls through to a default
   solo: 0, premium: 500, trial: 0,
@@ -164,7 +179,7 @@ export const IMAGE_WEEKLY: Record<string, number> = {
  */
 export const VIDEO_WEEKLY: Record<string, number> = {
   payg: 10,
-  watch: 0, watchpro: 20, practice: 20, command: 60, enterprise: 200,
+  try: 0, watch: 0, watchpro: 20, practice: 20, command: 60, enterprise: 200,
   starter: 0, growth: 5, business: 20, aicoo: 60,
   solo: 0, premium: 20, trial: 0,
 };
@@ -204,6 +219,14 @@ export const PLAN_CREDITS: Record<string, number> = {
     is the annual price divided by twelve — so no plan can sell a credit below
     the floor every action in CREDIT_COSTS is priced against.
   */
+  /*
+    735 = floor((7990 / 12) / 0.9059) — the annual price per month divided by
+    Watch's own worst-case credit rate. Derived from the tier above it rather
+    than picked, so the entry plan can never quietly become the cheapest way
+    to buy credits. npm run test:margins recomputes the floor and fails if it
+    moves.
+  */
+  try: 735,
   watch: 4600, watchpro: 13850, practice: 27750, command: 37000,
 
   // Retired tiers, at the economics they were actually sold at.
@@ -274,7 +297,7 @@ export const PLAN_SEATS: Record<string, number> = {
     Live tiers. Practice gets 25 seats because a firm puts its whole team in;
     the CLIENT WORKSPACES it manages are counted separately (PRACTICE_CLIENTS).
   */
-  watch: 3, watchpro: 20, practice: 25, command: 75, enterprise: -1,
+  try: 1, watch: 3, watchpro: 20, practice: 25, command: 75, enterprise: -1,
   // Retired tiers — an existing workspace must keep the seats it paid for.
   starter: 1, growth: 5, business: 20, aicoo: 75,
   solo: 1, premium: 20,
@@ -336,6 +359,9 @@ export type Capability = "api" | "webhooks" | "whitelabel" | "workflows" | "aler
 /* Exported so scripts/test-capabilities.mjs can check it against PLAN_SEATS —
    two maps keyed by plan id that drift apart is how `premium` lost everything. */
 export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
+  // Same as Watch: no API, no webhooks, no white-label. The entry tier is a
+  // smaller version of the product, not a differently-shaped one.
+  try: [],
   watch: [],
   watchpro: ["api", "webhooks", "workflows", "alert_rules", "memory"],
   practice: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
@@ -466,6 +492,44 @@ export const PUBLIC_CREDIT_PACKS: CreditPack[] = CREDIT_PACKS.filter((p) => !p.h
   ids for new economics; old ids keep what was bought.
 */
 export const PLANS: Plan[] = [
+  /*
+    THE ENTRY TIER — priced at the same margin as everything else, deliberately.
+
+    ₹799/month, ₹7,990/year (the same ten-months-for-twelve as every other plan).
+    The credit allowance is DERIVED, not chosen:
+
+      worst monthly price = annual / 12 = 7990 / 12 = ₹665.83
+      credits             = 665.83 / ₹0.9059 per credit ≈ 735
+
+    ₹0.9059 is Watch's own worst-case rate, so this tier sells a credit for
+    fractionally MORE than Watch does — it is a smaller plan, not a cheaper one.
+    That distinction is the whole point. A trial tier that quietly undercuts the
+    paid tiers on rate does not win a customer, it teaches the ones you already
+    have to downgrade, and it does so invisibly because the per-credit number is
+    never shown on the pricing page.
+
+    735 credits is a real month of watching, and the bullets below say exactly
+    what it buys rather than implying it is unlimited: the daily read is 14
+    credits, a question is 19, a bank statement or GST return is 45.
+
+    It carries an annual price rather than being monthly-only because
+    /api/pay/cashfree/order computes `annual ? plan.annual : plan.monthly` — a
+    zero there would create a ₹0 order. (That route is now also guarded against
+    a non-positive amount, but the plan should not depend on the guard.)
+  */
+  { id: "try", name: "Try Cortex", monthly: 799, annual: 7990, usdMonthly: 12, usdAnnual: 119,
+    tagline: "See whether it finds anything in your numbers.",
+    cta: "Try it for a month",
+    features: [
+      "1 business · 1 user",
+      "735 AI credits / month",
+      "Receivables & overdue payments — watched daily",
+      "MSME 45-day (43B(h)) deduction exposure",
+      "GST & statutory deadline warnings",
+      "Reads your Tally, Vyapar & Busy exports",
+      "About 16 bank statement or GST reads, or 38 questions",
+      "Upgrade any time — your data stays exactly as it is",
+    ] },
   { id: "watch", name: "Watch", monthly: 4999, annual: 49990, usdMonthly: 59, usdAnnual: 599,
     tagline: "Know what is going wrong, before it costs you.",
     cta: "Start watching",

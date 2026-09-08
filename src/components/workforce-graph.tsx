@@ -4,7 +4,7 @@ import { DEPARTMENTS, agentsForDepartment, type Agent } from "@/lib/agents/catal
 import { Search, Plus, Minus, Maximize2, BrainCircuit } from "lucide-react";
 
 type Node = { id: string; kind: "brain" | "dept" | "agent"; label: string; x: number; y: number; agent?: Agent; dept?: string };
-type Edge = { x1: number; y1: number; x2: number; y2: number; strong?: boolean };
+type Edge = { x1: number; y1: number; x2: number; y2: number; strong?: boolean; dept?: string; agentId?: string };
 type View = { tx: number; ty: number; s: number };
 
 const CX = 600, CY = 400, R_DEPT = 210;
@@ -23,6 +23,22 @@ export function WorkforceGraph() {
   const pinch = useRef<{ dist: number; s: number } | null>(null);
   const dragging = useRef(false);
 
+  /*
+    A network of ~130 nodes with a signal travelling down every branch is a lot
+    of simultaneous motion, and that is precisely the pattern that triggers
+    vestibular symptoms. The pulses are decorative — the graph is fully usable
+    without them — so anyone who has asked their system for less motion simply
+    does not get them.
+  */
+  const [animate, setAnimate] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => setAnimate(!mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   useEffect(() => { fetch("/api/agents").then((r) => r.json()).then((j) => setActivated(new Set(j.activated || []))).catch(() => {}); }, []);
 
   const { nodes, edges } = useMemo(() => {
@@ -33,7 +49,7 @@ export function WorkforceGraph() {
       const dx = Math.cos(ang), dy = Math.sin(ang);
       const px = CX + dx * R_DEPT, py = CY + dy * R_DEPT;
       nodes.push({ id: d.id, kind: "dept", label: d.name, x: px, y: py, dept: d.id });
-      edges.push({ x1: CX, y1: CY, x2: px, y2: py, strong: true });
+      edges.push({ x1: CX, y1: CY, x2: px, y2: py, strong: true, dept: d.id });
       const agents = agentsForDepartment(d.id);
       const perp = { x: -dy, y: dx };
       agents.forEach((a, j) => {
@@ -42,7 +58,7 @@ export function WorkforceGraph() {
         const ox = px + dx * rad + perp.x * col * 78;
         const oy = py + dy * rad + perp.y * col * 78;
         nodes.push({ id: a.id, kind: "agent", label: a.name, x: ox, y: oy, agent: a, dept: d.id });
-        edges.push({ x1: px, y1: py, x2: ox, y2: oy });
+        edges.push({ x1: px, y1: py, x2: ox, y2: oy, dept: d.id, agentId: a.id });
       });
     });
     return { nodes, edges };
@@ -132,9 +148,73 @@ export function WorkforceGraph() {
         onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onPointerLeave={onUp}
         style={{ cursor: dragging.current ? "grabbing" : "grab", touchAction: "none", background: "radial-gradient(circle at 50% 45%, hsl(var(--primary)/0.06), transparent 60%)" }}>
         <g transform={`translate(${view.tx} ${view.ty}) scale(${view.s})`}>
-          {edges.map((e, i) => (
-            <line key={i} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke="hsl(var(--border))" strokeWidth={e.strong ? 2 : 1} opacity={e.strong ? 0.9 : 0.5} />
-          ))}
+          {/*
+            THE LINKS, AND THE SIGNAL TRAVELLING ALONG THEM.
+
+            The graph already showed the workforce as connected; what it did not
+            show is that it is RUNNING. A static diagram of an org chart says
+            "here are the agents". A pulse moving out from the brain, down each
+            department, and on to the agents says "this thing is working right
+            now", which is the actual claim the page is making.
+
+            Done with SVG <animate> rather than a requestAnimationFrame loop:
+            the browser animates these on the compositor, so ~130 travelling
+            dots cost no JavaScript per frame and do not compete with the
+            pan/pinch handlers above. A JS loop redrawing this many nodes would
+            make dragging feel heavy on exactly the mid-range Android phones
+            this product is for.
+
+            Trunk links (brain → department) carry a brighter, faster pulse;
+            branch links (department → agent) a slower, dimmer one, so the eye
+            reads the direction of travel — out from the centre — rather than
+            seeing uniform noise.
+          */}
+          {edges.map((e, i) => {
+            const dimmed = focus ? e.dept !== focus : false;
+            const lit = e.agentId ? activated.has(e.agentId) : false;
+            return (
+              <line
+                key={"l" + i}
+                x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2}
+                stroke={lit ? "hsl(var(--primary))" : "hsl(var(--border))"}
+                strokeWidth={e.strong ? 2 : 1}
+                opacity={dimmed ? 0.12 : lit ? 0.55 : e.strong ? 0.9 : 0.5}
+              />
+            );
+          })}
+
+          {animate && edges.map((e, i) => {
+            // Hidden entirely when a department is focused and this link is not
+            // part of it — a pulse on a branch you have zoomed away from is
+            // motion with nothing to say.
+            if (focus && e.dept !== focus) return null;
+
+            /*
+              Stagger. Every pulse starting at once reads as a single flash
+              rather than as traffic; offsetting each one by a deterministic
+              fraction of its own cycle makes the network look continuously
+              busy. Deterministic (from the index) rather than random, so the
+              picture does not reshuffle on every React re-render.
+            */
+            const dur = e.strong ? 2.4 : 3.6;
+            const delay = ((i * 137) % 100) / 100 * dur;   // 137 is coprime with 100: an even spread
+            const lit = e.agentId ? activated.has(e.agentId) : false;
+
+            return (
+              <circle
+                key={"p" + i}
+                r={e.strong ? 3.4 : 2.2}
+                fill="hsl(var(--primary))"
+                opacity={e.strong ? 0.95 : lit ? 0.9 : 0.55}
+              >
+                <animate attributeName="cx" from={e.x1} to={e.x2} dur={`${dur}s`} begin={`${delay}s`} repeatCount="indefinite" />
+                <animate attributeName="cy" from={e.y1} to={e.y2} dur={`${dur}s`} begin={`${delay}s`} repeatCount="indefinite" />
+                {/* Fade in and out at the ends so a dot never appears to pop
+                    into existence on top of a node. */}
+                <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur={`${dur}s`} begin={`${delay}s`} repeatCount="indefinite" />
+              </circle>
+            );
+          })}
           {nodes.map((n) => {
             const dim = ql ? !match(n) : (focus && n.dept && n.dept !== focus && n.kind === "agent" ? true : false);
             if (n.kind === "brain") {
@@ -142,6 +222,18 @@ export function WorkforceGraph() {
                 <g key={n.id} onClick={(ev) => { ev.stopPropagation(); openNode(n); }} style={{ cursor: "pointer" }} opacity={dim ? 0.3 : 1}>
                   <circle cx={n.x} cy={n.y} r={54} fill="hsl(var(--primary))" />
                   <circle cx={n.x} cy={n.y} r={54} fill="none" stroke="hsl(var(--primary))" strokeWidth={10} opacity={0.25} />
+                  {/*
+                    An expanding ring leaving the brain on the same 2.4s cycle as
+                    the trunk pulses, so the centre reads as the SOURCE of the
+                    traffic rather than just another node that happens to be
+                    bigger. Two rings half a cycle apart make it continuous.
+                  */}
+                  {animate && [0, 1.2].map((begin) => (
+                    <circle key={begin} cx={n.x} cy={n.y} r={54} fill="none" stroke="hsl(var(--primary))" strokeWidth={2}>
+                      <animate attributeName="r" from={54} to={96} dur="2.4s" begin={`${begin}s`} repeatCount="indefinite" />
+                      <animate attributeName="opacity" from={0.45} to={0} dur="2.4s" begin={`${begin}s`} repeatCount="indefinite" />
+                    </circle>
+                  ))}
                   <text x={n.x} y={n.y - 2} textAnchor="middle" fontSize={13} fontWeight={700} fill="hsl(var(--primary-foreground))">Second</text>
                   <text x={n.x} y={n.y + 14} textAnchor="middle" fontSize={13} fontWeight={700} fill="hsl(var(--primary-foreground))">Brain</text>
                 </g>

@@ -38,6 +38,16 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
   const [biz, setBiz] = useState("");
   const [goals, setGoals] = useState("");
   const [buildMsg, setBuildMsg] = useState("");
+  /*
+    "Improve my prompt". Held as a PROPOSAL rather than written straight into
+    the field, because this is the customer's brief and replacing it without
+    asking is the wrong default — they may have chosen those words deliberately,
+    and the improved version is a suggestion until they say otherwise.
+    `improveKey` remembers which field it belongs to, since an agent can have
+    several inputs.
+  */
+  const [improved, setImproved] = useState("");
+  const [improveKey, setImproveKey] = useState("");
 
   useEffect(() => {
     api("/api/agents").then((j) => { setCustom(j.custom || []); setQuota(j.imageQuota || null); });
@@ -99,6 +109,51 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     }
     setBusy(""); setVideoNote("");
     setMsg("Still generating after 6 minutes — it may finish shortly. Try running it again if nothing appears.");
+  }
+
+  /*
+    The longest free-text field is the brief. Agents declare their inputs, and
+    the one worth improving is the textarea (or, failing that, the longest thing
+    typed so far) — asking the user to pick which field to improve would be a
+    question with one sensible answer.
+  */
+  function briefField(): { key: string; value: string } | null {
+    if (!sel) return null;
+    const ta = sel.inputs.find((f) => f.type === "textarea" && (inputs[f.key] || "").trim());
+    if (ta) return { key: ta.key, value: inputs[ta.key] };
+    let best: { key: string; value: string } | null = null;
+    for (const f of sel.inputs) {
+      const v = (inputs[f.key] || "").trim();
+      if (v && (!best || v.length > best.value.length)) best = { key: f.key, value: v };
+    }
+    return best;
+  }
+
+  async function improvePrompt() {
+    if (!sel) return;
+    const field = briefField();
+    if (!field) { setMsg("Write a few words about what you want first."); return; }
+    setBusy("improve"); setMsg(""); setImproved("");
+    try {
+      const r = await fetch("/api/ai/improve-prompt", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        // sel.kind, not the render-scoped isVideo — that is declared further
+        // down and is not in scope here.
+        body: JSON.stringify({ brief: field.value, kind: sel.kind === "video" ? "video" : "image" }),
+      });
+      const j = await r.json().catch(() => ({} as any));
+      if (!r.ok || j?.ok === false || !j?.improved) {
+        // The credit denial arrives as a 402 whose body carries the real
+        // explanation; showing it beats a generic failure.
+        setMsg(String(j?.error || "Couldn't improve that one — try again in a moment."));
+        setUpgrade(/credit|plan|top up/i.test(String(j?.error || "")));
+        return;
+      }
+      setImproved(String(j.improved));
+      setImproveKey(field.key);
+    } catch (e: any) {
+      setMsg("Couldn't reach Cortex — check your connection and try again.");
+    } finally { setBusy(""); }
   }
 
   async function run(reviseNote?: string) {
@@ -173,6 +228,55 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
               {isImage && quota && quota.limit >= 0 && (
                 <div className="text-xs text-muted-foreground">{quota.active ? `${quota.plan} plan` : "No active plan"} · {quota.left} of {quota.limit} image generations left this week</div>
               )}
+              {/*
+                IMPROVE MY PROMPT — offered only where it helps.
+
+                Image and video are the two places where the gap between what
+                someone types and what they wanted is largest: "ring photo" is
+                three words, and the missing detail — the metal, the stone, the
+                surface it sits on — is entirely in their head. Text agents
+                already take structured fields, so there is nothing to enrich.
+              */}
+              {(isImage || isVideo) && (
+                <div className="rounded-lg border border-dashed p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm">
+                      <span className="font-medium">Not sure how to describe it?</span>
+                      <span className="text-muted-foreground"> Write it roughly and let Cortex fill in the detail.</span>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={improvePrompt} disabled={busy === "improve"}>
+                      {busy === "improve" ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Sparkles aria-hidden="true" className="h-4 w-4" />}
+                      {busy === "improve" ? "Improving…" : "Improve my prompt"}
+                    </Button>
+                  </div>
+
+                  {/*
+                    Shown as a PROPOSAL, never written straight into the field.
+                    These are the customer's own words about their own product;
+                    replacing them without asking is the wrong default, and they
+                    may have chosen them deliberately.
+                  */}
+                  {improved && (
+                    <div className="mt-3">
+                      <div className="text-xs text-muted-foreground mb-1">Suggested description — camera and lighting are added automatically, so this only describes the subject:</div>
+                      <textarea
+                        className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y"
+                        rows={3}
+                        aria-label="Suggested description"
+                        value={improved}
+                        onChange={(e) => setImproved(e.target.value)}
+                      />
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button size="sm" onClick={() => { setInputs({ ...inputs, [improveKey]: improved }); setImproved(""); }}>
+                          Use this
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setImproved("")}>Keep mine</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <Button onClick={() => run()} disabled={busy === "run"}>{busy === "run" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {output || images.length || videoUrl ? "Run again" : isImage ? "Generate" : isVideo ? "Generate video" : "Run agent"}</Button>
             </div>
           )}

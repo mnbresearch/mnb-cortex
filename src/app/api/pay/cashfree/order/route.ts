@@ -37,6 +37,24 @@ export async function POST(req: Request) {
     note = `plan:${plan.id}:${annual ? "annual" : "monthly"}`;
   }
 
+  /*
+    NO ORDER MAY BE FOR ZERO — or for a negative number.
+
+    The plan branch above guards `plan.monthly === 0` (the enterprise
+    "contact sales" case) but not `plan.annual`. A plan with a monthly price and
+    no annual price would therefore create a ₹0 order the moment someone
+    toggled to annual billing: Cashfree would take it, the webhook would settle
+    it, and the workspace would be granted a full paid period for nothing.
+
+    Every plan in config.ts currently sets both, so this is a guard rather than
+    a live bug — but it is one line, and the failure it prevents is silent, free
+    subscriptions. Checking the ONE number that actually reaches the payment
+    gateway is stronger than checking the two fields it was derived from.
+  */
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return NextResponse.json({ ok: false, error: "That plan is not available for this billing cycle. Please contact us." }, { status: 400 });
+  }
+
   // A real 10-digit phone. Cashfree requires one; we used to invent it.
   const digits = String(b.phone || "").replace(/\D/g, "").slice(-10);
   const phone = /^[6-9]\d{9}$/.test(digits) ? digits : "";

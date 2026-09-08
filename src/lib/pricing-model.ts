@@ -75,6 +75,18 @@ export const PROFILE_OUTPUT_TOKENS = {
 export const MODE_PROFILE_NAME: Record<string, keyof typeof PROFILE_OUTPUT_TOKENS> = {
   pulse: "FAST", actions: "FAST", brief: "FAST", critique: "FAST", account: "FAST",
   outreach: "FAST", act: "FAST", gbp: "FAST",
+  /*
+    "Improve my prompt" runs on FAST — api/ai/improve-prompt passes the FAST
+    profile to runCortex explicitly.
+
+    Omitting it here was a real costing error, and the margin test caught it:
+    cogsInr() falls back to STANDARD for any mode it does not recognise, so a
+    ₹1.81 call was being costed at ₹2.51 and every plan dropped to ~83%. The
+    fallback is deliberately pessimistic, which is why the failure was a
+    false alarm rather than a silent loss — but a mode missing from this map
+    means the whole pricing model is reasoning about the wrong call.
+  */
+  improve_prompt: "FAST",
   scenario: "DEEP", forecast: "DEEP", strategy: "DEEP", investor: "DEEP",
   board: "DEEP", valuation: "DEEP", deepdive: "DEEP", report: "DEEP",
   gst: "EXTRACT", bankstatement: "EXTRACT",
