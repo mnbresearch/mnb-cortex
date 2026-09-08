@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Sparkles, Lock, Check, X } from "lucide-react";
 import { PLANS as ALL_PLANS } from "@/lib/config";
+import { isAllowedWhileLocked } from "@/lib/paywall";
 
 // Real prices, straight from the pricing source of truth.
 /*
@@ -64,19 +65,18 @@ const PLANS = ALL_PLANS
   match "/pricing-optimizer", which is a real product page. Listed exactly so
   the prefix cannot widen by accident.
 */
-const ALLOW = [
-  "/billing", "/settings", "/pricing", "/onboarding",
-  "/import", "/receivables", "/dashboard", "/usage",
-];
-const EXACT_ONLY = ["/pricing"];
+/*
+  The list itself now lives in lib/paywall.ts, next to the obligations it has to
+  satisfy and next to a test that executes it. A copy here is exactly how the
+  wizard's own destinations came to be missing from it.
+*/
 
 export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = false, subscriptionEndsAt = null }: { status: string; daysLeft: number; locked: boolean; lapsedSubscription?: boolean; subscriptionEndsAt?: string | null }) {
   const path = usePathname();
   const [dismissed, setDismissed] = useState(false);
 
   // ---- Hard paywall (trial ended, or a paid period ran out) ----
-  const allowed = ALLOW.some((p) => (EXACT_ONLY.includes(p) ? path === p : path?.startsWith(p)));
-  if (locked && !allowed) {
+  if (locked && !isAllowedWhileLocked(path)) {
     return (
       <div className="fixed inset-0 z-[100] grid place-items-center bg-background/80 backdrop-blur-sm p-4">
         <div className="w-full max-w-lg rounded-2xl border bg-card p-6 text-center shadow-2xl glow-ring">
@@ -108,7 +108,7 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
   }
 
   // ---- Trial countdown banner ----
-  if (status === "trialing" && !dismissed && !ALLOW.some((p) => path?.startsWith(p))) {
+  if (status === "trialing" && !dismissed && !isAllowedWhileLocked(path)) {
     const urgent = daysLeft <= 3;
     return (
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100%-2rem)]">
@@ -127,7 +127,7 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
   // ---- Renewal reminder for a paid plan about to lapse ----
   // Only when there IS a recorded end date: an active workspace without one
   // never expires and must never be nagged to renew.
-  if (status === "active" && subscriptionEndsAt && daysLeft <= 7 && !dismissed && !ALLOW.some((p) => path?.startsWith(p))) {
+  if (status === "active" && subscriptionEndsAt && daysLeft <= 7 && !dismissed && !isAllowedWhileLocked(path)) {
     const urgent = daysLeft <= 2;
     return (
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100%-2rem)]">

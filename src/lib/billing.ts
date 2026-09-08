@@ -1,6 +1,7 @@
 import "server-only";
 import { TRIAL_DAYS } from "@/lib/config";
 import { createClient } from "@/lib/supabase/server";
+import { isLocked } from "@/lib/paywall";
 import { getUserAndOrg } from "@/lib/data";
 
 const DAY = 86_400_000;
@@ -119,8 +120,7 @@ export async function getBillingStatus(): Promise<BillingStatus> {
 
     Anyone locked here genuinely has no plan and no credits.
   */
-  const hasSpendableCredits = unlimited || credits > 0;
-  const locked = enforceable && (blocked || (status === "expired" && !hasSpendableCredits));
+  const locked = isLocked({ enforceable, status, blocked, credits, unlimited });
 
   return {
     known: true, enforceable, status, daysLeft,

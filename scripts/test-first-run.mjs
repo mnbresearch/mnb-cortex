@@ -61,18 +61,45 @@ const read = (f) => stripComments(readFileSync(f, "utf8"));
 
 /* ------------------------------------------------------------ the deadlock */
 
+/*
+  THE LIST MOVED, AND THAT IS THE POINT.
+
+  This used to read `const ALLOW = [...]` out of trial-guard.tsx — a "use
+  client" component, which is precisely why the list could never be executed
+  and why it drifted from the wizard's own destinations in the first place. It
+  now lives in src/lib/paywall.ts as a pure module with no imports, and
+  scripts/test-paywall.mjs EXECUTES it against the states a real signup passes
+  through, including parsing the wizard's hrefs so a fourth button there fails
+  the suite.
+
+  The three checks below stay here anyway, reading the new home, because
+  first-run is where someone will look when signup breaks again. They overlap
+  with test-paywall deliberately: this file explains WHY, that one proves WHAT.
+*/
 const guard = read("src/components/trial-guard.tsx");
-const allow = (guard.match(/const ALLOW = \[([^\]]*)\]/) || [])[1] || "";
+const allow = read("src/lib/paywall.ts");
+
+check(
+  "trial-guard no longer keeps its own copy of the list",
+  !/const ALLOW\s*=/.test(guard) && /isAllowedWhileLocked/.test(guard),
+  "two copies of this list is the bug that locked every new customer out of the wizard's own buttons",
+);
 
 check(
   "the paywall lets a locked user reach onboarding",
   /"\/onboarding"/.test(allow),
-  "TRIAL_DAYS is 0, so every new workspace is locked on creation and the post-signup redirect goes to /onboarding — leaving it out of ALLOW means the first screen after signup is a lock over a page nobody can use",
+  "TRIAL_DAYS is 0, so every new workspace is locked on creation and the post-signup redirect goes to /onboarding — leaving it out means the first screen after signup is a lock over a page nobody can use",
 );
 
 for (const p of ["/billing", "/pricing"]) {
   check(`the paywall still lets a locked user reach ${p}`, allow.includes(`"${p}"`),
     "a locked user who cannot reach billing cannot pay, which is the only thing the paywall wants them to do");
+}
+
+/* The wizard's own exits, which is the half that was actually missing. */
+for (const p of ["/import", "/receivables", "/dashboard"]) {
+  check(`...and the wizard's own button ${p}`, allow.includes(`"${p}"`),
+    "the onboarding wizard links here; a lock behind it makes the first session a dead end");
 }
 
 /*
