@@ -34,8 +34,8 @@ export type ChargeResult = { ok: boolean; enforced: boolean; cost: number; balan
 // The entitlement rules live in their own dependency-free module so they can be
 // unit-tested (`npm run test:entitlement`). Re-exported here because that is
 // where every caller already imports them from.
-export { effectiveStatus, isLapsed, statusOf } from "@/lib/entitlement";
-import { isLapsed, statusOf } from "@/lib/entitlement";
+export { effectiveStatus, isLapsed, isHardStopped, statusOf } from "@/lib/entitlement";
+import { isLapsed, isHardStopped, statusOf } from "@/lib/entitlement";
 
 function planAllowance(plan: string, status: string, override?: number | null): number {
   // Explicit super-admin override wins (0 = ignore, -1 = unlimited, +n = fixed).
@@ -173,6 +173,19 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
     //
     // Only a workspace that is BOTH lapsed and out of credits is refused.
     const balanceNow = Number((org as any)?.credits ?? 0);
+    /*
+      AN OPERATOR SUSPENSION OUTRANKS BOTH ESCAPE HATCHES.
+
+      The test below is the clock: lapsed AND no override AND out of credits.
+      Every one of those conditions is a reason to let someone keep working, and
+      `hasOverride` short-circuits the whole thing — so a workspace we had
+      deliberately suspended, holding either credits or any non-zero allowance,
+      carried on spending. See isHardStopped() in entitlement.ts for what that
+      cost. Checked FIRST, and unconditionally.
+    */
+    if (isHardStopped(status)) {
+      return { ok: false, enforced: true, cost, balance: balanceNow, reason: "lapsed" };
+    }
     if (isLapsed(status) && !hasOverride && balanceNow < cost) {
       return { ok: false, enforced: true, cost, balance: balanceNow, reason: "lapsed" };
     }
@@ -341,6 +354,11 @@ async function generationGate(kind: "image" | "video"): Promise<ImageGate> {
     // A workspace with no live plan but a bought credit balance is pay-as-you-go
     // and must still be able to spend what it paid for.
     const balance = Number((org as any)?.credits ?? 0);
+    // Same hard stop as chargeForMode: a suspension is a decision, not a clock,
+    // and must not be survivable by holding a credit balance.
+    if (isHardStopped(status)) {
+      return { allowed: false, used: 0, limit: 0, plan, active: false, reason: `This workspace is suspended. Contact support to restore ${kind} agents.` };
+    }
     const payg = isLapsed(status) && balance > 0;
     if (isLapsed(status) && !payg) {
       return { allowed: false, used: 0, limit: 0, plan, active: false, reason: `Your plan is inactive. Add credits or choose a plan to use ${kind} agents.` };

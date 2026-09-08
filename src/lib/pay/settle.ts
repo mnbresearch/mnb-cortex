@@ -2,7 +2,7 @@ import "server-only";
 import { getOrder } from "@/lib/pay/cashfree";
 import { serviceClient } from "@/lib/supabase/server";
 import { grantCredits } from "@/lib/credits";
-import { PLANS, CREDIT_PACKS } from "@/lib/config";
+import { PLANS, CREDIT_PACKS, PLAN_CREDITS } from "@/lib/config";
 import { PAYMENTS_TABLE } from "@/lib/pay/table";
 import { emitQuietly } from "@/lib/webhooks";
 import { rewardReferral } from "@/lib/referrals";
@@ -93,6 +93,42 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
     return { orgId, ok: false, error: "Payment amount did not match the plan price." };
   }
 
+  /*
+    VALIDATE BEFORE CLAIMING. THE ORDER OF THESE TWO BLOCKS WAS THE BUG.
+
+    The claim below writes `status: "paid"`. Three exits AFTER it — "Unknown
+    plan", "Unknown credit pack", "Unknown order type" — return without calling
+    releaseClaim(). So an order whose note names something not in the catalogue
+    was recorded as PAID, granted nothing, and could never recover: every retry
+    finds a prior row whose status IS "paid", passes the `priorStatus !== "paid"`
+    guard, and falls through to the same refusal again. Money taken, nothing
+    given, and no code path that could ever fix it.
+
+    That is not hypothetical. `ref` comes from the order note written when
+    checkout STARTED, so a checkout opened before a plan id was renamed or
+    retired — this product has already retired four plan ids — settles into
+    exactly this state. So does an order whose note came back empty.
+
+    And the amount cross-check above is complicit: `expected` stays 0 for an
+    unknown ref, so `expected > 0 && ...` skips, and an unrecognised order is
+    also an unverified one.
+
+    Checked here, before anything is written. `unknown_ref` is a distinct status
+    so the row is findable rather than looking like a normal payment — the
+    superadmin console lists it (see admin-metrics.ts) instead of filtering it
+    out.
+  */
+  const knownRef =
+    (type === "plan" && !!PLANS.find((x) => x.id === ref)) ||
+    (type === "credits" && !!CREDIT_PACKS.find((x) => x.id === ref));
+  if (!knownRef) {
+    await svc.from(PAYMENTS_TABLE).upsert(
+      { order_id: orderId, org_id: orgId, kind: type || "unknown", ref: ref || null, amount: order.amount, status: "unknown_ref" },
+      { onConflict: "order_id", ignoreDuplicates: true },
+    );
+    return { orgId, ok: false, error: `We could not match this payment to a current plan or pack. Your payment is recorded — contact support and quote order ${orderId}.` };
+  }
+
   // Claim the order idempotently. If a row already existed, `data` is empty and
   // we must NOT grant again.
   const { data: claimed, error: claimErr } = await svc.from(PAYMENTS_TABLE).upsert(
@@ -140,14 +176,45 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       // stack the new one on top of it rather than truncating what they've paid for.
       const days = cycle === "annual" ? 365 : 30;
       let from = Date.now();
+      let priorPlan = "";
       try {
-        const { data: cur } = await svc.from("organizations").select("subscription_ends_at").eq("id", orgId).single();
+        const { data: cur } = await svc.from("organizations").select("subscription_ends_at, plan").eq("id", orgId).single();
         const existing = (cur as any)?.subscription_ends_at ? new Date((cur as any).subscription_ends_at).getTime() : 0;
         if (existing > from) from = existing;
+        priorPlan = String((cur as any)?.plan || "").toLowerCase();
       } catch { /* column not migrated yet — start from now */ }
       const endsAt = new Date(from + days * 86_400_000).toISOString();
 
       const patch: Record<string, any> = { plan: ref, subscription_status: "active" };
+
+      /*
+        AN UPGRADE HAS TO DELIVER THE CREDITS IT WAS SOLD ON, TODAY.
+
+        This function sets `plan` and never grants credits for a plan purchase.
+        Credits arrive lazily through sync_allowance(), which pays out only when
+        `credits_reset_at is null or < now()` — and nothing in the payment path
+        touched that column. So a customer on Try (735 credits) who upgrades to
+        Command (37,000) on day 5 of their cycle receives ZERO additional
+        credits until day 30, while paying ₹39,999 for them.
+
+        They will not read it as a scheduling nuance. They paid fifty times more
+        and the number on the usage page did not move.
+
+        Clearing credits_reset_at makes the very next sync_allowance() top them
+        up to the NEW plan's allowance immediately. Deliberately narrow:
+
+        - only when the plan actually CHANGED, so a renewal or a second month
+          bought early cannot mint a duplicate allowance; and
+        - only when the new allowance is LARGER, so this is an upgrade path and
+          not a way to farm credits by hopping between tiers.
+
+        The leftover balance from the old plan is not clawed back. They paid for
+        those too.
+      */
+      const priorAllowance = PLAN_CREDITS[priorPlan] ?? 0;
+      const newAllowance = PLAN_CREDITS[ref] ?? 0;
+      const isUpgrade = priorPlan !== ref && newAllowance > priorAllowance && newAllowance > 0;
+      if (isUpgrade) patch.credits_reset_at = null;
       const { error: withPeriod } = await svc.from("organizations")
         .update({ ...patch, subscription_ends_at: endsAt, subscription_cycle: cycle === "annual" ? "annual" : "monthly" })
         .eq("id", orgId);
@@ -212,6 +279,26 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
         }
         const retry = await svc.from("organizations").update(patch).eq("id", orgId);
         if (retry.error) { await releaseClaim(); return { orgId, ok: false, retryable: true, error: retry.error.message }; }
+      }
+
+      /*
+        Top up NOW rather than on their next AI call.
+
+        Clearing credits_reset_at above makes the allowance DUE; sync_allowance
+        is what actually pays it, and it is only ever called from
+        getCreditStatus() and chargeForMode(). Waiting for one of those means
+        the customer lands back on /billing having just paid ₹39,999 and sees
+        the old balance — which reads as "the payment did not work", and the
+        support message is already written before the number ever moves.
+
+        Best effort by design: the plan is granted and committed at this point,
+        and lib/credits.ts will do exactly this on the next read anyway. This
+        only decides whether they see it in five seconds or five minutes.
+      */
+      if (isUpgrade) {
+        try {
+          await svc.rpc("sync_allowance", { p_org: orgId, p_amount: newAllowance, p_days: 30 });
+        } catch { /* the lazy path in lib/credits.ts still covers it */ }
       }
 
       try { await svc.from("subscriptions").insert({ org_id: orgId, plan: ref, status: "active", provider: "cashfree", amount: order.amount, reference: orderId }); } catch { /* audit only */ }

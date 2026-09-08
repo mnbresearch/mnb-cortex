@@ -128,6 +128,32 @@ export async function deliverAlerts(origin?: string, budget?: Budget): Promise<D
     } catch { claimed = false; }
     if (!claimed) continue;
 
+    /*
+      EVERY PATH OUT OF THIS LOOP AFTER THE CLAIM MUST RELEASE IT.
+
+      The comment 40 lines below already argues this case — "an alert silently
+      marked 'delivered' and never delivered is the single worst state a row can
+      be in" — and the release was wired into exactly ONE of the four exits, the
+      Resend-failure branch. Two `continue` statements sitting between the claim
+      and the send skipped it entirely:
+
+        - the daily-gap check, which is a DEFERRAL. Those alerts were meant to
+          go out tomorrow. Instead they were stamped notified, and the query at
+          the top of this function filters on `.is("notified_at", null)`, so
+          tomorrow never came for them. Any workspace that got a digest within
+          the last 20 hours had its next batch destroyed rather than delayed.
+        - a workspace with no owner email, which is a config problem that should
+          resolve the moment someone confirms an address — and instead silently
+          consumed the alerts raised while it was unresolved.
+
+      Both are recoverable states being treated as terminal, which is the exact
+      inversion of what the claim is for. One helper, called on every exit.
+    */
+    const release = async () => {
+      try { await svc.from("alerts").update({ notified_at: null }).in("id", ids); }
+      catch { /* it will age out of the `since` window; nothing better to do */ }
+    };
+
     // Respect the per-workspace daily gap using the org's own last digest.
     try {
       const { data: recent } = await svc.from("alerts")
@@ -135,11 +161,11 @@ export async function deliverAlerts(origin?: string, budget?: Budget): Promise<D
         .not("id", "in", `(${ids.join(",")})`)
         .order("notified_at", { ascending: false }).limit(1);
       const last = (recent as any[])?.[0]?.notified_at;
-      if (last && now - new Date(last).getTime() < MIN_GAP_MS) continue;
+      if (last && now - new Date(last).getTime() < MIN_GAP_MS) { await release(); continue; }
     } catch { /* no history — proceed */ }
 
     const to = await ownerEmail(svc, orgId);
-    if (!to) continue;
+    if (!to) { await release(); continue; }
 
     const ordered = list.slice().sort((a, b) => {
       const rank = (s: string) => (s === "red" ? 0 : s === "yellow" ? 1 : 2);
@@ -179,9 +205,7 @@ export async function deliverAlerts(origin?: string, budget?: Budget): Promise<D
           property: if the send threw after Resend accepted it, we still leave
           the claim in place and prefer a missed repeat over a daily repeat.
         */
-        try {
-          await svc.from("alerts").update({ notified_at: null }).in("id", ids);
-        } catch { /* it will age out of the window; nothing better to do */ }
+        await release();
       }
     } catch { /* threw after a possible delivery — keep the claim, see above */ }
   }

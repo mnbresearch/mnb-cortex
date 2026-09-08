@@ -104,6 +104,66 @@ for (const map of ["PLAN_SEATS", "IMAGE_WEEKLY", "VIDEO_WEEKLY", "PLAN_CAPABILIT
     `a plan missing from ${map} silently inherits another tier's entitlement`);
 }
 
+/*
+  AND THE PER-PLAN MAPS THAT ARE NOT IN config.ts.
+
+  The four checks above passed the whole time the entry tier was broken, because
+  they only ever looked inside one file. Every per-plan structure OUTSIDE
+  config.ts was missing `try`, and each one falls back rather than throwing:
+
+    integrations.ts PLAN_RANK            -> `?? PLAN_RANK.starter` = 1
+    integrations.ts PLAN_INTEGRATION_LIMIT -> `?? 2`
+
+  So a ₹799 customer ranked below a retired tier and was refused the Tally,
+  Vyapar and Busy connectors that config.ts sells the plan on — server-side, with
+  an error naming a plan that no longer exists. A fallback is silent by
+  definition; it cannot tell you it fired.
+
+  This walks src/ for `Record<string, number>` maps keyed by plan id and requires
+  every one of them to name the entry tier explicitly. New maps are covered
+  automatically, which is the point — the next plan added will hit the same wall
+  unless something checks the whole tree.
+*/
+import { readdirSync, statSync } from "node:fs";
+
+function walk(dir) {
+  const out = [];
+  for (const e of readdirSync(dir)) {
+    const p = `${dir}/${e}`;
+    if (statSync(p).isDirectory()) out.push(...walk(p));
+    else if (/\.(ts|tsx)$/.test(p)) out.push(p);
+  }
+  return out;
+}
+
+/* A map is "per-plan" if it names at least three live plan ids. That threshold
+   is what distinguishes a plan table from an unrelated Record that happens to
+   contain the word `watch`. */
+const LIVE = ["watch", "watchpro", "practice", "command", "enterprise"];
+const planMaps = [];
+for (const f of walk("src")) {
+  const src = stripComments(readFileSync(f, "utf8"));
+  for (const m of src.matchAll(/export const ([A-Z][A-Z0-9_]*)\s*:\s*Record<\s*string\s*,\s*(?:number|string|boolean)\s*>\s*=\s*\{/g)) {
+    const start = m.index + m[0].length;
+    const end = src.indexOf("};", start);
+    if (end < 0) continue;
+    const body = src.slice(start, end);
+    const named = LIVE.filter((p) => new RegExp(`\\b${p}\\s*:`).test(body)).length;
+    if (named >= 3) planMaps.push({ file: f, name: m[1], body });
+  }
+}
+
+check("the sweep actually found the per-plan maps", planMaps.length >= 2,
+  `found ${planMaps.length} — if the pattern stops matching, this check goes quiet instead of failing`);
+
+for (const { file, name, body } of planMaps) {
+  check(
+    `${name} (${file}) names the entry plan`,
+    /\btry\s*:/.test(body),
+    "it falls back to another tier's entitlement instead of erroring, so a paying customer is quietly under-served and nothing logs it",
+  );
+}
+
 /* Video and image are premium actions; ₹799 must not include ₹77-a-clip Veo. */
 const iw = config.slice(config.indexOf("export const IMAGE_WEEKLY"));
 const vw = config.slice(config.indexOf("export const VIDEO_WEEKLY"));

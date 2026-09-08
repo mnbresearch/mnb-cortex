@@ -127,8 +127,21 @@ export async function pollVideo(operation: string): Promise<VideoStatus> {
 export async function fetchVideo(uri: string): Promise<Response | null> {
   const k = key();
   if (!k) return null;
-  // Only ever fetch from Google's own file host.
-  if (!/^https:\/\/generativelanguage\.googleapis\.com\//.test(uri)) return null;
+  /*
+    HOST WAS NOT ENOUGH — the PATH has to be pinned too.
+
+    The old test allowed any path on generativelanguage.googleapis.com, and this
+    function appends OUR api key and streams the response back to whoever asked.
+    Any signed-in user could therefore point `?file=` at some other endpoint on
+    that host and have us make an authenticated GET on their behalf: model and
+    file listings at minimum, and another tenant's rendered clip if its
+    operation id ever leaked. GET-only kept generateContent out of reach, which
+    is luck rather than design.
+
+    Generated files live under /v1beta/files/ or /v1/files/ and nowhere else, so
+    pinning the prefix costs no legitimate call and closes the general proxy.
+  */
+  if (!/^https:\/\/generativelanguage\.googleapis\.com\/v1(?:beta)?\/files\/[A-Za-z0-9_.:%-]+(?::download)?(?:\?|$)/.test(uri)) return null;
   const sep = uri.includes("?") ? "&" : "?";
   try {
     return await fetch(`${uri}${sep}key=${encodeURIComponent(k)}`);

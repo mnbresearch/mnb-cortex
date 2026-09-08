@@ -165,4 +165,34 @@ select jsonb_build_object(
 );
 $$;
 
-grant execute on function public.cortex_aggregate(uuid) to authenticated, service_role;
+/*
+  THE GRANT IS THE PART THAT ALMOST GOT COPIED WRONG.
+
+  "Copied verbatim" was right for the body and WRONG for the tail. The verbatim
+  source for this file was the pre-tenancy version of the function, whose last
+  line granted EXECUTE to `authenticated`. 2026_tenancy_aggregate.sql had
+  deliberately revoked exactly that — and because this file is named `zz` so it
+  applies LAST, copying the old tail silently undid the fix.
+
+  What that would have cost: this function is SECURITY DEFINER, takes the org id
+  as a PARAMETER, and checks no membership. Granted to `authenticated`,
+  PostgREST exposes it at /rest/v1/rpc/cortex_aggregate to anyone with a free
+  account. Post `{"p_org": "<any org uuid>"}` and you get that business's twelve
+  months of revenue, receivables, payables, stock value, headcount and TOTAL
+  MONTHLY PAYROLL, with RLS bypassed.
+
+  And org UUIDs are not secret — the org switcher and the Practice console ship
+  them to the browser as props. So the real damage is that revocation would stop
+  working: remove a departing employee's or a fired accountant's membership and
+  every other path locks them out correctly, but they kept the UUID, and this
+  function would never have asked.
+
+  There is no legitimate caller to serve. lib/metrics.ts:94 is the only call
+  site and it uses the SERVICE-ROLE client, which does not need the grant.
+
+  scripts/test-definer-grants.cjs now applies the whole migration directory in
+  filename order and asserts the FINAL privilege, so a later file re-granting
+  this fails the suite instead of winning by sort order.
+*/
+revoke execute on function public.cortex_aggregate(uuid) from public, anon, authenticated;
+grant  execute on function public.cortex_aggregate(uuid) to service_role;

@@ -142,8 +142,26 @@ export async function sendRenewalReminders(budget?: Budget): Promise<RenewalResu
       .insert({ org_id: o.id, kind, period_end: o.subscription_ends_at });
     if (claimErr) { out.skipped++; continue; } // already sent for this period
 
+    /*
+      Release on the missing-contact path too, not only on a send failure.
+
+      The claim row IS the "we told them" record, and it is keyed on
+      (org_id, kind, period_end) with a unique index — so a notice claimed for a
+      workspace whose billing contact could not be resolved is never retried for
+      that period. A renewal reminder is the last thing a customer gets before
+      their plan lapses; leaving it claimed means they find out by being locked
+      out. The address problem usually resolves within a day, and this is the
+      same fix already applied twelve lines below.
+    */
+    const releaseClaim = async () => {
+      try {
+        await svc.from("renewal_notices").delete()
+          .eq("org_id", o.id).eq("kind", kind).eq("period_end", o.subscription_ends_at);
+      } catch { /* it will be retried only if this succeeds; nothing better to do */ }
+    };
+
     const contact = await billingContact(svc, o.id);
-    if (!contact) { out.errors++; continue; }
+    if (!contact) { out.errors++; await releaseClaim(); continue; }
 
     const { subject, html } = render(kind, contact.name, planLabel(o.plan), new Date(end), Math.max(0, daysLeft));
     const res = await sendEmail(contact.email, subject, html, { from: brandFrom(), replyTo: brandReplyTo() });
@@ -154,7 +172,7 @@ export async function sendRenewalReminders(budget?: Budget): Promise<RenewalResu
     } else {
       out.errors++;
       // Release the claim so tomorrow's run retries rather than skipping forever.
-      try { await svc.from("renewal_notices").delete().eq("org_id", o.id).eq("kind", kind).eq("period_end", o.subscription_ends_at); } catch {}
+      await releaseClaim();
     }
   }
 

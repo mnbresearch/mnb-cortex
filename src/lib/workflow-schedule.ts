@@ -110,13 +110,25 @@ export async function runScheduledWorkflows(budget?: Budget): Promise<ScheduleRe
       res.ok ? ran++ : failed++;
 
       try {
-        await svc.from("workflow_runs").insert({
+        /*
+          `log`, not `summary`. The column is `log` (schema.sql:278) and the
+          MANUAL run path in actions.ts writes it correctly; only this one, the
+          scheduled path, used a name that does not exist. PostgREST rejected
+          every insert, the catch below swallowed it, and `res.ok ? ran++` had
+          already been counted — so scheduled workflows reported success and
+          left no audit row at all. The one execution path nobody watches in
+          real time is the one whose history was empty.
+        */
+        const { error: auditErr } = await svc.from("workflow_runs").insert({
           workflow_id: wf.id,
           org_id: wf.org_id,
           status: res.ok ? "success" : "failed",
-          summary: `[scheduled] ${res.summary}`.slice(0, 500),
+          log: `[scheduled] ${res.summary}`.slice(0, 500),
         });
-      } catch { /* the run happened; the audit row is best-effort */ }
+        // Best-effort, but not silent: a missing audit row is how "it ran fine"
+        // and "it never ran" become indistinguishable.
+        if (auditErr) console.error("[workflow-schedule] audit row not written:", auditErr.message);
+      } catch (e: any) { console.error("[workflow-schedule] audit row not written:", e?.message); }
     } catch {
       failed++;
     }

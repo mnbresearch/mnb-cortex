@@ -7,10 +7,23 @@
  * looked up as `undefined` and fell through to the Starter cap — so the most
  * expensive plan got FEWER integrations (2) than the ₹2,499 one (3).
  */
-export type PlanId = "starter" | "growth" | "business" | "aicoo" | "enterprise" | "solo" | "premium";
+export type PlanId = "try" | "starter" | "growth" | "business" | "aicoo" | "enterprise" | "solo" | "premium";
 // Ordering drives every "minimum plan" gate, so a missing id here silently
 // under-privileges a paying customer. aicoo must outrank business.
 export const PLAN_RANK: Record<string, number> = {
+  /*
+    `try` is the ₹799 entry tier and it was missing here — which is the exact
+    failure this file's header already describes happening to `solo` and
+    `business`, repeated. planRank() falls back to `starter` = 1, so a paying
+    entry customer ranked BELOW the retired free-ish tier and every minPlan gate
+    refused them. Concretely: config.ts sells this plan on "Reads your Tally,
+    Vyapar & Busy exports", and all three of those connectors were rejected
+    server-side with an error naming a plan that no longer exists.
+
+    Rank 1 is correct — it is the cheapest live tier — but it has to be WRITTEN,
+    because the fallback is indistinguishable from the intent.
+  */
+  try: 1,
   watch: 2, watchpro: 3, practice: 3, command: 4, enterprise: 5,
   starter: 1, growth: 2, business: 3, aicoo: 4,
   // legacy ids mapped onto the nearest current tier
@@ -40,6 +53,9 @@ export type Integration = {
 
 /** How many integrations each plan may connect. */
 export const PLAN_INTEGRATION_LIMIT: Record<string, number> = {
+  // The entry tier: enough to connect the books plus a store, which is what the
+  // plan is FOR. Absent, it fell through to `?? 2` — below the retired Starter.
+  try: 4,
   watch: 10,
   watchpro: 30,
   practice: 30,

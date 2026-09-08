@@ -181,6 +181,58 @@ export default async function SuperAdmin() {
                     that shows up here as a payment with no matching subscription — worth checking before
                     it becomes a support ticket.
                   </p>
+                  {/*
+                    PAID, AND GRANTED NOTHING.
+
+                    Rendered ABOVE the revenue table, because it is the only
+                    thing on this page that needs acting on today. Each of these
+                    is a person who has been charged and has not received what
+                    they bought — and until now none of them appeared anywhere
+                    in the product, because every payments query filtered on
+                    status = 'paid'.
+
+                    The order id is the handle: Cashfree → Orders identifies the
+                    payer, then "Manage customers" below puts them on the right
+                    plan or credits them.
+                  */}
+                  {econ.failedPayments.length > 0 && (
+                    <div className="rounded-lg border border-danger/40 bg-danger/5 p-3 mb-3 text-sm">
+                      <b className="text-danger">
+                        {econ.failedPayments.length} payment{econ.failedPayments.length === 1 ? " was" : "s were"} taken and never granted.
+                      </b>{" "}
+                      Fix these first — each one is a customer who has paid and has nothing to show for it.
+                      <div className="mt-2 rounded-lg border bg-background overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-muted/40 text-muted-foreground">
+                            <tr>
+                              <th className="text-left px-2 py-1.5 font-medium">When</th>
+                              <th className="text-left px-2 py-1.5 font-medium">Order</th>
+                              <th className="text-left px-2 py-1.5 font-medium">Workspace</th>
+                              <th className="text-left px-2 py-1.5 font-medium">What went wrong</th>
+                              <th className="text-right px-2 py-1.5 font-medium">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {econ.failedPayments.map((p) => (
+                              <tr key={p.order_id} className="border-t">
+                                <td className="px-2 py-1.5 whitespace-nowrap">{new Date(p.when).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" })}</td>
+                                <td className="px-2 py-1.5 font-mono truncate max-w-[190px]" title={p.order_id}>{p.order_id}</td>
+                                <td className="px-2 py-1.5 truncate max-w-[150px]">{p.org}</td>
+                                <td className="px-2 py-1.5">
+                                  {p.status === "grant_unverified"
+                                    ? "We could not confirm the plan was applied — check the workspace, then set it by hand."
+                                    : p.status === "unknown_ref"
+                                      ? `Order named "${p.ref}", which is not a current plan or pack — grant the equivalent by hand.`
+                                      : "Amount paid did not match the price — check Cashfree before granting."}
+                                </td>
+                                <td className="px-2 py-1.5 text-right tabular">{inr(p.amount)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                   {econ.unattributedCount > 0 && (
                     <div className="rounded-lg border border-danger/30 bg-danger/5 p-3 mb-2 text-sm">
                       <b className="text-danger">{econ.unattributedCount} payment{econ.unattributedCount === 1 ? "" : "s"} totalling {inr(econ.unattributedAmount)} activated no workspace.</b>{" "}
@@ -331,6 +383,46 @@ export default async function SuperAdmin() {
           <p className="text-xs text-muted-foreground mt-2">
             This creates the workspaces and profiles only. Real revenue, margin and cash figures must come from your own systems — import them via <Link href="/import" className="text-primary">Import data</Link> or the public API. Nothing is invented.
           </p>
+        </Section>
+
+        {/*
+          TOOLS THAT WERE BUILT, WORK, AND HAD NO LINK.
+
+          /superadmin/paytest is a finished ₹1 live payment test. GET and POST
+          /api/admin/cashfree-check is a genuinely good diagnostic — secret
+          fingerprint, whitespace detection, env mismatch, signature replay —
+          and it never reveals the secret itself. Both are super-admin gated.
+          Neither appeared in the sidebar, on this page, or anywhere else: the
+          only way to reach them was to remember the URL.
+
+          They exist for exactly one situation — a payment incident — which is
+          the situation in which nobody remembers a URL. A finished tool with no
+          entry point is indistinguishable from a tool that was never built.
+        */}
+        <Section title="Payments toolkit" desc="Use these before touching Cashfree's dashboard">
+          <Card className="p-5 space-y-3">
+            <p className="text-sm text-muted-foreground max-w-3xl">
+              When a payment misbehaves, check the configuration before assuming the gateway is at fault —
+              most incidents in this product have been a webhook secret with a trailing space, or test keys
+              left in a production environment.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a href="/superadmin/paytest" className="rounded-lg border px-3 h-9 inline-flex items-center text-sm hover:bg-muted transition-colors">
+                ₹1 live payment test
+              </a>
+              <a href="/api/admin/cashfree-check" target="_blank" rel="noreferrer" className="rounded-lg border px-3 h-9 inline-flex items-center text-sm hover:bg-muted transition-colors">
+                Cashfree configuration check
+              </a>
+              <a href="/api/health" target="_blank" rel="noreferrer" className="rounded-lg border px-3 h-9 inline-flex items-center text-sm hover:bg-muted transition-colors">
+                Full health detail
+              </a>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The configuration check reports a non-reversible fingerprint of the webhook secret, never the
+              secret itself. Health detail is the operator view — signed-out visitors see only each
+              service&apos;s status, not the reason behind it.
+            </p>
+          </Card>
         </Section>
 
         <Section title="Backup" desc="Your only copy of customer data — take one before any migration">

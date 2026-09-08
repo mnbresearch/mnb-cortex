@@ -60,7 +60,13 @@ check(seats && Object.keys(seats).length >= 8, "parse: read PLAN_SEATS");
 check(images && Object.keys(images).length >= 8, "parse: read IMAGE_WEEKLY");
 check(videos && Object.keys(videos).length >= 8, "parse: read VIDEO_WEEKLY");
 
-const LIVE = ["watch", "watchpro", "practice", "command", "enterprise"];
+/*
+  `try` is live and purchasable, and it sits deliberately BELOW the premium
+  floor — see the two constants further down. Listing it here is what makes the
+  coverage loop check that every per-plan table names it; a plan absent from
+  PLAN_SEATS or IMAGE_WEEKLY falls through to another tier's entitlement.
+*/
+const LIVE = ["try", "watch", "watchpro", "practice", "command", "enterprise"];
 const RETIRED = ["starter", "growth", "business", "aicoo"];
 
 /*
@@ -85,11 +91,46 @@ check(plans.length >= 5, "parse: read the PLANS ladder", `${plans.length} found`
 const live = plans.filter((p) => LIVE.includes(p.id) && p.monthly > 0);
 check(live.length >= 4, "there are at least four purchasable tiers", `${live.length}`);
 
-const FLOOR = 4999;
+/*
+  TWO DIFFERENT NUMBERS, WHICH THIS FILE USED TO TREAT AS ONE.
+
+  A single `FLOOR = 4999` served both as "no core tier may be cheaper than
+  this" and as "this is the price the marketing pages must quote". That held
+  only while the cheapest plan and the premium floor were the same plan. The
+  ₹799 entry tier separates them, and conflating them would force a choice
+  between two wrong answers: either quote ₹4,999 on the landing page when a
+  visitor can buy something for ₹799, or drop the floor and lose the check that
+  stops the core ladder drifting back down towards Zoho at ₹899.
+
+  So:
+
+  PREMIUM_FLOOR — the strategic floor for the tiers Cortex is actually sold on.
+    The entry tier is exempt BY NAME, not by being cheap, so a future plan
+    cannot slip under the floor by accident.
+
+  entryPrice — derived, never typed: the cheapest thing a visitor can buy. This
+    is what the public pages must quote, because a page quoting a higher price
+    than the pricing page turns the first click into a bait-and-switch.
+
+  The entry tier is separately proved not to undercut on VALUE — it sells
+  credits at ₹0.9059 against Watch's ₹0.9056 — in scripts/test-entry-plan.mjs.
+  Cheaper ticket, same rate, less of it.
+*/
+const ENTRY_TIER = "try";
+const PREMIUM_FLOOR = 4999;
 for (const p of live) {
-  check(p.monthly >= FLOOR, `"${p.id}" is at or above the ₹${FLOOR} floor`,
+  if (p.id === ENTRY_TIER) continue;
+  check(p.monthly >= PREMIUM_FLOOR, `"${p.id}" is at or above the ₹${PREMIUM_FLOOR} floor`,
     `₹${p.monthly} — the point of repricing was to stop competing on price with Zoho at ₹899`);
 }
+
+const entryPlan = live.find((p) => p.id === ENTRY_TIER);
+check(Boolean(entryPlan), `the entry tier "${ENTRY_TIER}" is in the live ladder`);
+check((entryPlan?.monthly || 0) > 0 && (entryPlan?.monthly || 0) < PREMIUM_FLOOR,
+  "the entry tier is genuinely cheaper than the premium floor",
+  `₹${entryPlan?.monthly} — if it were not, it would not be an entry tier and this exemption should be removed`);
+
+const FLOOR = Math.min(...live.map((p) => p.monthly));
 
 /*
   No live tier may sell a credit below ₹0.90, the floor every action in
@@ -183,7 +224,9 @@ check(/early-warning/i.test(layout), "page metadata carries the new position");
   first impression and the kind of thing that gets screenshotted.
 
   Nobody re-reads a marketing page when they change a number in config.ts, so
-  the two are pinned together here. FLOOR is derived from the live plans above.
+  the two are pinned together here. FLOOR is derived from the live plans above
+  — the MINIMUM of them, not the premium floor, because what a visitor needs to
+  be told is the cheapest price they can actually pay.
 */
 {
   const cheapest = FLOOR;

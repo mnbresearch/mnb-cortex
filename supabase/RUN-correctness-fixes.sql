@@ -186,7 +186,16 @@ select jsonb_build_object(
 );
 $$;
 
-grant execute on function public.cortex_aggregate(uuid) to authenticated, service_role;
+/*
+  NOT `authenticated`. This function is SECURITY DEFINER and takes the org id as
+  a parameter with no membership check, so granting it to `authenticated` would
+  publish any workspace's revenue, receivables and payroll at
+  /rest/v1/rpc/cortex_aggregate to anyone holding that org's UUID — and org
+  UUIDs ship to the browser in the org switcher. lib/metrics.ts calls this with
+  the service-role client, which does not need the grant.
+*/
+revoke execute on function public.cortex_aggregate(uuid) from public, anon, authenticated;
+grant  execute on function public.cortex_aggregate(uuid) to service_role;
 
 
 /* --------------------------------------------------------------- verify --- */

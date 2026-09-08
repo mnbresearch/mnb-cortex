@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isSuperAdmin } from "@/lib/superadmin";
-import { provisionBusinesses, grantOrgAccess, joinOrg, manageOrg, provisionCustomer, setCollectionsSwitch } from "@/lib/superadmin-actions";
+import { provisionBusinesses, grantOrgAccess, joinOrg, manageOrg, recomputeOrg, provisionCustomer, setCollectionsSwitch } from "@/lib/superadmin-actions";
 
 const num = (v: any) => (typeof v === "number" && isFinite(v) ? v : undefined);
 
@@ -25,6 +25,7 @@ export async function POST(req: Request) {
       industry: body.industry ? String(body.industry) : undefined,
     }));
     if (op === "join") return NextResponse.json(await joinOrg(String(body.org_id || "")));
+    if (op === "recompute") return NextResponse.json(await recomputeOrg(String(body.org_id || "")));
     /*
       The collections kill switch. Routed through here rather than imported
       directly by the panel: superadmin-actions.ts carries `server-only`, and a

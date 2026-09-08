@@ -10,6 +10,21 @@ export async function POST(req: Request) {
   if (!hasCashfree()) return NextResponse.json({ ok: false, needsConfig: true, error: "Online payments aren't set up yet. Contact sales, or your admin can add Cashfree keys." });
   const { user, orgId } = await getUserAndOrg();
   if (!orgId) return NextResponse.json({ ok: false, error: "Sign in to a workspace first." });
+
+  /*
+    ADMIN, like every other billing surface.
+
+    This was the one route in /api/pay that took membership as sufficient, so a
+    `viewer` — the role you hand a bookkeeper or an intern — could open a
+    Cashfree checkout in the workspace's name. Nothing is charged without
+    someone completing payment, so this is not a way to spend the company's
+    money; it is a way to put the company's name and billing phone on an order
+    page, and it is inconsistent with /subscription, which already refuses.
+  */
+  const { hasRole } = await import("@/lib/roles");
+  if (!(await hasRole("admin"))) {
+    return NextResponse.json({ ok: false, error: "Only an admin or owner can start a payment." }, { status: 403 });
+  }
   const b = await req.json().catch(() => ({} as any));
   const origin = new URL(req.url).origin;
 

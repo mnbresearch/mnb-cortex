@@ -208,7 +208,9 @@ export async function GET(req: Request) {
   try {
     if (process.env.WEEKLY_UPDATE_ENABLED === "1" && istDay === 1) {
       const { sendWeeklyUpdate } = await import("@/lib/weekly-update");
-      weekly = await sendWeeklyUpdate({});
+      // SHARE.weeklyUpdate existed and was never passed to anything. See the
+      // loop in lib/weekly-update.ts for what that cost on Mondays.
+      weekly = await sendWeeklyUpdate({ budget: budget.slice(SHARE.weeklyUpdate) });
     }
   } catch (e: any) { weekly = { error: e?.message }; }
 

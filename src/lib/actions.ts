@@ -634,8 +634,27 @@ export async function importFromUrl(fd: FormData): Promise<{ inserted: number; e
     if (!spec) return { inserted: 0, error: "Unsupported dataset" };
     const { toCsvUrl, parseCsv } = await import("@/lib/csv");
     const url = toCsvUrl(str(fd.get("url")));
-    if (!/^https:\/\//.test(url)) return { inserted: 0, error: "Enter a valid https URL" };
-    const res = await fetch(url, { headers: { "User-Agent": "MNBCortex" } });
+    /*
+      `/^https:\/\//` WAS NOT A CONTROL. It tested the URL as typed, and fetch
+      follows redirects on its own — so `https://attacker.example/r` returning
+      `302 -> http://169.254.169.254/` passed the check and then fetched the
+      cloud metadata endpoint from inside the hosting network.
+
+      And this path is not blind SSRF. When no column matches, the error below
+      hands `headers.slice(0, 6)` back to the caller, and `headers` is the first
+      line of whatever the server received. So the response body reaches the
+      customer's screen and the status code makes a working port scanner.
+
+      safeFetch re-validates on every hop. See lib/net-guard.ts, including what
+      it deliberately does not solve.
+    */
+    const { safeFetch, BlockedUrlError } = await import("@/lib/net-guard");
+    let res: Response;
+    try { res = await safeFetch(url, { headers: { "User-Agent": "MNBCortex" } }); }
+    catch (e: any) {
+      if (e instanceof BlockedUrlError) return { inserted: 0, error: e.message };
+      return { inserted: 0, error: "Could not fetch that URL. Make sure the sheet/link is public." };
+    }
     if (!res.ok) return { inserted: 0, error: `Could not fetch (${res.status}). Make sure the sheet/link is public.` };
     const rows = parseCsv(await res.text());
     if (!rows.length) return { inserted: 0, error: "No rows found at that URL" };
@@ -1251,6 +1270,19 @@ export async function saveCollectionPolicy(fd: FormData): Promise<{ ok: boolean;
     Validated here as well as by the CHECK constraints. A bad value should be a
     clear message, not a database error surfaced to someone changing a setting.
   */
+  /*
+    Rejected with a message, not dropped.
+
+    Silently storing null for a malformed address would leave the owner
+    believing replies are routed when they are not — the same class of quiet
+    failure this whole field exists to fix.
+  */
+  const replyToRaw = str(fd.get("reply_to")).trim().toLowerCase();
+  if (replyToRaw && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(replyToRaw)) {
+    return { ok: false, error: "That reply-to address doesn't look like an email. Use something like accounts@yourcompany.in, or leave it blank." };
+  }
+  const replyTo = replyToRaw || null;
+
   const patch = {
     org_id: orgId,
     enabled: str(fd.get("enabled")) === "1",
@@ -1266,6 +1298,17 @@ export async function saveCollectionPolicy(fd: FormData): Promise<{ ok: boolean;
     do_not_contact: String(fd.get("do_not_contact") || "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 500),
     signature: str(fd.get("signature")) || null,
     payment_note: str(fd.get("payment_note")) || null,
+    /*
+      WHERE THE DEBTOR'S REPLY GOES.
+
+      lib/collections/index.ts already read this column to set Reply-To on a
+      chaser. Nothing ever wrote it, and no migration created it — so every
+      reminder we sent on a customer's behalf, through our relay, sent the
+      debtor's answer to US instead of to the business chasing the money. On a
+      product whose whole point is getting invoices paid, the reply path was
+      pointed at the wrong company.
+    */
+    reply_to: replyTo,
     whatsapp_template: waTemplate,
     whatsapp_lang: waLang,
     updated_at: new Date().toISOString(),
@@ -1283,8 +1326,10 @@ export async function saveCollectionPolicy(fd: FormData): Promise<{ ok: boolean;
     keeps working, and say what is missing rather than showing a raw PostgREST
     error about a column nobody has heard of.
   */
-  if (error && /whatsapp_template|whatsapp_lang|column/i.test(error.message || "")) {
-    const { whatsapp_template, whatsapp_lang, ...rest } = patch as any;
+  if (error && /whatsapp_template|whatsapp_lang|reply_to|column/i.test(error.message || "")) {
+    // reply_to arrives with 2026_zzx_missing_columns and is subject to the same
+    // deploy-before-migrate window described above.
+    const { whatsapp_template, whatsapp_lang, reply_to, ...rest } = patch as any;
     const retry = await sb.from("collection_policies").upsert(rest, { onConflict: "org_id" });
     if (retry.error) return { ok: false, error: retry.error.message };
     error = null as any;

@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { serviceClient } from "@/lib/supabase/server";
 import { brandFrom } from "@/lib/branded-email";
 import { RELEASES, releasesSince, type Release } from "@/lib/changelog";
+import type { Budget } from "@/lib/cron-budget";
 
 /* =========================================================================
    Weekly product-update email for MNB Cortex.
@@ -29,6 +30,8 @@ type Bullet = { title: string; detail: string };
 export type WeeklyResult = {
   skipped: boolean; reason?: string; version?: string;
   recipients?: number; sent?: number; failed?: number; test?: boolean; bullets?: number;
+  /** True when the shared cron budget cut the broadcast short. Reported, not hidden. */
+  stoppedEarly?: boolean;
 };
 
 /* ---- unsubscribe tokens (HMAC so links can't be forged) ------------------ */
@@ -210,7 +213,7 @@ async function batchSend(chunk: any[]): Promise<{ ok: number; fail: number }> {
 }
 
 /* ---- main ---------------------------------------------------------------- */
-export async function sendWeeklyUpdate(opts?: { test?: boolean; force?: boolean }): Promise<WeeklyResult> {
+export async function sendWeeklyUpdate(opts?: { test?: boolean; force?: boolean; budget?: Budget }): Promise<WeeklyResult> {
   const test = !!opts?.test;
   const sb = serviceClient();
   if (!sb) return { skipped: true, reason: "no SUPABASE_SERVICE_ROLE_KEY" };
@@ -248,8 +251,30 @@ export async function sendWeeklyUpdate(opts?: { test?: boolean; force?: boolean 
   const subject = `${APP_NAME} — what's new this week`;
   const from = process.env.WEEKLY_FROM || brandFrom();
 
-  let ok = 0, fail = 0;
+  /*
+    THIS LOOP HAD NO BUDGET, AND IT RUNS BEFORE EVERYTHING EXPENSIVE.
+
+    SHARE.weeklyUpdate was declared in cron-budget.ts and never referenced —
+    grep found ten SHARE.* call sites and none of them this one. So the Monday
+    product email iterated every confirmed user in the system, in batches of
+    100, sleeping a full second between batches, inside a 300-second function,
+    ahead of the weekly plan email, the sweep and the daily analysis.
+
+    That is precisely the starvation hole the shared budget was written to
+    close, left open in the one place the module's own constant was pointing
+    at. At a few thousand users the pacing alone would consume the run and the
+    three steps behind it would silently never happen — on a MONDAY, which is
+    the day the weekly plan email is supposed to go out.
+
+    Unsent recipients are not lost: this is a broadcast keyed by release
+    version, and `weekly_email_sends` records what actually went. Stopping
+    early sends fewer copies of a newsletter; running long stops a customer
+    finding out their receivables are overdue.
+  */
+  let ok = 0, fail = 0, stoppedEarly = false;
   for (let i = 0; i < recipients.length; i += 100) {
+    // A batch plus its pacing sleep is ~1.5s; ask for that before starting one.
+    if (opts?.budget && !opts.budget.ok(2_000)) { stoppedEarly = true; break; }
     const chunk = recipients.slice(i, i + 100).map((r) => {
       const u = unsubUrl(r.email);
       return {
@@ -276,5 +301,5 @@ export async function sendWeeklyUpdate(opts?: { test?: boolean; force?: boolean 
     });
   } catch { /* logging table optional */ }
 
-  return { skipped: false, version: latest.v, recipients: recipients.length, sent: ok, failed: fail, test, bullets: bullets.length };
+  return { skipped: false, version: latest.v, recipients: recipients.length, sent: ok, failed: fail, test, bullets: bullets.length, stoppedEarly };
 }

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { createClient, hasSupabase, serviceClient } from "@/lib/supabase/server";
 import { demoMetrics, demoInsights, demoAlerts, demoContext } from "@/lib/demo";
 import { SUPER_ADMINS } from "@/lib/operators";
+import { likeLiteral } from "@/lib/sql";
 import type { HealthMetric, AIInsight, Alert } from "@/types";
 
 /**
@@ -401,7 +402,36 @@ export async function searchAll(q: string) {
   const { orgId } = await getUserAndOrg();
   if (!orgId || !q || q.length < 2) return [] as any[];
   const sb = createClient();
-  const like = `%${q}%`;
+  /*
+    THE SEARCH BOX WROTE POSTGREST FILTER SYNTAX, NOT JUST A PATTERN.
+
+    `.or()` builds the `or=(...)` query PARAMETER by string concatenation, and
+    PostgREST parses that string after URL-decoding. Inside it, a comma
+    separates conditions and `*` means `%`. So `?q=a,party.ilike.*` produced
+
+        or=(party.ilike.%a,party.ilike.*,invoice_no.ilike.%a,party.ilike.*%)
+
+    — a valid filter with an extra condition the customer wrote, matching every
+    row in the table.
+
+    That is not cross-tenant: `.eq("org_id", orgId)` is a separate parameter and
+    is ANDed, and a value cannot introduce a new parameter. The real cost is
+    that an injected condition may name ANY COLUMN OF THE TABLE, including ones
+    the select never returns — `?q=a,monthly_ctc.gt.500000` against the
+    employees branch answers "does this workspace have anyone above ₹5L/month"
+    through row presence alone, turning a search box into a boolean oracle over
+    colleagues' salaries. Malformed input returns PostgREST 400s.
+
+    likeLiteral does NOT fix this. It escapes `\ % _`, which are LIKE
+    metacharacters; the characters that matter here are `,` `.` `(` `)`, which
+    are FILTER metacharacters. Two different grammars, and escaping for one
+    while sitting in the other is how this survived a previous review.
+
+    Both are applied: strip the filter syntax, then escape the LIKE pattern.
+  */
+  const safeQ = q.replace(/[,()]/g, " ").trim();
+  if (safeQ.length < 2) return [] as any[];
+  const like = `%${likeLiteral(safeQ)}%`;
   const out: any[] = [];
   const push = (rows: any[], type: string, label: (r: any) => string, sub: (r: any) => string, href: string) => {
     for (const r of rows || []) out.push({ type, label: label(r), sub: sub(r), href });

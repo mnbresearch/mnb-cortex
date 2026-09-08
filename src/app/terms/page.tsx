@@ -41,6 +41,13 @@ export default function Terms() {
         scripts/test-legal.mjs now asserts the two files agree.
       */}
       <UL>
+        {/*
+          The ₹799 tier was sellable through checkout while this list did not
+          contain it — so a customer clicked through to a contract that named
+          neither their plan nor the price they had just agreed to pay. The
+          paragraph below then told them their plan had been "retired".
+        */}
+        <li><strong>Try Cortex</strong> — ₹799/month or ₹7,990/year · 735 AI credits/month</li>
         <li><strong>Watch</strong> — ₹4,999/month or ₹49,990/year · 4,600 AI credits/month</li>
         <li><strong>Watch Pro</strong> — ₹14,999/month or ₹1,49,990/year · 13,850 AI credits/month</li>
         <li><strong>Practice</strong> — ₹29,999/month or ₹2,99,990/year · 27,750 AI credits/month, and access to up to 25 client workspaces from the Practice console</li>

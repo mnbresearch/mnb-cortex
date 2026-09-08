@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "crypto";
 import { serviceClient } from "@/lib/supabase/server";
 import type { Budget } from "@/lib/cron-budget";
+import { safeFetch } from "@/lib/net-guard";
 
 /**
  * Outbound webhooks.
@@ -97,7 +98,22 @@ async function attempt(svc: any, deliveryId: string, endpoint: any, event: strin
 
   let status = 0, errMsg = "";
   try {
-    const r = await fetch(endpoint.url, {
+    /*
+      THE ENDPOINT URL IS THE CUSTOMER'S, AND THIS RUNS ON THE CRON.
+
+      An admin registers any URL and we POST workspace event data to it from a
+      server with private network access, on a schedule, with retries. Without
+      a destination check that is a durable SSRF channel — better than the
+      importer's, because it repeats on its own. The signature header does not
+      help: it authenticates us TO the endpoint, it does not say the endpoint
+      should be reachable.
+
+      safeFetch refuses private and link-local addresses and re-checks each
+      redirect hop. A BlockedUrlError is recorded as a failed delivery like any
+      other error, so the admin sees WHY on the deliveries list instead of the
+      webhook silently never firing.
+    */
+    const r = await safeFetch(endpoint.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

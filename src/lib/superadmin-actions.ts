@@ -108,6 +108,36 @@ export async function manageOrg(org_id: string, patch: {
   if (!sb) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set.");
   if (!org_id) throw new Error("Organization is required.");
 
+  /*
+    READ THE BEFORE STATE. THE AUDIT TABLE HAS EXISTED THE WHOLE TIME.
+
+    2026_credits.sql creates org_billing_log(org_id, actor, action, detail,
+    created_at) with the comment "keep a light audit trail of super-admin
+    billing changes", and 2026_hardening.sql put RLS on it. Nothing has ever
+    written a row. Grep finds the CREATE, the policy, and its inclusion in the
+    backup and erasure table lists — no INSERT anywhere in the application.
+
+    So every plan change, every status change, every allowance override
+    (including `-1`, which hands a workspace uncapped AI at roughly ₹77 a video
+    clip) happened with no record of who did it, when, or what it was before.
+    The credit ledger did record the amount — with user_id left NULL, so it
+    says credits vanished and not who took them.
+
+    That is survivable with one operator and no customers. It stops being
+    survivable the first time a customer disputes a balance, or the first time
+    the answer to "why is this workspace on Command?" has to come from memory.
+
+    Before-and-after, in one row, because a log that records only the new value
+    cannot tell you what you undid.
+  */
+  let before: Record<string, any> = {};
+  try {
+    const { data } = await sb.from("organizations")
+      .select("plan, subscription_status, subscription_ends_at, trial_ends_at, credits, credits_allowance")
+      .eq("id", org_id).maybeSingle();
+    before = (data as any) || {};
+  } catch { /* pre-migration database — the log below degrades with it */ }
+
   const updates: Record<string, any> = {};
   if (patch.plan) {
     if (!VALID_PLANS.includes(patch.plan)) throw new Error(`Unknown plan: ${patch.plan}`);
@@ -174,14 +204,78 @@ export async function manageOrg(org_id: string, patch: {
     }
   }
 
+  // Who is doing this. Resolved from the verified session, not passed in.
+  let actor = "unknown";
+  try {
+    const { data: { user } } = await createClient().auth.getUser();
+    actor = user?.email || user?.id || "unknown";
+  } catch { /* assertSuper already passed; a missing email is not worth failing on */ }
+
   // Record the credit change in the ledger (best-effort; table may not exist yet).
   if (typeof newCredits === "number" && newCredits !== prevCredits) {
     const reason = typeof patch.creditsSet === "number" ? "admin:set" : (newCredits >= prevCredits ? "admin:add" : "admin:revoke");
     try {
-      await sb.from("credit_ledger").insert({ org_id, delta: newCredits - prevCredits, balance_after: newCredits, reason, meta: {} });
-    } catch { /* ledger table not migrated yet */ }
+      /*
+        `user_id` was omitted, though the column has been there since
+        2026_credit_metering.sql. The ledger recorded that credits moved and not
+        who moved them — which is exactly the question asked when a customer
+        says their balance is wrong.
+      */
+      const { data: { user } } = await createClient().auth.getUser();
+      await sb.from("credit_ledger").insert({
+        org_id, delta: newCredits - prevCredits, balance_after: newCredits, reason,
+        user_id: user?.id ?? null,
+        meta: { actor },
+      });
+    } catch {
+      // Retry without user_id rather than losing the ledger row entirely — the
+      // amount matters more than the attribution.
+      try { await sb.from("credit_ledger").insert({ org_id, delta: newCredits - prevCredits, balance_after: newCredits, reason, meta: {} }); } catch { /* not migrated */ }
+    }
   }
+
+  /*
+    The audit row. Best-effort in the sense that it must never stop a change
+    the operator needs to make in an incident — but loud in the logs if it
+    fails, because a silent audit trail is indistinguishable from none.
+  */
+  if (Object.keys(updates).length) {
+    const after: Record<string, any> = {};
+    for (const k of Object.keys(updates)) after[k] = updates[k];
+    const changed: Record<string, any> = {};
+    for (const k of Object.keys(updates)) {
+      if ((before as any)[k] !== updates[k]) changed[k] = { from: (before as any)[k] ?? null, to: updates[k] };
+    }
+    try {
+      await sb.from("org_billing_log").insert({
+        org_id,
+        actor,
+        action: Object.keys(changed).join(",") || "no-op",
+        detail: { changed, requested: patch },
+      });
+    } catch (e: any) {
+      console.error("[superadmin] org_billing_log insert failed:", e?.message);
+    }
+  }
+
   return { ok: true, credits: newCredits, creditsWarning, periodWarning };
+}
+
+/**
+ * Recompute one workspace's KPIs, now.
+ *
+ * recomputeMetrics() has always taken an org id and has always been callable
+ * with any of them — but every in-app caller is recomputeQuietly() behind a
+ * membership check, so the only thing that ever recomputed a CUSTOMER's numbers
+ * was the 04:30 cron. "My dashboard looks stale" therefore had one answer:
+ * wait until tomorrow. This is the same function the cron calls, on demand.
+ */
+export async function recomputeOrg(org_id: string) {
+  await assertSuper();
+  if (!org_id) throw new Error("Organization is required.");
+  const { recomputeMetrics } = await import("@/lib/metrics");
+  const res = await recomputeMetrics(org_id);
+  return { ok: true, result: res };
 }
 
 /** Make the super-admin an owner of any workspace so they can view it. */

@@ -295,7 +295,18 @@ export async function runTool(name: string, args: any, orgId: string): Promise<T
       }
 
       case "find_party": {
-        const raw = String(args?.name || "").trim();
+        /*
+          `,` `(` `)` are stripped BEFORE likeLiteral, not instead of it.
+
+          likeLiteral escapes LIKE metacharacters (\ % _). The `.or()` two lines
+          below is a different grammar: PostgREST parses that string, where a
+          comma separates conditions. And the argument here is chosen by the
+          MODEL, which reads invoice parties and customer names — so a debtor
+          named `Acme, monthly_ctc.gt.500000` is a prompt-injection path into
+          filter syntax. Same defect as searchAll in lib/data.ts; fixed the same
+          way, in both places, because one of them being right is not a fix.
+        */
+        const raw = String(args?.name || "").trim().replace(/[,()]/g, " ").trim();
         if (!raw) return { ok: false, error: "No name given." };
         const like = `%${likeLiteral(raw)}%`;
         const [orders, invs, cust] = await Promise.all([

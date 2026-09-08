@@ -3,6 +3,7 @@ import { serviceClient } from "@/lib/supabase/server";
 import { decryptSecret } from "@/lib/crypto";
 import { recomputeQuietly } from "@/lib/metrics";
 import type { Budget } from "@/lib/cron-budget";
+import { safeFetch } from "@/lib/net-guard";
 
 /**
  * Integration data sync.
@@ -58,8 +59,16 @@ const shopify: Connector = {
   async pull(c, since) {
     const shop = String(c.shop || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
     if (!shop || !c.api_key) throw new Error("Shopify needs a shop domain and access token.");
+    /*
+      `c.shop` is a free-text field the customer saved. Interpolated into a
+      URL and fetched from our server it is a request to hit any host they
+      name — including 169.254.169.254 or an internal address — and we would
+      send the workspace's own Shopify token in the header while doing it.
+      A real Shopify domain is *.myshopify.com or a custom storefront domain;
+      either way it is public, so assertPublicUrl costs nothing legitimate.
+    */
     const url = `https://${shop}/admin/api/2024-01/orders.json?status=any&limit=250&created_at_min=${encodeURIComponent(since)}`;
-    const r = await fetch(url, { headers: { "X-Shopify-Access-Token": c.api_key } });
+    const r = await safeFetch(url, { headers: { "X-Shopify-Access-Token": c.api_key } });
     if (!r.ok) throw new Error(`Shopify returned ${r.status}`);
     const j = await r.json();
     const orders: any[] = Array.isArray(j?.orders) ? j.orders : [];
@@ -198,7 +207,13 @@ const googleSheets: Connector = {
     const url = String(c.sheet_url || c.url || "").trim();
     if (!url) throw new Error("Google Sheets needs a published sheet URL.");
     const { toCsvUrl, parseCsv } = await import("@/lib/csv");
-    const r = await fetch(toCsvUrl(url), { headers: { "User-Agent": "MNBCortex" } });
+    /*
+      Same class as importFromUrl, and easier to miss: this URL was validated
+      once when the integration was saved and is re-fetched on every nightly
+      sync, so a host that was public on Tuesday can point somewhere private on
+      Wednesday. Validate at fetch time, every time.
+    */
+    const r = await safeFetch(toCsvUrl(url), { headers: { "User-Agent": "MNBCortex" } });
     if (!r.ok) throw new Error(`Could not read the sheet (${r.status}). Make sure it's shared publicly.`);
     const rows = parseCsv(await r.text()).slice(0, 1000);
 

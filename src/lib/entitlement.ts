@@ -32,6 +32,30 @@ export function isLapsed(status: string): boolean {
 }
 
 /**
+ * An operator-set hard stop, as opposed to a period simply running out.
+ *
+ * `expired` is a clock. `suspended` and `cancelled` are a decision someone made,
+ * usually about a chargeback, an abuse report, or a customer who has left — and
+ * a decision has to outrank both of the escape hatches that exist for the
+ * clock: a leftover credit balance, and an allowance override.
+ *
+ * It did not. chargeForMode refused only when `isLapsed(status) && !hasOverride
+ * && balance < cost`, so a suspended workspace holding credits kept working,
+ * and a workspace with ANY non-zero credits_allowance — which the superadmin
+ * console's own "Set allowance" button writes — was never blocked at all,
+ * because hasOverride short-circuited the whole test. The console page promises
+ * suspension "locks that customer out behind the paywall". It did not, and the
+ * customer could still be spending ~₹77 a clip of Veo while we believed they
+ * were cut off.
+ */
+export function isHardStopped(status: string): boolean {
+  const s = String(status || "").toLowerCase();
+  return s === "suspended" || s === "cancelled" || s === "canceled";
+}
+
+
+
+/**
  * The status that actually counts, as opposed to the one stored in the row.
  *
  * A paid period that has run out is still recorded as 'active' until the nightly

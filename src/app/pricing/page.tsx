@@ -23,7 +23,7 @@ export default async function Pricing() {
           <Kinetic as="h1" text={"Find out first,\nnot last."} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
             Cortex watches your receivables, your supplier deadlines and your stock, and emails you before any of them
-            costs you money. From <span className="text-foreground font-medium">₹4,999/month</span>.
+            costs you money. From <span className="text-foreground font-medium">₹799/month</span>.
             Keep Tally or Zoho — this is the part they were never built to do.
           </p>
           {/*

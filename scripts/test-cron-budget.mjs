@@ -137,10 +137,44 @@ check(
 );
 
 /*
-  The arithmetic that started this. If every step ran to its full share back to
-  back, the run must still be recoverable — i.e. the reserve survives. This is
-  the property that was false before: the old effective total was unbounded.
+  THE SHARES MUST FIT. THIS TEST USED TO SAY THEY NEED NOT, AND WAS WRONG.
+
+  The comment above still stands on its own terms — shares are ceilings, a step
+  that finishes early hands the rest back, and slice() clamps to real remaining
+  time — and this file previously concluded from that: "the sum is allowed to
+  exceed 300s". It did exceed it: the declared shares summed to 345s against
+  288s available. Nothing crashed, so the check below (finite, under 1,000s)
+  passed happily for the entire time.
+
+  What clamping actually buys is that the run never OVERRUNS. It does not buy
+  that every step gets its share. Over-subscribing by 20% means the overdraft is
+  paid, in full, by whichever steps happen to run last — and the order in
+  cron-budget.ts is not incidental, it is the whole design: cheap must-never-skip
+  work first, tolerant AI work last. So the arithmetic error did not distribute
+  the shortfall evenly. It took the entire shortfall out of daily analysis,
+  which sits last behind an ok(9_000) guard, and quietly turned "twenty
+  workspaces analysed" into "two" on any night the earlier steps were busy.
+
+  "Deferred by design" and "starved by an arithmetic slip" look identical from
+  outside. Asserting the sum is what tells them apart, and cron-budget.ts now
+  throws at import for the same reason — a number that is only wrong at 4am in
+  production is a number nobody checks.
 */
+const AVAILABLE_MS = 300_000 - 12_000; // maxDuration − RESERVE_MS
+check(
+  "the declared shares fit inside the function, with the reserve intact",
+  shareTotal <= AVAILABLE_MS,
+  `shares total ${shareTotal / 1000}s but only ${AVAILABLE_MS / 1000}s is available — the excess is taken silently from whichever steps run last`,
+);
+
+/* And the module refuses to load at all if that stops being true, so the
+   failure lands in the build rather than in one bad night. */
+check(
+  "cron-budget.ts asserts its own total at import time",
+  /SHARE_TOTAL_MS\s*>\s*CRON_LIMIT_MS\s*-\s*RESERVE_MS/.test(budgetSrc) && /throw new Error/.test(budgetSrc),
+  "without this the next share added re-creates the overdraft and no test needs to be updated for it to pass",
+);
+
 check(
   "the declared shares are a finite, stated total rather than an unbounded sum",
   shareTotal > 0 && shareTotal < 1_000_000,

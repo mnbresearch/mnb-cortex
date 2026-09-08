@@ -176,6 +176,33 @@ export function CollectionsSettings({ policy, whatsappReady }: { policy: Policy;
         </p>
 
         {/*
+          WHERE THE REPLY GOES, which had no answer at all.
+
+          Reminders are sent through our relay on the business's behalf. The
+          sending code already looked for a reply-to address on the policy, but
+          nothing in the product ever set one and no migration had created the
+          column — so a debtor who hit Reply was writing to Cortex instead of to
+          the business chasing them. Silence that looks like being ignored.
+
+          Optional, because a workspace that has connected its own sending
+          domain already replies to itself; this is for everyone else.
+        */}
+        <label className="text-sm block">
+          <span className="text-muted-foreground block mb-1">Send replies to</span>
+          <input
+            type="email"
+            className={I + " w-full"}
+            name="reply_to"
+            defaultValue={(policy as any).reply_to || ""}
+            placeholder="accounts@sharmasteel.in"
+            aria-label="Email address that debtor replies should go to"
+          />
+          <span className="text-xs text-muted-foreground mt-1 block">
+            When a customer replies to a reminder, their answer goes here. Leave blank and replies come to Cortex, where nobody at your business will see them.
+          </span>
+        </label>
+
+        {/*
           Presented last and described honestly. This is the only setting that
           removes the human, and an owner should choose it with their eyes open
           rather than discover it in a checkbox they skimmed.

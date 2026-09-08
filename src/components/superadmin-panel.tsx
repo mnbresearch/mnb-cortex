@@ -179,7 +179,15 @@ export function OrgManager({ org }: { org: ManagedOrg }) {
   const [busy, setBusy] = useState<string>("");
   const [msg, setMsg] = useState("");
 
-  const dirty = plan !== (org.plan || "growth") || status !== (org.subscription_status || "trialing");
+  /*
+    Compared against the SAME default the state was initialised with.
+
+    This read `org.plan || "growth"` while useState above uses
+    `org.plan || "watch"`, so any workspace with a null plan rendered with Save
+    already enabled before the operator had touched anything — an invitation to
+    press a button that writes a plan nobody chose.
+  */
+  const dirty = plan !== (org.plan || "watch") || status !== (org.subscription_status || "trialing");
 
   async function run(tag: string, extra: Record<string, any>) {
     setBusy(tag); setMsg("");
@@ -188,6 +196,32 @@ export function OrgManager({ org }: { org: ManagedOrg }) {
     if (!j.ok) { setMsg(j.error || "Failed"); return; }
     if (typeof j.credits === "number") setCredits(j.credits);
     setMsg(j.creditsWarning || "Saved.");
+  }
+
+  /*
+    CONFIRM THE ONES THAT TAKE SOMETHING AWAY.
+
+    The collections kill switch got a proper two-step confirm with a reason
+    box. "Revoke", "Set to" and status→cancelled fire on a single click, on a
+    page that renders one of these cards per workspace in a two-column grid —
+    so the button that removes a paying customer's credits sits a few pixels
+    from the one that removes a different customer's credits.
+
+    Not a modal: a second click on the same button, which is enough to stop a
+    misfire and does not need a dialog nobody has time to read at 2am.
+  */
+  const [armed, setArmed] = useState<string>("");
+  function confirmRun(tag: string, label: string, extra: Record<string, any>) {
+    if (armed !== tag) { setArmed(tag); setMsg(`Press ${label} again to confirm.`); setTimeout(() => setArmed((a) => (a === tag ? "" : a)), 4000); return; }
+    setArmed("");
+    void run(tag, extra);
+  }
+
+  async function recompute() {
+    setBusy("recompute"); setMsg("");
+    const j = await call("recompute", { org_id: org.id });
+    setBusy("");
+    setMsg(j.ok ? "Recomputed — their dashboard is current." : (j.error || "Recompute failed"));
   }
 
   const trialLabel = org.trial_ends_at
@@ -227,8 +261,12 @@ export function OrgManager({ org }: { org: ManagedOrg }) {
         <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("add", { creditsDelta: Math.abs(amount) })}>
           {busy === "add" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Coins className="h-4 w-4" />} Add
         </Button>
-        <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("revoke", { creditsDelta: -Math.abs(amount) })}>Revoke</Button>
-        <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run("set", { creditsSet: Math.abs(amount) })}>Set to</Button>
+        <Button size="sm" variant={armed === "revoke" ? "default" : "outline"} disabled={Boolean(busy)} onClick={() => confirmRun("revoke", "Revoke", { creditsDelta: -Math.abs(amount) })}>
+          {armed === "revoke" ? "Confirm revoke" : "Revoke"}
+        </Button>
+        <Button size="sm" variant={armed === "set" ? "default" : "outline"} disabled={Boolean(busy)} onClick={() => confirmRun("set", "Set to", { creditsSet: Math.abs(amount) })}>
+          {armed === "set" ? "Confirm set" : "Set to"}
+        </Button>
         <div className="w-px h-8 bg-border mx-1" />
         {/* Grants a PAID period, not a trial — trials no longer exist. This
             button used to write trial_ends_at, which nothing reads any more. */}
@@ -247,10 +285,38 @@ export function OrgManager({ org }: { org: ManagedOrg }) {
         <span className="text-xs text-muted-foreground">0 = plan default · -1 = unlimited</span>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" disabled={!dirty || Boolean(busy)} onClick={() => run("save", { plan, subscription_status: status })}>
           {busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save plan &amp; status
         </Button>
+
+        {/*
+          THE TWO THINGS A CUSTOMER EMAIL ACTUALLY ASKS FOR.
+
+          "My dashboard is wrong" and "my numbers look stale" were the two most
+          likely support messages and neither had an answer inside the product.
+
+          Reading their data: joinOrg() has worked for ANY org id since it was
+          written and op:"join" was already routed — but the only button that
+          called it was rendered for the founder's own portfolio businesses.
+          Every other workspace required inviting yourself, signing out, and
+          signing back in (invites are only claimed on the auth callback), or
+          hand-crafting a POST in devtools. The action existed; the button did
+          not.
+
+          Recomputing: recomputeMetrics(orgId) has always taken an org id, and
+          the only thing that ever called it for a customer was the 04:30 cron.
+
+          Joining is not read-only and it is not invisible — an extra owner
+          appears on the customer's own /admin page, and manageOrg now writes to
+          org_billing_log. That is the right trade for a solo operator, but it
+          should be a deliberate press, so it confirms.
+        */}
+        <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={recompute}>
+          {busy === "recompute" ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Recompute KPIs
+        </Button>
+        <JoinButton orgId={org.id} />
+
         {msg && <span className="text-xs text-muted-foreground">{msg}</span>}
       </div>
     </div>

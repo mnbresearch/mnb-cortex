@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserAndOrg, getOrgProfile } from "@/lib/data";
 import { serviceClient } from "@/lib/supabase/server";
 import { createSubscription, cancelSubscription, getSubscription, hasSubscriptions } from "@/lib/pay/subscription";
+import { enforce } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -110,6 +111,35 @@ export async function GET(req: Request) {
   if (!orgId) return NextResponse.json({ ok: false }, { status: 401 });
   const ref = new URL(req.url).searchParams.get("sub");
   if (!ref) return NextResponse.json({ ok: false, error: "Missing subscription id." }, { status: 400 });
+
+  /*
+    ASK CASHFREE ONLY ABOUT OUR OWN SUBSCRIPTION.
+
+    The write below is correctly scoped — `.eq("id", orgId).eq("subscription_ref", ref)`
+    means no entitlement can be diverted. The READ was not scoped at all: any
+    signed-in user could pass any `sub` and we would query it with the merchant
+    credentials and return its status, plan, cycle and next charge date. That is
+    a lookup against our Cashfree account on a stranger's behalf, and it is the
+    one billing route that skipped the check its siblings all make (see
+    /verify, which refuses another workspace's order outright).
+
+    Confirm ownership from OUR row first, then call out.
+  */
+  const svcRead = serviceClient();
+  const { data: own } = svcRead
+    ? await svcRead.from("organizations").select("id").eq("id", orgId).eq("subscription_ref", ref).maybeSingle()
+    : { data: null as any };
+  if (!own) {
+    return NextResponse.json({ ok: false, error: "That subscription belongs to a different workspace." }, { status: 403 });
+  }
+
+  /*
+    And a limit. Each call is an outbound authenticated request to Cashfree, so
+    an unbounded loop burns our API quota from a free account. Reconciling after
+    an authorisation happens once or twice; 60/hour is far above that.
+  */
+  const over = await enforce([{ key: `pay:sub:org:${orgId}`, limit: 60, windowSecs: 3600 }]);
+  if (over) return NextResponse.json({ ok: false, error: "Too many status checks. Refresh this page in a minute." }, { status: 429 });
 
   const st = await getSubscription(ref);
   if (st.ok) {

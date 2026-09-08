@@ -179,9 +179,24 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     else setBuildMsg(j.error || "Could not build agents.");
   }
 
+  /*
+    THE AGENT'S NAME IS NOT OURS. Custom agents are built by a model from a
+    free-text business description and stored with only a slice(0, 80) — no
+    escaping (lib/agents/runtime.ts). `output` was escaped here; `sel.name` was
+    not. A document written into about:blank inherits THIS origin, so 80
+    characters of `<img src=x onerror=…>` in an agent name would have run with
+    full access to the app's cookies — and Supabase's SSR client leaves the auth
+    cookies readable from document.cookie.
+
+    Escape every interpolated value, not just the one that looked risky.
+  */
   function exportPdf() {
     if (!sel || !output) return;
-    const html = `<html><head><title>${sel.name}</title><style>body{font-family:system-ui,Arial,sans-serif;color:#111;padding:40px;max-width:760px;margin:auto;line-height:1.6}h1{color:#1f4a3b;font-size:20px}pre{white-space:pre-wrap;font-family:inherit;font-size:14px}</style></head><body><h1>${sel.name}</h1><div style="color:#666;font-size:12px;margin-bottom:16px">MNB Cortex · Agent output · ${new Date().toLocaleString("en-IN")}</div><pre>${output.replace(/</g, "&lt;")}</pre><script>window.onload=()=>window.print()</script></body></html>`;
+    const esc = (s: string) => String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const name = esc(sel.name);
+    const html = `<html><head><title>${name}</title><style>body{font-family:system-ui,Arial,sans-serif;color:#111;padding:40px;max-width:760px;margin:auto;line-height:1.6}h1{color:#1f4a3b;font-size:20px}pre{white-space:pre-wrap;font-family:inherit;font-size:14px}</style></head><body><h1>${name}</h1><div style="color:#666;font-size:12px;margin-bottom:16px">MNB Cortex · Agent output · ${esc(new Date().toLocaleString("en-IN"))}</div><pre>${esc(output)}</pre><script>window.onload=()=>window.print()</script></body></html>`;
     const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); }
   }
   function exportMd() { if (!sel) return; const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([`# ${sel.name}\n\n${output}`], { type: "text/markdown" })); a.download = `${sel.id.replace(/\./g, "-")}.md`; a.click(); }

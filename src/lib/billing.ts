@@ -17,6 +17,8 @@ export type BillingStatus = {
   lapsedSubscription: boolean;
   plan: string;
   locked: boolean;         // must upgrade to continue
+  /** Credits the workspace can still spend. Bought credits ARE an entitlement. */
+  credits: number;
 };
 
 /**
@@ -27,7 +29,7 @@ export type BillingStatus = {
 export async function getBillingStatus(): Promise<BillingStatus> {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) {
-    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, plan: "starter", locked: false };
+    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, plan: "starter", locked: false, credits: 0 };
   }
   const sb = createClient();
 
@@ -38,6 +40,8 @@ export async function getBillingStatus(): Promise<BillingStatus> {
   let created: number | null = null;
   let trialEnd: number | null = null;
   let subEnd: number | null = null;
+  let credits = 0;
+  let unlimited = false;
 
   try {
     // select("*") deliberately: naming subscription_ends_at explicitly would make
@@ -51,6 +55,8 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     created = (data as any).created_at ? new Date((data as any).created_at).getTime() : null;
     trialEnd = (data as any).trial_ends_at ? new Date((data as any).trial_ends_at).getTime() : (created ? created + TRIAL_DAYS * DAY : null);
     subEnd = (data as any).subscription_ends_at ? new Date((data as any).subscription_ends_at).getTime() : null;
+    credits = Number((data as any).credits ?? 0);
+    unlimited = (data as any).credits_allowance === -1;
   } catch {
     enforceable = false;
     try {
@@ -89,13 +95,38 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     ? (subEnd ? Math.max(0, Math.ceil((subEnd - now) / DAY)) : NEVER)
     : (trialEnd ? Math.max(0, Math.ceil((trialEnd - now) / DAY)) : TRIAL_DAYS);
 
-  const locked = enforceable && (blocked || status === "expired");
+  /*
+    THE PAYWALL AND THE METER DISAGREED, AND THE PAYWALL WON.
+
+    lib/credits.ts has a deliberate pay-as-you-go path: a workspace that is
+    lapsed but holds credits is allowed to spend them, because there is no free
+    trial and a brand-new workspace is `expired` from its first second — so
+    bought credits ARE the entitlement. The comment there says exactly that.
+
+    This function ignored the balance entirely. So someone who bought the ₹149
+    Taster pack the landing page advertises got a server that would happily meter
+    their credits and a UI that covered every page with a full-screen lock. They
+    had paid, and could not see what they paid for. /billing then told them to
+    "start with a ₹149 credit pack" — which they had just done.
+
+    Two rules, matching the meter:
+
+    - `blocked` (an operator set suspended/cancelled) locks REGARDLESS of
+      balance. That is the point of the lever, and it is now true on both sides
+      rather than only in the copy.
+    - an expired trial or a lapsed plan locks only when there is nothing left to
+      spend. Credits, or an unlimited allowance override, keep the product open.
+
+    Anyone locked here genuinely has no plan and no credits.
+  */
+  const hasSpendableCredits = unlimited || credits > 0;
+  const locked = enforceable && (blocked || (status === "expired" && !hasSpendableCredits));
 
   return {
     known: true, enforceable, status, daysLeft,
     trialEndsAt: trialEnd ? new Date(trialEnd).toISOString() : null,
     subscriptionEndsAt: subEnd ? new Date(subEnd).toISOString() : null,
     lapsedSubscription,
-    plan, locked,
+    plan, locked, credits,
   };
 }

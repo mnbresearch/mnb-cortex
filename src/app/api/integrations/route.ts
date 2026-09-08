@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, hasSupabase } from "@/lib/supabase/server";
 import { encryptSecret, decryptSecret, maskSecret, encryptionAvailable } from "@/lib/crypto";
 import { integrationById, planAllows, limitForPlan } from "@/lib/integrations";
+import { safeFetch, BlockedUrlError } from "@/lib/net-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,14 +67,26 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
       case "airtable": return j(await fetch("https://api.airtable.com/v0/meta/bases", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Airtable");
       case "telegram": return j(await fetch(`https://api.telegram.org/bot${c.bot_token}/getMe`), "Connected to Telegram");
       case "openai": return j(await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to OpenAI");
-      case "shopify": return j(await fetch(`https://${c.shop}/admin/api/2024-01/shop.json`, { headers: { "X-Shopify-Access-Token": c.api_key } }), "Connected to Shopify");
+      /*
+        `c.shop` is free text the customer saved. Every other case here targets
+        a hardcoded vendor host; these two take a URL the customer chose and
+        fetch it from our server, which is inside the hosting network. Without
+        a check, `shop = "169.254.169.254"` makes this a proxy to the cloud
+        metadata endpoint, and the returned status is an oracle either way.
+      */
+      case "shopify": return j(await safeFetch(`https://${c.shop}/admin/api/2024-01/shop.json`, { headers: { "X-Shopify-Access-Token": c.api_key } }), "Connected to Shopify");
       case "razorpay": {
         const auth = Buffer.from(`${c.key_id}:${c.key_secret}`).toString("base64");
         return j(await fetch("https://api.razorpay.com/v1/payments?count=1", { headers: { Authorization: `Basic ${auth}` } }), "Connected to Razorpay");
       }
       case "slack": {
-        const r = await fetch(c.webhook_url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "✅ MNB Cortex connected successfully." }) });
-        return r.ok ? { ok: true, message: "Test message sent to Slack" } : { ok: false, message: `Slack rejected the webhook (${r.status})` };
+        try {
+          const r = await safeFetch(c.webhook_url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "✅ MNB Cortex connected successfully." }) });
+          return r.ok ? { ok: true, message: "Test message sent to Slack" } : { ok: false, message: `Slack rejected the webhook (${r.status})` };
+        } catch (e: any) {
+          if (e instanceof BlockedUrlError) return { ok: false, message: e.message };
+          throw e;
+        }
       }
       case "zoho_books": return j(await fetch(`https://www.zohoapis.in/books/v3/organizations`, { headers: { Authorization: `Zoho-oauthtoken ${c.api_key}` } }), "Connected to Zoho Books");
       case "sendgrid": return j(await fetch("https://api.sendgrid.com/v3/user/profile", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to SendGrid");

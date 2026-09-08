@@ -68,6 +68,8 @@ export type PlatformEconomics = {
   /** The actual rows behind the revenue figure — a total you cannot drill into
    *  is a number you cannot trust. Newest first. */
   recentPayments: { order_id: string; org: string; kind: string; ref: string; amount: number; when: string; unattributed: boolean }[];
+  /** Paid but not granted. See the query in this file for what each status means. */
+  failedPayments: { order_id: string; org: string; kind: string; ref: string; amount: number; when: string; status: string }[];
   /** Payments that activated no workspace — money in, nothing granted. */
   unattributedCount: number;
   unattributedAmount: number;
@@ -79,7 +81,7 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
   const empty: PlatformEconomics = {
     live: false, revenueTotal: 0, revenue30d: 0, mrr: 0, payingOrgs: 0,
     totalOrgs: 0, activeOrgs: 0, paygOrgs: 0, cogs30d: 0, grossMargin30d: null,
-    usage: [], watchlist: [], recentPayments: [], unattributedCount: 0, unattributedAmount: 0,
+    usage: [], watchlist: [], recentPayments: [], failedPayments: [], unattributedCount: 0, unattributedAmount: 0,
   };
   const sb = serviceClient();
   if (!sb) return { ...empty, reason: "SUPABASE_SERVICE_ROLE_KEY not set" };
@@ -88,7 +90,7 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
     const since = new Date(Date.now() - 30 * DAY).toISOString();
     const priceOf = new Map(PLANS.map((p) => [p.id, p.monthly]));
 
-    const [paymentsRes, orgsRes, ledgerRes] = await Promise.all([
+    const [paymentsRes, failedRes, orgsRes, ledgerRes] = await Promise.all([
       /*
         Still filtered on `kind`, even though cortex_payments is now ours alone.
 
@@ -103,12 +105,36 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
         filter would silently drop that history from the totals.
       */
       sb.from(PAYMENTS_TABLE).select("order_id, amount, status, created_at, org_id, kind, ref").eq("status", "paid").not("kind", "is", null).order("created_at", { ascending: false }).limit(20_000),
+      /*
+        THE PAYMENTS THAT TOOK MONEY AND GRANTED NOTHING.
+
+        The query above filters `.eq("status", "paid")`, which is right for a
+        REVENUE total and wrong for everything else on this page — it excludes,
+        by construction, the three statuses that mean a customer is unhappy:
+
+          amount_mismatch  — underpaid or tampered; deliberately not granted.
+          grant_unverified — settle.ts could not confirm the plan landed. Its
+                             own comment says "support can fix it from the
+                             payments row", and no screen showed that row.
+          unknown_ref      — the order named a plan or pack not in the current
+                             catalogue (a checkout opened before an id was
+                             retired). Money in, nothing out.
+
+        So the one section of the console titled "Money" was structurally
+        incapable of displaying the cases where money went wrong. The customer
+        always found out first. Kept as a separate query rather than widening
+        the one above, so revenue stays a sum of paid rows only.
+      */
+      sb.from(PAYMENTS_TABLE).select("order_id, amount, status, created_at, org_id, kind, ref")
+        .in("status", ["amount_mismatch", "grant_unverified", "unknown_ref"])
+        .order("created_at", { ascending: false }).limit(200),
       sb.from("organizations").select("id, name, plan, subscription_status, subscription_ends_at, credits").limit(5_000),
       // Only AI charges. Refunds and grants carry other reasons.
       sb.from("credit_ledger").select("org_id, reason, delta, created_at").lt("delta", 0).gte("created_at", since).limit(100_000),
     ]);
 
     const payments = (paymentsRes.data as any[]) || [];
+    const failedRows = (failedRes?.data as any[]) || [];
     const orgs = (orgsRes.data as any[]) || [];
     const ledger = (ledgerRes.data as any[]) || [];
 
@@ -188,7 +214,17 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
 
     return {
       live: true,
-      recentPayments, unattributedCount, unattributedAmount,
+      recentPayments,
+      failedPayments: failedRows.map((p: any) => ({
+        order_id: String(p.order_id || ""),
+        org: (p.org_id && orgName.get(p.org_id)?.name) || "not linked",
+        kind: String(p.kind || "—"),
+        ref: String(p.ref || "—"),
+        amount: Number(p.amount) || 0,
+        when: p.created_at,
+        status: String(p.status || ""),
+      })),
+      unattributedCount, unattributedAmount,
       revenueTotal, revenue30d, mrr, payingOrgs,
       totalOrgs: orgs.length, activeOrgs, paygOrgs,
       cogs30d,

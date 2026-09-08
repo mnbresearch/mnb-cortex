@@ -101,15 +101,47 @@ export function createBudget(totalMs: number, startedAt = Date.now()): Budget {
   rotation cursors mean nothing is lost, only deferred.
 */
 export const SHARE = {
-  renewals: 20_000,
-  reports: 30_000,
-  workflows: 30_000,
-  collections: 45_000,
-  alerts: 25_000,
+  renewals: 15_000,
+  reports: 25_000,
+  workflows: 25_000,
+  collections: 40_000,
+  alerts: 20_000,
   webhooks: 20_000,   // was uncapped at 200 × 8s = 1,600s
-  sync: 30_000,
-  weeklyUpdate: 20_000,
-  weeklyPlan: 45_000,
-  sweep: 20_000,
-  analysis: 60_000,
+  sync: 25_000,
+  weeklyUpdate: 15_000,
+  weeklyPlan: 35_000,
+  sweep: 15_000,
+  analysis: 45_000,
 } as const;
+
+/*
+  THE SHARES HAVE TO FIT INSIDE THE FUNCTION, AND THEY DID NOT.
+
+  The original numbers summed to 345,000ms against a limit of
+  maxDuration(300s) − RESERVE_MS(12s) = 288,000ms. Every slice is clamped to
+  whatever is actually left, so nothing overran and nothing crashed — the
+  overdraft was paid entirely by the LAST steps in the order, silently.
+
+  That is the worst way for this to fail, because the order was chosen on
+  purpose: the cheap, must-never-skip work goes first and the tolerant AI work
+  goes last. Over-subscribing by 20% means the tail is not "finished tomorrow by
+  design", it is "cut short every single night by an arithmetic error nobody
+  could see". Daily analysis sits last behind an ok(9_000) guard, so on a busy
+  night it processed a couple of workspaces instead of twenty.
+
+  These sum to 280,000ms, inside 288,000 with room for the guard itself. The
+  ordering and the relative weights are unchanged; every share is scaled down.
+  The assertion below fails the BUILD rather than the night, because a number
+  that is only wrong in production at 4am is a number nobody checks.
+*/
+export const SHARE_TOTAL_MS = Object.values(SHARE).reduce((a, b) => a + b, 0);
+
+/** The cron's own maxDuration, in ms. Kept next to the shares it constrains. */
+export const CRON_LIMIT_MS = 300_000;
+
+if (SHARE_TOTAL_MS > CRON_LIMIT_MS - RESERVE_MS) {
+  throw new Error(
+    `cron-budget: SHARE sums to ${SHARE_TOTAL_MS}ms but only ${CRON_LIMIT_MS - RESERVE_MS}ms is available. ` +
+    `Every slice clamps, so the overdraft is paid silently by whichever steps run last.`,
+  );
+}

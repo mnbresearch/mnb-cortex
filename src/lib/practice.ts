@@ -199,12 +199,28 @@ export async function getPractice(): Promise<Practice> {
       recovered = Number(r?.amount_recovered) || 0;
     } catch { /* collections not migrated for this org */ }
 
+    /*
+      `updated_at` did not exist on this table until 2026_zzx_missing_columns.
+      PostgREST rejected the ordering, the catch swallowed it, and lastActivity
+      was ALWAYS null — so the Practice console told a CA firm "No data yet"
+      for every client, including the ones who had imported their books. Fall
+      back to created_at rather than to null if the migration has not been run,
+      because a slightly stale date is a far better answer than a wrong one.
+    */
     try {
-      const { data } = await svc.from("health_metrics")
+      const { data, error } = await svc.from("health_metrics")
         .select("updated_at").eq("org_id", orgId)
         .order("updated_at", { ascending: false }).limit(1);
+      if (error) throw error;
       lastActivity = ((data as any[]) || [])[0]?.updated_at ?? null;
-    } catch { /* ignore */ }
+    } catch {
+      try {
+        const { data } = await svc.from("health_metrics")
+          .select("created_at").eq("org_id", orgId)
+          .order("created_at", { ascending: false }).limit(1);
+        lastActivity = ((data as any[]) || [])[0]?.created_at ?? null;
+      } catch { /* the workspace genuinely has no metrics */ }
+    }
 
     /*
       What moved since last week.
