@@ -68,6 +68,29 @@ const REACHABLE_ON_PURPOSE = {
   seed_demo_customers: "Same.",
   cortex_collections_enabled: "Reads one global boolean. No org parameter, no writes, same answer for everyone.",
   cortex_norm_name: "Pure function over its argument. No table access.",
+  /*
+    These two MOVE MONEY — they decide whose credit balance a workspace spends —
+    so they get more than a line.
+
+    They must be definer: the check spans two organizations (the firm and the
+    client) and no single RLS policy can express "is this caller an ADMIN of the
+    claiming org AND a member of the claimed one". They must be reachable by
+    `authenticated` because a CA partner, not a service process, is the person
+    pressing the button.
+
+    What makes that safe is that each resolves auth.uid() itself and refuses
+    before writing anything: rank in the firm must be owner/admin, membership of
+    the client must exist, the firm's plan must include pooling, and the client
+    cap applies. The firm id is taken from the SESSION by the calling server
+    action, never from the request, so it is not attacker-controlled.
+
+    Verified by scripts/test-practice-pool-sql.cjs against real Postgres, which
+    runs the two attacks this would otherwise open — pointing at a rich
+    stranger's balance, and claiming a workspace nobody from the firm belongs to
+    — and kills the mutants that remove either check.
+  */
+  cortex_practice_claim: "Resolves auth.uid() itself; requires owner/admin rank in the firm AND membership of the client before writing the pool link. Attacks covered in test-practice-pool-sql.cjs.",
+  cortex_practice_release: "Same, and deliberately more permissive: an admin of EITHER side may break the link, because a business must be able to stop funding without its accountant's cooperation. Releasing only ever makes a workspace pay for itself.",
 };
 
 /* ------------------------------------------------------------------ parsing */
