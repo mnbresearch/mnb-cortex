@@ -77,7 +77,8 @@
     "verify:run-now": "node scripts/verify-run-now-0911.cjs",
     "test:credit-pool": "node --experimental-strip-types --no-warnings scripts/test-credit-pool.mjs",
     "test:practice-pool-sql": "node scripts/test-practice-pool-sql.cjs",
-    "test:claims": "node --experimental-strip-types --no-warnings scripts/test-claims.mjs"
+    "test:claims": "node --experimental-strip-types --no-warnings scripts/test-claims.mjs",
+    "verify:invoice-columns": "node scripts/verify-invoice-columns.cjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

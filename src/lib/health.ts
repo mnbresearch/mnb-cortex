@@ -283,7 +283,23 @@ async function checkSchema(): Promise<Check> {
       migration does. So the health endpoint says so out loud.
     */
     ["organizations", "referral_code", "2026_referrals"],
-    ["invoices", "meta", "2026_invoice_documents"],
+    /*
+      BOTH COLUMNS, because one of them is load-bearing for the most important
+      path in the product.
+
+      This probed `meta` alone, and on production `meta` came back unreadable
+      while quotes.status and alerts.notified_at were fine — a half-applied
+      2026_invoice_documents.sql. That is already worth reporting, but it
+      understated the problem: the same file adds `issue_date`, and
+      `issue_date` is a member of IMPORT_COLS.invoices, so the importer maps it
+      on EVERY invoice import. A missing column there is not a degraded
+      feature, it is a rejected insert — the primary onboarding action failing
+      outright.
+
+      PostgREST fails the select if either column is absent, so this is one
+      round trip that now cannot report "fine" while the import is broken.
+    */
+    ["invoices", "meta, issue_date", "2026_invoice_documents"],
     ["quotes", "status", "2026_invoice_documents"],
     ["alerts", "notified_at", "2026_invoice_documents"],
     ["referrals", "status", "2026_referrals"],
