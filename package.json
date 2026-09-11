@@ -72,7 +72,8 @@
     "test:practice-brief": "node --experimental-strip-types --no-warnings scripts/test-practice-brief.mjs",
     "test:collections-preview": "node --experimental-strip-types --no-warnings scripts/test-collections-preview.mjs",
     "test:import-detect": "node --experimental-strip-types --no-warnings scripts/test-import-detect.mjs",
-    "test:import-outcome": "node --experimental-strip-types --no-warnings scripts/test-import-outcome.mjs"
+    "test:import-outcome": "node --experimental-strip-types --no-warnings scripts/test-import-outcome.mjs",
+    "verify:run-now": "node scripts/verify-run-now-0911.cjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
