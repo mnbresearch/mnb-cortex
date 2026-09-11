@@ -5,13 +5,33 @@ import { Reveal } from "@/components/landing-extras";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
 import { VisibilityCheck } from "@/components/visibility-check";
 
+/*
+  THIS PAGE PROMISED THREE ENGINES AND QUERIES ONE.
+
+  "see whether ChatGPT, Gemini and Perplexity name your business" — but
+  askEngine() in lib/ai/visibility.ts calls Gemini with Google Search
+  grounding, and falls back to Groq's Llama 3.3. There is no OpenAI call and no
+  Perplexity call anywhere in the file.
+
+  The product then contradicts the page on the same screen: the result renders
+  the engine label it actually used, "Gemini · web-grounded". So a visitor who
+  arrived expecting a three-engine check reads the promise and the refutation
+  without scrolling.
+
+  The landing page already had this right ("AI Visibility (AEO) — See whether
+  Gemini recommends you"), which is what makes this drift rather than intent.
+
+  Gemini alone is still a real and useful check — it is the grounded engine,
+  it searches live, and what it cites is a good proxy for what the others will.
+  That is worth saying honestly rather than inflating to three.
+*/
 export const metadata = {
   title: "Free AI Visibility Check — is AI recommending your business? | MNB Cortex",
-  description: "Over 100M people ask AI for recommendations before buying. Run a free check to see whether ChatGPT, Gemini and Perplexity name your business — and how to fix it.",
+  description: "Buyers ask AI for recommendations before they buy. Run a free check to see whether Gemini — searching the live web — names your business, and what to fix if it doesn't.",
 };
 
 const STEPS = [
-  { n: "01", t: "We ask the AI what buyers ask", d: "Real buyer-intent questions about your category, run through live AI answer engines." },
+  { n: "01", t: "We ask the AI what buyers ask", d: "Real buyer-intent questions about your category, put to Gemini with live web search." },
   { n: "02", t: "We check if you're named", d: "See your AI Visibility Score and exactly who's being recommended instead of you." },
   { n: "03", t: "Cortex drafts the fix", d: "The AI-ready FAQs, blurb and moves that get engines to cite and recommend you." },
 ];
@@ -28,8 +48,8 @@ export default function AiVisibility() {
           <SectionLabel n="00">Free tool</SectionLabel>
           <Kinetic as="h1" text={"Is AI recommending\nyour business?"} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            Your next customer is asking ChatGPT, Gemini or Perplexity for a recommendation right now. If the AI doesn&rsquo;t name you, you don&rsquo;t exist.
-            Find out where you stand — free, in about 20 seconds.
+            Your next customer is asking an AI for a recommendation right now. If it doesn&rsquo;t name you, you don&rsquo;t exist.
+            We put the questions your buyers actually ask to Gemini, searching the live web, and show you what came back — free, in about 20 seconds.
           </p>
         </div>
       </section>

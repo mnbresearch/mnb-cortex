@@ -2,6 +2,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, ArrowUp } from "lucide-react";
 
+/*
+  A SCRIPT, AND THE SCREEN NOW SAYS SO.
+
+  These four exchanges are typed out character by character to look like a live
+  session against a real workspace, complete with named customers and specific
+  figures ("₹42.8L", "Sharma Textiles", "pay back in ~4.6 months"). A visitor
+  has no way to tell this from the real /chat, which is a few pixels away and
+  does answer questions about actual rows.
+
+  The answers are also better than the product reliably gives — that is what
+  scripted answers are. Keeping the demo is fine; letting it pass for live is
+  not, so the panel carries a label. See the badge in the header below.
+*/
 const SCRIPT = [
   { q: "How is my business today?", a: "Revenue is up 18% MTD and cash runway is healthy at 7.4 months. One watch-out: receivables aged 45+ days rose 22%. Want me to draft reminders?" },
   { q: "Which customers might churn?", a: "Three accounts show falling order frequency and slower payments — Sharma Textiles, NovaMart and RK Traders. I've prepared a win-back offer for each." },
@@ -49,7 +62,16 @@ export function AskCortexDemo() {
       <div className="flex items-center gap-2 px-4 h-11 border-b bg-secondary/40">
         <div className="h-6 w-6 rounded-lg brand-gradient grid place-items-center"><Sparkles className="h-3.5 w-3.5 text-white" /></div>
         <span className="text-sm font-medium">Ask Cortex</span>
-        <span className="ml-auto text-[11px] text-muted-foreground flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> live</span>
+        {/*
+          IT SAID "live", WITH A PULSING GREEN DOT.
+
+          A hardcoded four-turn script, typed out to mimic latency, badged with
+          the one word that asserts the opposite. Unlabelled artwork is a
+          judgement call; artwork labelled "live" is a statement of fact that
+          is not true, and it is the sort of detail that makes a prospect
+          re-read everything else on the page.
+        */}
+        <span className="ml-auto text-[11px] text-muted-foreground border rounded px-1.5 py-0.5">Sample conversation</span>
       </div>
 
       <div ref={scrollRef} className="flex-1 p-4 space-y-3 overflow-hidden">

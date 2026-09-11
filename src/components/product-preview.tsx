@@ -18,6 +18,21 @@ export function ProductPreview() {
         <span className="h-3 w-3 rounded-full bg-warning/60" />
         <span className="h-3 w-3 rounded-full bg-success/60" />
         <div className="mx-auto text-xs text-muted-foreground rounded-md bg-background/70 px-3 py-1 border">cortex.mnbresearch.com/dashboard</div>
+        {/*
+          SAY THAT IT IS A MOCKUP, ON THE MOCKUP.
+
+          Every figure below is invented — ₹42.8L revenue, 7.4 months of runway,
+          a Cortex Score of 82. That is normal for marketing artwork, and it
+          stops being normal when the frame carries the real production URL and
+          the panel greets someone by name: the combination reads as a
+          screenshot of a working account, which is a claim about results.
+
+          The file called itself "stylised" in a code comment, where no visitor
+          can see it. This is the same sentence, on screen.
+        */}
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground border rounded px-1.5 py-0.5 shrink-0">
+          Illustrative
+        </span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-[64px_1fr] md:grid-cols-[180px_1fr]">
         {/* sidebar */}
@@ -34,7 +49,10 @@ export function ProductPreview() {
         </div>
         {/* main */}
         <div className="p-4 md:p-6">
-          <div className="text-xs text-muted-foreground">Good morning, Mridul</div>
+          {/* Generic, not the founder's own name — a named greeting under the
+              real production URL is what turns artwork into an apparent
+              screenshot of a live account. */}
+          <div className="text-xs text-muted-foreground">Good morning</div>
           <div className="font-display text-xl md:text-2xl tracking-tightest mt-0.5">Here&rsquo;s your business today</div>
           <div className="grid grid-cols-3 gap-2.5 mt-4">
             {kpis.map((k) => (

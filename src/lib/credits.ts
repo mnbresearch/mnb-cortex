@@ -36,6 +36,9 @@ export type ChargeResult = { ok: boolean; enforced: boolean; cost: number; balan
 // where every caller already imports them from.
 export { effectiveStatus, isLapsed, isHardStopped, statusOf } from "@/lib/entitlement";
 import { isLapsed, isHardStopped, statusOf } from "@/lib/entitlement";
+// Which workspace's balance actually pays. Pure and separately tested, because
+// "charge somebody else" needs its every branch exercised. See lib/credit-pool.
+import { resolvePayer, pooledReason } from "@/lib/credit-pool";
 
 function planAllowance(plan: string, status: string, override?: number | null): number {
   // Explicit super-admin override wins (0 = ignore, -1 = unlimited, +n = fixed).
@@ -65,24 +68,63 @@ export async function getCreditState(): Promise<CreditState> {
     // error here would silently switch metering off for a paying customer.
     const { data, error } = await sb.from("organizations").select("*").eq("id", orgId).single();
     if (error) throw error;
-    const plan = String((data as any).plan || "starter").toLowerCase();
-    const status = statusOf(data);
-    const allowance = planAllowance(plan, status, (data as any).credits_allowance);
+    let plan = String((data as any).plan || "starter").toLowerCase();
+    let status = statusOf(data);
+    let row: any = data;
+
+    /*
+      A POOLED WORKSPACE REPORTS THE FIRM'S CREDITS, because those are the
+      credits its actions will actually spend.
+
+      Without this the meter on a client workspace reads 0 while every action
+      inside it succeeds — which is worse than being wrong, because the owner
+      cannot tell the difference between "pooled, plenty left" and "about to
+      start failing". The paywall reads this same state (lib/paywall isLocked),
+      so reporting the client's own empty balance would also lock a workspace
+      the firm is paying for.
+    */
+    const firmId = (data as any).practice_org_id;
+    if (firmId) {
+      try {
+        const svcP = serviceClient();
+        if (svcP) {
+          const { data: firmRow } = await svcP.from("organizations").select("*").eq("id", firmId).single();
+          const decision = resolvePayer(
+            { id: orgId, plan, status },
+            firmRow ? { id: String((firmRow as any).id), plan: String((firmRow as any).plan || ""), status: statusOf(firmRow) } : null,
+          );
+          if (decision.pooled && firmRow) {
+            row = firmRow;
+            plan = String((firmRow as any).plan || plan).toLowerCase();
+            status = statusOf(firmRow);
+          }
+        }
+      } catch { /* fall back to this workspace's own state */ }
+    }
+
+    const allowance = planAllowance(plan, status, (row as any).credits_allowance);
     // Enterprise is metered on its fair-use allowance like every other plan, so
     // it is no longer treated as unlimited here either. Only super-admins are.
     const unlimited = superAdmin || allowance < 0;
-    let balance = Number((data as any).credits ?? 0);
-    let resetAt: string | null = (data as any).credits_reset_at ?? null;
+    /*
+      `row` is the PAYER — this workspace, or the firm funding it. Every line
+      below reads from it rather than from `data`, including the id passed to
+      sync_allowance: topping up the client's row for a firm's allowance would
+      mint a second monthly grant out of nothing.
+    */
+    const meterOrgId = String((row as any).id || orgId);
+    let balance = Number((row as any).credits ?? 0);
+    let resetAt: string | null = (row as any).credits_reset_at ?? null;
 
     if (!unlimited && allowance > 0) {
       const svc = serviceClient();
       if (svc) {
         try {
-          const { data: nb, error: rpcErr } = await svc.rpc("sync_allowance", { p_org: orgId, p_amount: allowance, p_days: RESET_DAYS });
+          const { data: nb, error: rpcErr } = await svc.rpc("sync_allowance", { p_org: meterOrgId, p_amount: allowance, p_days: RESET_DAYS });
           if (!rpcErr && typeof nb === "number") {
             balance = nb;
             // reflect the advanced reset date
-            const { data: fresh } = await svc.from("organizations").select("credits_reset_at").eq("id", orgId).single();
+            const { data: fresh } = await svc.from("organizations").select("credits_reset_at").eq("id", meterOrgId).single();
             resetAt = (fresh as any)?.credits_reset_at ?? resetAt;
           }
         } catch { /* rpc missing — leave balance as read */ }
@@ -219,16 +261,73 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
       return { ok: true, enforced: false, cost: 0, balance: balanceNow, reason: "own-key" };
     }
 
-    if (allowance > 0) { try { await svc.rpc("sync_allowance", { p_org: orgId, p_amount: allowance, p_days: RESET_DAYS }); } catch {} }
+    /*
+      PRACTICE POOLING — resolved here, immediately before the debit.
+
+      The Practice plan sells 27,750 credits alongside 25 client workspaces,
+      and every firm reads that as one budget. It was not: this called
+      charge_credits with the CURRENT org, so a partner working inside a client
+      was refused for credits that client never had.
+
+      `practice_org_id` names the firm that funds this workspace. It can only
+      have been written by cortex_practice_claim(), which proves owner/admin
+      rank in the firm AND membership of the client — so the link itself is
+      trustworthy. What is NOT trusted is that it is still valid: resolvePayer()
+      re-reads the firm's plan and status on every charge, so a firm that
+      downgrades, lapses or is suspended stops funding its clients that moment
+      rather than whenever someone remembers to unlink them.
+
+      Every uncertain branch resolves back to "this workspace pays for itself",
+      which is the behaviour before pooling existed. A bug here must never fail
+      open into a stranger's balance.
+    */
+    let payerOrgId = orgId;
+    let pooledFor: string | null = null;
+    const linkedFirmId = (org as any)?.practice_org_id;
+    if (linkedFirmId) {
+      try {
+        const { data: firmRow } = await svc.from("organizations").select("*").eq("id", linkedFirmId).single();
+        const decision = resolvePayer(
+          { id: orgId, plan, status },
+          firmRow ? { id: String((firmRow as any).id), plan: String((firmRow as any).plan || ""), status: statusOf(firmRow) } : null,
+        );
+        if (decision.pooled) {
+          payerOrgId = decision.payerOrgId;
+          pooledFor = orgId;
+          /*
+            Top the FIRM's allowance up, not the client's. sync_allowance is
+            what rolls the monthly grant; pointing it at the client here would
+            hand a pooled workspace its own separate allowance — which is the
+            same double-grant bug as refunding an unenforced charge.
+          */
+          const firmPlan = String((firmRow as any)?.plan || "").toLowerCase();
+          const firmAllowance = planAllowance(firmPlan, statusOf(firmRow), (firmRow as any)?.credits_allowance);
+          if (firmAllowance > 0) {
+            try { await svc.rpc("sync_allowance", { p_org: payerOrgId, p_amount: firmAllowance, p_days: RESET_DAYS }); } catch {}
+          }
+        }
+      } catch { /* unreadable firm → this workspace pays for itself */ }
+    }
+
+    if (!pooledFor && allowance > 0) { try { await svc.rpc("sync_allowance", { p_org: orgId, p_amount: allowance, p_days: RESET_DAYS }); } catch {} }
 
     const { data: nb, error: rpcErr } = await svc.rpc("charge_credits", {
-      p_org: orgId, p_amount: cost, p_user: user.id, p_reason: "ai:" + String(mode || "").toLowerCase(), p_meta: {},
+      p_org: payerOrgId,
+      p_amount: cost,
+      p_user: user.id,
+      /* The client's id rides along in the reason so a firm reading its ledger
+         can tell which of twenty-five workspaces spent what. */
+      p_reason: pooledFor ? pooledReason(mode, pooledFor) : "ai:" + String(mode || "").toLowerCase(),
+      p_meta: pooledFor ? { pooled: true, client_org_id: pooledFor } : {},
     });
     if (rpcErr) return { ok: true, enforced: false, cost, balance: 0 }; // rpc missing → allow
 
     const bal = Number(nb);
     if (bal < 0) {
-      const { data: cur } = await svc.from("organizations").select("credits").eq("id", orgId).single();
+      /* Report the PAYER's balance — for a pooled workspace, "you have 0
+         credits" would be true of the client and useless to the firm that
+         actually ran out. */
+      const { data: cur } = await svc.from("organizations").select("credits").eq("id", payerOrgId).single();
       return { ok: false, enforced: true, cost, balance: Number((cur as any)?.credits ?? 0), reason: "insufficient" };
     }
     return { ok: true, enforced: true, cost, balance: bal };

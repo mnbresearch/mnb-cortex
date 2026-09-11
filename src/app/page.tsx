@@ -31,11 +31,37 @@ const FAQS = [
   130 things?" A prospect deciding in five seconds needs to know what Cortex
   looks at on their behalf.
 */
+/*
+  EVERY NUMBER HERE HAS TO BE CHECKABLE AGAINST CODE, and two were not.
+
+  "1 email a week — that's it" counted only the Monday plan. A workspace also
+  receives alert digests (daily-capable, lib/alert-delivery), the weekly brief,
+  renewal notices, lifecycle nudges and collections mail. "That's it" was
+  therefore false, and falsifiable by the customer's own inbox in week two.
+  What is true is the SCHEDULED volume: one planned email a week, and anything
+  beyond it means something actually happened. That is the real promise anyway
+  — nobody is reassured by a cap, they are reassured by not being spammed.
+
+  "3 min to your first warning" was flatly unachievable when it was written.
+  Alerts reach the customer through the 04:30 UTC cron with a 20-hour floor, so
+  the first warning was up to a day away, and this sat next to an email stat
+  which is what a reader would assume it meant. A prospect could disprove it
+  with a stopwatch on day one.
+
+  It is true NOW, for a different reason and only on a specific path: the
+  import screen awaits the recompute and renders the worst finding in place
+  (lib/import-outcome, components/csv-import). So the warning genuinely appears
+  seconds after the file is read — and the label now says which path that is,
+  rather than implying it of email.
+
+  If the import ever stops awaiting recomputeAndReport, this number becomes a
+  lie again. That is what scripts/test-claims.mjs is for.
+*/
 const STATS = [
   { to: 45, suffix: "-day", label: "MSME clock, watched" },
   { to: 19, suffix: "", label: "statutory deadlines tracked" },
-  { to: 1, suffix: "", label: "email a week — that's it" },
-  { to: 3, suffix: " min", label: "to your first warning" },
+  { to: 1, suffix: "", label: "planned email a week — the rest only when something breaks" },
+  { to: 3, suffix: " min", label: "from your first import to your first warning" },
 ];
 
 // Problem-specific: the day-to-day reality of running an SME, and how Cortex changes it.
@@ -117,7 +143,9 @@ const CAPS = [
   { n: "07", name: "Legal & Compliance", blurb: "GST, contracts, compliance calendar, documents." },
   { n: "08", name: "Communications", blurb: "Email, WhatsApp, daily brief, meeting notes." },
   { n: "09", name: "Automation", blurb: "Autopilot, scheduled reports, API & webhooks." },
-  { n: "10", name: "Integrations", blurb: "Tally, Zoho, Razorpay, Shopify + 62 tools." },
+  /* Four sync (lib/sync CONNECTORS). "Tally, Zoho, Razorpay, Shopify" named two
+     that do and two that do not, in one breath, which is the whole problem. */
+  { n: "10", name: "Integrations", blurb: "Shopify, Razorpay, Stripe & Sheets sync. Tally and Vyapar by file." },
 ];
 
 const LOOP = [
@@ -241,7 +269,33 @@ export default function Home() {
           </div>
 
           <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            <span>This week it caught <RotatingWord words={["₹8.4L of deductions at risk.", "an invoice 62 days overdue.", "a GST deadline in 3 days.", "stock out in 9 days."]} /></span>
+            {/*
+              WAS: "This week it caught ₹8.4L of deductions at risk." — present
+              tense, above the fold, with a rupee figure, from a hardcoded array.
+
+              There is no data source behind it. No aggregation query, no
+              telemetry, nothing that could produce or substantiate that number.
+              It is a specific claim about results the product has delivered,
+              and it was invented.
+
+              That is the same category as the testimonials deleted forty lines
+              below, for the same reasons given there — an unsubstantiated
+              performance claim is an unfair trade practice under the Consumer
+              Protection Act 2019, and ASCI requires substantiation on demand.
+              It survived the pass that removed them because it reads like
+              copy rather than like a testimonial.
+
+              What replaces it says what Cortex LOOKS FOR, which is checkable
+              against the code: 43B(h) exposure (lib/msme.ts), overdue
+              receivables (lib/receivables), the statutory calendar
+              (lib/statutory.ts), and reorder cover (lib/reorder). Same four
+              items, same rotating device, no claim about outcomes we have not
+              measured.
+
+              If we ever want the original sentence back, it needs a real query
+              behind it over real workspaces, and the figure has to move.
+            */}
+            <span>It watches for <RotatingWord words={["deductions at risk under 43B(h).", "invoices past their due date.", "the next statutory deadline.", "stock about to run out."]} /></span>
             <Link href="/health-check" className="inline-flex items-center gap-1.5 text-foreground font-medium link-sweep">Take the free 60-second health check <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
 
@@ -267,9 +321,22 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------- MARQUEE ---------- */}
+      {/* ---------- MARQUEE ----------
+        A LOGO WALL IS AN INTEGRATION CLAIM, whatever the surrounding words say.
+
+        This scrolled sixteen names — Odoo, HubSpot, Salesforce, Slack,
+        SendGrid, QuickBooks, Freshdesk, Calendly — of which four sync. Nobody
+        reads a marquee as "tools whose API keys we can store"; it reads as
+        "works with these", which is the conventional meaning and is what makes
+        it a claim rather than decoration.
+
+        Now it names only what Cortex genuinely reads: the four live syncs, the
+        export formats the importer actually parses (lib/import-map), and
+        WhatsApp, which works through the customer's own Meta account. Shorter,
+        and every item survives being asked "show me".
+      */}
       <section className="py-6 border-y bg-secondary/30 font-display text-2xl lg:text-3xl tracking-tightest">
-        <Marquee items={["Tally", "Zoho", "Odoo", "Razorpay", "Stripe", "Shopify", "HubSpot", "Salesforce", "WhatsApp", "Slack", "SendGrid", "QuickBooks", "Google Sheets", "Cashfree", "Freshdesk", "Calendly"]} />
+        <Marquee items={["Tally exports", "Vyapar exports", "Busy exports", "Shopify", "Razorpay", "Stripe", "Google Sheets", "WhatsApp Business", "CSV"]} />
       </section>
 
       {/* ---------- THE PROBLEM ---------- */}

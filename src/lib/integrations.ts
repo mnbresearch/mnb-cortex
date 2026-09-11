@@ -115,12 +115,12 @@ export const INTEGRATIONS: Integration[] = [
     ] },
 
   // ---- Accounting & Finance ----
-  { id: "zoho_books", name: "Zoho Books", category: "Accounting & Finance", desc: "Invoices, expenses and ledger sync", minPlan: "growth", testable: true,
+  { id: "zoho_books", name: "Zoho Books", category: "Accounting & Finance", desc: "Store your Zoho Books OAuth token", minPlan: "growth", testable: true,
     docs: "https://www.zoho.com/books/api/v3/",
     fields: [KEY("OAuth token", "1000.xxxx"), { key: "organization_id", label: "Organization ID", type: "text", placeholder: "60xxxxxxx", required: true }] },
-  { id: "tally", name: "Tally", category: "Accounting & Finance", desc: "Ledger, vouchers and stock from Tally Prime", minPlan: "growth",
+  { id: "tally", name: "Tally", category: "Accounting & Finance", desc: "Endpoint for the Tally bridge — pushes from your PC", minPlan: "growth",
     fields: [{ key: "endpoint", label: "Tally endpoint URL", type: "text", placeholder: "http://localhost:9000", required: true, help: "Enable ODBC/HTTP in Tally Prime" }] },
-  { id: "quickbooks", name: "QuickBooks", category: "Accounting & Finance", desc: "Accounting and P&L sync", minPlan: "premium",
+  { id: "quickbooks", name: "QuickBooks", category: "Accounting & Finance", desc: "Store your QuickBooks access token", minPlan: "premium",
     fields: [KEY("Access token"), { key: "realm_id", label: "Realm ID", type: "text", required: true }] },
   { id: "razorpay", name: "Razorpay", category: "Commerce & Payments", desc: "Payments, settlements and payouts", minPlan: "growth", testable: true,
     docs: "https://razorpay.com/docs/api/",
@@ -140,7 +140,7 @@ export const INTEGRATIONS: Integration[] = [
   // ---- CRM & Sales ----
   { id: "hubspot", name: "HubSpot", category: "CRM & Sales", desc: "Contacts, deals and pipeline", minPlan: "growth", testable: true,
     docs: "https://developers.hubspot.com/docs/api/overview", fields: [KEY("Private app token", "pat-na1-…")] },
-  { id: "salesforce", name: "Salesforce", category: "CRM & Sales", desc: "Enterprise CRM sync", minPlan: "premium",
+  { id: "salesforce", name: "Salesforce", category: "CRM & Sales", desc: "Store your Salesforce credentials", minPlan: "premium",
     fields: [KEY("Access token"), { key: "instance_url", label: "Instance URL", type: "text", placeholder: "https://xx.my.salesforce.com", required: true }] },
   { id: "zoho_crm", name: "Zoho CRM", category: "CRM & Sales", desc: "Leads, contacts and deals", minPlan: "growth",
     fields: [KEY("OAuth token"), { key: "domain", label: "Data centre", type: "text", placeholder: "www.zohoapis.in", required: true }] },

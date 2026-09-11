@@ -313,6 +313,24 @@ export const PLAN_SEATS: Record<string, number> = {
  * The credit allowance is POOLED across clients rather than per client, because
  * a firm's usage is lumpy: nothing for three weeks, then everything at once in
  * the run-up to the 20th.
+ *
+ * THIS SENTENCE WAS AN ASSERTION WITH NO IMPLEMENTATION BEHIND IT for as long
+ * as the plan has been sold. charge_credits was always called with the CURRENT
+ * workspace's id, so a partner working inside a client workspace was refused
+ * for want of credits that client had never been given — while this comment,
+ * and the bullet listing 27,750 credits under 25 client workspaces, both said
+ * otherwise.
+ *
+ * It is true now: lib/credit-pool.ts decides the payer, the link is written
+ * only by cortex_practice_claim() (2026_zzzd_practice_pool.sql) which proves
+ * owner/admin rank in the firm AND membership of the client, and the firm's
+ * plan and status are re-checked on every single charge so a downgrade or a
+ * lapse stops the funding immediately.
+ *
+ * Pooling is OPT-IN PER CLIENT, from the Practice console. Deciding to fund
+ * another workspace is a spending decision; inferring it from shared
+ * membership would drain a firm's allowance into any workspace someone had
+ * been added to.
  */
 export const PRACTICE_CLIENTS: Record<string, number> = {
   practice: 25,
@@ -561,7 +579,7 @@ export const PLANS: Plan[] = [
     cta: "Talk to us about Practice",
     features: [
       "Up to 25 client workspaces",
-      "27,750 AI credits / month",
+      "27,750 AI credits / month, shared across your clients",
       "Practice console — every client's exposure ranked",
       "Whose 43B(h) clock is running, client by client",
       "Whose receivables moved this week",

@@ -3,6 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { Card } from "@/components/ui/card";
 import { getPractice } from "@/lib/practice";
 import { ClientSwitchLink } from "@/components/client-switch-link";
+import { ClientPoolingToggle } from "@/components/client-pooling-toggle";
 import { ClientBrief } from "@/components/client-brief";
 import { AlertTriangle, Info, Building2 } from "lucide-react";
 
@@ -147,6 +148,8 @@ export default async function Practice() {
                   and so it does not happen.
                 */}
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* Whose credits this client spends — see components/client-pooling-toggle. */}
+                  <ClientPoolingToggle orgId={c.orgId} clientName={c.name} pooled={c.pooled} />
                   <ClientBrief orgId={c.orgId} clientName={c.name} />
                   <ClientSwitchLink orgId={c.orgId} />
                 </div>

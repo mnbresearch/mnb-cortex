@@ -1904,3 +1904,69 @@ export async function exportWorkspaceJson(): Promise<{ ok: boolean; json?: strin
   const { exportBeforeErasure } = await import("@/lib/erasure");
   return exportBeforeErasure();
 }
+
+// ---- Practice credit pooling ------------------------------------------------
+/*
+  Put a client workspace on the firm's credit pool, or take it off.
+
+  ALL THE SECURITY IS IN POSTGRES, deliberately. cortex_practice_claim() proves,
+  in one transaction with the write, that the caller is an owner/admin of the
+  FIRM and a member of the CLIENT. Re-implementing those checks here would give
+  two places to get it wrong and one of them would eventually drift; and a
+  server action is not a boundary a determined caller cannot reach.
+
+  So this is a thin pass-through whose only job is to turn the function's
+  outcome codes into sentences a partner can act on. `p_firm` is taken from the
+  SESSION's current workspace, never from the request — otherwise the firm id
+  would be an attacker-controlled input and the whole guard would rest on a
+  value they chose.
+*/
+const POOL_MESSAGES: Record<string, string> = {
+  "not-signed-in": "Sign in again and retry.",
+  "missing-argument": "Something went wrong — reload the page and try again.",
+  "cannot-claim-self": "A workspace cannot fund itself.",
+  "not-a-member-of-firm": "You are not a member of this firm's workspace.",
+  "insufficient-rank": "Only an owner or admin of the firm can change this.",
+  "not-a-member-of-client": "You are not a member of that client workspace.",
+  "firm-not-found": "Could not read this workspace.",
+  "firm-plan-has-no-pooling": "Shared credits are part of the Practice plan.",
+  "client-limit-reached": "You are at your plan's limit of client workspaces.",
+  "not-pooled": "That client is not using your credits.",
+};
+
+export async function setClientPooling(fd: FormData): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { orgId: firmOrgId } = await getUserAndOrg();
+    if (!firmOrgId) return { ok: false, error: "Sign in first." };
+    const client = str(fd.get("client"));
+    const on = str(fd.get("on")) === "1";
+    if (!client) return { ok: false, error: "Which client?" };
+
+    const sb = createClient();
+    const { practiceClientLimit } = await import("@/lib/config");
+    const svc = serviceClient();
+    let limit = 25;
+    try {
+      const { data } = await (svc || sb).from("organizations").select("plan").eq("id", firmOrgId).single();
+      limit = practiceClientLimit(String((data as any)?.plan || ""));
+    } catch { /* fall back to the advertised 25 */ }
+
+    const { data, error } = on
+      ? await sb.rpc("cortex_practice_claim", { p_firm: firmOrgId, p_client: client, p_limit: limit })
+      : await sb.rpc("cortex_practice_release", { p_client: client });
+
+    /*
+      A missing function means the migration has not been run. Say that rather
+      than "failed" — it is the one failure here with a specific fix, and the
+      operator is usually the person reading it.
+    */
+    if (error) return { ok: false, error: "Shared credits are not set up on this database yet — run 2026_zzzd_practice_pool.sql." };
+
+    const code = String(data || "");
+    if (code !== "ok") return { ok: false, error: POOL_MESSAGES[code] || "Could not change that." };
+
+    await logActivity(firmOrgId, "practice", `${on ? "Pooled" : "Unpooled"} client workspace ${client}`);
+    revalidatePath("/practice");
+    return { ok: true };
+  } catch (e: any) { return { ok: false, error: e?.message || "Could not change that." }; }
+}

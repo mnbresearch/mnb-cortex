@@ -51,6 +51,18 @@ export type ClientSignal = {
     "nothing moved" and "we cannot see yet" need opposite words on screen.
   */
   movedPct: number | null;
+  /*
+    True when this client's AI actions are billed to the FIRM's credit pool
+    rather than to its own balance.
+
+    Surfaced per client because the Practice bullet sells "Up to 25 client
+    workspaces" beside "27,750 AI credits / month", and a firm cannot tell
+    whether it is getting that unless the console says which clients are
+    actually drawing on the pool. A partner who links twenty-four and forgets
+    the twenty-fifth would otherwise discover it as an unexplained refusal
+    inside that client, weeks later.
+  */
+  pooled: boolean;
 };
 
 export type Practice = {
@@ -106,8 +118,15 @@ export async function getPractice(): Promise<Practice> {
   } catch { return EMPTY; }
   if (!orgIds.length) return EMPTY;
 
-  const { data: orgRows } = await svc.from("organizations").select("id, name, plan").in("id", orgIds);
+  const { data: orgRows } = await svc.from("organizations").select("id, name, plan, practice_org_id").in("id", orgIds);
   const names = new Map(((orgRows as any[]) || []).map((o) => [String(o.id), String(o.name || "Untitled")]));
+  /*
+    Which clients already draw on the firm's credit pool. Read from the same
+    row set as the names — one query, not one per client — and resolved
+    against the CURRENT workspace, because a partner who belongs to two firms
+    must see pooling as it applies to the firm they are standing in.
+  */
+  const pooledTo = new Map(((orgRows as any[]) || []).map((o) => [String(o.id), o.practice_org_id ? String(o.practice_org_id) : null]));
 
   /*
     ENTITLEMENT. Practice is a ₹29,999/month plan and this console was open to
@@ -301,6 +320,7 @@ export async function getPractice(): Promise<Practice> {
     clients.push({
       orgId, name: names.get(orgId) || "Untitled", rank, headline, detail,
       receivablesOverdue, msmeAtRisk, openAlerts, lastActivity, recovered, movedPct,
+      pooled: Boolean(currentOrgId) && pooledTo.get(orgId) === String(currentOrgId),
     });
   }
 

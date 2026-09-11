@@ -37,8 +37,23 @@ const DOMAINS: { n: string; name: string; blurb: string; tools: string[] }[] = [
     tools: ["Email Campaigns + tracking", "WhatsApp Broadcast", "Daily CEO Brief", "Meeting Assistant", "Negotiation Coach"] },
   { n: "09", name: "Automation", blurb: "Set it once; Cortex keeps working while you sleep.",
     tools: ["AI Autopilot (daily)", "Scheduled reports", "Public API & Webhooks", "Data Explorer", "CSV / Sheets / PDF import"] },
-  { n: "10", name: "Integrations", blurb: "Plugs into the tools you already run.",
-    tools: ["Tally, Zoho, Odoo", "Razorpay, Cashfree, Stripe, Shopify", "HubSpot, Salesforce", "WhatsApp, Slack, SendGrid", "62 tools + Custom API keys"] },
+  /*
+    WAS: "Tally, Zoho, Odoo" / "HubSpot, Salesforce" / "WhatsApp, Slack,
+    SendGrid" / "62 tools", in a list headed "Plugs into the tools you already
+    run", with the four that genuinely sync buried in the middle of it.
+
+    Four providers sync — Shopify, Razorpay, Stripe and Google Sheets
+    (lib/sync/index.ts CONNECTORS). Zoho, Odoo, HubSpot, Salesforce, Slack,
+    SendGrid and QuickBooks pull and push nothing. Listing them beside Razorpay
+    made the whole list read as uniform, which is exactly how a reader is
+    misled without a single false word being written.
+
+    The split below is the honest shape of the thing, and it is still a good
+    offer: four live syncs, the file formats Indian SMEs actually export, a
+    working Tally bridge over the API, and a credential vault for the rest.
+  */
+  { n: "10", name: "Integrations", blurb: "Four live syncs, plus the files your accountant already sends you.",
+    tools: ["Syncs: Shopify, Razorpay, Stripe, Google Sheets", "File import: Tally, Vyapar, Busy, any CSV", "Tally bridge via the public API", "Your own WhatsApp Business account", "Credential vault for 60+ other tools"] },
 ];
 
 const SECURITY = [

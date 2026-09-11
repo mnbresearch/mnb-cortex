@@ -144,8 +144,45 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
                   </Badge>
                 ) : !allowed ? (
                   <Badge className="bg-warning/10 text-warning border-warning/20"><Lock className="h-3 w-3 mr-1" />{i.minPlan}</Badge>
-                ) : null}
+                ) : SYNCABLE.includes(i.id) ? (
+                  <Badge className="bg-success/10 text-success border-success/20">Syncs</Badge>
+                ) : (
+                  /*
+                    "Vault" — said BEFORE the customer connects, which is the
+                    whole point. See the block below.
+                  */
+                  <Badge className="bg-secondary text-muted-foreground">Vault</Badge>
+                )}
               </div>
+
+              {/*
+                THE DISCLOSURE HAS TO COME BEFORE THE CREDENTIAL, NOT AFTER IT.
+
+                "Automatic data sync isn't available for this provider yet" was
+                only rendered in the `conn ?` branch below — i.e. once the
+                integration was already connected. So the sequence for 59 of the
+                63 providers was:
+
+                  read "Zoho Books — Invoices, expenses and ledger sync"
+                  press Connect
+                  hand over a live OAuth token for a production accounting system
+                  THEN be told no sync exists
+
+                The customer has now given us a credential for a capability we
+                do not have. That is not a marketing problem, it is a custody
+                problem: we are holding a key we cannot justify having asked for.
+
+                Four providers sync (lib/sync CONNECTORS). The rest are a
+                credential vault, which is a legitimate thing to be — it is what
+                the API and the Tally bridge authenticate against — but the card
+                has to say so while the customer can still decline.
+              */}
+              {!conn && allowed && !SYNCABLE.includes(i.id) && (
+                <p className="text-[11px] text-muted-foreground">
+                  Stores credentials only — Cortex does not yet pull data from {i.name}. Bring these numbers in
+                  by CSV import or the API.
+                </p>
+              )}
 
               {conn?.config?.hint && <div className="text-xs text-muted-foreground font-mono">{conn.config.hint}</div>}
 
