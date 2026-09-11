@@ -11,6 +11,8 @@ import { ByoKeyCard } from "@/components/byo-key-card";
 import { byoKey } from "@/lib/byok";
 import { hasWhatsAppFor } from "@/lib/whatsapp";
 import { Info } from "lucide-react";
+import { CollectionsDryRun } from "@/components/collections-dry-run";
+import { previewCollections } from "@/lib/collections/preview";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -55,6 +57,36 @@ export default async function Collections() {
     pending = (data as any[]) || [];
   }
 
+  /*
+    THE DRY RUN, computed only when collections is OFF.
+
+    When it is on, the console below already shows the real drafts — a preview
+    would be a second, slightly different account of the same thing, which is
+    how two screens come to disagree. When it is off, this is the entire
+    argument for switching it on, so it is worth the extra reads.
+  */
+  let preview = null;
+  if (!policy.enabled) {
+    /*
+      Built from `candidates` and `policy` — the rows already fetched above for
+      the console. Not a second read: two independent reads are two chances for
+      one screen to disagree with itself about the same invoices, and this page
+      has a 30-second budget it does not need to spend twice.
+
+      The only extra query is the workspace's own name, which the drafted
+      message signs off with. If even that fails the preview still renders,
+      signed "your business", rather than the whole card disappearing.
+    */
+    let businessName = "your business";
+    if (svc) {
+      try {
+        const { data: org } = await svc.from("organizations").select("name").eq("id", orgId).maybeSingle();
+        if ((org as any)?.name) businessName = String((org as any).name);
+      } catch { /* keep the fallback */ }
+    }
+    preview = previewCollections(candidates, policy, businessName);
+  }
+
   const chaseable = candidates.filter((c) => !c.blockedBy);
   const blocked = candidates.filter((c) => c.blockedBy);
 
@@ -97,15 +129,30 @@ export default async function Collections() {
           </Card>
         </div>
 
+        {/*
+          The off state used to DESCRIBE the feature — "turn it on, generate the
+          drafts, and read them". That asks an owner to decide, from a
+          paragraph, whether to let software write to the people who owe them
+          money. Most will not, which is why the feature that would prove this
+          product's value is the one least likely to be switched on.
+
+          It now shows the dry run instead: what would be chased, the exact
+          message, and what would be left alone and why. Falls back to the old
+          card if the preview could not be computed.
+        */}
         {!policy.enabled && (
-          <Card className="p-4 border-primary/20 bg-primary/5 text-sm flex items-start gap-2.5">
-            <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-            <div>
-              <span className="font-medium">Collections is off.</span>{" "}
-              Nothing has been drafted and nothing can be sent. Turn it on below, generate the drafts, and read them —
-              you approve every message before it leaves. Cortex never messages your customers without you.
-            </div>
-          </Card>
+          preview
+            ? <CollectionsDryRun preview={preview} />
+            : (
+              <Card className="p-4 border-primary/20 bg-primary/5 text-sm flex items-start gap-2.5">
+                <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" aria-hidden="true" />
+                <div>
+                  <span className="font-medium">Collections is off.</span>{" "}
+                  Nothing has been drafted and nothing can be sent. Turn it on below, generate the drafts, and read them —
+                  you approve every message before it leaves. Cortex never messages your customers without you.
+                </div>
+              </Card>
+            )
         )}
 
         <CollectionsConsole
