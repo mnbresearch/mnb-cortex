@@ -398,8 +398,21 @@ async function checkSchema(): Promise<Check> {
   for (const [table, col, name] of probes) {
     try {
       const { error } = await sb.from(table).select(col).limit(1);
-      if (error) missing.push(name);
-    } catch { missing.push(name); }
+      /*
+        NAME THE OBJECT, NOT JUST THE FILE.
+
+        This reported only `name` — the file to run. That is the right thing to
+        tell an operator who has to fix it, and useless to anyone trying to
+        understand what is broken: "Not applied: RUN-2026-09-05.sql" covers six
+        tables and seven functions, so the first real hit sent me reading the
+        whole collections subsystem when a single table was absent. Reporting
+        the file alone also hides the case where five of six objects exist,
+        which is what a half-finished paste looks like.
+
+        Both, then: what is missing and what to run about it.
+      */
+      if (error) missing.push(`${name} (${table}.${col.split(",")[0].trim()} unreadable)`);
+    } catch { missing.push(`${name} (${table} — probe threw)`); }
   }
   /*
     The billing guard is a trigger, not a column, so a select cannot see it.
@@ -498,21 +511,62 @@ async function computeHealth() {
     the incident ended. This puts it on the same status page the operator
     already looks at.
   */
+  /*
+    THE KILL SWITCH REPORTED ITSELF HEALTHY WITHOUT BEING CHECKED.
+
+    This read `const { data: on } = await svcSw.rpc(...)` and branched on
+    `on === false`. supabase-js does not THROW on a failed RPC — it returns
+    `{ data: null, error }`. So when cortex_collections_enabled is not
+    installed, `on` was null, `null === false` was false, and this reported
+    "operational". The catch below was unreachable for the same reason and had
+    never once run.
+
+    Which means: for a database where RUN-2026-09-05.sql had not been applied,
+    the operator kill switch for the one feature that writes to a customer's
+    own customers was shown as green, on the strength of a check that could not
+    run. That is the precise failure checkSchema() above already calls out in
+    its own comments — "a control that cannot be verified is reported as
+    unverified; green has to mean green" — reproduced two hundred lines later
+    in the check for the more dangerous control.
+
+    THREE OUTCOMES NOW, not two:
+      switch readable and on   -> operational
+      switch readable and off  -> degraded, with the recorded reason
+      switch NOT readable      -> degraded, and says so
+  */
   let collections: Check = { name: "Outbound collections", status: "operational" };
   try {
     const svcSw = serviceClient();
-    if (svcSw) {
-      const { data: on } = await svcSw.rpc("cortex_collections_enabled");
-      if (on === false) {
+    if (!svcSw) {
+      collections = { name: "Outbound collections", status: "degraded", detail: "No service role — cannot read the kill switch" };
+    } else {
+      const { data: on, error } = await svcSw.rpc("cortex_collections_enabled");
+      if (error) {
+        collections = {
+          name: "Outbound collections",
+          status: "degraded",
+          detail: `cannot verify the kill switch — ${error.message}. Run RUN-2026-09-05.sql`,
+        };
+      } else if (on === false) {
         const { data: row } = await svcSw.from("platform_switches").select("reason").limit(1).maybeSingle();
         collections = {
           name: "Outbound collections",
           status: "degraded",
           detail: `PAUSED platform-wide — ${(row as any)?.reason || "no reason recorded"}`,
         };
+      } else if (on !== true) {
+        /* Neither true nor false nor an error — a signature change, or a
+           function returning null. Unverified is not the same as fine. */
+        collections = {
+          name: "Outbound collections",
+          status: "degraded",
+          detail: `the kill switch returned ${JSON.stringify(on)}, which is neither on nor off`,
+        };
       }
     }
-  } catch { collections = { name: "Outbound collections", status: "degraded", detail: "cannot verify the kill switch" }; }
+  } catch (e: any) {
+    collections = { name: "Outbound collections", status: "degraded", detail: `cannot verify the kill switch — ${e?.message || "threw"}` };
+  }
 
   const services: Check[] = [
     { name: "Web app", status: "operational", critical: true },   // it answered, so it's up
