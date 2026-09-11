@@ -306,6 +306,93 @@ async function checkSchema(): Promise<Check> {
       to "this is missing" should be the command that fixes it.
     */
     ["weekly_plan_sends", "week", "RUN-weekly-plan-sends.sql"],
+    /*
+      THE SAME ARGUMENT, THREE MORE TIMES — and these were shipped without
+      being added here, which is how the question "did that SQL ever get run?"
+      became unanswerable except by asking a human who might be wrong.
+
+      All three degrade silently, and silently in the most expensive direction:
+
+        funnel_events   — every analytics call in the product writes here and
+                          swallows its own failure on purpose (an analytics
+                          write must never break a page). So the funnel reads
+                          zero, which is indistinguishable from "nobody came".
+                          Every decision made from that number is then wrong in
+                          a way nothing on screen reveals.
+
+        lifecycle_sends — the claim-before-send lock for the welcome, setup,
+                          import and last-call emails. THIS IS THE DANGEROUS
+                          ONE. The claim is `insert ... on conflict do nothing`,
+                          and if the table is absent the insert errors, so
+                          either nothing is ever sent or — depending on how the
+                          caller treats that error — the same nudge goes to the
+                          same new customer every single morning. Annoying a
+                          brand-new signup daily is worse than never writing to
+                          them at all.
+
+        leads.score     — the health check already computes a score out of 100
+                          and names the weak areas. Without the column the
+                          insert drops them, and the CRM row keeps a name and
+                          an email for the warmest lead in the funnel.
+
+      Named for the file to run, not the migration, because the answer to "this
+      is missing" should be the command that fixes it.
+    */
+    ["funnel_events", "event", "RUN-NOW-2026-09-11.sql"],
+    ["lifecycle_sends", "stage", "RUN-NOW-2026-09-11.sql"],
+    ["leads", "company, note, score", "RUN-NOW-2026-09-11.sql"],
+    /*
+      COLLECTIONS HAD NO PROBE AT ALL — the whole subsystem, six tables of it.
+
+      Found by scripts/test-schema-probes.mjs, which asserts that every table
+      and column introduced by a hand-run supabase/RUN-*.sql file is reported
+      here. It found sixteen gaps on its first run, and these are the worst of
+      them: collections is the feature that most directly makes a customer
+      money, and an operator who never ran RUN-2026-09-05.sql had every part of
+      it dead while this endpoint reported "operational".
+
+      The columns are probed BY NAME and not just the table, because these
+      tables pre-date the columns. A bare `select id from collection_policies`
+      succeeds on the original table, so the circuit breaker's tripped_at, the
+      WhatsApp template and the reply-to header could all be missing with
+      nothing to show it — which is precisely how leads.score stayed invisible.
+
+      One probe, several columns: PostgREST fails the select if any single one
+      is absent, so this is one round trip rather than five.
+    */
+    ["collection_threads", "status", "RUN-2026-09-05.sql"],
+    ["collection_messages", "attempt", "RUN-2026-09-05.sql"],
+    ["collection_policies", "tone, tripped_at, tripped_reason, reply_to, whatsapp_template, last_swept_at", "RUN-2026-09-05.sql"],
+    /*
+      metric_snapshots backs the week-on-week movement in the Practice console
+      and the "receivables have risen 12%" line in the client brief. Absent, a
+      firm's brief silently loses its only trend sentence.
+
+      platform_switches is the operator kill switch. If this table is missing
+      the switch cannot be read, and a control that cannot be read is a control
+      that is not there — which is the one category this file already refuses
+      to report as fine elsewhere.
+
+      erased_subscriptions is the DPDP erasure ledger. It has to exist before
+      somebody exercises the right, not after.
+    */
+    ["metric_snapshots", "captured_at", "RUN-2026-09-05.sql"],
+    ["platform_switches", "enabled", "RUN-2026-09-05.sql"],
+    ["erased_subscriptions", "erased_at", "RUN-2026-09-05.sql"],
+    /*
+      cron_cursors is how the nightly sweep rotates through workspaces instead
+      of always starting at the same one. Without it the rotation resets every
+      night, so the first twenty workspaces get their analysis every day and
+      the twenty-first never gets one — a starvation bug that looks like
+      nothing at all from the outside.
+    */
+    ["cron_cursors", "name", "RUN-scale.sql"],
+    /*
+      health_metrics.updated_at. The Practice console orders clients by it; a
+      missing column means ordering by nothing and reporting every client as
+      equally idle.
+    */
+    ["health_metrics", "updated_at", "RUN-NOW-2026-09-08.sql"],
   ];
   const missing: string[] = [];
   for (const [table, col, name] of probes) {
