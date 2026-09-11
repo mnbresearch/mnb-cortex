@@ -11,7 +11,8 @@ export const metadata = {
 };
 
 const LOOP = [
-  { k: "Monitor", d: "Reads sales, finance, inventory, production and HR in real time — one source of truth." },
+  /* "in real time" contradicted the daily-cron architecture. */
+  { k: "Monitor", d: "Reads sales, finance, inventory, production and HR every day — one source of truth." },
   { k: "Predict", d: "Forecasts stockouts, churn, and cash crunches weeks before they happen." },
   { k: "Recommend", d: "Boardroom-grade advice, grounded in your live numbers and your history." },
   { k: "Remember", d: "A permanent second brain that makes every answer sharper over time." },

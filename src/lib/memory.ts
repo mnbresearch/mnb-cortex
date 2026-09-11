@@ -24,6 +24,39 @@ function clampImp(n: any) { const v = Math.round(Number(n) || 3); return Math.ma
 /* ------------------------------------------------------------------ writing */
 
 /** Create (remember) a memory and register any entities it mentions. */
+/*
+  CORTEX MEMORY IS A PLAN FEATURE, AND WAS NOT ENFORCED ANYWHERE.
+
+  config.ts declares `memory` in the Capability union and grants it to Watch
+  Pro and above — it is a headline bullet of the ₹14,999 tier. It had ZERO
+  requireCapability or planIncludes call sites in the entire codebase, so a
+  ₹799 Try workspace got the whole thing.
+
+  That is a revenue leak rather than a false claim — nobody was misled, we
+  were under-charging — but it hollows out the tier the feature was built to
+  justify, and it breaks the symmetry the entitlement suite exists to keep
+  (every other capability in that union is gated).
+
+  Enforced on the WRITE path only, and here rather than across six API routes,
+  for the same reason chargeForMode is the single choke point for credits:
+  every path that adds a memory ends up in this function, so one check cannot
+  be forgotten by the next route that calls it.
+
+  Reads stay open deliberately. A workspace that downgrades keeps whatever it
+  has recorded — silently hiding a customer's own notes is worse than
+  declining to take new ones, and "anything you have already set up keeps
+  working" is the wording requireCapability already uses elsewhere.
+*/
+async function memoryWriteAllowed(orgId: string): Promise<boolean> {
+  try {
+    const { planIncludes } = await import("@/lib/config");
+    const svc = serviceClient();
+    if (!svc) return true;   // unreadable plan must never block a write
+    const { data } = await svc.from("organizations").select("plan").eq("id", orgId).maybeSingle();
+    return planIncludes(String((data as any)?.plan || ""), "memory");
+  } catch { return true; }   // fail OPEN: never lose a customer's note to a gate bug
+}
+
 export async function remember(input: {
   content: string; title?: string; kind?: string; entities?: string[]; tags?: string[];
   importance?: number; source?: string; source_ref?: string; author?: string | null; orgId?: string;
@@ -32,6 +65,7 @@ export async function remember(input: {
   if (!svc || !input.content?.trim()) return null;
   const orgId = input.orgId || (await getUserAndOrg()).orgId;
   if (!orgId) return null;
+  if (!(await memoryWriteAllowed(orgId))) return null;
 
   const entities = (input.entities || []).map((e) => e.trim()).filter(Boolean).slice(0, 12);
   const row = {

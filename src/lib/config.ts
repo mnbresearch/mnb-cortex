@@ -583,7 +583,7 @@ export const PLANS: Plan[] = [
       "Practice console — every client's exposure ranked",
       "Whose 43B(h) clock is running, client by client",
       "Whose receivables moved this week",
-      "Your accent colour across the workspace",
+      "Your accent colour across the workspace (outbound email is Cortex-branded)",
       "Everything in Watch Pro for your firm",
       "Named onboarding for your team",
     ] },
@@ -596,7 +596,17 @@ export const PLANS: Plan[] = [
       "Everything in Watch Pro",
       "WhatsApp execution (your Meta account)",
       "AI agents across every department",
-      "Custom accent colour & logo",
+      /*
+        SCOPED TO THE WORKSPACE, deliberately.
+
+        The chrome is branded — layout.tsx reads logo_url and the accent, and
+        the sidebar renders them. But renderBrandedEmail() takes no org
+        parameter, so every email the customer's own clients receive is
+        MNB-branded, and email is the surface a white-label buyer actually
+        judges. Until that is threaded through all ten call sites, the bullet
+        says where the branding stops.
+      */
+      "Custom accent colour & logo in your workspace",
       "Image & video generation",
       "Guided onboarding · priority support",
     ] },

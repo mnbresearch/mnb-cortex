@@ -106,7 +106,15 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
       { icon: Bot, name: "438 AI Agents", d: "A 7-department AI workforce across 27 Indian industries." },
       { icon: Workflow, name: "Workflows & Approvals", d: "Automate the busywork with a human in the loop." },
       { icon: Radio, name: "WhatsApp Broadcast", d: "Personalised messages, ready for you to send." },
-      { icon: Cpu, name: "AI Autopilot", d: "Runs a daily analysis and briefs you each morning." },
+      /*
+        "briefs you each morning" is true today and becomes false as this
+        succeeds: the nightly sweep analyses ANALYSIS_CAP = 20 workspaces,
+        rotated, so at 100 paying workspaces "daily" is every fifth day. The
+        cron already computes nights_for_full_cycle and nothing acts on it.
+        Worded so it stays true either way; the rotation is the honest
+        mechanism and is worth saying out loud.
+      */
+      { icon: Cpu, name: "AI Autopilot", d: "Runs a nightly sweep and writes up what changed." },
     ],
   },
   {
@@ -149,7 +157,9 @@ const CAPS = [
 ];
 
 const LOOP = [
-  { k: "Monitors", d: "Reads sales, finance, inventory, production & HR in real time." },
+  /* Not "in real time": one daily cron (vercel.json), a 200-workspace sweep.
+     The product's own positioning says "watched daily" and is right. */
+  { k: "Monitors", d: "Reads sales, finance, inventory, production & HR, every day." },
   { k: "Predicts", d: "Forecasts stockouts, churn and cash crunches before they hit." },
   { k: "Recommends", d: "Boardroom-grade advice, grounded in your live numbers." },
   { k: "Remembers", d: "A permanent memory that sharpens every answer over time." },
@@ -194,7 +204,7 @@ const TESTI: { q: string; n: string }[] = [];
 
 const MOATS = [
   { n: "01", name: "A memory that compounds", claim: "Every workspace builds its own permanent brain — decisions, numbers, context, preferences — that gets sharper every single day. A rival starting today starts from zero for each customer; your Cortex only deepens. The data moat is private, per-customer, and grows on its own." },
-  { n: "02", name: "One brain, not 130 point tools", claim: "Finance, sales, ops and 438 agents draw on the same memory and your live data, so answers stay consistent across the company. You can bolt a chatbot onto a dashboard — you can't retrofit a unified operating brain." },
+  { n: "02", name: "One brain, not 128 point tools", claim: "Finance, sales, ops and 438 agents draw on the same memory and your live data, so answers stay consistent across the company. You can bolt a chatbot onto a dashboard — you can't retrofit a unified operating brain." },
   { n: "03", name: "It acts, not just answers", claim: "Cortex reads your real bank statements and GST returns, drafts the reminder, PO or plan, and — with one approval — sends it. Advice is a commodity. A system that closes the loop across every function is not." },
   { n: "04", name: "Vertical depth × the AI-search era", claim: "Tuned to 27 Indian industries and built to get you recommended when buyers ask an AI assistant. Generic tools can't match the depth, and latecomers can't catch a head start that compounds." },
 ];
@@ -395,7 +405,19 @@ export default function Home() {
               How healthy is <span className="text-primary">your</span> business, really?
             </h2>
             <p className="mt-5 text-muted-foreground leading-7 max-w-lg">
-              Six questions. No signup, no card, no sales call unless you ask for one. You get a Business Health
+              {/*
+                WAS "no sales call unless you ask for one" — beside a form
+                whose phone field is `required` and whose own helper text says
+                "We use your number to walk you through the report", and which
+                emails the lead straight to the operator.
+
+                The contradiction lived inside one flow, two screens apart.
+                Keeping the phone is the right call — this is the warmest lead
+                in the funnel and the whole point of the health check — so the
+                promise changes to match the behaviour rather than the other
+                way round.
+              */}
+              Six questions. No signup, no card. We&rsquo;ll call once to walk you through it — tell us not to and we won&rsquo;t. You get a Business Health
               Score out of 100, the specific areas putting you at risk, and exactly what to do about each one.
             </p>
             <ul className="mt-7 space-y-3 text-sm">
@@ -487,7 +509,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="04">Everything you get</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Not one AI trick.<br />An operating system for your business.</h2>
-          <p className="mt-4 text-muted-foreground max-w-2xl">130 modules, 438 agents and a permanent memory — organised into the jobs you actually need done. Here&rsquo;s the whole thing.</p>
+          <p className="mt-4 text-muted-foreground max-w-2xl">128 modules, 438 agents and a permanent memory — organised into the jobs you actually need done. Here&rsquo;s the whole thing.</p>
 
           <div className="mt-14 space-y-14">
             {FEATURES.map((g) => (

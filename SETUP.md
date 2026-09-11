@@ -19,7 +19,7 @@ scope them to *Production* (and *Preview* if you use it), then redeploy.
 |---|---|---|
 | Database, workspaces, KPIs | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → `service_role` |
 | AI text — chat, Deep Dive, reports, agents | `GEMINI_API_KEY` | Free at [aistudio.google.com/apikey](https://aistudio.google.com/apikey), no card |
-| Image agents (80) | `GEMINI_API_KEY` | Same key. Nothing extra |
+| Image agents (98) | `GEMINI_API_KEY` | Same key. Nothing extra |
 | Video agents (14, Google Veo) | `GEMINI_API_KEY` | Same key |
 | Email | `RESEND_API_KEY` | [resend.com/api-keys](https://resend.com/api-keys) + verify your domain |
 | Payments | `CASHFREE_APP_ID`, `CASHFREE_SECRET_KEY` | Cashfree → Developers → API Keys |
@@ -225,13 +225,20 @@ verify the mandate and refunds it.
 
 **The one limit to know:** UPI Autopay is capped at **₹15,000 per mandate**.
 
+<!-- Every plan and price here comes from PLANS in src/lib/config.ts. The
+     previous table listed Solo / Starter / Growth / Premium / Business at
+     ₹799 / ₹2,499 / ₹6,999 / ₹17,999 / ₹39,999 — five names and four prices
+     that no longer exist anywhere in the product. This is the table a support
+     agent quotes from when a customer asks why UPI Autopay was declined. -->
+
 | Plan | Monthly | UPI Autopay? |
 |---|---|---|
-| Solo | ₹799 | yes |
-| Starter | ₹2,499 | yes |
-| Growth | ₹6,999 | yes |
-| Premium | ₹17,999 | no — card or eNACH |
-| Business | ₹39,999 | no — card or eNACH |
+| Try Cortex | ₹799 | yes |
+| Watch | ₹4,999 | yes |
+| Watch Pro | ₹14,999 | yes |
+| Practice | ₹29,999 | no — card or eNACH |
+| Command | ₹39,999 | no — card or eNACH |
+| Enterprise | negotiated | invoice / eNACH |
 
 The UI says this before the customer starts, rather than letting them discover
 it at their bank's screen. Successful cycles arrive as `SUBSCRIPTION_*`
@@ -285,11 +292,36 @@ already set. Production is unaffected — Vercel has the real values.
 
 ## Database migrations
 
-Run in this order in the Supabase SQL editor. All are idempotent.
+**Run every file in `supabase/migrations/` in filename order.** They are all
+idempotent, and the filenames sort into dependency order — which is why this is
+one instruction rather than a list.
 
-1. `2026_hardening.sql` — RLS on billing tables, locked-down RPCs, subscription periods
-2. `2026_metrics_layer.sql` — merge key + GST columns for the KPI layer
-3. `2026_tenancy.sql` — role-split RLS across every tenant table
-4. `2026_signup_trigger.sql` — profile-only signup trigger
-5. `2026_renewal_notices.sql` — renewal reminders + `billing_phone`
-6. `2026_integrations_layer.sql` — webhooks + scheduled reports
+```bash
+for f in supabase/migrations/*.sql; do echo "-- $f"; cat "$f"; done > /tmp/all.sql
+# then paste /tmp/all.sql into the Supabase SQL editor, or:
+psql "$DATABASE_URL" -f /tmp/all.sql
+```
+
+### Why this is not a curated list any more
+
+It used to name six files. There are 57. The forty-nine omissions were not
+minor — they included the migrations behind the MSME 43B(h) engine, alert
+rules, Cortex Memory, the whole collections subsystem, and
+`2026_default_weekly_brief.sql`.
+
+That last one is the instructive failure. "Weekly brief by email, automatically"
+is a headline bullet of the Watch plan (₹4,999). It needs that migration. A
+deployment that followed this document to the letter therefore shipped a
+customer a feature they had paid for and which silently did nothing — no error,
+no empty state, no complaint, just a quieter inbox than promised and a churn
+six weeks later that nobody could explain.
+
+A hand-maintained list of a growing directory has exactly one failure mode and
+it is this one. The loop above cannot drift.
+
+### Checking it worked
+
+`/api/health` reports `Schema migrations` and names any file whose objects it
+cannot read — see `checkSchema()` in `src/lib/health.ts`, and
+`scripts/test-schema-probes.mjs`, which fails the build if a hand-run migration
+is not covered by a probe.

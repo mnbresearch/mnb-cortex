@@ -162,7 +162,21 @@ export function OnboardingWizard({
           <div className="mt-4 space-y-2 text-sm">
             {[
               ["Every day", "It checks who has gone past their due date, what is about to run out, and which supplier bills are nearing the MSME 45-day window."],
-              ["The moment something crosses a line", "You get an email — not a notification you have to log in to find."],
+              /*
+                WAS "The moment something crosses a line".
+
+                Delivery is a once-daily digest with a hard 20-hour floor
+                (lib/alert-delivery MIN_GAP_MS), run by one 04:30 UTC cron. So
+                the worst case is roughly a day, not a moment — and this is the
+                LAST screen of onboarding, which is exactly where the customer
+                forms the expectation they will later measure us against.
+
+                The digest design is right: alert-delivery's own header argues
+                it well, and nobody wants a mail per breach. The copy simply
+                has to match it. "The next morning" is true, still sells, and
+                cannot be disproved with a stopwatch.
+              */
+              ["The next morning", "An email listing what crossed a line — not a notification you have to log in to find."],
               ["Monday morning", "One brief with the three things worth your attention this week."],
             ].map(([when, what]) => (
               <div key={when} className="rounded-lg border p-3">

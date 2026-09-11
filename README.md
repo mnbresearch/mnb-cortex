@@ -11,7 +11,7 @@ Built with **Next.js 16 (App Router) · TypeScript · Tailwind · Supabase (Post
 
 ## What's inside
 
-130 module pages, 438 agent definitions and 28 calculators. Rather than list them
+128 module pages, 438 agent definitions and 28 calculators. Rather than list them
 here — where the list goes stale the moment someone adds a page — the sources of
 truth are:
 
@@ -106,7 +106,7 @@ After a user signs up, run in the Supabase SQL editor (or wire a button):
     |  |  |- login/                   # magic-link + Google
     |  |  |- auth/callback/route.ts   # OAuth/OTP exchange
     |  |  |- api/chat/route.ts        # AI COO endpoint
-    |  |  |- (app)/                   # authenticated shell + 13 module pages
+    |  |  |- (app)/                   # authenticated shell + 128 module pages
     |  |- components/   # sidebar, topbar, KPI cards, charts, UI primitives
     |  |- lib/          # supabase clients, data layer, AI layer, demo data
     |  |- types/
@@ -120,17 +120,38 @@ After a user signs up, run in the Supabase SQL editor (or wire a button):
 Kept here deliberately, and kept honest — this list is read by people deciding
 whether to trust the rest of the repo, so an out-of-date one is worse than none.
 
-- **Sync connectors** — four are live. Tally, Zoho and the other 58 catalogue
-  entries store credentials and sync nothing. File import covers Tally, Vyapar
-  and Busy exports, which is what the Watch plan actually promises.
-- **White-label** — `organizations.logo_url` is captured and read by nothing;
-  `renderBrandedEmail()` takes no org parameter. Per-org accent colour works.
+- **Sync connectors** — four are live: Shopify, Razorpay, Stripe, Google
+  Sheets (`src/lib/sync/index.ts` `CONNECTORS`). The other 59 catalogue entries
+  store credentials and sync nothing; the integrations UI now badges them
+  `Vault` and says so *before* you connect, rather than after you have handed
+  over an OAuth token. File import covers Tally, Vyapar and Busy exports, and
+  `scripts/tally-bridge.mjs` pushes from a Tally PC into `/api/v1/ingest`
+  (needs the `api` capability — Watch Pro and above).
+- **White-label** — the app chrome is branded: `logo_url` and the accent colour
+  are read by `(app)/layout.tsx` and the sidebar. **Outbound email is not** —
+  `renderBrandedEmail()` takes no org parameter, so all ten call sites send
+  Cortex-branded mail. The plan bullets say "in your workspace" for this
+  reason. *(This entry used to say logo_url was "read by nothing", which
+  stopped being true and is exactly the rot this list is supposed to avoid.)*
 - **Enterprise SSO** — no SAML/OIDC. Supabase Google sign-in only. Sell on
   request, per `SETUP.md`.
-- **Practice credit pooling** — credits are per workspace; there is no
-  cross-org aggregation.
 - **RAG / vector search** — `pgvector` is not enabled; Cortex Memory is
-  keyword-recalled, not embedded.
+  keyword-recalled (`textSearch` + `ilike`), not embedded. So a question
+  phrased differently from the stored memory will not retrieve it.
+- **Autopilot coverage at scale** — the nightly sweep analyses
+  `ANALYSIS_CAP = 20` workspaces, rotated. Below twenty paying workspaces that
+  is genuinely daily; above it, each workspace is analysed every
+  `ceil(N/20)` nights. The cron returns `nights_for_full_cycle` and nothing
+  currently acts on it.
+
+### Closed since the last revision
+
+- ~~**Practice credit pooling**~~ — built. A firm's allowance is now spendable
+  inside client workspaces it has claimed: `src/lib/credit-pool.ts` decides the
+  payer, `cortex_practice_claim()` in `2026_zzzd_practice_pool.sql` proves
+  owner/admin rank in the firm *and* membership of the client before writing
+  the link, and the firm's plan and status are re-checked on every charge.
+  Opt-in per client from the Practice console.
 
 ---
 

@@ -10,7 +10,7 @@ export default function Refund() {
   return (
     <LegalShell title="Refund & Cancellation Policy" subtitle="Abrobot Technologies Pvt Ltd · Last updated September 2026 · Delhi, India">
       <P>
-        This policy explains how refunds and cancellations work for <strong>MNB Cortex</strong>, an AI-COO software-as-a-service platform
+        This policy explains how refunds and cancellations work for <strong>MNB Cortex</strong>, an early-warning software-as-a-service platform for Indian businesses
         operated by <strong>Abrobot Technologies Pvt Ltd</strong>. By purchasing a subscription or credit pack, you agree to the terms below,
         which should be read together with our <Link href="/terms" className="text-primary underline">Terms &amp; Conditions</Link>.
       </P>

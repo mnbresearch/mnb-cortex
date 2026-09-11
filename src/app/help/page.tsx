@@ -6,7 +6,7 @@ const faqs = [
   { q: "What is MNB Cortex?", a: "The early-warning system for your business — it watches your numbers and warns you, recommends actions, and executes them, so you can run your company by asking instead of opening spreadsheets." },
   { q: "How do I get my own data in?", a: "Sign in, then use Settings → Load demo data to explore, or Import data (CSV/Excel/Google Sheets), the public API, or connect an integration." },
   { q: "Is my data secure?", a: "Yes. Every workspace is isolated with Postgres Row-Level Security, traffic is HTTPS-only (HSTS), and API keys stay server-side." },
-  { q: "Which AI does it use?", a: "It runs on fast open models via Groq by default, and also supports Gemini, OpenAI and Anthropic — grounded in your live business data." },
+  { q: "Which AI does it use?", a: "Gemini by default, with Groq, Anthropic and OpenAI as fallbacks — grounded in your live business data. You can also bring your own key for any of them, in which case that call is billed to your provider account and costs you no Cortex credits." },
   { q: "Can I install it as an app?", a: "Yes — open the dashboard on your phone and tap Install (or on iPhone, Share → Add to Home Screen). It runs full-screen and works offline." },
   { q: "How do I add my team?", a: "Admin → invite by email. They get an email and auto-join your workspace with the role you set when they sign in." },
 ];

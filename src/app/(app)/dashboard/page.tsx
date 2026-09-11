@@ -105,7 +105,7 @@ export default async function Dashboard() {
         */}
         <SetupPath run={firstRun} />
 
-        {/* Guided command layer: turns 130 modules into the few that matter now. */}
+        {/* Guided command layer: turns 128 modules into the few that matter now. */}
         <NextBestActions />
 
         {/*
