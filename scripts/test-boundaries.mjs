@@ -75,6 +75,19 @@ function resolveSpec(fromFile, spec) {
   if (spec.startsWith("@/")) base = join(ROOT, spec.slice(2));
   else if (spec.startsWith(".")) base = resolve(dirname(fromFile), spec);
   else return null; // node_modules — not ours to police
+  /*
+    An explicit .ts / .tsx extension resolves to itself.
+
+    tsconfig sets "allowImportingTsExtensions", and a couple of modules use the
+    extension deliberately: it is what lets `node --experimental-strip-types`
+    load them from a test script, which the "@/…" alias cannot do. Without this
+    branch the resolver appended a second extension and reported
+    "./import-map.ts" as resolving to nothing — a false positive in the one test
+    whose job is to catch real broken imports, which is how a boundary test
+    stops being believed.
+  */
+  if (/\.tsx?$/.test(base) && existsSync(base)) return base;
+
   for (const c of [base + ".ts", base + ".tsx", join(base, "index.ts"), join(base, "index.tsx")]) {
     if (existsSync(c)) return c;
   }

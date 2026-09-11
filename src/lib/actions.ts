@@ -5,8 +5,9 @@ import { seatLimit, planIncludes, lowestPlanWith } from "@/lib/config";
 import { SUPER_ADMINS } from "@/lib/operators";
 import { generateFor } from "@/lib/ai/cortex";
 import { sendEmail } from "@/lib/email";
-import { recomputeQuietly } from "@/lib/metrics";
+import { recomputeQuietly, recomputeAndReport } from "@/lib/metrics";
 import { resolveHeaders, applyMapping, IMPORT_COLS, mapImportedRow } from "@/lib/import-map";
+import { capRows, accountForRows, topWarning, REVALIDATE_AFTER_IMPORT } from "@/lib/import-outcome";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -519,11 +520,43 @@ const IMPORT_CONFLICT: Record<string, string> = {
   invoices: "org_id,invoice_no",
 };
 
+/*
+  ROWS PER STATEMENT.
+
+  The importer used to cap the whole file at 1000 rows with `rows.slice(0,1000)`
+  and say nothing: the preview read "4,312 rows detected", the result read
+  "✓ Imported 1000 rows", and nothing connected the two. A wholesaler's year of
+  invoices came in a quarter complete, so every figure downstream — receivables,
+  the 43B(h) window, revenue — was wrong by an unknown amount, and the owner had
+  been told it worked.
+
+  The fix is to send the whole file in batches rather than to truncate it. 500
+  keeps each statement well inside Postgres' parameter limits and the request
+  inside its timeout, and a partial failure now reports how many rows actually
+  landed instead of losing the count.
+*/
+const IMPORT_BATCH = 500;
+
+/** Split into batches of at most `size`. Exported shape kept local — pure. */
+function batches<T>(rows: T[], size = IMPORT_BATCH): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
+  return out;
+}
+
 async function writeImported(sb: any, table: string, mapped: any[]): Promise<{ written: number; error?: string }> {
   const conflict = IMPORT_CONFLICT[table];
   if (!conflict) {
-    const { error } = await sb.from(table).insert(mapped);
-    return error ? { written: 0, error: error.message } : { written: mapped.length };
+    let written = 0;
+    for (const batch of batches(mapped)) {
+      const { error } = await sb.from(table).insert(batch);
+      // Report what landed. Earlier batches are already committed, and telling
+      // the owner "0 imported" when 1,500 rows are in the table is worse than
+      // telling them it stopped partway.
+      if (error) return { written, error: error.message };
+      written += batch.length;
+    }
+    return { written };
   }
 
   const col = conflict.split(",")[1];
@@ -538,36 +571,62 @@ async function writeImported(sb: any, table: string, mapped: any[]): Promise<{ w
   const unique = [...byKey.values()];
 
   let written = 0;
-  if (unique.length) {
-    const { error } = await sb.from(table).upsert(unique, { onConflict: conflict });
+  for (const batch of batches(unique)) {
+    const { error } = await sb.from(table).upsert(batch, { onConflict: conflict });
     if (error) {
       // 42P10 = the unique index this upsert needs isn't there yet. Importing
       // is more important than de-duplicating, so fall back to a plain insert
       // rather than blocking the user behind a migration.
       if (error.code === "42P10") {
-        const { error: insErr } = await sb.from(table).insert(unique);
+        const { error: insErr } = await sb.from(table).insert(batch);
         if (insErr) return { written, error: insErr.message };
-        written += unique.length;
+        written += batch.length;
       } else {
         return { written, error: error.message };
       }
     } else {
-      written += unique.length;
+      written += batch.length;
     }
   }
-  if (rest.length) {
-    const { error } = await sb.from(table).insert(rest);
-    // Report what actually landed: the upsert above may already have committed.
+  for (const batch of batches(rest)) {
+    const { error } = await sb.from(table).insert(batch);
+    // Report what actually landed: the upserts above may already have committed.
     if (error) return { written, error: error.message };
-    written += rest.length;
+    written += batch.length;
   }
   return { written };
 }
 
-export async function importRows(fd: FormData): Promise<{
-  inserted: number; error?: string;
-  matched?: number; totalCols?: number; missing?: string[];
-}> {
+/*
+  WHAT THE IMPORT TELLS THE OWNER WHEN IT WORKED.
+
+  Both import paths return this. Before it existed, a successful import ended at
+  "✓ Imported 412 rows into Invoices." on a screen with no link on it — the
+  single most important moment in the funnel, terminating in a sentence.
+
+  The receivables figure was already computed at that point: recomputeQuietly()
+  is awaited two lines earlier and derives the insights synchronously. They were
+  written to a table and then discarded, and the owner was left to find the
+  consequence by guessing at the sidebar.
+*/
+export type ImportOutcome = {
+  inserted: number;
+  error?: string;
+  matched?: number;
+  totalCols?: number;
+  missing?: string[];
+  /**
+   * Rows in the file that were not written. Non-zero means a cap or a
+   * duplicate-key collapse, and the reason says which — "412 detected, 380
+   * imported" with no explanation reads like data loss, because it is.
+   */
+  skipped?: number;
+  skippedReason?: string;
+  /** The worst thing Cortex now knows about this workspace. */
+  warning?: { title: string; detail: string; severity: string; route?: string } | null;
+};
+
+export async function importRows(fd: FormData): Promise<ImportOutcome> {
   try {
     const orgId = await requireWriteOrg();
     const table = str(fd.get("table"));
@@ -599,7 +658,8 @@ export async function importRows(fd: FormData): Promise<{
       };
     }
 
-    const mapped = rows.slice(0, 1000).map((r) => mapImportedRow(table, spec, orgId, applyMapping(r, match)));
+    const capped = capRows(rows);
+    const mapped = capped.rows.map((r) => mapImportedRow(table, spec, orgId, applyMapping(r, match)));
     const sb = createClient();
     const wrote = await writeImported(sb, table, mapped);
     if (wrote.error) {
@@ -610,9 +670,9 @@ export async function importRows(fd: FormData): Promise<{
           : wrote.error,
       };
     }
-    await recomputeQuietly(orgId);
+    const insights = await recomputeAndReport(orgId);
     await logActivity(orgId, "import", `Imported ${wrote.written} rows into ${table} (CSV)`);
-    ["/sales", "/finance", "/inventory", "/hr", "/dashboard"].forEach((p) => revalidatePath(p));
+    REVALIDATE_AFTER_IMPORT.forEach((p) => revalidatePath(p));
     return {
       inserted: wrote.written,
       // Surfaced so a PARTIAL match is visible. Importing 500 rows while
@@ -621,18 +681,21 @@ export async function importRows(fd: FormData): Promise<{
       matched: match.matched,
       totalCols: match.total,
       missing: match.missing,
+      ...accountForRows(rows.length, capped, wrote.written),
+      warning: topWarning(insights),
     };
   } catch (e: any) { return { inserted: 0, error: e?.message || "Import failed" }; }
 }
 
 // ---- Import from a public CSV / Google Sheets URL ----
-export async function importFromUrl(fd: FormData): Promise<{ inserted: number; error?: string }> {
+export async function importFromUrl(fd: FormData): Promise<ImportOutcome> {
   try {
     const orgId = await requireWriteOrg();
     const table = str(fd.get("table"));
     const spec = IMPORT_COLS[table];
     if (!spec) return { inserted: 0, error: "Unsupported dataset" };
-    const { toCsvUrl, parseCsv } = await import("@/lib/csv");
+    const { toCsvUrl, parseCsvGrid } = await import("@/lib/csv");
+    const { flattenExport } = await import("@/lib/accounting-export");
     const url = toCsvUrl(str(fd.get("url")));
     /*
       `/^https:\/\//` WAS NOT A CONTROL. It tested the URL as typed, and fetch
@@ -656,7 +719,20 @@ export async function importFromUrl(fd: FormData): Promise<{ inserted: number; e
       return { inserted: 0, error: "Could not fetch that URL. Make sure the sheet/link is public." };
     }
     if (!res.ok) return { inserted: 0, error: `Could not fetch (${res.status}). Make sure the sheet/link is public.` };
-    const rows = parseCsv(await res.text());
+    /*
+      READ THE GRID FIRST, THEN FIND THE HEADER — the fourth fix the file path
+      had and this one did not.
+
+      parseCsv() takes row 0 as the header. That is right for a clean sheet and
+      wrong for every Tally, Vyapar and Busy export, where row 0 is the company
+      name and the LAST row is a Grand Total. Imported verbatim, the totals row
+      becomes a transaction worth the sum of all the others — so a Google Sheet
+      of invoices produced receivables roughly double the truth, and the 43B(h)
+      exposure with it. Exactly the bug accounting-export.ts was written to stop,
+      still live on this path because the fix was applied in the component.
+    */
+    const flat = flattenExport(parseCsvGrid(await res.text()));
+    const rows = flat.rows;
     if (!rows.length) return { inserted: 0, error: "No rows found at that URL" };
     /*
       THE SAME IMPORT, WITH NONE OF THE FIXES.
@@ -689,7 +765,8 @@ export async function importFromUrl(fd: FormData): Promise<{ inserted: number; e
       };
     }
 
-    const mapped = rows.slice(0, 1000).map((r) => mapImportedRow(table, spec, orgId, applyMapping(r, match)));
+    const capped = capRows(rows);
+    const mapped = capped.rows.map((r) => mapImportedRow(table, spec, orgId, applyMapping(r, match)));
 
     const sb = createClient();
     const wrote = await writeImported(sb, table, mapped);
@@ -701,10 +778,25 @@ export async function importFromUrl(fd: FormData): Promise<{ inserted: number; e
           : wrote.error,
       };
     }
-    await recomputeQuietly(orgId);
+    const insights = await recomputeAndReport(orgId);
     await logActivity(orgId, "import", `Imported ${wrote.written} rows into ${table} (URL)`);
-    ["/sales", "/finance", "/inventory", "/hr", "/dashboard", "/data"].forEach((p) => revalidatePath(p));
-    return { inserted: wrote.written };
+    REVALIDATE_AFTER_IMPORT.forEach((p) => revalidatePath(p));
+    /*
+      THE SAME RETURN SHAPE AS THE FILE PATH, at last.
+
+      This used to return `{ inserted }` and nothing else — no `missing`, so a
+      Google Sheet that matched the party and the invoice number but not the
+      AMOUNT reported plain success, with every figure downstream computed from
+      zeroes. The file path had shown that warning for months.
+    */
+    return {
+      inserted: wrote.written,
+      matched: match.matched,
+      totalCols: match.total,
+      missing: match.missing,
+      ...accountForRows(rows.length, capped, wrote.written),
+      warning: topWarning(insights),
+    };
   } catch (e: any) { return { inserted: 0, error: e?.message || "Import failed" }; }
 }
 

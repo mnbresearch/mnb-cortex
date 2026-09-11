@@ -30,6 +30,27 @@ export type DerivedInsight = {
   detail: string;
   confidence: number;
   recommended_actions: string[];
+  /*
+    THE SCREEN THAT SHOWS THIS, set per insight rather than derived from
+    `module`.
+
+    The import screen ends with a warning about the owner's own data, and a
+    warning the owner cannot act on is a worse outcome than no warning: they
+    now know something is wrong and have to go and find it. So each insight
+    carries its destination.
+
+    Per-insight and not per-module because one module's insights land on
+    different screens — a receivables warning belongs on /receivables, a
+    payables gap on /finance, both of which are `module: "finance"`. Mapping by
+    module would have sent half of them to the wrong place, and mapping by
+    keywords in the title would have broken silently the first time anyone
+    reworded one.
+
+    Not written to `ai_insights` — metrics.ts lists the inserted columns
+    explicitly and there is no such column. It exists for callers who have the
+    derived object in hand.
+  */
+  route?: string;
 };
 
 /** Everything recomputeMetrics() already has in hand when it calls this. */
@@ -98,6 +119,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
         "Send reminders on anything past 45 days",
         "Call the largest single overdue account today",
       ],
+      route: "/receivables",
     });
   }
 
@@ -114,6 +136,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
         "Check which payables can move to next month without a penalty",
         "Chase receivables due before your largest payable",
       ],
+      route: "/finance",
     });
   }
 
@@ -129,6 +152,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
       recommended_actions: months < 6
         ? ["Model a 20% cost reduction in Runway", "Decide the date by which you need funding or profitability"]
         : ["Keep watching monthly — this is comfortable but not permanent"],
+      route: "/runway",
     });
   }
 
@@ -146,6 +170,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
           "Compare against the same month last year, not just last month",
           "Check whether a large order slipped rather than disappeared",
         ],
+        route: "/sales",
       });
     } else if (change >= 20) {
       out.push({
@@ -155,6 +180,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
         detail: `${inrShort(s.revenueNow)} against ${inrShort(s.revenuePrev)}. Worth knowing whether this is one large order or broad-based before you plan around it.`,
         confidence: 0.8,
         recommended_actions: ["Check whether stock and staffing can hold this level"],
+        route: "/sales",
       });
     }
   }
@@ -174,6 +200,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
         "Open Sales and set the status on those orders",
         "If importing, include a status column so this does not recur",
       ],
+      route: "/sales",
     });
   }
 
@@ -190,6 +217,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
         "Open Reorder to see which items and how many days of cover remain",
         "Raise purchase orders for anything under a week of cover",
       ],
+      route: "/reorder",
     });
   }
 
@@ -201,6 +229,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
       detail: `Across all items, at the current rate of consumption. If your supplier lead time is longer than this, you are already late ordering.`,
       confidence: 0.9,
       recommended_actions: ["Compare cover against your supplier lead times"],
+      route: "/inventory",
     });
   }
 
@@ -216,6 +245,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
         "Open Workforce and look at who is flagged highest",
         "Have the conversation before the resignation, not after",
       ],
+      route: "/workforce",
     });
   }
 
@@ -227,6 +257,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
       detail: `Below roughly 85%, schedules start slipping and overtime quietly replaces the missing hours at a higher cost.`,
       confidence: 0.75,
       recommended_actions: ["Check whether absence is concentrated in one team or shift"],
+      route: "/hr",
     });
   }
 
@@ -244,6 +275,7 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
           "Identify your single largest payable and its due date",
           "Accelerate collection on anything already overdue",
         ],
+        route: "/finance",
       });
     }
   }

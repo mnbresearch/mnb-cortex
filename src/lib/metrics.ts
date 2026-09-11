@@ -1,6 +1,6 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
-import { deriveInsights } from "@/lib/insights";
+import { deriveInsights, type DerivedInsight } from "@/lib/insights";
 import { evaluateRules } from "@/lib/alert-rules";
 import { emitQuietly } from "@/lib/webhooks";
 
@@ -118,7 +118,19 @@ async function tryAggregate(svc: any, orgId: string): Promise<Aggregate | null> 
  * Recompute `health_metrics` and `finance_ledger` for one workspace from its
  * real rows. Safe to call repeatedly; it fully replaces both tables for the org.
  */
-export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; metrics: number; months: number; reason?: string }> {
+export async function recomputeMetrics(orgId: string): Promise<{
+  ok: boolean; metrics: number; months: number; reason?: string;
+  /*
+    The insights this pass derived, worst first — the same objects written to
+    `ai_insights`, handed back rather than only stored.
+
+    So that a write path can SHOW the owner what it just found. The import
+    screen used to end at "✓ Imported 412 rows" and leave them to go and look
+    for the consequence; the numbers were already computed by then, three
+    lines above, and simply thrown away.
+  */
+  insights?: DerivedInsight[];
+}> {
   if (!orgId) return { ok: false, metrics: 0, months: 0, reason: "no org" };
   const svc = serviceClient();
   if (!svc) return { ok: false, metrics: 0, months: 0, reason: "service role not configured" };
@@ -670,12 +682,15 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
   // Same insert-then-delete-stale ordering as health_metrics above, for the same
   // reason: a delete-first leaves a window where the dashboard panel and the AI
   // context both see zero insights.
+  // Declared outside the try so it survives to the return. An insights failure
+  // must still not break the save, so this stays [] in that case.
+  let derived: DerivedInsight[] = [];
   try {
     const cashLatest = hasBank ? num(cashRows[cashRows.length - 1].cash_balance) : 0;
     const nets = hasBank ? cashRows.slice(-3).map((r) => num(r.net_profit)) : [];
     const avgNet = nets.length ? nets.reduce((a, b) => a + b, 0) / nets.length : 0;
 
-    const derived = deriveInsights({
+    derived = deriveInsights({
       hasSales, hasInvoices, hasStock, hasStaff, hasBank,
       revenueNow, revenuePrev,
       ordersNow: ordersByMonth.get(thisMonth) || 0,
@@ -762,7 +777,7 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
     org_id: orgId,
     metrics: metrics.map((m) => ({ key: m.metric_key, label: m.label, value: m.value, unit: m.unit, status: m.status })),
   });
-  return { ok: true, metrics: metrics.length, months };
+  return { ok: true, metrics: metrics.length, months, insights: derived };
 }
 
 /**
@@ -771,7 +786,23 @@ export async function recomputeMetrics(orgId: string): Promise<{ ok: boolean; me
  * that caused it, and the daily sweep will catch it.
  */
 export async function recomputeQuietly(orgId: string | null | undefined): Promise<void> {
-  if (!orgId) return;
+  await recomputeAndReport(orgId);
+}
+
+/**
+ * Identical to recomputeQuietly — same never-throws contract, same failure
+ * recording — but returns the insights the pass derived.
+ *
+ * Two functions rather than changing recomputeQuietly's signature, because it
+ * has a couple of dozen call sites that want "recompute and say nothing" and
+ * would now be ignoring a return value. This one exists for the handful of
+ * write paths that should tell the owner what just changed.
+ *
+ * Returns [] on every failure path, so a caller can always treat the result as
+ * "nothing worth reporting" without checking for null.
+ */
+export async function recomputeAndReport(orgId: string | null | undefined): Promise<DerivedInsight[]> {
+  if (!orgId) return [];
   try {
     const res = await recomputeMetrics(orgId);
     // Swallowing the reason is right for the CALLER — a failed recompute must
@@ -779,10 +810,15 @@ export async function recomputeQuietly(orgId: string | null | undefined): Promis
     // everywhere is how a misconfigured service role became invisible: the
     // customer added rows, the KPIs never moved, and nothing anywhere said
     // why. Recording it lets /api/health and the dashboard tell the truth.
-    if (!res.ok) await noteRecomputeFailure(orgId, res.reason || "unknown");
-    else await clearRecomputeFailure(orgId);
+    if (!res.ok) {
+      await noteRecomputeFailure(orgId, res.reason || "unknown");
+      return [];
+    }
+    await clearRecomputeFailure(orgId);
+    return res.insights || [];
   } catch (e: any) {
     await noteRecomputeFailure(orgId, e?.message || "unknown");
+    return [];
   }
 }
 
