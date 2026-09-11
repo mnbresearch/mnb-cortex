@@ -161,6 +161,62 @@ for (const table of probedTables) {
   );
 }
 
+/* ---- EVERY PROBED COLUMN MUST BE A REAL COLUMN ------------------------ */
+/*
+  THE CHECK THIS FILE WAS MISSING, AND THE BUG IT WOULD HAVE CAUGHT.
+
+  The first version asserted that probes EXIST and that their tables exist. It
+  never asked whether the probed COLUMN was real. So two names written from
+  memory — `metric_snapshots.captured_at` and `platform_switches.enabled`,
+  where the actual columns are `as_of` and `collections_enabled` — shipped into
+  a production health check. Both probes failed against a completely healthy
+  database, and /api/health reported
+
+      Schema migrations: degraded — Not applied: RUN-2026-09-05.sql
+
+  for a file that had been applied. The operator and I then went looking for a
+  missing collections subsystem that was never missing.
+
+  A monitoring check that raises false alarms is worse than no check: the
+  second time it cries wolf, the whole status page stops being read. So the
+  column names are resolved against the schema, mechanically, here.
+*/
+const declared = new Map(); // table -> Set(columns)
+const add = (t, c) => {
+  if (!declared.has(t)) declared.set(t, new Set());
+  declared.get(t).add(c);
+};
+
+/* Columns declared inside a create-table body. */
+for (const m of allSql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z_]+)\s*\(([\s\S]*?)\n\s*\);/gi)) {
+  const table = m[1];
+  for (const line of m[2].split("\n")) {
+    const bare = line.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/, "").trim();
+    /* First token of a definition line, skipping table-level constraints. */
+    const col = bare.match(/^([a-z_]+)\s+[a-z]/i);
+    if (!col) continue;
+    if (/^(primary|foreign|unique|check|constraint|exclude|like)$/i.test(col[1])) continue;
+    add(table, col[1]);
+  }
+}
+/* Columns added later. */
+for (const m of allSql.matchAll(/alter\s+table\s+(?:public\.)?([a-z_]+)\s+add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_]+)/gi)) {
+  add(m[1], m[2]);
+}
+
+check(declared.size > 10, "the schema parser found columns for many tables", `${declared.size} tables`);
+
+for (const key of probed) {
+  const [table, col] = key.split(".");
+  const cols = declared.get(table);
+  if (!cols) continue; // the table-exists check above already covers this
+  check(
+    cols.has(col),
+    `"${key}" is a real column`,
+    `not declared anywhere in supabase/. Columns on "${table}": ${[...cols].sort().join(", ")}`,
+  );
+}
+
 /* ---- the file named in a probe has to be a real file ------------------ */
 /*
   The third element is shown to the operator as the thing to go and run. A

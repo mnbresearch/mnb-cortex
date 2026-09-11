@@ -376,8 +376,27 @@ async function checkSchema(): Promise<Check> {
       erased_subscriptions is the DPDP erasure ledger. It has to exist before
       somebody exercises the right, not after.
     */
-    ["metric_snapshots", "captured_at", "RUN-2026-09-05.sql"],
-    ["platform_switches", "enabled", "RUN-2026-09-05.sql"],
+    /*
+      COLUMN NAMES HERE ARE REAL ONES, AND TWO OF THESE WERE NOT.
+
+      I wrote `metric_snapshots.captured_at` and `platform_switches.enabled`
+      from memory. The actual columns are `as_of` and `collections_enabled`.
+      Both probes therefore failed against a perfectly healthy database, and
+      /api/health spent a day reporting
+
+          Schema migrations: degraded — Not applied: RUN-2026-09-05.sql
+
+      about a file that HAD been applied. Which is worse than the gap this
+      probe list was added to close: a check that cries wolf gets switched off,
+      and it took the operator and me on a hunt for a missing collections
+      subsystem that was never missing.
+
+      scripts/test-schema-probes.mjs now resolves every probed column against
+      the CREATE TABLE and ALTER TABLE text in supabase/, so an invented name
+      fails the suite instead of failing production.
+    */
+    ["metric_snapshots", "as_of", "RUN-2026-09-05.sql"],
+    ["platform_switches", "collections_enabled", "RUN-2026-09-05.sql"],
     ["erased_subscriptions", "erased_at", "RUN-2026-09-05.sql"],
     /*
       cron_cursors is how the nightly sweep rotates through workspaces instead

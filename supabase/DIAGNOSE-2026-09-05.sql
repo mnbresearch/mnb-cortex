@@ -108,30 +108,34 @@ select kind, name, state
 
 
 /* ---------------------------------------------------------------------------
-   SECOND QUERY: is anything that IS present also reachable by a stranger?
+   SECOND QUERY: USE THE AUDIT THAT ALREADY EXISTS.
 
-   A SECURITY DEFINER function granted to `authenticated` runs with the
-   definer's rights for any signed-in user of any workspace. That is the exact
-   mistake that put cortex_aggregate within reach of every tenant earlier in
-   this project, so it is worth one query whenever these functions are touched.
+   This slot used to hold my own "is anything reachable by a stranger" query,
+   listing seven function names with the instruction EXPECT ZERO ROWS. It
+   returned two, and both were false alarms:
 
-   EXPECT ZERO ROWS. Anything listed here is reachable and should not be.
+     cortex_recovery_summary    — it is SECURITY INVOKER. It runs with the
+                                  CALLER's rights, so RLS on
+                                  collection_threads still filters every row;
+                                  passing someone else's org id returns zeros.
+                                  Granted to `authenticated` deliberately, on
+                                  the line right below its definition.
+
+     cortex_collections_enabled — SECURITY DEFINER, but it takes no org
+                                  parameter, writes nothing, and returns one
+                                  global boolean. Already reviewed and recorded
+                                  as acceptable.
+
+   My query ignored `prosecdef`, so it swept up an invoker-rights function, and
+   ignored the fact that cortex_definer_audit() below had already done this
+   job properly — with the allow-list and the REASON for each exception. Two
+   false positives in a security check is how a security check gets ignored.
+
+   So: call the real one. It filters on SECURITY DEFINER, and every row comes
+   with a verdict rather than leaving you to judge.
+
+   READ THE `verdict` COLUMN. "OK — …" rows are reviewed and fine. Any row
+   reading "REVIEW — definer rights bypass RLS and nothing here checks
+   membership" is a genuine finding and worth acting on today.
    --------------------------------------------------------------------------- */
-select p.proname as function_name,
-       has_function_privilege('anon', p.oid, 'execute')          as anon_can_execute,
-       has_function_privilege('authenticated', p.oid, 'execute') as authenticated_can_execute
-  from pg_proc p
-  join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public'
-   and p.proname in (
-     'cortex_collections_enabled',
-     'cortex_set_collections_switch',
-     'cortex_collections_stop_on_paid',
-     'cortex_collections_trip_check',
-     'cortex_recovery_summary',
-     'cortex_guard_last_owner',
-     'cortex_seed_default_alert_rules'
-   )
-   and (has_function_privilege('anon', p.oid, 'execute')
-     or has_function_privilege('authenticated', p.oid, 'execute'))
- order by p.proname;
+select * from cortex_definer_audit();
