@@ -79,7 +79,8 @@
     "test:practice-pool-sql": "node scripts/test-practice-pool-sql.cjs",
     "test:claims": "node --experimental-strip-types --no-warnings scripts/test-claims.mjs",
     "verify:invoice-columns": "node scripts/verify-invoice-columns.cjs",
-    "test:seo-pages": "node --experimental-strip-types --no-warnings scripts/test-seo-pages.mjs"
+    "test:seo-pages": "node --experimental-strip-types --no-warnings scripts/test-seo-pages.mjs",
+    "verify:api-key-hash": "node scripts/verify-api-key-hash.cjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

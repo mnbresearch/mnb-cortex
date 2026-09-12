@@ -7,7 +7,8 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Field, CollapsibleForm } from "@/components/forms";
 import { getApiKeys } from "@/lib/data";
-import { generateApiKey, deleteApiKey } from "@/lib/actions";
+import { deleteApiKey } from "@/lib/actions";
+import { ApiKeyCreator } from "@/components/api-key-creator";
 import { KeyRound, Trash2, Terminal } from "lucide-react";
 import { hasRole } from "@/lib/roles";
 
@@ -54,16 +55,31 @@ export default async function Developers() {
       <PageShell>
         {!live && <Card className="p-5 bg-warning/10 border-warning/20 text-sm"><a href="/login" className="text-primary underline">Sign in</a> (admin/owner) to generate API keys.</Card>}
         {live && (
-          <Section title="API keys" desc="Use in the x-api-key header. Keep secret.">
-            <form action={generateApiKey} className="flex flex-wrap items-end gap-2 mb-4">
-              <div className="flex-1 min-w-[200px]"><Field name="label" label="Label" placeholder="e.g. Zapier, backend" aria-label="e.g. Zapier, backend" /></div>
-              <button className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90"><KeyRound className="h-4 w-4" /> Generate key</button>
-            </form>
+          <Section title="API keys" desc="Use in the x-api-key header. Shown once when created — Cortex keeps only a hash.">
+            <ApiKeyCreator />
+            {/*
+              THIS LIST USED TO PRINT THE WHOLE KEY, every visit.
+
+              That required storing it in clear, and a plaintext credential in a
+              table is one database backup, staging restore or leaked
+              service-role key away from being every customer's problem at once.
+              Only a SHA-256 is stored now (2026_zzze_api_key_hash.sql), so
+              there is nothing left to print.
+
+              The prefix keeps a key identifiable — which is all this list was
+              really used for, since nobody reads a 64-character secret off a
+              screen to compare it. A customer who has lost a key rotates it.
+            */}
             <div className="space-y-2">
               {rows.length === 0 && <p className="text-sm text-muted-foreground">No keys yet.</p>}
               {rows.map((k) => (
                 <div key={k.id} className="flex items-center justify-between rounded-lg border p-3">
-                  <div><div className="text-sm font-medium">{k.label}</div><code className="text-xs text-muted-foreground break-all">{k.key}</code></div>
+                  <div>
+                    <div className="text-sm font-medium">{k.label}</div>
+                    <code className="text-xs text-muted-foreground break-all">
+                      {k.key_prefix ? `${k.key_prefix}…` : "key stored as a hash"}
+                    </code>
+                  </div>
                   <form action={deleteApiKey}><input type="hidden" name="id" value={k.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></form>
                 </div>
               ))}

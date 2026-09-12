@@ -30,7 +30,12 @@ export async function POST(req: Request) {
   try {
     const svc = serviceClient();
     if (svc) {
-      const { data: k } = await svc.from("api_keys").select("org_id").eq("key", key).maybeSingle();
+      /* Hash, like api_ingest() does — `key` is empty after
+         2026_zzze_api_key_hash.sql, so comparing against it silently matched
+         nothing and the KPI refresh stopped happening. */
+      const { createHash } = await import("node:crypto");
+      const keyHash = createHash("sha256").update(key).digest("hex");
+      const { data: k } = await svc.from("api_keys").select("org_id").eq("key_hash", keyHash).maybeSingle();
       await recomputeQuietly((k as any)?.org_id);
     }
   } catch { /* swept nightly */ }

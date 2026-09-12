@@ -1084,12 +1084,36 @@ export async function generateApiKey(fd: FormData) {
     GUESSABLE API key — and this key authenticates full read access to a
     workspace's financial data. Two UUIDv4s give 244 bits from the platform CSPRNG.
   */
-  const { randomUUID } = await import("node:crypto");
+  const { randomUUID, createHash } = await import("node:crypto");
   const key = "mnb_" + (randomUUID() + randomUUID()).replace(/-/g, "");
 
-  const { error } = await sb.from("api_keys").insert({ org_id: orgId, label: str(fd.get("label")) || "API key", key });
+  /*
+    ONLY THE HASH IS STORED.
+
+    The plaintext used to go straight into api_keys.key, where RLS protected it
+    from other tenants but nothing protected it from a database backup, a
+    staging restore, or the service-role key leaking — in any of which every
+    customer's key was immediately usable.
+
+    A SHA-256 is enough here and bcrypt would be wrong: this is a 244-bit random
+    string from the CSPRNG, not a human-chosen password, so there is no
+    dictionary to slow down and the per-request cost of a KDF would buy nothing.
+
+    `key_prefix` keeps a key identifiable in the dashboard once the plaintext is
+    gone. The full key is returned to the caller exactly once, here.
+  */
+  const key_hash = createHash("sha256").update(key).digest("hex");
+
+  const { error } = await sb.from("api_keys").insert({
+    org_id: orgId,
+    label: str(fd.get("label")) || "API key",
+    key_hash,
+    key_prefix: key.slice(0, 12),
+  });
   if (error) throw new Error(error.message);
   revalidatePath("/developers");
+  /* Shown once. There is deliberately no way to ask for it again. */
+  return { key };
 }
 export async function deleteApiKey(fd: FormData) {
   const { orgId } = await requireRole("admin"); const sb = createClient();
