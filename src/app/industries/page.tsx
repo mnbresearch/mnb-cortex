@@ -7,7 +7,7 @@ import { INDUSTRIES } from "@/lib/industries";
 
 export const metadata = {
   title: "Industries — MNB Cortex",
-  description: "MNB Cortex is tuned for 25+ industries — manufacturing, retail & D2C, services, jewellery, distribution, clinics, restaurants, salons, logistics, real estate and more. See your specific problems and the exact tools that solve them.",
+  description: "MNB Cortex is tuned for 27 industries — manufacturing, retail & D2C, services, jewellery, distribution, clinics, restaurants, salons, logistics, real estate and more. See your specific problems and the exact tools that solve them.",
 };
 
 export default function Industries() {
@@ -22,7 +22,7 @@ export default function Industries() {
           <div className="eyebrow">Industries</div>
           <Kinetic as="h1" text={"Tuned for how your\nindustry actually runs."} className="font-display display-1 tracking-tightest mt-5" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            Cortex isn&rsquo;t a generic dashboard. It knows the specific problems of {INDUSTRIES.length}+ industries — and comes with the exact tools to solve them,
+            Cortex isn&rsquo;t a generic dashboard. It knows the specific problems of {INDUSTRIES.length} industries — and comes with the exact tools to solve them,
             grounded in a permanent memory of your business.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
@@ -38,9 +38,9 @@ export default function Industries() {
           {INDUSTRIES.map((i) => {
             const I = i.icon;
             return (
-              <a key={i.slug} href={`#${i.slug}`} className="inline-flex items-center gap-1.5 rounded-full border px-3 h-9 text-sm hover:bg-accent hover:border-primary/40 transition-colors">
+              <Link key={i.slug} href={`/industries/${i.slug}`} className="inline-flex items-center gap-1.5 rounded-full border px-3 h-9 text-sm hover:bg-accent hover:border-primary/40 transition-colors">
                 <I className="h-3.5 w-3.5 text-primary" /> {i.name}
-              </a>
+              </Link>
             );
           })}
         </div>
@@ -90,7 +90,10 @@ export default function Industries() {
 
                   <div className="bg-card p-6 lg:p-7 border-t flex flex-wrap items-center justify-between gap-4">
                     <p className="text-sm lg:text-base max-w-xl"><span className="text-primary font-medium">Outcome:</span> {ind.outcome}</p>
-                    <Link href="/login" className="inline-flex items-center gap-1.5 text-sm font-medium link-sweep shrink-0">Get started <ArrowUpRight className="h-4 w-4" /></Link>
+                    {/* To the industry's own page, not /login. Twenty-seven identical
+                        CTAs to one destination gave a crawler no reason to believe the
+                        detail pages existed. */}
+                    <Link href={`/industries/${ind.slug}`} className="inline-flex items-center gap-1.5 text-sm font-medium link-sweep shrink-0">{ind.name} in detail <ArrowUpRight className="h-4 w-4" /></Link>
                   </div>
                 </div>
               </Reveal>

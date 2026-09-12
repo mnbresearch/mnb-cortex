@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { ARTICLES } from "@/lib/resources";
 import { CALCULATOR_ROUTES } from "@/lib/calculator-seo";
+import { INDUSTRY_SLUGS } from "@/lib/industry-seo";
+import { DEADLINE_SLUGS } from "@/lib/deadline-seo";
 
 /*
   THE SITEMAP LISTED 21 URLs AND LEFT OUT THE 29 PAGES MOST WORTH FINDING.
@@ -39,6 +41,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const support = ["/status", "/changelog", "/help", "/terms", "/privacy", "/refund"];
   const articleRoutes = ARTICLES.map((a) => `/resources/${a.slug}`);
 
+  /*
+    THE TWO NEW PROGRAMMATIC SETS, derived from the same arrays the pages
+    render from — never a second hand-typed list. That rule is why the
+    calculators are here at all: the first version of this file listed 21 URLs
+    by hand and omitted all 29 of them.
+
+    Deadlines rank ABOVE industries. "GSTR-3B due date" is asked by every
+    business in India every month; "cash flow for a salon" is a much smaller,
+    though much better qualified, query. Priority should say which pages we
+    expect to earn the traffic.
+  */
+  const deadlineRoutes = DEADLINE_SLUGS.map((s) => `/deadlines/${s}`);
+  const industryRoutes = INDUSTRY_SLUGS.map((s) => `/industries/${s}`);
+
   const entry = (
     r: string,
     priority: number,
@@ -54,6 +70,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entry("", 1, "weekly"),
     ...convert.map((r) => entry(r, 0.9, "weekly")),
     ...CALCULATOR_ROUTES.map((r) => entry(r, 0.8, "monthly")),
+    /* Statutory dates change when a Finance Act or a CBIC notification says so
+       — "monthly" would train a crawler to ignore the signal. */
+    entry("/deadlines", 0.8, "monthly"),
+    ...deadlineRoutes.map((r) => entry(r, 0.8, "monthly")),
+    ...industryRoutes.map((r) => entry(r, 0.7, "monthly")),
     ...marketing.filter((r) => r !== "").map((r) => entry(r, 0.7, "weekly")),
     ...articleRoutes.map((r) => entry(r, 0.7, "monthly")),
     ...support.map((r) => entry(r, 0.6, "monthly")),

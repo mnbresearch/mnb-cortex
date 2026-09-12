@@ -95,6 +95,70 @@ const FIXED: Array<{ id: string; month: number; day: number; name: string; what:
     severity: "medium", appliesIf: "you deduct TDS" },
 ];
 
+/* ===========================================================================
+   THE SAME RULES, EXPORTED — so the public pages cannot hold a second copy.
+
+   /deadlines and its thirteen topic pages are the highest-volume search
+   surface this product has: "GSTR-3B due date" and "TDS payment due date" are
+   asked every month by every business in India. Which means they are also the
+   easiest pages to get WRONG in the most damaging way — a published due date
+   that is off by a day is worse than no page, because someone will act on it.
+
+   So the pages render from these two arrays rather than from anything typed
+   into JSX. Nothing about a deadline exists in two places: change the day here
+   and the product warning, the calendar hub and the page all move together.
+
+   `cadence` is added on the way out because a page needs to say "every month"
+   or "once a year" and the shape of the source array is the only place that is
+   currently recorded.
+   =========================================================================== */
+
+export type StatutoryRule = {
+  id: string;
+  name: string;
+  what: string;
+  severity: Deadline["severity"];
+  appliesIf: string;
+  cadence: "monthly" | "annual";
+  /** Day of the month it falls due. */
+  day: number;
+  /** 1-indexed month, for annual rules only. */
+  month?: number;
+};
+
+export const STATUTORY_CATALOGUE: StatutoryRule[] = [
+  ...MONTHLY.map((r) => ({ ...r, cadence: "monthly" as const })),
+  ...FIXED.map((r) => ({ ...r, cadence: "annual" as const })),
+];
+
+/** One rule by id, or null. */
+export function statutoryRule(id: string): StatutoryRule | null {
+  return STATUTORY_CATALOGUE.find((r) => r.id === id) || null;
+}
+
+/**
+ * The next time a rule falls due, from a reference day.
+ *
+ * Shares istDate() and istToday() with upcomingDeadlines() rather than doing
+ * its own date arithmetic — the IST offset and the month-wrap are exactly the
+ * kind of thing that is subtly different in a second implementation.
+ */
+export function nextOccurrence(id: string, now = new Date()): Date | null {
+  const r = statutoryRule(id);
+  if (!r) return null;
+  const { y, m, d } = istToday(now);
+  const today = istDate(y, m, d);
+
+  if (r.cadence === "monthly") {
+    const thisMonth = istDate(y, m, r.day);
+    if (thisMonth.getTime() >= today.getTime()) return thisMonth;
+    return istDate(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1, r.day);
+  }
+
+  const thisYear = istDate(y, r.month as number, r.day);
+  return thisYear.getTime() >= today.getTime() ? thisYear : istDate(y + 1, r.month as number, r.day);
+}
+
 /** Midnight IST on a given y/m/d, as an instant. IST has no daylight saving. */
 function istDate(y: number, m: number, d: number): Date {
   return new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T00:00:00+05:30`);
