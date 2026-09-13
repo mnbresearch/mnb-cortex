@@ -12,6 +12,7 @@ import "server-only";
 */
 import { anyEnvKey, envKey } from "@/lib/env";
 import { hasSupabase, serviceClient } from "@/lib/supabase/server";
+import { coverageVerdict, parseCoverage, COVERAGE_KEY } from "@/lib/cron-coverage";
 import { encryptionAvailable } from "@/lib/crypto";
 import { geminiTextModels, geminiImageModels, geminiUrl } from "@/lib/ai/models";
 import { veoModels } from "@/lib/ai/video";
@@ -230,9 +231,16 @@ async function checkCron(): Promise<Check> {
   const sb = serviceClient();
   if (!sb) return { name: "Scheduled jobs", status: "degraded", detail: "No service role" };
   try {
-    const { data, error } = await sb.from("system_status").select("value").eq("key", "cron_last_run").maybeSingle();
+    /*
+      TWO KEYS, ONE ROUND TRIP. `cron_last_run` answers "did it run"; the
+      coverage row answers "did it reach everyone", which is the question that
+      goes wrong quietly. See below.
+    */
+    const { data: rows, error } = await sb
+      .from("system_status").select("key,value").in("key", ["cron_last_run", COVERAGE_KEY]);
     if (error) return { name: "Scheduled jobs", status: "degraded", detail: "Heartbeat table missing — run 2026_system_status.sql" };
-    const last = (data as any)?.value;
+    const at = (k: string) => ((rows as any[]) || []).find((r) => r.key === k)?.value;
+    const last = at("cron_last_run");
     if (!last) {
       return { name: "Scheduled jobs", status: "degraded", detail: "Not run since this was deployed — first run is 08:00 IST" };
     }
@@ -253,7 +261,31 @@ async function checkCron(): Promise<Check> {
     */
     if (hours > 48) return { name: "Scheduled jobs", status: "down", detail: `Last ran ${Math.round(hours)}h ago`, critical: true };
     if (hours > 26) return { name: "Scheduled jobs", status: "degraded", detail: `Last ran ${Math.round(hours)}h ago` };
-    return { name: "Scheduled jobs", status: "operational", detail: `Last ran ${Math.round(hours)}h ago` };
+
+    /*
+      RAN IS NOT THE SAME AS REACHED EVERYONE.
+
+      Up to here the check only asked whether the cron fired. It can fire
+      perfectly every night and still be covering a shrinking fraction of the
+      platform: the sweep is capped at 200 workspaces a night and rotates, so at
+      201 customers every warning becomes up to 48 hours late while this check
+      stays green and says "Last ran 6h ago".
+
+      That is the failure mode that arrives WITH success, which is exactly the
+      kind nobody is watching for. The cron already computed the number; it just
+      had nowhere to put it. Now it writes it and this reads it.
+
+      Coverage can only DEGRADE, never mark critical: partial coverage is late
+      warnings, not absent ones, and a 503 would take the status page down over
+      a capacity planning problem.
+    */
+    const verdict = coverageVerdict(parseCoverage(at(COVERAGE_KEY)));
+    const age = `Last ran ${Math.round(hours)}h ago`;
+    return {
+      name: "Scheduled jobs",
+      status: verdict.status === "degraded" ? "degraded" : "operational",
+      detail: verdict.detail ? `${age} · ${verdict.detail}` : age,
+    };
   } catch (e: any) {
     return { name: "Scheduled jobs", status: "degraded", detail: e?.message };
   }

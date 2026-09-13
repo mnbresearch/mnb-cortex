@@ -7,6 +7,7 @@ import { recomputeMetrics } from "@/lib/metrics";
 import { statusOf, isLapsed } from "@/lib/entitlement";
 import { rotate } from "@/lib/cron-rotation";
 import { createBudget, SHARE } from "@/lib/cron-budget";
+import { nightsForFullCycle, COVERAGE_KEY } from "@/lib/cron-coverage";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -464,20 +465,65 @@ export async function GET(req: Request) {
     caps need raising or the cron needs to run more often, and that should be a
     decision rather than a discovery.
   */
+  /*
+    `this_run` IS WHAT WAS DONE, NOT WHAT WAS HANDED OVER.
+
+    This read `sweep.batch.length` — the size of the slice the rotation offered.
+    The loop above breaks the moment the shared time budget drops under 3,000ms,
+    so a run given 200 workspaces can finish 60 and this line would still report
+    200. The one number whose job is to tell the truth about coverage was
+    reporting the plan. `swept` is the count the cursor was committed against,
+    so it is the same figure the rotation itself believes.
+  */
+  const sweepRecord = { total: sweep.total, done: swept, cap: SWEEP_CAP };
+  const analysisRecord = { total: analysis.total, done: ran, cap: ANALYSIS_CAP };
   const coverage = {
     metrics_sweep: {
       workspaces: sweep.total,
-      this_run: sweep.batch.length,
+      this_run: swept,
+      offered: sweep.batch.length,
       wrapped: sweep.wrapped,
-      nights_for_full_cycle: Math.max(1, Math.ceil(sweep.total / SWEEP_CAP)),
+      nights_for_full_cycle: nightsForFullCycle(sweepRecord),
     },
     daily_analysis: {
       entitled: analysis.total,
       this_run: ran,
       wrapped: analysis.wrapped,
-      nights_for_full_cycle: Math.max(1, Math.ceil(analysis.total / ANALYSIS_CAP)),
+      nights_for_full_cycle: nightsForFullCycle(analysisRecord),
     },
   };
+
+  /*
+    PERSIST IT, because a number returned only to Vercel's scheduler is a number
+    nobody has ever seen.
+
+    This block used to end here, having computed `nights_for_full_cycle` and put
+    it in an HTTP response body that goes to the cron trigger and no further. A
+    grep for the field name across the repo found the line that computes it and
+    a comment pointing at that line — nothing read it. So the run knew it was
+    degrading and had no way to say so.
+
+    Written to the row the health check already reads from, so this costs one
+    upsert and no migration: system_status is a key/value table and this is a
+    new key. Failure is logged and otherwise ignored — a monitoring write must
+    never be the reason a run that did its work reports failure.
+  */
+  try {
+    const now = new Date().toISOString();
+    const { error: covErr } = await sb.from("system_status").upsert({
+      key: COVERAGE_KEY,
+      value: JSON.stringify({
+        at: now,
+        metrics_sweep: sweepRecord,
+        daily_analysis: analysisRecord,
+        budget_left_ms: budget.remaining(),
+      }),
+      updated_at: now,
+    }, { onConflict: "key" });
+    if (covErr) console.error("[cron] coverage write —", covErr.message);
+  } catch (e: any) {
+    console.error("[cron] coverage write threw —", e?.message);
+  }
 
   return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, collectionsSent, coverage,
     /*
