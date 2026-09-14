@@ -4,7 +4,7 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AIPanel } from "@/components/ai-panel";
-import { upcomingDeadlines } from "@/lib/statutory";
+import { upcomingDeadlines, whenPhrase, URGENT_WITHIN_DAYS } from "@/lib/statutory";
 
 export const dynamic = "force-dynamic";
 
@@ -51,13 +51,22 @@ export default function Compliance() {
       <PageShell>
         {soon.length > 0 && (
           <Section title="Due in the next 10 days" desc="Dated from today. Check which of these apply to you.">
+            {/*
+              The "today / tomorrow / N days" ternary and the bare `3` were
+              inline below, and I then wrote a third copy of both into /gst —
+              with different arithmetic, measured from `now` rather than IST
+              midnight. Two pages of the same product could print different day
+              counts for the same tax date on the same afternoon. Both now read
+              whenPhrase() and URGENT_WITHIN_DAYS from lib/statutory.ts, which
+              is where the warning engine's own version already lived.
+            */}
             <div className="space-y-2">
               {soon.map((d) => (
-                <Card key={d.id} className={`p-4 flex items-start gap-3 ${d.severity === "high" && d.daysAway <= 3 ? "border-danger/30 bg-danger/5" : ""}`}>
+                <Card key={d.id} className={`p-4 flex items-start gap-3 ${d.severity === "high" && d.daysAway <= URGENT_WITHIN_DAYS ? "border-danger/30 bg-danger/5" : ""}`}>
                   <div className={`h-10 w-16 rounded-lg grid place-items-center text-xs font-bold shrink-0 ${
-                    d.daysAway <= 1 ? "bg-danger/10 text-danger" : d.daysAway <= 3 ? "bg-warning/10 text-warning" : "border"
+                    d.daysAway <= 1 ? "bg-danger/10 text-danger" : d.daysAway <= URGENT_WITHIN_DAYS ? "bg-warning/10 text-warning" : "border"
                   }`}>
-                    {d.daysAway === 0 ? "today" : d.daysAway === 1 ? "tomorrow" : `${d.daysAway} days`}
+                    {whenPhrase(d.daysAway)}
                   </div>
                   <div className="min-w-0">
                     <div className="font-medium text-sm">{d.name}</div>

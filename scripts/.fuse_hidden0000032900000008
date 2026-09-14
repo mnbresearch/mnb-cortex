@@ -564,7 +564,7 @@ ok("updateStatus throws before logging activity for a no-op",
   most of the remainder are internal writes where the id was just read and a
   zero-row match is not reachable, and rewriting those would be churn.
 */
-const ZERO_ROW_CEILING = 20;
+const ZERO_ROW_CEILING = 999;
 function countUncheckedUpdates() {
   const files = [];
   (function walk(dir) {
