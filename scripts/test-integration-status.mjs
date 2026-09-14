@@ -20,7 +20,7 @@
 import { readFileSync } from "node:fs";
 import { readCode } from "./lib/read-code.mjs";
 import {
-  statusFor, lastTestOk, badgeFor, needsAttention,
+  statusFor, statusForAttempt, lastTestOk, badgeFor, needsAttention, shouldPersistResult,
 } from "../src/lib/integration-status.ts";
 
 let pass = 0;
@@ -85,6 +85,39 @@ ok("every badge carries a hint a screen reader can use",
 ok("only the verified badge claims verification",
   badgeFor("connected").hint.toLowerCase().includes("verified")
   && !badgeFor("saved").hint.toLowerCase().includes("we made a real"));
+
+/* ────────── unreachable: "we could not ask" is not "they said no" ──────── */
+
+/*
+  testCredentials' catch used to return `verified: true`, so a DNS failure, an
+  egress block or a provider outage was recorded as a rejection: status "error",
+  last_test_ok false, and a badge telling the customer to go and reconnect a
+  credential that works. These two functions are what separates the cases.
+*/
+eq("a reachable result is persisted", shouldPersistResult(false), true);
+eq("an undefined flag is persisted", shouldPersistResult(undefined), true);
+eq("an unreachable result is NOT persisted", shouldPersistResult(true), false);
+
+/*
+  Connect cannot decline to write — the customer just handed over the
+  credential — so it needs a status for the unreachable case, and it is
+  `saved`, not `error`.
+*/
+eq("connect stores an unreachable provider as saved", statusForAttempt(false, false, true), "saved");
+ok("an outage during connect never brands the credential broken",
+  statusForAttempt(false, false, true) !== "error");
+eq("connect with a real rejection still records the error", statusForAttempt(false, true, false), "error");
+eq("connect with a pass still records connected", statusForAttempt(true, true, false), "connected");
+eq("connect with no test available still records saved", statusForAttempt(true, false, false), "saved");
+ok("statusForAttempt matches statusFor whenever the provider was reachable",
+  [[true, true], [false, true], [true, false], [false, false]]
+    .every(([o, v]) => statusForAttempt(o, v, false) === statusFor(o, v)));
+
+/* The error badge must not assert a cause it cannot know. */
+ok("the error hint no longer claims the provider rejected anything",
+  !badgeFor("error").hint.toLowerCase().includes("rejected"),
+  badgeFor("error").hint);
+ok("the error hint says what is actually known", /could not verify/i.test(badgeFor("error").hint));
 
 eq("only an error needs attention", needsAttention("error"), true);
 eq("saved does not nag", needsAttention("saved"), false);

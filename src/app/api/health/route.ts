@@ -3,7 +3,22 @@ import { getHealth } from "@/lib/health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+/*
+  60, NOT 30 — HEADROOM ABOVE THE WORK, NOT EQUAL TO IT.
+
+  This was 30, and in production the endpoint returned
+  `504 FUNCTION_INVOCATION_TIMEOUT` after 31.1 seconds, which left /status
+  showing "Checking…" indefinitely. The model checks are legitimately allowed
+  ~20s each (see MODEL_TIMEOUT in lib/health.ts — a real model round trip was
+  measured at 27.9s), so a 30s route budget gave the rest of the work almost
+  nothing.
+
+  The durable fix is in lib/health.ts: every check now runs under its own
+  deadline, so the total is bounded by construction rather than by hope. This
+  raise is the belt to that braces — the endpoint whose job is to notice
+  outages should be the last thing to fall over during one.
+*/
+export const maxDuration = 60;
 
 /**
  * Public status endpoint.

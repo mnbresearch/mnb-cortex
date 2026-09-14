@@ -63,8 +63,6 @@ export async function ensureWorkspace(opts?: { name?: string; industry?: string 
       "of the people who reached pricing, how many actually signed up" had no
       answer — which is the first question anyone would ask about a funnel.
     */
-    recordQuietly("workspace_created", { orgId, meta: { industry: opts?.industry || meta.industry || "" } });
-
     /*
       THE OWNER MEMBERSHIP IS THE WHOLE ACCOUNT. CHECK THAT IT LANDED.
 
@@ -115,6 +113,22 @@ export async function ensureWorkspace(opts?: { name?: string; industry?: string 
       if (rbErr) console.error("[workspace] could not roll back orphan org", orgId, "—", rbErr.message);
       return { ok: false, error: "We could not finish setting up your workspace. Please try signing in again — nothing was charged." };
     }
+
+    /*
+      THE FUNNEL EVENT MOVED BELOW THE CHECK.
+
+      It was fired immediately after the organizations insert, before the
+      membership was verified — so every signup that the code above then rolled
+      back was still counted as `workspace_created`. The comment attached to it
+      says it answers "of the people who reached pricing, how many actually
+      signed up", and it would have over-reported by exactly the failure rate
+      the rollback exists to handle: a metric that looks best when the thing it
+      measures is broken.
+
+      Emitted here, after the membership is confirmed present, so the event
+      means what its name says.
+    */
+    recordQuietly("workspace_created", { orgId, meta: { industry: opts?.industry || meta.industry || "" } });
 
     /*
       Attach the referral, if this visitor arrived through someone's link.

@@ -25,6 +25,7 @@
 
   Run: npm run test:silent-writes
 */
+import { readFileSync } from "node:fs";
 import { readCode, stripComments } from "./lib/read-code.mjs";
 
 let pass = 0;
@@ -149,8 +150,46 @@ ok("checkAI pings Anthropic", /ping\("https:\/\/api\.anthropic\.com\/v1\/models"
 ok("the Anthropic ping sends the required version header",
   /"anthropic-version": "2023-06-01"/.test(health));
 ok("checkAI ends at down, not up",
-  /status: "down",\s*\n?\s*detail: tried\.length/.test(health));
-ok("both providers are reported when both were tried", /tried\.push\(`anthropic:/.test(health));
+  /status: "down",\s*\n?\s*detail: `no provider answered/.test(health),
+  "the last return must be down, never a bare operational");
+ok("both providers are reported when both were tried",
+  /settled\.map\(\(x\) => `\$\{x\.label\}:/.test(health));
+
+/*
+  THE 504 THIS CAUSED IN PRODUCTION, pinned.
+
+  Replacing checkAI's hardcoded `operational` with two real pings was correct
+  and cost real time, and I made them sequential inside a function that can
+  already spend MODEL_TIMEOUT in its Gemini loop. /api/health returned
+  504 FUNCTION_INVOCATION_TIMEOUT after 31.1s and /status hung on "Checking…".
+  Found with a browser; no source-level assertion would have noticed.
+*/
+ok("the AI probes run concurrently, not one after the other",
+  /await Promise\.all\(aiProbes\)/.test(health),
+  "two independent probes must not serialise inside a bounded route");
+ok("no sequential awaited ping remains in the provider fallback",
+  !/const r = await ping\("https:\/\/api\.openai\.com/.test(health));
+ok("every check runs under a deadline", /async function bounded\(/.test(health));
+/*
+  The ping array is `aiProbes`, not `probes`, and that name is load-bearing:
+  scripts/test-schema-probes.mjs locates checkSchema's probe list by slicing
+  this file, and a second `const probes:` earlier in it stole the anchor —
+  making that suite report all 30 hand-run tables as unprobed when nothing had
+  changed. Both sides were fixed; this pins one of them.
+*/
+ok("checkAI's ping array does not shadow checkSchema's probe list",
+  /const aiProbes:/.test(health) && !/const probes: Array<Promise</.test(health));
+ok("the deadline is applied to all seven checks",
+  (health.match(/bounded\("/g) || []).length >= 7,
+  "one unbounded check can still outlast the route");
+ok("a timed-out check is degraded, not down",
+  /status: "degraded",\s*\n?\s*detail: `check did not finish/.test(health),
+  "reporting an unmeasured critical dependency as down would drive a false 503");
+
+const healthRoute = read("src/app/api/health/route.ts", "export async function GET");
+const badgeRoute = read("src/app/api/badge/route.ts", "getHealth");
+ok("/api/health has headroom above the model budget", /maxDuration = 60/.test(healthRoute));
+ok("/api/badge shares it, since it calls the same getHealth", /maxDuration = 60/.test(badgeRoute));
 
 /* ───────────────────── D1 · memory ──────────────────────────────────────── */
 
@@ -166,9 +205,9 @@ ok("a person entity counts only when written", /const eid = await upsertEntity[\
   old row is not retired it stays `status: "active"`, so recallContext() feeds
   both the stale fact and its correction into every AI call.
 */
-ok("supersede inspects the retire error", /const \{ error: retireErr \}/.test(memory));
+ok("supersede inspects the retire error", /const \{ data: retired, error: retireErr \}/.test(memory));
 ok("supersede returns null when the old fact could not be retired",
-  /if \(retireErr\)[\s\S]{0,200}?return null;/.test(memory));
+  /if \(retireErr \|\| !\(\(retired as any\[\]\) \|\| \[\]\)\.length\)[\s\S]{0,400}?return null;/.test(memory));
 ok("supersede no longer swallows both updates in a bare catch",
   !/await svc\.from\("memories"\)\.update\(\{ status: "superseded" \}\)[\s\S]{0,200}?\} catch \{\}/.test(memory));
 
@@ -309,6 +348,81 @@ ok("the layout passes superAdmin to the mobile nav", /<MobileNav superAdmin=\{su
 const csv = read("src/components/csv-import.tsx", "result.inserted");
 ok("the import result finally renders the column ratio it returns",
   /result\.matched[\s\S]{0,200}?result\.totalCols/.test(csv));
+
+/* ───────────── H · the defects the review of MY OWN code found ─────────── */
+
+/*
+  An adversarial pass over the previous two commits found five real faults in
+  them. These pin the fixes. Two of the five were mine outright; two were
+  long-standing and I am fixing them because I was in the file; one was a false
+  justification I had written in a comment.
+*/
+
+/* The billing divergence. byo.ts waives AI credits from config.last_test_ok
+   alone, and the Test op wrote only `status` — so a revoked key kept its
+   waiver and ran free on the platform key. Long-standing, not new. */
+/*
+  SLICED FROM `if (op === "test")`, NOT FROM `op === "test"`.
+
+  The first version anchored on the bare comparison — which appears earlier, in
+  the rate-limit ternary (`const over = op === "test" ? …`) — so the slice
+  still contained the CONNECT block, whose own `last_test_ok` satisfied the
+  regex. The assertion passed while the test op wrote nothing, and a mutation
+  removing it survived. Found by running that mutation.
+*/
+const testOp = intRoute.slice(intRoute.indexOf('if (op === "test")'));
+ok("the test-op slice was located", intRoute.includes('if (op === "test")') && testOp.length > 200);
+ok("the test-op slice excludes the connect block", !testOp.includes("credentials_encrypted: encrypted"));
+ok("the test op persists last_test_ok, not just status",
+  /last_test_ok: lastTestOk\(test\.ok, test\.verified\)/.test(testOp),
+  "status and config.last_test_ok can still disagree");
+ok("the test op merges config rather than replacing it",
+  /\.\.\.\(\(\(cur as any\)\?\.config\) \|\| \{\}\)/.test(intRoute),
+  "writing a bare object would destroy hint / phone_number_id");
+
+/* An outage is not a rejection. This one was mine: I wrote verified:true in
+   the catch, which stamped `error` onto credentials we never reached. */
+ok("the catch no longer claims a call happened",
+  !/catch \(e: any\) \{\s*\n?\s*return \{ ok: false, verified: true, message: e\?\.message \|\| "Could not reach the provider" \}/.test(intRoute));
+ok("the catch reports unreachable", /unreachable: true/.test(intRoute));
+ok("an unreachable result is not written to the row", /shouldPersistResult\(test\.unreachable\)/.test(intRoute));
+ok("connect stores an unreachable provider via statusForAttempt",
+  /statusForAttempt\(test\.ok, test\.verified, test\.unreachable\)/.test(intRoute));
+
+/* The row-count check I applied in workspace.ts and skipped in memory.ts. */
+ok("supersede reads the retired row back",
+  /\.update\(\{ status: "superseded" \}\)[\s\S]{0,160}?\.select\("id"\)/.test(memory));
+ok("supersede treats a zero-row update as failure",
+  /!\(\(retired as any\[\]\) \|\| \[\]\)\.length/.test(memory));
+ok("updateMemory treats a zero-row update as failure",
+  /return \(\(data as any\[\]\) \|\| \[\]\)\.length > 0;/.test(memory),
+  "archive would report success while the memory stayed active");
+
+/* The tenth instance of the bug the previous commit was named after — which
+   that same commit introduced. */
+ok("the sync activity insert binds its error", /const \{ error: actErr \}/.test(syncRoute));
+ok("it no longer wraps a non-throwing call in try/catch",
+  !/try \{\s*\n?\s*const pulled[\s\S]{0,300}?\} catch \{ \/\* the log is not the deliverable/.test(syncRoute));
+
+/* A funnel event that made failure look like success. */
+ok("workspace_created is recorded after the membership check, not before",
+  workspace.indexOf("recordQuietly(\"workspace_created\"") > workspace.indexOf("const { data: memRow, error: memErr }"),
+  "a rolled-back signup would still count as a conversion");
+
+/* A comment of mine that was simply false. */
+const syncRaw = readCode(import.meta.url, "../src/app/api/integrations/sync/route.ts", ["syncProvider(orgId"]);
+ok("the revalidate justification no longer claims it fixes stale numbers",
+  !/sees the numbers from before the sync/.test(
+    readFileSync(new URL("../src/app/api/integrations/sync/route.ts", import.meta.url), "utf8"),
+  ),
+  "all four targets are force-dynamic, so there is no route cache to bust");
+
+/* And sync must not re-mint a verified badge it did not earn. */
+const syncLib = read("src/lib/sync/index.ts", "export async function syncProvider");
+ok("a successful pull does not promote an unverified row to connected",
+  !/\.update\(\{ status: "connected", last_sync/.test(syncLib));
+ok("it preserves a prior verification and clears a stale error",
+  /prior === "connected" \? "connected" : "saved"/.test(syncLib));
 
 /* ────────────────────────────────────────────────────── report ─────────── */
 

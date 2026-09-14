@@ -84,9 +84,29 @@ const health = readFileSync(join(ROOT, "src/lib/health.ts"), "utf8");
   entries are a fixed literal shape — ["table", "column", "name"] — so this is
   a narrow, checkable bit of text extraction rather than general parsing.
 */
+/*
+  ANCHORED ON THE TYPE, NOT THE NAME.
+
+  This searched for `const probes:` — and a second `const probes:` was later
+  added to checkAI (an array of in-flight provider pings), earlier in the file.
+  indexOf found THAT one and sliced to its closing bracket, so this suite
+  suddenly reported that health.ts probes none of the 30 hand-run tables and
+  columns. All 30 failures were false; the probe list was untouched.
+
+  Caught because the assertions are positive ("this table IS probed") and so a
+  mis-slice fails loudly. A negative assertion would have gone quiet instead,
+  which is the failure mode scripts/lib/read-code.mjs exists to prevent.
+
+  `[string, string, string][]` is the probe list's actual shape and nothing
+  else in the file shares it. The variable was also renamed to `aiProbes` on
+  the other side, so the collision is fixed twice over — deliberately, because
+  a test whose anchor can be stolen by an unrelated edit is a test that will
+  lie again.
+*/
+const PROBE_ANCHOR = "const probes: [string, string, string][]";
 const probesBlock = health.slice(
-  health.indexOf("const probes:"),
-  health.indexOf("];", health.indexOf("const probes:")),
+  health.indexOf(PROBE_ANCHOR),
+  health.indexOf("];", health.indexOf(PROBE_ANCHOR)),
 );
 check(probesBlock.length > 0, "the probes array is found in health.ts");
 

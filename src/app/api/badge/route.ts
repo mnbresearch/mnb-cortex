@@ -13,7 +13,11 @@ export const dynamic = "force-dynamic";
   default and a burst of badge renders on a cold cache could hold open a lot of
   invocations pinging the AI providers.
 */
-export const maxDuration = 30;
+/* Same 60 as /api/health, and for the same reason: this route calls the same
+   getHealth(), so a 30s budget here would 504 on exactly the cache miss that
+   took /api/health down. A badge embedded on someone else's page failing is
+   more visible than our own status page failing. */
+export const maxDuration = 60;
 
 /** Live status badge (SVG) — embed anywhere with <img src="/api/badge" />. */
 export async function GET(req: Request) {

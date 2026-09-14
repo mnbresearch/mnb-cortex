@@ -58,6 +58,73 @@ const MODEL_TIMEOUT = 20000;
 /** Above this a model is answering, but slowly enough that users will feel it. */
 const MODEL_SLOW = 6000;
 
+/*
+  THE HEALTH ENDPOINT MUST NOT BE ABLE TO OUTLAST ITS OWN ROUTE.
+
+  Found live, with a browser, after this file was last changed: /api/health was
+  returning
+
+      504  FUNCTION_INVOCATION_TIMEOUT   after 31,134 ms
+
+  and /status therefore sat on "Checking…" for ever. `maxDuration = 30` on the
+  route, and nothing in here was bounded by it.
+
+  This is my regression, and its shape is worth stating plainly. checkAI used
+  to end in a hardcoded `return { status: "operational" }` whenever only an
+  OpenAI or Anthropic key was configured — a lie, which I replaced with two
+  real pings. The lie cost 0ms. The truth costs up to two network round trips,
+  and I added them SEQUENTIALLY, to a function already capable of spending
+  MODEL_TIMEOUT (20s) in its Gemini loop. The checks run under Promise.all, so
+  the endpoint takes as long as its slowest member, and the slowest member
+  could now exceed the route's budget on its own.
+
+  A monitoring endpoint that fails when a dependency is slow is worse than
+  useless: it converts "one provider is sluggish" into "the whole platform is
+  unreachable", which is exactly the false alarm the MODEL_TIMEOUT comment
+  above was written to prevent — one layer up.
+
+  So every check now runs under a deadline, and a check that overruns reports
+  DEGRADED with a note saying it timed out. Two properties follow:
+
+    - /api/health always answers, in bounded time, whatever any provider does;
+    - "we could not measure this" is visible as itself, rather than as either
+      a green tick or a dead endpoint.
+
+  10s: comfortably above TIMEOUT (6s) so a normal check is never cut short,
+  and far enough below the route's 30s that the JSON assembly after Promise.all
+  has room.
+*/
+const CHECK_DEADLINE = 10_000;
+
+/**
+ * Run a check, but never let it exceed the endpoint's budget.
+ *
+ * A timed-out check is `degraded`, never `down`: we did not observe a failure,
+ * we failed to observe. Reporting an unmeasured dependency as down would
+ * re-create the false alarm this whole mechanism exists to avoid — and for a
+ * `critical` check it would drive a 503.
+ */
+async function bounded(name: string, run: () => Promise<Check>, ms = CHECK_DEADLINE): Promise<Check> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<Check>((resolve) => {
+    timer = setTimeout(
+      () => resolve({
+        name,
+        status: "degraded",
+        detail: `check did not finish within ${Math.round(ms / 1000)}s — this reports the probe, not the dependency`,
+      }),
+      ms,
+    );
+  });
+  try {
+    return await Promise.race([run(), deadline]);
+  } catch (e: any) {
+    return { name, status: "degraded", detail: e?.message || "check threw" };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /** fetch with a hard timeout — a hung dependency must not hang the health check. */
 async function ping(
   url: string,
@@ -170,50 +237,60 @@ async function checkAI(): Promise<Check> {
     Both are listed rather than one-or-the-other so a deployment holding both
     keys learns which of them is actually answering.
   */
+  /*
+    IN PARALLEL, NOT ONE AFTER THE OTHER.
+
+    The first version awaited OpenAI and then Anthropic, so a deployment
+    holding both keys could spend 2 × TIMEOUT here — and that, on top of the
+    Gemini loop's budget, is what took /api/health past its route limit and
+    into a 504 in production. Two independent probes have no reason to be
+    sequential; the cost is now one round trip, not two.
+
+    Anthropic has no cheap unauthenticated listing that validates a key, so it
+    hits /v1/models with the two headers it requires — `anthropic-version` is
+    mandatory, or the request is rejected for the wrong reason and a good key
+    looks bad.
+  */
   const openai = envKey("OPENAI_API_KEY");
   const anthropic = envKey("ANTHROPIC_API_KEY");
-  const tried: string[] = [];
 
+  const aiProbes: Array<Promise<{ label: string; r: Awaited<ReturnType<typeof ping>> }>> = [];
   if (openai) {
-    const r = await ping("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${openai}` } });
-    if (r.ok) {
-      const slow = r.ms > MODEL_SLOW;
-      return {
-        name: "AI engine",
-        status: slow ? "degraded" : "operational",
-        detail: slow ? `openai — answering, but slowly (${(r.ms / 1000).toFixed(1)}s)` : "openai",
-        critical: true,
-      };
-    }
-    tried.push(`openai: ${r.error || `HTTP ${r.status}`}`);
+    aiProbes.push(
+      ping("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${openai}` } })
+        .then((r) => ({ label: "openai", r })),
+    );
+  }
+  if (anthropic) {
+    aiProbes.push(
+      ping("https://api.anthropic.com/v1/models", {
+        headers: { "x-api-key": anthropic, "anthropic-version": "2023-06-01" },
+      }).then((r) => ({ label: "anthropic", r })),
+    );
   }
 
-  if (anthropic) {
-    /*
-      Anthropic has no unauthenticated-cheap listing equivalent that validates
-      the key, so this hits /v1/models with the two headers it requires. A 401
-      means the key is bad, which is the thing worth knowing; anthropic-version
-      is mandatory or the request is rejected for the wrong reason.
-    */
-    const r = await ping("https://api.anthropic.com/v1/models", {
-      headers: { "x-api-key": anthropic, "anthropic-version": "2023-06-01" },
-    });
-    if (r.ok) {
-      const slow = r.ms > MODEL_SLOW;
-      return {
-        name: "AI engine",
-        status: slow ? "degraded" : "operational",
-        detail: slow ? `anthropic — answering, but slowly (${(r.ms / 1000).toFixed(1)}s)` : "anthropic",
-        critical: true,
-      };
-    }
-    tried.push(`anthropic: ${r.error || `HTTP ${r.status}`}`);
+  if (!aiProbes.length) {
+    return { name: "AI engine", status: "down", detail: "no provider key configured", critical: true };
+  }
+
+  const settled = await Promise.all(aiProbes);
+  const win = settled.find((x) => x.r.ok);
+  if (win) {
+    const slow = win.r.ms > MODEL_SLOW;
+    return {
+      name: "AI engine",
+      status: slow ? "degraded" : "operational",
+      detail: slow
+        ? `${win.label} — answering, but slowly (${(win.r.ms / 1000).toFixed(1)}s)`
+        : win.label,
+      critical: true,
+    };
   }
 
   return {
     name: "AI engine",
     status: "down",
-    detail: tried.length ? `no provider answered — ${tried.join("; ")}` : "no provider key configured",
+    detail: `no provider answered — ${settled.map((x) => `${x.label}: ${x.r.error || `HTTP ${x.r.status}`}`).join("; ")}`,
     critical: true,
   };
 }
@@ -636,8 +713,20 @@ let healthCache: { at: number; body: any } | null = null;
 let healthInFlight: Promise<any> | null = null;
 
 async function computeHealth() {
+  /*
+    Each under its own deadline — see `bounded`. The model checks get the
+    longer MODEL_TIMEOUT-shaped budget they were designed for, plus a small
+    margin, because a slow model is a real and expected state; everything else
+    lives inside CHECK_DEADLINE.
+  */
   const [db, ai, gen, email, pay, cron, schema] = await Promise.all([
-    checkDatabase(), checkAI(), checkGenModels(), checkEmail(), checkPayments(), checkCron(), checkSchema(),
+    bounded("Database", checkDatabase),
+    bounded("AI engine", checkAI, MODEL_TIMEOUT + 2_000),
+    bounded("Image & video models", checkGenModels, MODEL_TIMEOUT + 2_000),
+    bounded("Email delivery", checkEmail),
+    bounded("Payments", checkPayments),
+    bounded("Scheduled jobs", checkCron),
+    bounded("Schema migrations", checkSchema),
   ]);
 
   /*
