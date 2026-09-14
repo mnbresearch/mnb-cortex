@@ -165,7 +165,7 @@ export const INTEGRATIONS: Integration[] = [
   { id: "slack", name: "Slack", category: "Communication", desc: "Alerts and daily briefs to a channel", minPlan: "starter", testable: true,
     docs: "https://api.slack.com/messaging/webhooks",
     fields: [{ key: "webhook_url", label: "Incoming webhook URL", type: "password", placeholder: "https://hooks.slack.com/services/…", required: true }] },
-  { id: "whatsapp", name: "WhatsApp Business", category: "Communication", desc: "Campaigns, reminders and broadcasts", minPlan: "growth",
+  { id: "whatsapp", name: "WhatsApp Business", category: "Communication", desc: "Campaigns, reminders and broadcasts", minPlan: "growth", testable: true,
     docs: "https://developers.facebook.com/docs/whatsapp/cloud-api",
     fields: [KEY("Permanent access token"), { key: "phone_number_id", label: "Phone number ID", type: "text", required: true }] },
   { id: "resend", name: "Resend", category: "Communication", desc: "Transactional email delivery", minPlan: "starter", testable: true,

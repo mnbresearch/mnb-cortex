@@ -41,7 +41,15 @@ export function hasWhatsApp(): boolean {
   return whatsappConfig() !== null;
 }
 
-/** What the UI shows when it isn't set up. Names the missing pieces exactly. */
+/**
+ * THE OPERATOR'S hint. Names the missing environment variables.
+ *
+ * Kept, and correct, for exactly one caller: /setup, which is super-admin only
+ * and exists to tell ME which platform credentials are absent.
+ *
+ * It must NOT be shown to a customer, which is what it was doing — see
+ * whatsappCustomerHint() below.
+ */
 export function whatsappSetupHint(): string {
   const missing: string[] = [];
   if (!envKey("WHATSAPP_TOKEN")) missing.push("WHATSAPP_TOKEN");
@@ -49,6 +57,34 @@ export function whatsappSetupHint(): string {
   return missing.length
     ? `WhatsApp sending needs ${missing.join(" and ")}. Create a Meta WhatsApp Business app, then see SETUP.md → WhatsApp.`
     : "WhatsApp is configured.";
+}
+
+/**
+ * WHAT THE CUSTOMER SEES. Three things the operator hint got wrong for them.
+ *
+ * sendText() and sendTemplate() returned whatsappSetupHint() as their user-
+ * facing `error`, so a tenant who tried to send a WhatsApp message was told:
+ *
+ *   "WhatsApp sending needs WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID.
+ *    Create a Meta WhatsApp Business app, then see SETUP.md → WhatsApp."
+ *
+ * Every clause of that is wrong for them:
+ *
+ *   - WHATSAPP_TOKEN is a server environment variable on OUR deployment. A
+ *     customer cannot set it, so the message asks them to do the impossible
+ *     and leaks our configuration naming while doing it.
+ *   - SETUP.md is a file in this repository. They do not have it.
+ *   - and the action they SHOULD take is different: this module's own header
+ *     says "WhatsApp is bring-your-own-account: each workspace connects its
+ *     own Meta app on /integrations". whatsappConfigFor() implements exactly
+ *     that. The message just never described it.
+ *
+ * So the failure was telling the customer to fix a thing that is not their
+ * thing, instead of the one thing that is.
+ */
+export function whatsappCustomerHint(): string {
+  return "WhatsApp isn't connected for this workspace yet. Connect WhatsApp Business on the Integrations page "
+    + "with your Meta permanent access token and phone number ID — messages then send from your own business number.";
 }
 
 /** E.164 without the plus, which is what the Graph API wants. Assumes India when no country code. */
@@ -113,7 +149,7 @@ async function post(cfg: WhatsAppConfig, body: any): Promise<SendResult> {
  */
 export async function sendText(to: string, body: string, orgId?: string | null): Promise<SendResult> {
   const cfg = await whatsappConfigFor(orgId);
-  if (!cfg) return { sent: false, needsSetup: true, error: whatsappSetupHint() };
+  if (!cfg) return { sent: false, needsSetup: true, error: whatsappCustomerHint() };
   const num = normalisePhone(to);
   if (!num) return { sent: false, error: `"${to}" is not a valid phone number.` };
   return post(cfg, { to: num, type: "text", text: { preview_url: false, body: body.slice(0, 4000) } });
@@ -131,7 +167,7 @@ export async function sendTemplate(
   orgId?: string | null,
 ): Promise<SendResult> {
   const cfg = await whatsappConfigFor(orgId);
-  if (!cfg) return { sent: false, needsSetup: true, error: whatsappSetupHint() };
+  if (!cfg) return { sent: false, needsSetup: true, error: whatsappCustomerHint() };
   const num = normalisePhone(to);
   if (!num) return { sent: false, error: `"${to}" is not a valid phone number.` };
 
@@ -148,10 +184,18 @@ export async function sendTemplate(
   });
 }
 
-/** Verify the credentials actually work, for the integrations "Test" button. */
-export async function verifyWhatsApp(): Promise<{ ok: boolean; detail: string }> {
-  const cfg = whatsappConfig();
-  if (!cfg) return { ok: false, detail: whatsappSetupHint() };
+/**
+ * Verify a SPECIFIC pair of credentials against Meta.
+ *
+ * Split out and taking the config explicitly, because the integrations Test
+ * button has the customer's freshly-entered credentials in hand and should
+ * check THOSE — not read anything back, and certainly not test a different
+ * account than the one being connected.
+ */
+export async function verifyWhatsAppCreds(cfg: WhatsAppConfig): Promise<{ ok: boolean; detail: string }> {
+  if (!cfg.token || !cfg.phoneNumberId) {
+    return { ok: false, detail: "Both the permanent access token and the phone number ID are required." };
+  }
   try {
     const r = await fetch(`${GRAPH}/${cfg.phoneNumberId}?fields=display_phone_number,verified_name`, {
       headers: { Authorization: `Bearer ${cfg.token}` },
@@ -163,3 +207,29 @@ export async function verifyWhatsApp(): Promise<{ ok: boolean; detail: string }>
     return { ok: false, detail: e?.message || "Could not reach the Meta Graph API." };
   }
 }
+
+/**
+ * Verify whichever credentials THIS WORKSPACE would actually send with.
+ *
+ * WAS PLATFORM-ONLY, AND HAD NO CALLERS AT ALL.
+ *
+ * It read `whatsappConfig()` — the environment fallback — so on the one
+ * surface it was written for (the integrations Test button) it would have
+ * tested our shared account rather than the credentials the customer had just
+ * entered. A green tick proving somebody else's number works is worse than no
+ * tick.
+ *
+ * It was also unreachable: WhatsApp has no `case` in testCredentials(), so it
+ * fell to the `default` branch. Now there is one, and it goes through
+ * verifyWhatsAppCreds() with the customer's own pair.
+ */
+export async function verifyWhatsApp(orgId?: string | null): Promise<{ ok: boolean; detail: string }> {
+  const cfg = await whatsappConfigFor(orgId);
+  if (!cfg) return { ok: false, detail: orgId ? whatsappCustomerHint() : whatsappSetupHint() };
+  return verifyWhatsAppCreds(cfg);
+}
+
+/* The platform-only body that used to live here is gone rather than kept as a
+   deprecated stub. verifyWhatsApp(null) reaches the same code path through
+   whatsappConfigFor(), and an unused function retained "just in case" is the
+   thing three dead server actions in lib/actions.ts taught me not to leave. */

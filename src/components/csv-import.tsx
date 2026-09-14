@@ -213,6 +213,21 @@ export function CsvImport({ initialTable }: { initialTable?: string } = {}) {
             <CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" aria-hidden="true" />
             <span>
               <span className="font-medium">Imported {result.inserted.toLocaleString("en-IN")} rows into {ds.label}.</span>
+              {/*
+                `matched` and `totalCols` were returned by the import action —
+                with a comment saying they were "surfaced so a PARTIAL match is
+                visible" — and read by nothing. `missing` was and is rendered,
+                so the important half was never lost; the ratio was simply
+                computed, sent across the server-action boundary, and dropped.
+
+                Shown here rather than deleted because the pre-import preview's
+                version of this disappears the moment the import runs, and
+                "matched 4 of 7 columns" is the line worth still having on
+                screen when you are looking at what landed.
+              */}
+              {typeof result.matched === "number" && typeof result.totalCols === "number" && (
+                <> Matched {result.matched} of {result.totalCols} columns.</>
+              )}
               {(result.missing || []).length > 0 && (
                 <> Not found in your file: <span className="text-warning">{(result.missing || []).join(", ")}</span> — those fields are blank.</>
               )}

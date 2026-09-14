@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, MessageSquare, TrendingUp, Boxes, Menu, X } from "lucide-react";
+import { LayoutDashboard, MessageSquare, TrendingUp, Boxes, Menu, X, ShieldAlert, Mail, KeyRound } from "lucide-react";
 // PRODUCT_NAV excludes the ~28 standalone calculators; they are collected
 // behind a single "Calculators" entry so the screens that matter are not
 // buried under fifty that store nothing. The command palette still
@@ -17,7 +17,27 @@ const primary = [
   { href: "/inventory", icon: Boxes, label: "Stock" },
 ];
 
-export function MobileNav() {
+/*
+  THREE OPERATOR ROUTES HAD NO MOBILE ENTRANCE AT ALL.
+
+  /superadmin, /email and /setup are linked from exactly one place in the
+  codebase: the Platform block in components/sidebar.tsx, which lives inside
+  `<aside className="hidden lg:flex …">`. They are not in NAV, so this sheet
+  never listed them, and command-palette.tsx filters NAV too — so below the lg
+  breakpoint there was no route to the kill switch, the customer manager or the
+  credential status page. On a phone, which is where you are when something
+  breaks and you are not at your desk.
+
+  The layout already computes `superAdmin` and passes it to Sidebar; it was
+  simply never passed here. Same gate, same three links.
+*/
+const PLATFORM = [
+  { href: "/superadmin", icon: ShieldAlert, label: "Super Admin" },
+  { href: "/email", icon: Mail, label: "Email Console" },
+  { href: "/setup", icon: KeyRound, label: "Setup status" },
+];
+
+export function MobileNav({ superAdmin = false }: { superAdmin?: boolean }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const groups = Array.from(new Set(NAV.map((n) => n.group)));
@@ -44,6 +64,16 @@ export function MobileNav() {
                 </div>
               </div>
             ))}
+            {superAdmin && (
+              <div className="mb-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Platform</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {PLATFORM.map((n) => { const Icon = n.icon; const active = path === n.href; return (
+                    <Link key={n.href} href={n.href} onClick={() => setOpen(false)} className={cn("flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm", active ? "bg-primary text-primary-foreground" : "hover:bg-accent")}><Icon className="h-4 w-4" />{n.label}</Link>
+                  ); })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

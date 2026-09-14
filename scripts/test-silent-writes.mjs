@@ -242,6 +242,74 @@ ok("the calculators hub is in the sitemap", /entry\("\/calculators"/.test(sitema
 const chrome = read("src/components/public-chrome.tsx", "PublicFooter");
 ok("the public footer links the free tools", /\["Free calculators", "\/calculators"\]/.test(chrome));
 
+/* ───────────── F · errors written for the operator, shown to the customer ── */
+
+/*
+  A DIFFERENT FAILURE-REPORTING BUG FROM THE ONES ABOVE, AND WORSE IN ONE WAY:
+  this one was not silent. It spoke, at length, and told the customer to do
+  something they cannot do.
+
+  sendText() and sendTemplate() returned whatsappSetupHint() as their
+  user-facing error, and that function names WHATSAPP_TOKEN,
+  WHATSAPP_PHONE_NUMBER_ID and SETUP.md — a server environment variable on our
+  deployment, a second one, and a file in this repository. Meanwhile the
+  module's own header says WhatsApp is bring-your-own-account per workspace and
+  whatsappConfigFor() implements exactly that, so the action the customer
+  should take (connect it on /integrations) was the one thing not mentioned.
+*/
+const wa = read("src/lib/whatsapp.ts", "export async function sendText", "whatsappConfigFor");
+
+ok("the send paths no longer hand the operator hint to a customer",
+  !/needsSetup: true, error: whatsappSetupHint\(\)/.test(wa),
+  "a customer is being told to set a server env var");
+ok("the send paths use the customer-facing hint", (wa.match(/whatsappCustomerHint\(\)/g) || []).length >= 2);
+ok("the customer hint names the page they can actually use",
+  /Integrations page/.test(wa) && /permanent access token/.test(wa));
+ok("the customer hint mentions no environment variable",
+  !/WHATSAPP_TOKEN[\s\S]{0,400}?Integrations page/.test(wa.slice(wa.indexOf("whatsappCustomerHint"))));
+ok("the operator hint survives for /setup, which is super-admin only",
+  /export function whatsappSetupHint/.test(wa) && /WHATSAPP_TOKEN/.test(wa));
+
+const setupPage = read("src/app/(app)/setup/page.tsx", "hasWhatsApp");
+ok("/setup still names the env vars, which is right for an operator page",
+  /WHATSAPP_TOKEN \+ WHATSAPP_PHONE_NUMBER_ID/.test(setupPage));
+
+/*
+  verifyWhatsApp was written "for the integrations Test button", read the
+  PLATFORM config, and had no callers — so it would have tested our shared
+  account rather than the credentials being connected, if anything had called
+  it at all.
+*/
+ok("verification takes an explicit credential pair", /export async function verifyWhatsAppCreds/.test(wa));
+ok("the per-org verifier resolves through whatsappConfigFor",
+  /export async function verifyWhatsApp\(orgId[\s\S]{0,200}?whatsappConfigFor\(orgId\)/.test(wa));
+ok("no deprecated platform-only verifier was left behind", !/_legacyVerify/.test(wa));
+
+const intRoute = read("src/app/api/integrations/route.ts", "async function testCredentials");
+ok("whatsapp has a real test case now", /case "whatsapp":/.test(intRoute));
+ok("it verifies the credentials it was handed, not stored ones",
+  /verifyWhatsAppCreds\(\{[\s\S]{0,200}?c\.phone_number_id/.test(intRoute));
+
+/* needsSetup was threaded through two layers and dropped by the client. */
+const act = read("src/components/act-center.tsx", "async function send");
+ok("act-center reads needsSetup", /setNeedsSetup\(Boolean\(j\.needsSetup\)\)/.test(act));
+ok("a setup state is not rendered as a red error", /err && !needsSetup &&/.test(act));
+ok("it offers the link that fixes it", /href="\/integrations"/.test(act));
+
+/* ───────────── G · the rest of the unreachable UI ─────────────────────── */
+
+const mobile = read("src/components/mobile-nav.tsx", "export function MobileNav");
+for (const r of ["/superadmin", "/email", "/setup"]) {
+  ok(`mobile nav can reach ${r}`, mobile.includes(`href: "${r}"`));
+}
+ok("the platform block is gated on superAdmin", /superAdmin && \(/.test(mobile));
+const appLayout = read("src/app/(app)/layout.tsx", "MobileNav");
+ok("the layout passes superAdmin to the mobile nav", /<MobileNav superAdmin=\{superAdmin\} \/>/.test(appLayout));
+
+const csv = read("src/components/csv-import.tsx", "result.inserted");
+ok("the import result finally renders the column ratio it returns",
+  /result\.matched[\s\S]{0,200}?result\.totalCols/.test(csv));
+
 /* ────────────────────────────────────────────────────── report ─────────── */
 
 console.log(`\nsilent writes: ${pass} passed, ${fails.length} failed`);

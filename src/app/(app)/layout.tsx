@@ -73,7 +73,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {!orgId && <AnonToolBar />}
         {children}
       </div>
-      <MobileNav />
+      {/* superAdmin was already computed above for Sidebar; MobileNav needs the
+          same gate or the three Platform routes have no phone entrance. */}
+      <MobileNav superAdmin={superAdmin} />
       <CommandPalette />
       <PWA />
       <Branding accent={brandable ? profile?.accent : undefined} />

@@ -27,6 +27,19 @@ export function ActCenter() {
   const [confirm, setConfirm] = useState(false);
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState("");
+  /*
+    "NOT CONNECTED YET" IS NOT AN ERROR, AND IT HAS AN ACTION.
+
+    /api/act has always returned `needsSetup: true` when the workspace has no
+    WhatsApp credentials — lib/whatsapp.ts even carries the field on its
+    SendResult type so the route could pass it through — and this component
+    read only `j.error`. So the single most fixable outcome in the send flow
+    rendered as a red triangle and a sentence, with nowhere to click.
+
+    (The sentence was also wrong until now: it named our server environment
+    variables and a file in our repository. See whatsappCustomerHint().)
+  */
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   // Deep-link prefill: a plan/priority card can open this pre-filled with a brief.
   useEffect(() => {
@@ -51,11 +64,12 @@ export function ActCenter() {
 
   async function send() {
     if (!confirm) { setConfirm(true); return; }
-    setSending(true); setErr(""); setConfirm(false);
+    setSending(true); setErr(""); setNeedsSetup(false); setConfirm(false);
     try {
       const r = await fetch("/api/act", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "send", to, subject, body }) });
       const j = await r.json();
-      if (!j.ok) setErr(j.error || "Send failed."); else setSent(true);
+      if (!j.ok) { setNeedsSetup(Boolean(j.needsSetup)); setErr(j.error || "Send failed."); }
+      else setSent(true);
     } catch { setErr("Network error sending."); }
     finally { setSending(false); }
   }
@@ -101,7 +115,33 @@ export function ActCenter() {
               </Button>
               {confirm && <button onClick={() => setConfirm(false)} className="text-sm text-muted-foreground">Cancel</button>}
               {phone.trim() && <a href={waLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-md bg-[#25D366] text-white h-9 px-4 text-sm font-medium"><MessageCircle className="h-4 w-4" /> WhatsApp</a>}
-              {err && <span className="text-sm text-danger flex items-center gap-1" role="alert"><AlertTriangle className="h-4 w-4" /> {err}</span>}
+              {err && !needsSetup && <span className="text-sm text-danger flex items-center gap-1" role="alert"><AlertTriangle className="h-4 w-4" /> {err}</span>}
+            </div>
+          )}
+
+          {/*
+            A SETUP STATE, WITH THE LINK THAT FIXES IT — not a red error.
+
+            Rendered on `needsSetup` rather than folded into the error line:
+            the whole point is that this outcome has one specific remedy, and
+            the customer should be one click from it rather than reading a
+            sentence and going to look for the page themselves.
+          */}
+          {needsSetup && (
+            <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm" role="status">
+              <div className="flex items-start gap-2">
+                <MessageCircle className="h-4 w-4 text-warning mt-0.5 shrink-0" aria-hidden="true" />
+                <div>
+                  <div className="font-medium">WhatsApp isn&rsquo;t connected yet</div>
+                  <p className="text-muted-foreground mt-0.5">{err}</p>
+                  <a href="/integrations" className="mt-2 inline-flex items-center gap-1.5 text-primary underline">
+                    Connect WhatsApp Business
+                  </a>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Email still works without it, and the green WhatsApp button above opens the message on your own phone.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           <p className="text-xs text-muted-foreground">You approve every send. Email goes from your verified domain with replies routed to you.</p>

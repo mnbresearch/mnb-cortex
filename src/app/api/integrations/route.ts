@@ -106,6 +106,29 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
       case "intercom": return j(await fetch("https://api.intercom.io/me", { headers: { Authorization: `Bearer ${c.api_key}`, Accept: "application/json" } }), "Connected to Intercom");
       case "typeform": return j(await fetch("https://api.typeform.com/me", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Typeform");
       /*
+        WHATSAPP IS TESTABLE, AND WAS NOT BEING TESTED.
+
+        lib/whatsapp.ts already had verifyWhatsApp() written for "the
+        integrations Test button" — and it had no callers anywhere, because
+        there was no case here. So WhatsApp fell to the `default` branch and
+        was reported as stored-without-verification, on the one integration
+        where a wrong credential is most expensive: it is what collections
+        sends the customer's own debtor reminders through.
+
+        Verified against the credentials just entered rather than anything read
+        back, and the Graph call returns the verified business name and phone
+        number, so the customer sees WHICH account they connected — the useful
+        confirmation for a provider where having two Meta apps is common.
+      */
+      case "whatsapp": {
+        const { verifyWhatsAppCreds } = await import("@/lib/whatsapp");
+        const r = await verifyWhatsAppCreds({
+          token: String(c.api_key || c.token || "").trim(),
+          phoneNumberId: String(c.phone_number_id || "").trim(),
+        });
+        return { ok: r.ok, verified: true, message: r.detail };
+      }
+      /*
         BYO AI keys. Tests each key the workspace supplied with ONE real,
         minimal model call — a "Test" that only checks the string is non-empty
         tells someone they are connected and lets them discover otherwise from
