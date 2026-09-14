@@ -28,6 +28,11 @@ export function HealthCheckClient() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "" });
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+  /*
+    Did the report email actually send? The endpoint returns `confirmed`; this
+    screen used to promise the report regardless. See the done screen below.
+  */
+  const [reportSent, setReportSent] = useState(false);
 
   const done = step >= QUESTIONS.length;
   const score = done ? Math.round(Object.values(answers).reduce((a, b) => a + b, 0) / QUESTIONS.length) : 0;
@@ -82,6 +87,7 @@ export function HealthCheckClient() {
         }),
       });
       const j = await r.json();
+      setReportSent(Boolean(j?.confirmed));
       setStatus(j.ok ? "done" : "error");
     } catch { setStatus("error"); }
   }
@@ -165,10 +171,32 @@ export function HealthCheckClient() {
               most useful thing we can do is show them a truer one, not ask
               them to sign up.
             */}
-            <p className="mt-2 font-medium">Thanks, {form.name.split(" ")[0]} — your report is on its way to {form.email}.</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              It has your score, your weakest areas, and an honest note about what a six-question check can and cannot tell you.
-            </p>
+            {/*
+              …AND NOW IT ONLY SAYS SO WHEN IT IS TRUE.
+
+              `sendEmail` returns { sent: false, reason } rather than throwing,
+              and this screen rendered on `j.ok` alone — so when Resend rejected
+              the send, the visitor was told a report was on its way that did
+              not exist. /api/inquiry has always returned `confirmed`; nothing
+              read it. The score is on screen either way, so the fallback keeps
+              the value they came for instead of just apologising.
+            */}
+            {reportSent ? (
+              <>
+                <p className="mt-2 font-medium">Thanks, {form.name.split(" ")[0]} — your report is on its way to {form.email}.</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  It has your score, your weakest areas, and an honest note about what a six-question check can and cannot tell you.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 font-medium">Thanks, {form.name.split(" ")[0]} — we have your details.</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  The confirmation email did not go through, so your score and weakest areas are on this screen above — worth a
+                  screenshot. We will follow up directly.
+                </p>
+              </>
+            )}
             <a href="#ledger" className="mt-4 inline-flex items-center gap-2 rounded-full btn-ink px-6 h-11 text-sm font-medium">
               Now check your real numbers <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
             </a>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserAndOrg } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { syncProvider, isSyncable } from "@/lib/sync";
+import { revalidatePath } from "next/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,5 +26,46 @@ export async function POST(req: Request) {
   }
 
   const result = await syncProvider(orgId, String(provider));
-  return NextResponse.json(result, { status: result.ok ? 200 : 200 });
+
+  /*
+    REVALIDATE, AND LOG IT. THIS ROUTE DID NEITHER.
+
+    There used to be a second implementation of this operation — a server
+    action, `syncIntegration` in lib/actions.ts — which was unreachable: the
+    integrations UI was rebuilt against this API route and nothing was ever
+    wired to the action. It has been deleted, but it did two things this route
+    does not, and they are the reason deleting it outright would have lost
+    something real:
+
+      1. `["/integrations", "/dashboard", "/sales", "/finance"].forEach(revalidatePath)`
+
+         A sync writes sales orders, invoices and customers. Without
+         revalidation the customer presses "Sync data now", is told rows were
+         pulled, navigates to the dashboard, and sees the numbers from before
+         the sync. The data is in; the app is showing the cached version. That
+         reads as "the sync did not work", which is the worst possible
+         impression from the one button that proves an integration is live.
+
+      2. an activity row, so /activity — subtitled "Everything Cortex and your
+         team have done" — actually records the sync.
+
+    Only on success: revalidating after a failed pull would throw away warm
+    caches for nothing, and logging a sync that did not happen is the kind of
+    entry that makes an audit trail worth less than no audit trail.
+  */
+  if (result.ok) {
+    for (const p of ["/integrations", "/dashboard", "/sales", "/finance"]) {
+      try { revalidatePath(p); } catch { /* a bad path must not fail the sync */ }
+    }
+    try {
+      const pulled = (result.salesOrders || 0) + (result.invoices || 0) + (result.customers || 0);
+      await sb.from("activity").insert({
+        org_id: orgId,
+        type: "integration",
+        message: `Synced ${provider} — ${pulled} record${pulled === 1 ? "" : "s"} pulled in`,
+      });
+    } catch { /* the log is not the deliverable */ }
+  }
+
+  return NextResponse.json(result, { status: 200 });
 }

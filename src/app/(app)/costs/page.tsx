@@ -1,4 +1,3 @@
-import { getUserAndOrg } from "@/lib/data";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -16,8 +15,6 @@ const areas = [
 ];
 
 export default async function Costs() {
-  const { orgId } = await getUserAndOrg();
-  const signedIn = Boolean(orgId);
 
   return (
     <>
@@ -31,6 +28,17 @@ export default async function Costs() {
           no disclaimer at all, while the signed-in customer who could at least
           tell it apart from their own dashboard got the warning. The example is
           equally not-your-data in both cases, so it is stated in both cases.
+
+          The two lines that COMPUTED `signedIn` outlived the gate by several
+          commits:
+
+              const { orgId } = await getUserAndOrg();
+              const signedIn = Boolean(orgId);
+
+          Nothing read either. On a force-dynamic page that is a cookie read, a
+          Supabase auth.getUser() round trip and a membership lookup on every
+          request, to produce a boolean that is thrown away. Six pages carried
+          the same leftover; all six are clean now.
         */}
           <Card className="p-4 text-sm text-muted-foreground">
             The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis

@@ -123,14 +123,40 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
       }
       {
         setTasks((t) => [...parsed, ...t]);
-        // Persist each one, tagged source:"ai" so the follow-up loop can later
-        // tell what Cortex suggested from what the owner wrote himself.
+        /*
+          Persist each one, tagged source:"ai" so the follow-up loop can later
+          tell what Cortex suggested from what the owner wrote himself.
+
+          THE FAILURES ARE COUNTED NOW. This loop was
+          `try { await addTask(fd); } catch { /* keep the rest *\/ }` — so up to
+          eight AI-generated tasks appeared on the board, some or all of them
+          unsaved, and vanished on the next reload with nothing ever said. The
+          header comment on this file promises the opposite: "Each mutation
+          writes through a server action and then updates local state, so the
+          board still feels instant while being real." Only the generate path
+          skipped persist() and its rollback.
+
+          Continuing through failures rather than aborting is right — one bad
+          title should not discard seven good ones — so this keeps the loop and
+          reports the shortfall instead. Rolling the whole set back would throw
+          away a paid-for model call, so the ones that did save stay, and only
+          the ones that did not are removed from the board.
+        */
+        const failed: string[] = [];
         for (const t of parsed) {
           const fd = new FormData();
           fd.set("title", t.title);
           if (t.priority) fd.set("priority", t.priority);
           fd.set("source", "ai");
-          try { await addTask(fd); } catch { /* keep the rest */ }
+          try { await addTask(fd); } catch { failed.push(t.id); }
+        }
+        if (failed.length) {
+          setTasks((t) => t.filter((x) => !failed.includes(x.id)));
+          setErr(
+            failed.length === parsed.length
+              ? "Cortex generated actions but none could be saved — check your connection and try again."
+              : `${failed.length} of ${parsed.length} actions couldn't be saved and have been removed from the board. The rest are saved.`,
+          );
         }
       }
     } catch (e: any) {

@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { INTEGRATIONS, CATEGORIES, planAllows, limitForPlan, type Integration } from "@/lib/integrations";
+import { badgeFor } from "@/lib/integration-status";
 import { Plug, Check, Lock, Loader2, X, ExternalLink, ShieldCheck, Search, Zap } from "lucide-react";
 import Link from "next/link";
 
@@ -81,7 +82,15 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
     setTesting(id);
     const j = await call("test", id);
     setTesting("");
-    alert(j.ok ? `✅ ${j.message}` : `⚠️ ${j.error || j.message}`);
+    /*
+      `verified` distinguishes "the provider said no" from "we cannot ask".
+      Previously both arrived as a bare falsy `ok` and would have been shown
+      with the same warning triangle — and before that, an untestable provider
+      returned ok:true and got a tick. Three outcomes, three messages.
+    */
+    if (j.ok) { alert(`✅ ${j.message}`); return; }
+    if (j.verified === false) { alert(`ℹ️ ${j.message || j.error}`); return; }
+    alert(`⚠️ ${j.error || j.message}`);
   }
 
 
@@ -138,11 +147,34 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
                     <div className="text-xs text-muted-foreground">{i.desc}</div>
                   </div>
                 </div>
-                {conn ? (
-                  <Badge className={conn.status === "connected" ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/20"}>
-                    <Check className="h-3 w-3 mr-1" />{conn.status === "connected" ? "Live" : "Check"}
-                  </Badge>
-                ) : !allowed ? (
+                {conn ? (() => {
+                  /*
+                    THREE STATES, BECAUSE THERE ARE THREE.
+
+                    This was a binary: `status === "connected"` painted a green
+                    tick and the word "Live", anything else painted "Check".
+                    Since the API stored "connected" for all 45 providers with
+                    no test case, "Live" was being claimed for credentials no
+                    call had ever been made against — on the one screen whose
+                    job is to tell a customer whether their connections work.
+
+                    "Saved" is the state that was missing. See
+                    lib/integration-status.ts for why it is not simply green.
+                  */
+                  const b = badgeFor(conn.status);
+                  const cls = b.tone === "ok"
+                    ? "bg-success/10 text-success border-success/20"
+                    : b.tone === "warn"
+                      ? "bg-warning/10 text-warning border-warning/20"
+                      : "bg-secondary text-muted-foreground border-border";
+                  return (
+                    <Badge className={cls} title={b.hint}>
+                      {b.tone === "ok" ? <Check className="h-3 w-3 mr-1" aria-hidden="true" /> : null}
+                      {b.label}
+                      <span className="sr-only"> — {b.hint}</span>
+                    </Badge>
+                  );
+                })() : !allowed ? (
                   <Badge className="bg-warning/10 text-warning border-warning/20"><Lock className="h-3 w-3 mr-1" />{i.minPlan}</Badge>
                 ) : SYNCABLE.includes(i.id) ? (
                   <Badge className="bg-success/10 text-success border-success/20">Syncs</Badge>
@@ -191,9 +223,28 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
               ) : conn ? (
                 <div className="space-y-2">
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => test(i.id)} disabled={testing === i.id}>
-                      {testing === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />} Test
-                    </Button>
+                    {/*
+                      THE TEST BUTTON ONLY APPEARS WHERE A TEST EXISTS.
+
+                      It used to render for all 63 providers, and for the 45
+                      without a case in testCredentials() it returned a success
+                      tick having made no request at all. A control that always
+                      says yes is worse than no control: it is the one a
+                      customer reaches for specifically when they suspect
+                      something is wrong.
+
+                      `i.testable` is the catalogue flag that already described
+                      exactly this and was read nowhere.
+                    */}
+                    {i.testable ? (
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => test(i.id)} disabled={testing === i.id}>
+                        {testing === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />} Test
+                      </Button>
+                    ) : (
+                      <span className="flex-1 text-[11px] text-muted-foreground self-center">
+                        No automated test for {i.name} — confirm it from their dashboard.
+                      </span>
+                    )}
                     <Button variant="ghost" size="sm" onClick={() => disconnect(i.id)}>Disconnect</Button>
                   </div>
                   {SYNCABLE.includes(i.id) ? (

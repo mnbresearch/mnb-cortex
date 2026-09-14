@@ -32,6 +32,13 @@ export function ContactForm() {
   const [f, setF] = useState({ name: "", email: "", company: "", phone: "", message: "" });
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [err, setErr] = useState("");
+  /*
+    Whether the visitor's own confirmation email actually sent. The endpoint has
+    always returned this; nothing read it, so the success screen promised a
+    confirmation unconditionally — including when Resend had rejected it. The
+    promise is now conditional on the fact.
+  */
+  const [confirmed, setConfirmed] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,7 +57,7 @@ export function ContactForm() {
         already received your request" is reassuring, and "something went
         wrong" after a successful submission is not.
       */
-      if (j?.ok) { setStatus("done"); return; }
+      if (j?.ok) { setConfirmed(Boolean(j.confirmed)); setStatus("done"); return; }
       setErr(j?.error || "Could not send that just now.");
       setStatus("error");
     } catch {
@@ -67,7 +74,10 @@ export function ContactForm() {
         <Check className="h-9 w-9 text-success mx-auto" aria-hidden="true" />
         <p className="mt-3 font-medium">Thanks, {f.name.split(" ")[0]}.</p>
         <p className="text-sm text-muted-foreground mt-1">
-          We have your message and usually reply within two business days. A confirmation is on its way to {f.email}.
+          We have your message and usually reply within two business days.
+          {confirmed
+            ? <> A confirmation is on its way to {f.email}.</>
+            : <> We could not send a confirmation email, but your message reached us — no need to send it again.</>}
         </p>
         <a href={WA} target="_blank" rel="noopener noreferrer"
           className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#25D366] text-white h-10 px-4 text-sm font-medium">

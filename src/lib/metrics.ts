@@ -135,7 +135,18 @@ export async function recomputeMetrics(orgId: string): Promise<{
   const svc = serviceClient();
   if (!svc) return { ok: false, metrics: 0, months: 0, reason: "service role not configured" };
 
-  const since = monthStart(MONTHS - 1);
+  /*
+    `const since = monthStart(MONTHS - 1);` WAS HERE AND WAS NEVER USED.
+
+    It read as a window bound — "only look at rows from the last MONTHS
+    months" — and none of the six queries below carries a date predicate; they
+    are `.order("created_at", desc).limit(20000)`. The month bucketing happens
+    in JS afterwards, so behaviour was correct and the declaration was simply
+    inert. Removed rather than applied: pushing it into the queries would
+    change what the slow path returns and break its agreement with
+    cortex_aggregate(), which scripts/test-aggregate.mjs asserts. A name that
+    describes a bound the code does not enforce is worse than no name.
+  */
 
   /*
     FAST PATH. cortex_aggregate() does all the summing inside Postgres and

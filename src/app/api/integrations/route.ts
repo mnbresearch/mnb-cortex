@@ -3,6 +3,7 @@ import { createClient, hasSupabase } from "@/lib/supabase/server";
 import { encryptSecret, decryptSecret, maskSecret, encryptionAvailable } from "@/lib/crypto";
 import { integrationById, planAllows, limitForPlan } from "@/lib/integrations";
 import { safeFetch, BlockedUrlError } from "@/lib/net-guard";
+import { statusFor, lastTestOk } from "@/lib/integration-status";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,9 +55,19 @@ async function guard() {
   return { sb, orgId, plan: (org as any)?.plan || "watch" };
 }
 
-/** Verifies credentials against the provider's real API. Never returns the secret. */
-async function testCredentials(id: string, c: Record<string, string>): Promise<{ ok: boolean; message: string }> {
-  const j = (r: Response, okMsg: string) => r.ok ? { ok: true, message: okMsg } : { ok: false, message: `Provider rejected the credentials (${r.status})` };
+/**
+ * Verifies credentials against the provider's real API. Never returns the secret.
+ *
+ * `verified` says whether a real call actually happened. 18 of the 63 catalogue
+ * providers have a case below; the rest fall to the `default`, which stores the
+ * credential without checking it. Both used to return a bare `ok: true`, so the
+ * caller could not tell "the provider accepted this" from "nobody asked" — and
+ * recorded the second as the first. See lib/integration-status.ts.
+ */
+async function testCredentials(id: string, c: Record<string, string>): Promise<{ ok: boolean; verified: boolean; message: string }> {
+  const j = (r: Response, okMsg: string) => r.ok
+    ? { ok: true, verified: true, message: okMsg }
+    : { ok: false, verified: true, message: `Provider rejected the credentials (${r.status})` };
   try {
     switch (id) {
       case "stripe": return j(await fetch("https://api.stripe.com/v1/balance", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Stripe");
@@ -82,9 +93,9 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
       case "slack": {
         try {
           const r = await safeFetch(c.webhook_url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "✅ MNB Cortex connected successfully." }) });
-          return r.ok ? { ok: true, message: "Test message sent to Slack" } : { ok: false, message: `Slack rejected the webhook (${r.status})` };
+          return r.ok ? { ok: true, verified: true, message: "Test message sent to Slack" } : { ok: false, verified: true, message: `Slack rejected the webhook (${r.status})` };
         } catch (e: any) {
-          if (e instanceof BlockedUrlError) return { ok: false, message: e.message };
+          if (e instanceof BlockedUrlError) return { ok: false, verified: true, message: e.message };
           throw e;
         }
       }
@@ -105,7 +116,7 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
         const present = PROVIDERS
           .map((prov) => ({ prov, k: String((c as any)[prov.id] || "").trim() }))
           .filter((x) => x.k);
-        if (!present.length) return { ok: false, message: "No keys entered. Add at least one provider key." };
+        if (!present.length) return { ok: false, verified: false, message: "No keys entered. Add at least one provider key." };
 
         /*
           In PARALLEL. Sequentially, four providers at a 15s timeout each is 60s
@@ -116,12 +127,19 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
           present.map(async ({ prov, k }) => ({ prov, r: await verifyProviderKey(prov.id, k) })),
         );
         const anyOk = settled.some((x) => x.r.ok);
-        return { ok: anyOk, message: settled.map((x) => `${x.prov.name}: ${x.r.ok ? "✓" : "✗"} ${x.r.detail}`).join("  ·  ") };
+        return { ok: anyOk, verified: true, message: settled.map((x) => `${x.prov.name}: ${x.r.ok ? "✓" : "✗"} ${x.r.detail}`).join("  ·  ") };
       }
-      default: return { ok: true, message: "Saved securely. This provider has no automated test — verify from its dashboard." };
+      /*
+        NO TEST EXISTS FOR THIS PROVIDER — and `verified: false` is how that
+        gets said out loud. `ok` stays true because storing the credential did
+        succeed and there is nothing to complain about; it is simply not
+        evidence that the credential works, and the caller now records the
+        difference instead of flattening it into a green "Live" badge.
+      */
+      default: return { ok: true, verified: false, message: "Saved securely. This provider has no automated test — confirm it from the provider's own dashboard." };
     }
   } catch (e: any) {
-    return { ok: false, message: e?.message || "Could not reach the provider" };
+    return { ok: false, verified: true, message: e?.message || "Could not reach the provider" };
   }
 }
 
@@ -215,16 +233,31 @@ export async function POST(req: Request) {
       for (const f of meta.fields) if (f.type !== "password" && creds[f.key]) publicConfig[f.key] = creds[f.key];
       const hint = meta.fields.filter((f) => f.type === "password" && creds[f.key]).map((f) => maskSecret(creds[f.key]))[0] || "";
 
+      /*
+        `status` and `last_test_ok` now distinguish tested from untested.
+
+        Was: `status: test.ok ? "connected" : "error"` and
+        `last_test_ok: test.ok`. Since the default branch of testCredentials
+        returned ok:true for 45 of 63 providers, that stored "connected" and
+        `last_test_ok: true` — a positive test result — for a credential no
+        call had been made against. `last_test_at` was stamped too, so the row
+        claimed a test happened at a specific time.
+      */
       const { error } = await sb.from("integrations").upsert({
         org_id: orgId,
         provider: id,
-        status: test.ok ? "connected" : "error",
-        config: { ...publicConfig, hint, last_test_ok: test.ok, last_test_at: new Date().toISOString() },
+        status: statusFor(test.ok, test.verified),
+        config: {
+          ...publicConfig, hint,
+          last_test_ok: lastTestOk(test.ok, test.verified),
+          // Only stamp a time when something actually ran.
+          last_test_at: test.verified ? new Date().toISOString() : null,
+        },
         credentials_encrypted: encrypted,
       }, { onConflict: "org_id,provider" });
       if (error) throw new Error(error.message);
 
-      return NextResponse.json({ ok: true, tested: test.ok, message: test.message });
+      return NextResponse.json({ ok: true, tested: test.ok, verified: test.verified, message: test.message });
     }
 
     if (op === "test") {
@@ -234,8 +267,24 @@ export async function POST(req: Request) {
       const dec = decryptSecret(raw);
       if (!dec) return NextResponse.json({ ok: false, error: "Could not decrypt stored credentials (ENCRYPTION_KEY may have changed)." });
       const test = await testCredentials(id, JSON.parse(dec));
-      await sb.from("integrations").update({ status: test.ok ? "connected" : "error" }).eq("org_id", orgId).eq("provider", id);
-      return NextResponse.json({ ok: test.ok, message: test.message });
+      /*
+        THE "TEST" BUTTON NO LONGER CLAIMS TO HAVE TESTED.
+
+        This returned `ok: test.ok` and the client painted a tick — so for the
+        45 providers with no test case, pressing Test produced a success tick
+        without a single outbound request. The one control whose entire purpose
+        is to answer "is this actually working?" was answering yes on the
+        strength of having been clicked.
+
+        `ok: test.verified && test.ok` means an untestable provider answers no
+        (with `verified: false` and a message saying why) rather than a
+        counterfeit yes.
+      */
+      const { error: upErr } = await sb.from("integrations")
+        .update({ status: statusFor(test.ok, test.verified) })
+        .eq("org_id", orgId).eq("provider", id);
+      if (upErr) console.error("[integrations] test status not persisted —", upErr.message);
+      return NextResponse.json({ ok: test.verified && test.ok, verified: test.verified, message: test.message });
     }
 
     return NextResponse.json({ ok: false, error: "Unknown operation" }, { status: 400 });

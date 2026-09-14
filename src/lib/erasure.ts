@@ -155,7 +155,13 @@ export async function eraseWorkspace(confirmation: string): Promise<ErasureResul
     proceed — the caller is told, because "your payment history was kept" is a
     promise in the UI and in the privacy policy.
   */
-  let subsArchived = 0;
+  /*
+    `let subsArchived = 0;` was declared here, assigned below, and read
+    nowhere. `retained.subscriptions` on the next line carries the same number
+    and IS read (lib/actions.ts, to tell the customer what was kept), so this
+    was a duplicate that only looked load-bearing in a function where being
+    able to prove what was retained matters.
+  */
   try {
     const { data: subs } = await svc.from("subscriptions").select("*").eq("org_id", orgId);
     const rows = (subs as any[]) || [];
@@ -174,7 +180,6 @@ export async function eraseWorkspace(confirmation: string): Promise<ErasureResul
                + "Nothing has been deleted. Please contact support — this needs a migration applied.",
         };
       }
-      subsArchived = rows.length;
       retained.subscriptions = rows.length;
     }
   } catch {

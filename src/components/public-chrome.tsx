@@ -109,8 +109,23 @@ export function PublicHeader() {
 }
 
 export function PublicFooter() {
+  /*
+    "Free calculators" and "Compliance calendar" are in this list because both
+    are public acquisition surfaces that the public chrome did not link to.
+
+    /calculators indexes 28 tools and carries a title written for "free
+    business calculators india"; its only inbound links were the signed-in
+    sidebar and /tools, so no crawler reached it from the site's own
+    navigation. /deadlines is the hub for thirteen topic pages built for the
+    highest-volume commercial-intent queries this product has.
+
+    A footer link on every public page is the cheapest internal linking there
+    is, and it is what tells a crawler these pages are part of the site rather
+    than orphans that happen to exist.
+  */
   const cols = [
     { h: "Product", links: [["Features", "/features"], ["Industries", "/industries"], ["Compare", "/compare"], ["Pricing", "/pricing"], ["AI Visibility check", "/ai-visibility"], ["Free health check", "/health-check"]] },
+    { h: "Free tools", links: [["Free calculators", "/calculators"], ["Compliance calendar", "/deadlines"], ["Ledger check", "/health-check#ledger"]] },
     { h: "Company", links: [["Investors", "/investors"], ["Resources", "/resources"], ["Contact", "/contact"], ["Changelog", "/changelog"], ["Status", "/status"], ["MNB Research", "https://www.mnbresearch.com"]] },
     { h: "Legal", links: [["Terms", "/terms"], ["Privacy", "/privacy"], ["Refund Policy", "/refund"]] },
   ];
@@ -132,7 +147,10 @@ export function PublicFooter() {
 
           <div className="h-px bg-background/15 my-14" />
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
+          {/* Five columns now: the brand block plus four link groups. Was
+              lg:grid-cols-4, which would have wrapped the new "Free tools"
+              group onto a second row on its own. */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-10">
             <div>
               <div className="flex items-center gap-2.5"><Logo size={30} /><span className="font-semibold">MNB Cortex</span></div>
               <p className="mt-4 text-sm text-background/60 max-w-xs">The AI operating brain for your business. A brand of Abrobot Technologies Pvt Ltd, Delhi.</p>

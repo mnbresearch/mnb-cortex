@@ -69,6 +69,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     entry("", 1, "weekly"),
     ...convert.map((r) => entry(r, 0.9, "weekly")),
+    /*
+      THE INDEX THAT LISTS THE CALCULATORS WAS NOT IN ITS OWN SITEMAP.
+
+      All 28 individual calculators are below, and /calculators — the page that
+      links to every one of them, carries a hand-written canonical and a title
+      targeting "free business calculators india" — was in none of these
+      arrays. Its only inbound links were the signed-in sidebar and /tools, so
+      the hub page of the product's largest acquisition surface was reachable
+      from the public web via nothing at all.
+
+      Higher priority than the individual tools it indexes, because it is the
+      page that consolidates their internal link equity and the one a broad
+      query should land on.
+    */
+    entry("/calculators", 0.9, "weekly"),
     ...CALCULATOR_ROUTES.map((r) => entry(r, 0.8, "monthly")),
     /* Statutory dates change when a Finance Act or a CBIC notification says so
        — "monthly" would train a crawler to ignore the signal. */

@@ -70,8 +70,30 @@ export default function Login() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ company }),
       });
       const j = await r.json().catch(() => ({} as any));
+      /*
+        `ok` IS READ NOW, and it is the point of this call.
+
+        This took only `j.next` and navigated. bootstrap returns ok:false when
+        provisioning genuinely failed — the owner membership not landing being
+        the case that matters, because every RLS policy authorises through it —
+        and `next` still defaulted to "/dashboard". So the one signup outcome
+        that leaves a customer unable to read a single row of their own
+        workspace sent them to the dashboard to discover it looked empty, with
+        nothing said and nothing to click.
+      */
+      if (j && j.ok === false) {
+        setErr(j.error || "You are signed in, but your workspace could not be set up. Please try again.");
+        setLoading(false);
+        return;
+      }
       if (j?.next) next = j.next;
-    } catch {}
+    } catch {
+      /*
+        A network failure here is NOT fatal: the session cookie is already set,
+        and ensureWorkspace runs again on the next request. Entering the app is
+        the better outcome than stranding a signed-in user on the login screen.
+      */
+    }
     window.location.href = next;
   }
 

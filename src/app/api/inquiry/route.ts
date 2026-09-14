@@ -52,6 +52,14 @@ export async function POST(req: Request) {
     const cyc = cycle === "annual" ? "Annual" : "Monthly";
 
     // Persist the lead first (best-effort) so nothing is lost even if email fails.
+    /*
+      WHETHER IT LANDED IS NOW RECORDED. The block below already retried on a
+      column mismatch, but both outcomes were discarded, so "best-effort" meant
+      nobody — not the operator, not the visitor, not a log — could tell a
+      stored lead from a lost one. `stored` is used at the end of the handler to
+      decide what to tell the person who filled the form.
+    */
+    let stored = false;
     if (hasSupabase()) {
       try {
         /*
@@ -71,16 +79,22 @@ export async function POST(req: Request) {
           score,
         };
         const { error } = await createClient().from("leads").insert(row);
-        if (error) {
+        if (!error) {
+          stored = true;
+        } else {
           /*
             Deploy-before-migrate: this ships before anyone runs the migration.
             Retry with the original four columns rather than losing the lead
             entirely — a lead with less detail beats no lead at all.
           */
           const { company: _c, note: _n, score: _s, ...core } = row;
-          await createClient().from("leads").insert(core);
+          const { error: e2 } = await createClient().from("leads").insert(core);
+          stored = !e2;
+          if (e2) console.error("[inquiry] lead not stored —", e2.message, "(first attempt:", error.message, ")");
         }
-      } catch {}
+      } catch (e: any) {
+        console.error("[inquiry] lead insert threw —", e?.message);
+      }
     }
 
     const adminBody = `A new prospect requested pricing / access on the MNB Cortex site.
@@ -190,7 +204,42 @@ In the meantime, reply to this email or message us on WhatsApp: https://wa.me/91
         userHtml, { from: brandFrom(), replyTo: brandReplyTo() }),
     ]);
 
-    return NextResponse.json({ ok: true, notified: adminRes.sent, confirmed: userRes.sent, adminReason: adminRes.reason, userReason: userRes.reason });
+    /*
+      THE REPORT IS THE DELIVERABLE, SO ITS DELIVERY IS NOT A DETAIL.
+
+      This returned a flat ok:true. On the health-check path that is the most
+      misleading response in the product: the page says "We'll email the full
+      breakdown" and then "Your report is on its way", the report IS the email
+      built above, and `userRes.sent` being false means the visitor receives
+      nothing at all. sendEmail returns { sent: false, reason } rather than
+      throwing, so that outcome was indistinguishable from success and the
+      client — which read only `ok` — showed the confirmation screen anyway.
+
+      So the most engaged person on the site, at the one moment they were
+      paying attention, was told a report was coming that was never sent. That
+      is worse than an error message, because they do not come back.
+
+      `ok` now means we captured the lead (stored, or the operator notified).
+      `confirmed` reports whether the visitor's own email went, and the client
+      words its success screen from that instead of promising unconditionally.
+    */
+    const captured = adminRes.sent || stored;
+    if (!captured) {
+      console.error("[inquiry] NOT captured — email:", adminRes.reason || "?", "| db:", hasSupabase() ? "insert failed" : "no supabase");
+      return NextResponse.json({
+        ok: false,
+        error: "We could not record that just now. Please message us on WhatsApp — that always reaches us.",
+      }, { status: 200 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      notified: adminRes.sent,
+      stored,
+      confirmed: userRes.sent,
+      adminReason: adminRes.reason,
+      userReason: userRes.reason,
+    });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || "Failed" }, { status: 200 });
   }

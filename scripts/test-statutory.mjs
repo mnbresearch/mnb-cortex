@@ -212,12 +212,46 @@ console.log("\nGST rate slabs — GST 2.0, effective 22 September 2025");
     check("it declares an as-of date", /RATES_AS_OF/.test(lf));
   }
 
+  /*
+    THESE FOUR ASSERTIONS WERE WRITTEN AGAINST THE IMPLEMENTATION, AND THE
+    IMPLEMENTATION WAS THE BUG.
+
+    They matched `slab: "40%"` — the literal shape of a `rates` array typed
+    into gst/page.tsx. That array is gone: the page now renders from
+    lib/gst-rates.ts, which the calculator, the invoice generator and the quote
+    builder already share, so there is no longer a second copy of the slabs to
+    go stale. (It HAD gone stale once, for two years, which is why these
+    checks exist at all.)
+
+    Removing the array turned the first two checks VACUOUS — `slab: "12%"` is
+    absent from a file that contains no `slab:` keys whatsoever, so they passed
+    while asserting nothing — and the third red for code that is more correct
+    than what it was guarding. A check that cannot fail is the worse of the
+    two outcomes, because it is counted.
+
+    Rewritten against the intent: the page must take its slabs from the shared
+    table, and the shared table must carry 40% and must not carry the abolished
+    12% and 28%. That is checkable, cannot pass vacuously, and now fails if
+    either the page reverts to a private copy OR the real rate data goes wrong.
+  */
   const page = readPage("gst/page.tsx");
-  check("gst page: no 12% slab card", !/slab:\s*"12%"/.test(page));
-  check("gst page: no 28% slab card", !/slab:\s*"28%"/.test(page));
-  check("gst page: a 40% slab card exists", /slab:\s*"40%"/.test(page));
+  /* read() is rooted at src/components, so step up one for src/lib. */
+  const rateSrc = read(join("..", "lib", "gst-rates.ts"));
+
+  check("gst page: slabs come from the shared table, not a local array",
+    /from "@\/lib\/gst-rates"/.test(page) && /GST_RATES\.map/.test(page));
+  check("gst page: no private slab array remains",
+    !/const rates = \[/.test(page) && !/slab:\s*"/.test(page));
+
+  /* The rate data itself — where the staleness would now have to live. */
+  check("gst rates: the 40% demerit slab exists", /\{\s*v:\s*40\b/.test(rateSrc));
+  check("gst rates: the abolished 12% slab is gone", !/\{\s*v:\s*12\b/.test(rateSrc));
+  check("gst rates: the abolished 28% slab is gone", !/\{\s*v:\s*28\b/.test(rateSrc));
+  check("gst rates: 12 and 28 are still named as abolished, so a stale document warns",
+    /GST_ABOLISHED/.test(rateSrc) && /\b12:/.test(rateSrc) && /\b28:/.test(rateSrc));
+
   check("gst page: the as-of date is stated on screen",
-    /RATES_AS_OF/.test(page) && /22 September 2025/.test(page));
+    /GST_RATES_AS_OF/.test(page) && /22 September 2025/.test(rateSrc));
 }
 
 console.log("");

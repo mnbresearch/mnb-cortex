@@ -82,16 +82,58 @@ export async function remember(input: {
   } catch { return null; }
 }
 
-/** Replace an existing memory with an updated one (evolving facts). */
+/**
+ * Replace an existing memory with an updated one (evolving facts).
+ *
+ * "REPLACE" HAS TO MEAN THE OLD ONE STOPS BEING TRUE.
+ *
+ * The two updates below were wrapped in `try { … } catch {}` and their errors
+ * discarded — and supabase-js returns {error} rather than throwing, so even the
+ * catch was the wrong instrument. If the supersede failed, the function still
+ * returned `created`, and api/memory/route.ts answers `ok: Boolean(m)`, so the
+ * caller was told the replacement had happened.
+ *
+ * What that leaves behind is worse than a failed write: the OLD memory keeps
+ * `status: "active"`, so recallContext() injects BOTH the stale fact and its
+ * correction into every AI call this workspace makes. The customer corrected
+ * something and the model now sees the correction and the error side by side,
+ * with nothing to say which is current. A silently failed delete leaves a gap;
+ * this leaves a contradiction, which is the one thing worse than a gap in a
+ * system whose output is advice.
+ *
+ * Returns null when the replacement could not be completed, so the caller's
+ * `ok` is false and the user can retry, rather than believing a fact was
+ * corrected when it was not. The newly created memory is left in place
+ * deliberately — it is the correct fact, and deleting the customer's own
+ * correction to tidy up would be the wrong half to throw away.
+ */
 export async function supersedeMemory(orgId: string, oldId: string, next: Parameters<typeof remember>[0]) {
   const svc = serviceClient();
   if (!svc) return null;
   const created = await remember({ ...next, orgId, source: next.source || "revision" });
-  if (created) {
-    try {
-      await svc.from("memories").update({ status: "superseded" }).eq("id", oldId).eq("org_id", orgId);
-      await svc.from("memories").update({ supersedes: oldId }).eq("id", created.id);
-    } catch {}
+  if (!created) return null;
+
+  try {
+    /*
+      Order matters. Retiring the old row is the half that makes the
+      correction true; the back-pointer is provenance. If the first fails
+      there is no point attempting the second, and the caller must hear about
+      it — so this returns null rather than falling through.
+    */
+    const { error: retireErr } = await svc.from("memories")
+      .update({ status: "superseded" }).eq("id", oldId).eq("org_id", orgId);
+    if (retireErr) {
+      console.error("[memory] supersede failed to retire", oldId, "—", retireErr.message);
+      return null;
+    }
+    const { error: linkErr } = await svc.from("memories")
+      .update({ supersedes: oldId }).eq("id", created.id);
+    // Provenance only: the stale fact is already retired, so the correction
+    // is live and correct. Log it, do not fail the operation over a link.
+    if (linkErr) console.error("[memory] supersede back-pointer not written —", linkErr.message);
+  } catch (e: any) {
+    console.error("[memory] supersede threw —", e?.message);
+    return null;
   }
   return created;
 }
@@ -319,7 +361,29 @@ export async function ingestBusinessData(orgId: string, author?: string | null) 
     const { data } = await svc.from("customers").select("*").eq("org_id", orgId).limit(120);
     for (const c of ((data as any[]) || [])) {
       const name = pick(c, ["name", "customer_name", "company", "title"]); if (!name) continue;
-      await upsertEntity(orgId, name, "customer", pick(c, ["segment", "notes"]) || undefined).catch(() => {}); entities++;
+      /*
+        COUNTED ONLY IF IT WAS ACTUALLY WRITTEN.
+
+        This was `await upsertEntity(...).catch(() => {}); entities++;` — the
+        increment ran unconditionally, after a catch that swallowed the
+        failure, and upsertEntity returns null on EVERY failure path (no
+        service client, bad name, a unique-index collision, its own internal
+        catch). So `entities` measured rows iterated, not entities created.
+
+        Two things read that number and both treat it as fact:
+
+          - memory-console.tsx tells the user "Learned N memories and M
+            entities from your data."
+          - api/memory/ingest/route.ts refunds the credit charge only when
+            BOTH counts are zero — so a run where every single entity write
+            failed still billed the customer for a report it did not produce.
+
+        `?? null` rather than a try/catch around the increment: upsertEntity
+        already never throws, so the old `.catch()` was decoration. What was
+        missing was reading the return value.
+      */
+      const cid = await upsertEntity(orgId, name, "customer", pick(c, ["segment", "notes"]) || undefined);
+      if (cid) entities++;
       const bits = [pick(c, ["city", "location"]), pick(c, ["segment"]) && `segment ${pick(c, ["segment"])}`, pick(c, ["status"]), pick(c, ["notes"])].filter(Boolean);
       lines.push(`Customer ${name}${bits.length ? " — " + bits.join(", ") : ""}`);
     }
@@ -328,7 +392,9 @@ export async function ingestBusinessData(orgId: string, author?: string | null) 
     const { data } = await svc.from("employees").select("*").eq("org_id", orgId).limit(120);
     for (const e of ((data as any[]) || [])) {
       const name = pick(e, ["name", "full_name"]); if (!name) continue;
-      await upsertEntity(orgId, name, "person", pick(e, ["role", "title"]) || undefined).catch(() => {}); entities++;
+      // Same as above: count the write, not the loop iteration.
+      const eid = await upsertEntity(orgId, name, "person", pick(e, ["role", "title"]) || undefined);
+      if (eid) entities++;
       const bits = [pick(e, ["role", "title"]), pick(e, ["department", "dept"])].filter(Boolean);
       lines.push(`Team member ${name}${bits.length ? " — " + bits.join(", ") : ""}`);
     }

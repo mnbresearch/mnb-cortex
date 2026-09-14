@@ -800,21 +800,34 @@ export async function importFromUrl(fd: FormData): Promise<ImportOutcome> {
   } catch (e: any) { return { inserted: 0, error: e?.message || "Import failed" }; }
 }
 
-// ---- Integrations ----
-export async function connectIntegration(fd: FormData) {
-  const { orgId } = await requireRole("admin"); const sb = createClient();
-  const provider = str(fd.get("provider"));
-  let config: any = {}; try { const raw = str(fd.get("config")); if (raw) config = JSON.parse(raw); } catch {}
-  const { error } = await sb.from("integrations").upsert({ org_id: orgId, provider, status: "connected", config }, { onConflict: "org_id,provider" });
-  if (error) throw new Error(error.message);
-  revalidatePath("/integrations");
-}
-export async function disconnectIntegration(fd: FormData) {
-  const { orgId } = await requireRole("admin"); const sb = createClient();
-  const { error } = await sb.from("integrations").delete().eq("org_id", orgId).eq("provider", str(fd.get("provider")));
-  if (error) throw new Error(error.message);
-  revalidatePath("/integrations");
-}
+/* ---- Integrations ----
+
+   connectIntegration, disconnectIntegration and syncIntegration LIVED HERE AND
+   WERE UNREACHABLE.
+
+   All three were exported server actions with zero importers anywhere in the
+   repo — verified by grepping every .ts/.tsx/.mjs/.md outside node_modules.
+   The integrations surface was rebuilt against API routes
+   (api/integrations, api/integrations/sync) and components/integrations-manager
+   calls those with fetch(); nothing was ever pointed back at these.
+
+   Deleted rather than wired up, because the API routes are strictly better:
+   they encrypt credentials (encryptSecret), verify them against the provider
+   before storing, enforce the plan's integration limit, rate-limit the
+   outbound test calls, and resolve the ACTIVE workspace from the cortex_org
+   cookie. `connectIntegration` did none of that — it took a JSON blob from a
+   form field and upserted it with `status: "connected"` unconditionally, which
+   would store a secret in plaintext and assert it worked.
+
+   So keeping them was not neutral. A dead action is an invitation: the next
+   person to add a form here would have found `connectIntegration` by name,
+   used it, and quietly bypassed encryption and verification.
+
+   What the dead code DID have that the live route lacked — revalidating
+   /dashboard, /sales and /finance after a sync, and writing an activity row —
+   has been moved into api/integrations/sync/route.ts. That was a real gap:
+   without it the numbers on screen stayed stale after a successful sync.
+*/
 export async function deleteLead(fd: FormData) {
   const { user, orgId } = await getUserAndOrg();
   if (!orgId) throw new Error("Sign in to use this feature.");
@@ -1228,17 +1241,9 @@ export async function deleteScheduledReport(fd: FormData) {
 }
 
 
-/** Pull data from a connected integration right now. */
-export async function syncIntegration(fd: FormData) {
-  const { orgId } = await requireRole("admin");
-  const provider = str(fd.get("provider"));
-  const { syncProvider } = await import("@/lib/sync");
-  const r = await syncProvider(orgId, provider);
-  if (!r.ok) throw new Error(r.error || `Could not sync ${provider}.`);
-  await logActivity(orgId, "integration",
-    `Synced ${provider} — ${r.salesOrders} orders, ${r.invoices} invoices, ${r.customers} customers`);
-  ["/integrations", "/dashboard", "/sales", "/finance"].forEach((p) => revalidatePath(p));
-}
+/* `syncIntegration` was here and had no callers — see the Integrations note
+   above. Its revalidation and activity log now live in
+   api/integrations/sync/route.ts, which is the path the UI actually uses. */
 
 // ---- Leads ----
 /**

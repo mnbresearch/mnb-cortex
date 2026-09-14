@@ -62,12 +62,39 @@ export function MemoryConsole({ initialMemories, entities: initialEntities, prof
     setBusy("");
     if (j.ok) { setExtractText(""); await reload(); setMsg(`Extracted ${j.count} memories.`); } else setMsg(j.error || "Extraction failed.");
   }
+  /*
+    THESE TWO WERE THE ONLY HANDLERS IN THIS FILE THAT IGNORED `ok`.
+
+    Both awaited the PATCH, threw the response away, and then mutated local
+    state — so the row vanished from the list (archive) or flipped its pin
+    regardless of what the server did. The route returns `{ ok: await
+    setPinned(...) }` and updateMemory() returns false on both `error` and
+    `catch`, so the false case was real and reachable and silently discarded.
+
+    Archive is the one that matters: a memory a customer archived because it
+    was wrong disappears from the screen, stays `active` in the database, and
+    keeps being injected into every AI call by recallContext(). They removed
+    it, watched it go, and it is still shaping the answers they get.
+
+    Every other handler here (capture, extract, regenProfile, teach) already
+    checked `j.ok` and set `msg`. These now match — and re-sync from the server
+    on failure rather than leaving the list showing something that was not
+    saved.
+  */
   async function pin(m: Memory) {
-    await api("/api/memory", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.id, op: "pin", pinned: !m.pinned }) });
+    const j = await api("/api/memory", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.id, op: "pin", pinned: !m.pinned }) });
+    if (!j?.ok) { setMsg(j?.error || "Could not change the pin. Nothing was saved."); await reload(); return; }
+    setMsg("");
     setMemories((xs) => xs.map((x) => x.id === m.id ? { ...x, pinned: !x.pinned } : x));
   }
   async function archive(m: Memory) {
-    await api("/api/memory", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.id, op: "archive" }) });
+    const j = await api("/api/memory", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.id, op: "archive" }) });
+    if (!j?.ok) {
+      setMsg(j?.error || "Could not archive that — it is still in Cortex's memory and still being used. Please try again.");
+      await reload();
+      return;
+    }
+    setMsg("");
     setMemories((xs) => xs.filter((x) => x.id !== m.id));
   }
   async function regenProfile() {

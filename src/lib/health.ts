@@ -146,7 +146,76 @@ async function checkAI(): Promise<Check> {
     const r = await ping("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${groq}` } });
     return { name: "AI engine", status: r.ok ? "operational" : "down", detail: r.ok ? "groq" : (r.error || `HTTP ${r.status}`), critical: true };
   }
-  return { name: "AI engine", status: "operational", detail: "provider configured", critical: true };
+
+  /*
+    OPENAI AND ANTHROPIC ARE PINGED TOO — THEY USED TO BE ASSUMED.
+
+    This function ended with:
+
+        return { name: "AI engine", status: "operational", detail: "provider configured", critical: true };
+
+    reached whenever GEMINI and GROQ are unset but OPENAI_API_KEY or
+    ANTHROPIC_API_KEY is. That is `Boolean(process.env.X)` wearing the word
+    "operational" — precisely the behaviour this module's own header says was
+    removed ("Every check below actually talks to the dependency"). Both keys
+    are first-class here: lib/ai/byo.ts treats all four providers equally, so
+    this is a configuration a workspace can genuinely be running on, not a
+    theoretical branch.
+
+    It is the worst check to fake, because `critical: true` means this one
+    drives the 503 that uptime monitors watch. A deployment on an expired
+    OpenAI key would report a green AI engine and a 200 for ever, while every
+    AI action in the product failed.
+
+    Both are listed rather than one-or-the-other so a deployment holding both
+    keys learns which of them is actually answering.
+  */
+  const openai = envKey("OPENAI_API_KEY");
+  const anthropic = envKey("ANTHROPIC_API_KEY");
+  const tried: string[] = [];
+
+  if (openai) {
+    const r = await ping("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${openai}` } });
+    if (r.ok) {
+      const slow = r.ms > MODEL_SLOW;
+      return {
+        name: "AI engine",
+        status: slow ? "degraded" : "operational",
+        detail: slow ? `openai — answering, but slowly (${(r.ms / 1000).toFixed(1)}s)` : "openai",
+        critical: true,
+      };
+    }
+    tried.push(`openai: ${r.error || `HTTP ${r.status}`}`);
+  }
+
+  if (anthropic) {
+    /*
+      Anthropic has no unauthenticated-cheap listing equivalent that validates
+      the key, so this hits /v1/models with the two headers it requires. A 401
+      means the key is bad, which is the thing worth knowing; anthropic-version
+      is mandatory or the request is rejected for the wrong reason.
+    */
+    const r = await ping("https://api.anthropic.com/v1/models", {
+      headers: { "x-api-key": anthropic, "anthropic-version": "2023-06-01" },
+    });
+    if (r.ok) {
+      const slow = r.ms > MODEL_SLOW;
+      return {
+        name: "AI engine",
+        status: slow ? "degraded" : "operational",
+        detail: slow ? `anthropic — answering, but slowly (${(r.ms / 1000).toFixed(1)}s)` : "anthropic",
+        critical: true,
+      };
+    }
+    tried.push(`anthropic: ${r.error || `HTTP ${r.status}`}`);
+  }
+
+  return {
+    name: "AI engine",
+    status: "down",
+    detail: tried.length ? `no provider answered — ${tried.join("; ")}` : "no provider key configured",
+    critical: true,
+  };
 }
 
 /** Is the Resend key valid right now? */

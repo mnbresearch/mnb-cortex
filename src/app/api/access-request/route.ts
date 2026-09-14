@@ -35,9 +35,47 @@ export async function POST(req: Request) {
 
     const when = new Date().toLocaleString("en-IN");
 
-    // Persist as a lead (best-effort) so nothing is lost even if email fails.
+    /*
+      PERSIST THE LEAD — ALL OF IT, AND KNOW WHETHER IT LANDED.
+
+      The comment here said "so nothing is lost even if email fails" while the
+      row carried four of the six fields collected. `company` and `message` were
+      parsed, length-capped, and written into the operator's notification email
+      only — so the two fields that say WHO this is and WHAT they want existed
+      solely in the prose of an email, where nothing can query them. The sibling
+      route (api/inquiry) already persists company and note and carries a long
+      comment about why dropping them was a bug; this route was never updated.
+
+      The `catch {}` was the other half: a wholly failed insert was invisible,
+      and the caller was still told ok:true. For a pre-revenue product the
+      inbound lead is the single most valuable object in the system, so losing
+      one silently is the worst affordable failure here.
+
+      The two-step insert mirrors api/inquiry: try the full row, and if the
+      column set is not migrated yet fall back to the original four rather than
+      losing the lead entirely. A lead with less detail beats no lead.
+    */
+    let stored = false;
     if (hasSupabase()) {
-      try { await createClient().from("leads").insert({ name, email, phone: phone || null, plan: "access-request", source: "access-request" }); } catch {}
+      const row: Record<string, any> = {
+        name, email, phone: phone || null,
+        plan: "access-request", source: "access-request",
+        company: company || null,
+        note: message || null,
+      };
+      try {
+        const { error } = await createClient().from("leads").insert(row);
+        if (!error) {
+          stored = true;
+        } else {
+          const { company: _c, note: _n, ...core } = row;
+          const { error: e2 } = await createClient().from("leads").insert(core);
+          stored = !e2;
+          if (e2) console.error("[access-request] lead not stored —", e2.message, "(first attempt:", error.message, ")");
+        }
+      } catch (e: any) {
+        console.error("[access-request] lead insert threw —", e?.message);
+      }
     }
 
     // Notify the operator.
@@ -69,7 +107,45 @@ Team MNB Research`;
       sendEmail(email, "Your MNB Cortex access request", userHtml, { from: brandFrom(), replyTo: brandReplyTo() }),
     ]);
 
-    return NextResponse.json({ ok: true, notified: adminRes.sent, confirmed: userRes.sent, contactUrl: CONTACT_URL, adminReason: adminRes.reason });
+    /*
+      `ok` NOW MEANS "WE HAVE YOUR REQUEST", NOT "THE HANDLER REACHED ITS END".
+
+      This returned a flat ok:true. sendEmail never throws — it returns
+      { sent: false, reason } — so a request where BOTH emails failed and the
+      database insert failed returned success, and contact-form.tsx renders
+      "Thanks, {name}. A confirmation is on its way to {email}." on `ok` alone.
+      The person walked away believing they had reached us when nothing had
+      recorded them and nothing had been sent. That is the one outcome this form
+      exists to prevent.
+
+      Three states now, and they are distinguishable:
+
+        - the operator was notified, or the lead is in the database → ok. We
+          genuinely have it, whichever of the two worked.
+        - neither → ok:false with the WhatsApp fallback, because the honest
+          answer is that the message did not get through.
+        - `confirmed` says whether the requester's own confirmation email sent,
+          so the UI can stop promising one that did not. It was already returned
+          and read by nobody.
+    */
+    const captured = adminRes.sent || stored;
+    if (!captured) {
+      console.error("[access-request] NOT captured — email:", adminRes.reason || "?", "| db:", hasSupabase() ? "insert failed" : "no supabase");
+      return NextResponse.json({
+        ok: false,
+        error: "We could not record your request just now. Please message us on WhatsApp — that always reaches us.",
+        contactUrl: CONTACT_URL,
+      }, { status: 200 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      notified: adminRes.sent,
+      stored,
+      confirmed: userRes.sent,
+      contactUrl: CONTACT_URL,
+      adminReason: adminRes.reason,
+    });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || "Failed", contactUrl: CONTACT_URL }, { status: 200 });
   }

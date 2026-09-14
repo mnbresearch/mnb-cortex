@@ -64,7 +64,57 @@ export async function ensureWorkspace(opts?: { name?: string; industry?: string 
       answer — which is the first question anyone would ask about a funnel.
     */
     recordQuietly("workspace_created", { orgId, meta: { industry: opts?.industry || meta.industry || "" } });
-    await svc.from("memberships").insert({ org_id: orgId, user_id: user.id, role: "owner" });
+
+    /*
+      THE OWNER MEMBERSHIP IS THE WHOLE ACCOUNT. CHECK THAT IT LANDED.
+
+      This was `await svc.from("memberships").insert(...)` with the result
+      discarded. supabase-js RETURNS {error} rather than throwing, so a failed
+      insert was indistinguishable from a successful one and the function went
+      on to return ok:true with an orgId.
+
+      What that produces is the worst signup outcome available:
+
+        - every RLS policy in the schema authorises through `memberships`, so
+          the user owns a workspace they cannot read a single row of. The app
+          does not look broken; it looks empty.
+        - `orgId` on line 45 is resolved BY READING memberships, so the next
+          sign-in finds none and creates a SECOND organization. Then a third.
+          The user accumulates orphaned workspaces and never reaches any of
+          them, and none of it appears in any error.
+        - the trial credits granted below are attached to an org nobody is a
+          member of, so the grant guard is satisfied and the retry gets nothing.
+
+      So the row is read back, not merely written. `.select()` forces PostgREST
+      to return it: a write that is accepted and then silently filtered by a
+      policy comes back as no error AND no row, which is the signature of the
+      service-role key not actually being the service role — the same failure
+      the cron heartbeat had to learn to detect.
+    */
+    const { data: memRow, error: memErr } = await svc
+      .from("memberships")
+      .insert({ org_id: orgId, user_id: user.id, role: "owner" })
+      .select("org_id");
+
+    if (memErr || !((memRow as any[]) || []).length) {
+      const why = memErr?.message
+        || "the membership write was accepted but returned no row — check SUPABASE_SERVICE_ROLE_KEY is the service_role key";
+      console.error("[workspace] owner membership failed for", user.id, "—", why);
+      /*
+        ROLL BACK THE ORG WE JUST MADE.
+
+        Leaving it costs the user nothing directly, but it is the row that makes
+        the next attempt create a duplicate instead of retrying cleanly. It is
+        provably safe to remove: it was inserted a few milliseconds ago in this
+        same call, no membership exists, so no request could have read or
+        written through it, and none of the provisioning below has run yet.
+        Deliberately narrow — this deletes an empty workspace on the failure
+        path, never one with data.
+      */
+      const { error: rbErr } = await svc.from("organizations").delete().eq("id", orgId);
+      if (rbErr) console.error("[workspace] could not roll back orphan org", orgId, "—", rbErr.message);
+      return { ok: false, error: "We could not finish setting up your workspace. Please try signing in again — nothing was charged." };
+    }
 
     /*
       Attach the referral, if this visitor arrived through someone's link.

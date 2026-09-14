@@ -33,13 +33,57 @@ async function extractPdf(f: File): Promise<string> {
   return out;
 }
 
-export function AIPanel({ mode, placeholder, cta, multiline = false, allowFile = false, saveMode }: {
+export function AIPanel({
+  mode, placeholder, cta, multiline = false, allowFile = false, saveMode,
+  suggestions,
+  "aria-label": ariaLabel,
+}: {
   mode: string; placeholder: string; cta: string; multiline?: boolean; allowFile?: boolean; saveMode?: string;
+  /**
+   * Starting points, rendered as real buttons that fill the field.
+   *
+   * WHY THIS PROP EXISTS. Three pages (/sops, /proposals, /marketing) showed a
+   * row of example prompts under copy that said "Tap one, paste it above, and
+   * generate". The chips were `<Badge>`, which is a bare non-interactive
+   * `<span>` — no onClick, no clipboard, no wiring to this panel. Tapping did
+   * nothing, so the instruction was simply wrong, and the user had to retype a
+   * sentence that was already on their screen.
+   *
+   * They belong in here rather than on each page because only this component
+   * owns `input`. A page-level chip would have to reach into this state, which
+   * is how the three pages ended up telling the user to be the integration.
+   */
+  suggestions?: string[];
+  /**
+   * ACTUALLY APPLIED NOW.
+   *
+   * /sops, /investor and /contracts already passed `aria-label`, and this
+   * component neither destructured it nor spread rest props — so it was
+   * dropped on the floor and the accessibility fix those three lines were
+   * added for never reached the DOM.
+   */
+  "aria-label"?: string;
 }) {
   const [input, setInput] = useState("");
   const [out, setOut] = useState("");
   const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+
+  /*
+    Fill the field and put the cursor in it. Focusing matters: the point of a
+    starting point is that you edit it, so landing the caret in the box is the
+    difference between a shortcut and a surprise.
+  */
+  function useSuggestion(s: string) {
+    setInput(s);
+    const el = fieldRef.current;
+    if (el) {
+      el.focus();
+      const n = s.length;
+      try { el.setSelectionRange(n, n); } catch { /* not all inputs support it */ }
+    }
+  }
 
   async function run() {
     if (mode !== "pulse" && !input.trim()) return;
@@ -74,13 +118,40 @@ export function AIPanel({ mode, placeholder, cta, multiline = false, allowFile =
         </div>
       )}
       {multiline ? (
-        <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder={placeholder} rows={5}
+        <textarea ref={fieldRef as React.RefObject<HTMLTextAreaElement>}
+          value={input} onChange={(e) => setInput(e.target.value)} placeholder={placeholder} rows={5}
+          aria-label={ariaLabel || placeholder}
           className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
       ) : (
-        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={placeholder}
+        <input ref={fieldRef as React.RefObject<HTMLInputElement>}
+          value={input} onChange={(e) => setInput(e.target.value)} placeholder={placeholder}
+          aria-label={ariaLabel || placeholder}
           onKeyDown={(e) => { if (e.key === "Enter") run(); }}
           className="w-full rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
       )}
+
+      {/*
+        REAL BUTTONS. A chip that says "tap one" has to be tappable — with a
+        mouse, with a finger, and with the keyboard, which a <span> never was.
+      */}
+      {Boolean(suggestions?.length) && (
+        <div>
+          <p className="text-xs text-muted-foreground mb-1.5">Start from one of these — it fills the box above, then edit it:</p>
+          <div className="flex flex-wrap gap-2">
+            {suggestions!.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => useSuggestion(s)}
+                className="rounded-full border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary hover:bg-accent/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <Button onClick={run} disabled={loading}><Sparkles className="h-4 w-4" aria-hidden="true" /> {loading ? "Working…" : cta}</Button>
 
       {/*

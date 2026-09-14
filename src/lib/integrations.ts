@@ -47,7 +47,21 @@ export type Integration = {
   minPlan: PlanId;
   fields: Field[];
   docs?: string;
-  /** We can verify these credentials with a real API call. */
+  /**
+   * We can verify these credentials with a real API call.
+   *
+   * THIS FLAG WAS DECORATIVE. It was declared, set on seventeen entries, and
+   * read by absolutely nothing — while the code that needed exactly this
+   * distinction (testCredentials in api/integrations/route.ts) fell back to a
+   * `default` that reported success for every provider without one.
+   *
+   * It had already drifted: `typeform` has had a real test case since it was
+   * added and was never flagged. That is what an unread field does.
+   *
+   * scripts/test-integration-status.mjs now asserts this set matches the
+   * switch cases in the route exactly, in both directions, so the flag cannot
+   * drift again in either direction.
+   */
   testable?: boolean;
 };
 
@@ -222,7 +236,7 @@ export const INTEGRATIONS: Integration[] = [
 
   // ---- Productivity ----
   { id: "calendly", name: "Calendly", category: "Productivity", desc: "Scheduling & bookings", minPlan: "growth", testable: true, docs: "https://developer.calendly.com/", fields: [KEY("Personal access token")] },
-  { id: "typeform", name: "Typeform", category: "Productivity", desc: "Forms & survey responses", minPlan: "growth", fields: [KEY("Personal access token")] },
+  { id: "typeform", name: "Typeform", testable: true, category: "Productivity", desc: "Forms & survey responses", minPlan: "growth", fields: [KEY("Personal access token")] },
   { id: "dropbox", name: "Dropbox", category: "Productivity", desc: "File storage & sharing", minPlan: "premium", fields: [KEY("Access token")] },
   { id: "google_drive", name: "Google Drive", category: "Productivity", desc: "Documents & files", minPlan: "premium", fields: [KEY("OAuth token")] },
   { id: "microsoft365", name: "Microsoft 365", category: "Productivity", desc: "Outlook, Teams & OneDrive", minPlan: "premium", fields: [KEY("OAuth token")] },
