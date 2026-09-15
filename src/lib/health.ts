@@ -607,8 +607,36 @@ async function checkSchema(): Promise<Check> {
     */
     ["health_metrics", "updated_at", "RUN-NOW-2026-09-08.sql"],
   ];
-  const missing: string[] = [];
-  for (const [table, col, name] of probes) {
+  /*
+    CONCURRENT, BECAUSE SEQUENTIAL WAS TIMING THE CHECK OUT.
+
+    This was a `for` loop with an `await` in the body: one round trip per
+    probe, 24 of them, then two RPCs — 26 serial hops inside the 10-second
+    CHECK_DEADLINE that bounded() imposes. At a routine 400ms per hop that is
+    10.4s, and bounded() reports an overrun as DEGRADED.
+
+    Which is what production started doing. /api/health went from
+    "Schema migrations: operational" to "degraded" with no migration having
+    changed and no probed column having moved — while the endpoint's own
+    wall time crept from 12.1s to 13.5s. A check slow enough to miss its own
+    deadline reports the schema as broken when the schema is fine.
+
+    That is the failure this file already warns about, two screens up, in its
+    own words: "a check that cries wolf gets switched off, and it took the
+    operator and me on a hunt for a missing collections subsystem that was
+    never missing." I then wrote the sequential loop that made it cry wolf.
+
+    Every probe is independent — a SELECT of one column on one table, no
+    ordering between them — so there was never a reason to serialise. 26 hops
+    become one round trip's worth of latency, which puts the check back inside
+    its budget with room to spare rather than tuning the deadline up and
+    waiting for the next creep.
+
+    `missing` is rebuilt from the settled results rather than pushed to from
+    inside the callbacks, so the order stays the probe order and the operator's
+    report does not reshuffle itself between runs.
+  */
+  const results = await Promise.all(probes.map(async ([table, col, name]) => {
     try {
       const { error } = await sb.from(table).select(col).limit(1);
       /*
@@ -624,9 +652,10 @@ async function checkSchema(): Promise<Check> {
 
         Both, then: what is missing and what to run about it.
       */
-      if (error) missing.push(`${name} (${table}.${col.split(",")[0].trim()} unreadable)`);
-    } catch { missing.push(`${name} (${table} — probe threw)`); }
-  }
+      return error ? `${name} (${table}.${col.split(",")[0].trim()} unreadable)` : null;
+    } catch { return `${name} (${table} — probe threw)`; }
+  }));
+  const missing: string[] = results.filter((r): r is string => r !== null);
   /*
     The billing guard is a trigger, not a column, so a select cannot see it.
     Probed by attempting the attack in the only harmless way available: update a

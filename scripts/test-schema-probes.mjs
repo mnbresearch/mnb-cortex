@@ -258,6 +258,46 @@ for (const m of probesBlock.matchAll(/\[\s*"[a-z_]+"\s*,\s*"[a-z_]+"\s*,\s*"([^"
   );
 }
 
+/* ========================================================================
+   THE PROBES MUST RUN CONCURRENTLY.
+
+   They were a `for` loop with an `await` in the body: 24 serial round trips
+   inside the 10-second CHECK_DEADLINE that bounded() imposes. Production
+   duly reported "Schema migrations: degraded" with nothing wrong with the
+   schema — the check had simply missed its own deadline, and bounded() calls
+   an overrun degraded.
+
+   This is the "cries wolf" failure health.ts already warns about in its own
+   comments, so it is worth an executable guard rather than a note: every
+   probe is an independent single-column SELECT, and re-serialising them puts
+   the status page back to inventing outages.
+   ======================================================================== */
+{
+  const src = readFileSync(new URL("../src/lib/health.ts", import.meta.url), "utf8");
+  const i = src.indexOf("const probes: [string, string, string][]");
+  const j = src.indexOf("const missing: string[]", i);
+  check(i > 0 && j > i, "the probe list and its consumer are both still in health.ts");
+  const region = src.slice(i, j);
+
+  check(
+    /Promise\.all\(probes\.map\(/.test(region),
+    "the probes run concurrently (Promise.all over the probe list)",
+  );
+  /*
+    The dangerous shape, named explicitly: an await inside a loop over the
+    probe list. Matched on the loop keyword rather than on "await", because
+    the concurrent version legitimately awaits — once, on Promise.all.
+  */
+  check(
+    !/for\s*\(const \[table, col, name\] of probes\)/.test(region),
+    "no sequential for-loop over the probes",
+  );
+  check(
+    !/\bfor\b[\s\S]{0,80}\bof probes\b[\s\S]{0,200}await sb\.from/.test(region),
+    "no awaited query inside a loop over the probes",
+  );
+}
+
 console.log(`\nschema probes: ${pass} passed, ${fails.length} failed`);
 if (fails.length) {
   for (const f of fails) console.log("  FAIL " + f);
