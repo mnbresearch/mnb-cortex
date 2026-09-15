@@ -1,4 +1,5 @@
 import { Topbar } from "@/components/topbar";
+import { SafeForm } from "@/components/safe-form";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
@@ -43,10 +44,10 @@ export default async function Reports() {
                     {r.last_sent ? ` · last sent ${new Date(r.last_sent).toLocaleDateString("en-IN")}` : " · not sent yet"}
                   </span>
                 </div>
-                <form action={deleteScheduledReport}>
+                <SafeForm action={deleteScheduledReport}>
                   <input type="hidden" name="id" value={r.id} />
                   <button className="rounded-lg border h-8 px-3 text-xs text-danger hover:bg-danger/10">Remove</button>
-                </form>
+                </SafeForm>
               </div>
             ))}
             {sched.rows.length === 0 && (

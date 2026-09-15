@@ -1,6 +1,8 @@
 import { Card } from "@/components/ui/card";
 import { PROFILE_QUESTIONS, type StatutoryProfile } from "@/lib/statutory-profile";
 import { updateStatutoryProfile } from "@/lib/actions";
+import { SafeForm } from "@/components/safe-form";
+import { SubmitButton } from "@/components/form-buttons";
 
 /*
   SIX QUESTIONS THAT TURN INDIA'S CALENDAR INTO THIS BUSINESS'S.
@@ -14,9 +16,19 @@ import { updateStatutoryProfile } from "@/lib/actions";
       statutory warnings the workspace stops receiving, so "it looked saved"
       is not an acceptable outcome, and a full round trip is the honest
       interaction;
-    - `updateStatutoryProfile` reads the row back and throws if nothing was
+    - `updateStatutoryProfile` reads the row back and REPORTS if nothing was
       written, so a failed save surfaces rather than silently appearing to
       work — the pattern the rest of this codebase had to learn.
+
+  I got the last part half right and had to come back. The action did check
+  its row count, but it threw, and a thrown message is masked by Next in
+  production and takes the whole page down with it — so a failed save showed a
+  support reference instead of the sentence I wrote, and lost the six answers
+  on the way. Worse, I saw the real failure mode live: two saves returned 503
+  during a deploy and produced NOTHING — no error, no change, a form that
+  looked exactly like one that had worked. SafeForm handles both, and the
+  plain <button> below is now a SubmitButton so the form is visibly busy
+  while it is in flight. See lib/action-result.ts.
 
   Every question offers "I'm not sure", and that is the default. Choosing it
   is how an answer is UNDONE: an owner who ticked "no employees" and later
@@ -25,7 +37,7 @@ import { updateStatutoryProfile } from "@/lib/actions";
 */
 export function StatutoryProfileForm({ profile }: { profile: StatutoryProfile }) {
   return (
-    <form action={updateStatutoryProfile}>
+    <SafeForm action={updateStatutoryProfile} successMessage="Saved. Your calendar below now reflects these answers.">
       <div className="grid md:grid-cols-2 gap-4">
         {PROFILE_QUESTIONS.map((q) => (
           <Card key={q.key} className="p-4">
@@ -45,15 +57,18 @@ export function StatutoryProfileForm({ profile }: { profile: StatutoryProfile })
         ))}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button className="rounded-lg bg-primary text-primary-foreground min-h-11 px-5 text-sm font-medium hover:opacity-90">
+        <SubmitButton
+          pendingLabel="Saving…"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground min-h-11 px-5 text-sm font-medium hover:opacity-90 disabled:opacity-60"
+        >
           Save my compliance profile
-        </button>
+        </SubmitButton>
         <p className="text-xs text-muted-foreground max-w-xl">
           These are your answers, not our assessment. Anything you leave as &ldquo;I&rsquo;m not sure&rdquo; keeps showing,
           so nothing disappears because you skipped a question. Change them any time — your CA is the right person to ask
           about the audit one.
         </p>
       </div>
-    </form>
+    </SafeForm>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import { SafeForm } from "@/components/safe-form";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Upload } from "lucide-react";
@@ -185,12 +186,12 @@ export function AIPanel({
         />
       )}
       {out && saveMode && (
-        <form action={saveArtifact} className="flex flex-wrap items-center gap-2">
+        <SafeForm action={saveArtifact} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="mode" value={saveMode} />
           <input type="hidden" name="content" value={out} />
           <input name="title" placeholder="Title to save as…" defaultValue={input.slice(0, 60)} className="rounded-lg border bg-background px-3 h-9 text-sm flex-1 min-w-[200px] outline-none focus:ring-2 focus:ring-ring"  aria-label="Title to save as"/>
           <Button type="submit" variant="outline"><Save className="h-4 w-4" /> Save to workspace</Button>
-        </form>
+        </SafeForm>
       )}
     </Card>
   );

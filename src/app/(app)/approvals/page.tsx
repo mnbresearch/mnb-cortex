@@ -1,4 +1,5 @@
 import { Topbar } from "@/components/topbar";
+import { SafeForm } from "@/components/safe-form";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
@@ -12,11 +13,11 @@ export const dynamic = "force-dynamic";
 
 function StatusButton({ table, id, status, label }: { table: string; id: string; status: string; label: string }) {
   return (
-    <form action={updateStatus}>
+    <SafeForm action={updateStatus}>
       <input type="hidden" name="table" value={table} /><input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={status} /><input type="hidden" name="path" value="/approvals" />
       <button className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-8 px-3 text-xs font-medium hover:opacity-90"><Check className="h-3.5 w-3.5" /> {label}</button>
-    </form>
+    </SafeForm>
   );
 }
 

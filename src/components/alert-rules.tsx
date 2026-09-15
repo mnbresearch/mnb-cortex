@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { SafeForm } from "@/components/safe-form";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -92,6 +93,12 @@ export function AlertRules({ metrics = [], rules = [] }: { metrics?: LiveMetric[
                   ? <Badge className="bg-danger/10 text-danger border-danger/20">breached</Badge>
                   : <Badge className="bg-success/10 text-success border-success/20">ok</Badge>)
                 : <Badge className="bg-muted text-muted-foreground">waiting for data</Badge>}
+              {/*
+                Left as a plain <form>: it carries an onSubmit that drives this
+                component's own busy state, which SafeForm does not forward.
+                Nothing here is user-recoverable — a delete either works or is
+                an outage — so the boundary is the right destination.
+              */}
               <form action={deleteAlertRule} onSubmit={() => setBusy(r.id)}>
                 <input type="hidden" name="id" value={r.id} />
                 <button type="submit" className="text-muted-foreground hover:text-danger" aria-label="Delete rule">
@@ -108,7 +115,7 @@ export function AlertRules({ metrics = [], rules = [] }: { metrics?: LiveMetric[
         </div>
 
         {metrics.length > 0 && (
-          <form action={saveAlertRule} className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-3">
+          <SafeForm action={saveAlertRule} className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-3">
             <span className="text-sm text-muted-foreground">Alert me when</span>
             <select
               name="metric_key" value={draftMetric}
@@ -133,7 +140,7 @@ export function AlertRules({ metrics = [], rules = [] }: { metrics?: LiveMetric[
             />
             <span className="text-sm text-muted-foreground">{byKey[draftMetric]?.unit}</span>
             <Button type="submit" variant="outline" size="sm" className="ml-auto"><Plus className="h-4 w-4" /> Add rule</Button>
-          </form>
+          </SafeForm>
         )}
 
         {firing.length > 0 && (

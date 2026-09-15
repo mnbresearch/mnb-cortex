@@ -1,4 +1,5 @@
 import { Topbar } from "@/components/topbar";
+import { SafeForm } from "@/components/safe-form";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
@@ -67,10 +68,10 @@ export default async function Workflows() {
               </div>
               {wf.live && (
                 <div className="mt-3 flex items-center gap-2">
-                  <form action={runWorkflow}>
+                  <SafeForm action={runWorkflow}>
                     <input type="hidden" name="id" value={f.id} /><input type="hidden" name="name" value={f.name} />
                     <button className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-8 px-3 text-xs font-medium hover:opacity-90"><Play className="h-3.5 w-3.5" /> Run now</button>
-                  </form>
+                  </SafeForm>
                   <DeleteButton table="workflows" id={f.id} path="/workflows" />
                 </div>
               )}

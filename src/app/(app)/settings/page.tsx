@@ -1,6 +1,7 @@
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
+import { SafeForm } from "@/components/safe-form";
 import { AiInstructionsPanel } from "@/components/ai-instructions-panel";
 import { hasRole } from "@/lib/roles";
 import { DeleteWorkspace } from "@/components/delete-workspace";
@@ -63,7 +64,7 @@ export default async function Settings() {
             <AiInstructionsPanel canEdit={canEditAi} />
 
             <Section title="Company profile" desc="The business Cortex watches for you">
-              <form action={updateOrgProfile} className="grid sm:grid-cols-3 gap-3">
+              <SafeForm action={updateOrgProfile} className="grid sm:grid-cols-3 gap-3" successMessage="Company profile saved.">
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-1">Company name
                   <input className={inp} name="name" defaultValue={profile?.name || ""} required />
                 </label>
@@ -113,7 +114,7 @@ export default async function Settings() {
                     action is in flight; without it this form could be submitted
                     twice on a slow connection. */}
                 <div className="sm:col-span-3"><SubmitButton className={btn}><Building2 className="h-4 w-4" /> Save profile</SubmitButton></div>
-              </form>
+              </SafeForm>
             </Section>
 
             <Section title="Sample data" desc="Fill every module with a realistic example business so you can see how Cortex behaves">

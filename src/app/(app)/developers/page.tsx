@@ -1,4 +1,5 @@
 import { getWebhooks, getWebhookDeliveries } from "@/lib/data";
+import { SafeForm } from "@/components/safe-form";
 import { addWebhook, deleteWebhook, testWebhook } from "@/lib/actions";
 import { WEBHOOK_EVENTS } from "@/lib/webhooks";
 import { Topbar } from "@/components/topbar";
@@ -80,7 +81,7 @@ export default async function Developers() {
                       {k.key_prefix ? `${k.key_prefix}…` : "key stored as a hash"}
                     </code>
                   </div>
-                  <form action={deleteApiKey}><input type="hidden" name="id" value={k.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></form>
+                  <SafeForm action={deleteApiKey}><input type="hidden" name="id" value={k.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></SafeForm>
                 </div>
               ))}
             </div>
@@ -139,10 +140,10 @@ export default async function Developers() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <form action={testWebhook}><input type="hidden" name="id" value={h.id} />
-                      <button className="rounded-lg border h-8 px-3 text-xs hover:bg-accent">Send test</button></form>
-                    <form action={deleteWebhook}><input type="hidden" name="id" value={h.id} />
-                      <button className="rounded-lg border h-8 px-3 text-xs text-danger hover:bg-danger/10">Remove</button></form>
+                    <SafeForm action={testWebhook}><input type="hidden" name="id" value={h.id} />
+                      <button className="rounded-lg border h-8 px-3 text-xs hover:bg-accent">Send test</button></SafeForm>
+                    <SafeForm action={deleteWebhook}><input type="hidden" name="id" value={h.id} />
+                      <button className="rounded-lg border h-8 px-3 text-xs text-danger hover:bg-danger/10">Remove</button></SafeForm>
                   </div>
                 </div>
               </div>

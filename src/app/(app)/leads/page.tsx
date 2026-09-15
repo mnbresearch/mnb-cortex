@@ -1,4 +1,5 @@
 import { Topbar } from "@/components/topbar";
+import { SafeForm } from "@/components/safe-form";
 import { PageShell } from "@/components/page-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -65,11 +66,11 @@ export default async function Leads() {
                             {/* customers.status already had a "lead" value with no
                                 relationship to this table — there was no way to
                                 move a person from one to the other. */}
-                            <form action={convertLead}>
+                            <SafeForm action={convertLead}>
                               <input type="hidden" name="id" value={l.id} />
                               <button className="text-xs text-primary px-2 py-1 rounded-md hover:bg-primary/10 whitespace-nowrap">Make customer</button>
-                            </form>
-                            <form action={deleteLead}><input type="hidden" name="id" value={l.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></form>
+                            </SafeForm>
+                            <SafeForm action={deleteLead}><input type="hidden" name="id" value={l.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></SafeForm>
                           </div>
                         </td>
                       </tr>

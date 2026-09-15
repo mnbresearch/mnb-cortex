@@ -1,4 +1,5 @@
 import { Topbar } from "@/components/topbar";
+import { SafeForm } from "@/components/safe-form";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { AlertRules, type LiveMetric, type SavedRule } from "@/components/alert-rules";
@@ -46,10 +47,10 @@ export default async function Alerts() {
                     <div className="font-medium text-sm">{a.title}</div>
                     {a.body && <div className="text-sm text-muted-foreground mt-0.5">{a.body}</div>}
                   </div>
-                  <form action={dismissAlert}>
+                  <SafeForm action={dismissAlert}>
                     <input type="hidden" name="id" value={a.id} />
                     <button type="submit" className="text-xs text-muted-foreground hover:text-foreground whitespace-nowrap">Dismiss</button>
-                  </form>
+                  </SafeForm>
                 </Card>
               ))}
             </div>

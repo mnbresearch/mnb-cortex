@@ -1,5 +1,7 @@
 import { Plus } from "lucide-react";
 import { deleteRecord } from "@/lib/actions";
+import { SafeForm } from "@/components/safe-form";
+import type { FormAction } from "@/lib/action-result";
 // The buttons live in a client module because useFormStatus has to run in the
 // browser; everything else on this page stays a server component.
 import { SubmitButton, DeleteSubmit } from "@/components/form-buttons";
@@ -7,16 +9,22 @@ import { SubmitButton, DeleteSubmit } from "@/components/form-buttons";
 const inp = "rounded-lg border bg-background px-3 h-9 text-sm w-full outline-none focus:ring-2 focus:ring-ring";
 const btn = "inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90";
 
-export function CollapsibleForm({ title, action, children }: { title: string; action: (fd: FormData) => Promise<void>; children: React.ReactNode }) {
+/*
+  The shared wrappers all route through SafeForm now, so a recoverable failure
+  appears under the form that caused it rather than replacing the page. That
+  covers most of the app's forms in one place — see lib/action-result.ts for
+  why a thrown message could never reach the customer.
+*/
+export function CollapsibleForm({ title, action, children }: { title: string; action: FormAction; children: React.ReactNode }) {
   return (
     <details className="rounded-xl border bg-card">
       <summary className="flex items-center gap-2 cursor-pointer select-none px-4 py-3 text-sm font-medium">
         <Plus className="h-4 w-4 text-primary" /> {title}
       </summary>
-      <form action={action} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0">
+      <SafeForm action={action} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4 pt-0">
         {children}
         <div className="sm:col-span-2 lg:col-span-3"><SubmitButton className={btn}>Save</SubmitButton></div>
-      </form>
+      </SafeForm>
     </details>
   );
 }
@@ -43,18 +51,18 @@ export function SelectField({ name, label, options }: { name: string; label: str
 
 export function DeleteButton({ table, id, path }: { table: string; id: string; path: string }) {
   return (
-    <form action={deleteRecord}>
+    <SafeForm action={deleteRecord}>
       <input type="hidden" name="table" value={table} />
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="path" value={path} />
       <DeleteSubmit />
-    </form>
+    </SafeForm>
   );
 }
 
-export function ActionForm({ action, label, primary = false }: { action: () => Promise<void>; label: string; primary?: boolean }) {
+export function ActionForm({ action, label, primary = false }: { action: () => Promise<any>; label: string; primary?: boolean }) {
   return (
-    <form action={action}>
+    <SafeForm action={action as FormAction}>
       <SubmitButton
         icon
         pendingLabel="Working…"
@@ -64,6 +72,6 @@ export function ActionForm({ action, label, primary = false }: { action: () => P
       >
         {label}
       </SubmitButton>
-    </form>
+    </SafeForm>
   );
 }

@@ -1,4 +1,5 @@
 import { Topbar } from "@/components/topbar";
+import { SafeForm } from "@/components/safe-form";
 import { PageShell } from "@/components/page-shell";
 import { CollapsibleForm, Field, SelectField, DeleteButton } from "@/components/forms";
 import { getPipeline } from "@/lib/data";
@@ -115,12 +116,12 @@ export default async function Pipeline() {
                       <div className="text-xs mt-1 font-medium">{inr(Number(d.value) || 0)}</div>
                       {live && (
                         <div className="flex items-center gap-1 mt-2">
-                          <form action={moveDeal} className="flex-1">
+                          <SafeForm action={moveDeal} className="flex-1">
                             <input type="hidden" name="id" value={d.id} />
                             <select name="stage" defaultValue={d.stage} className="w-full rounded-md border bg-background px-1.5 h-7 text-[11px]">
                               {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
                             </select>
-                          </form>
+                          </SafeForm>
                           <DeleteButton table="sales_pipeline" id={d.id} path="/pipeline" />
                         </div>
                       )}

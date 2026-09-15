@@ -1,4 +1,5 @@
 import { Topbar } from "@/components/topbar";
+import { SafeForm } from "@/components/safe-form";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
@@ -73,12 +74,12 @@ export default async function Billing() {
 
         {live && (
           <Section title="Share a read-only snapshot" desc="Public link to a live business snapshot — no login needed">
-            <form action={createReportLink}><button className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90"><Link2 className="h-4 w-4" /> Create share link</button></form>
+            <SafeForm action={createReportLink}><button className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90"><Link2 className="h-4 w-4" /> Create share link</button></SafeForm>
             <div className="space-y-2 mt-3">
               {links.rows.map((l: any) => (
                 <div key={l.id} className="flex items-center justify-between rounded-lg border p-3">
                   <a href={`/r/${l.token}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary break-all">mnb-cortex.vercel.app/r/{l.token}</a>
-                  <form action={revokeReportLink}><input type="hidden" name="id" value={l.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></form>
+                  <SafeForm action={revokeReportLink}><input type="hidden" name="id" value={l.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></SafeForm>
                 </div>
               ))}
               {links.rows.length === 0 && <p className="text-xs text-muted-foreground">No share links yet.</p>}

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { SafeForm } from "@/components/safe-form";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, ArrowLeft } from "lucide-react";
@@ -45,13 +46,13 @@ export function Playbooks() {
           <>
             <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />
             {out && (
-              <form action={saveArtifact} className="flex flex-wrap items-center gap-2 pt-1">
+              <SafeForm action={saveArtifact} className="flex flex-wrap items-center gap-2 pt-1">
                 <input type="hidden" name="mode" value="strategy" />
                 <input type="hidden" name="content" value={out} />
                 <input name="title" defaultValue={active.title} className="rounded-lg border bg-background px-3 h-9 text-sm flex-1 min-w-[200px] outline-none focus:ring-2 focus:ring-ring" />
                 <Button type="submit" variant="outline"><Save className="h-4 w-4" /> Save to workspace</Button>
                 <Button type="button" onClick={() => open(active)}><Sparkles className="h-4 w-4" /> Regenerate</Button>
-              </form>
+              </SafeForm>
             )}
           </>
         )}

@@ -1,4 +1,5 @@
 import { Topbar } from "@/components/topbar";
+import { SafeForm } from "@/components/safe-form";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
@@ -25,9 +26,9 @@ export default async function Autopilot() {
               </div>
             </div>
             {live ? (
-              <form action={runAutopilot}>
+              <SafeForm action={runAutopilot}>
                 <button className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-10 px-5 text-sm font-medium hover:opacity-90"><Sparkles className="h-4 w-4" /> Run Autopilot now</button>
-              </form>
+              </SafeForm>
             ) : <a href="/login" className="text-sm text-primary underline">Sign in to run</a>}
           </div>
         </Card>

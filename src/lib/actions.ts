@@ -10,6 +10,7 @@ import { resolveHeaders, applyMapping, IMPORT_COLS, mapImportedRow } from "@/lib
 import { capRows, accountForRows, topWarning, REVALIDATE_AFTER_IMPORT } from "@/lib/import-outcome";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { fail, type ActionResult } from "@/lib/action-result";
 
 async function requireOrg() {
   const { orgId } = await getUserAndOrg();
@@ -168,7 +169,7 @@ export async function hasDemoData(): Promise<boolean> {
  * the roles that can already change what the business does, not with the ones
  * that can only read it.
  */
-export async function updateStatutoryProfile(fd: FormData) {
+export async function updateStatutoryProfile(fd: FormData): Promise<ActionResult | void> {
   const { orgId } = await requireRole("manager");
   const sb = createClient();
 
@@ -193,14 +194,20 @@ export async function updateStatutoryProfile(fd: FormData) {
   const { data, error } = await sb.from("organizations")
     .update({ statutory_profile: clean }).eq("id", orgId).select("id");
   if (error) throw new Error(error.message);
+  /*
+    RETURNED, NOT THROWN. A zero-row update means the page is looking at a
+    workspace that has moved — reloading genuinely fixes it, so this is a
+    sentence the owner can act on, and lib/action-result.ts says those are
+    returned so the wording survives production masking.
+  */
   if (!((data as any[]) || []).length) {
-    throw new Error("Could not save your compliance profile — reload and try again.");
+    return fail("Could not save your compliance profile — reload the page and try again.");
   }
   await logActivity(orgId, "settings", "Updated the compliance profile");
   ["/compliance", "/gst", "/settings", "/dashboard"].forEach((p) => revalidatePath(p));
 }
 
-export async function updateOrgProfile(fd: FormData) {
+export async function updateOrgProfile(fd: FormData): Promise<ActionResult | void> {
   const { orgId } = await requireRole("admin");
   const sb = createClient();
   /*
@@ -214,7 +221,7 @@ export async function updateOrgProfile(fd: FormData) {
   const patch: any = {};
   if (fd.has("name")) {
     const nm = str(fd.get("name"));
-    if (!nm) throw new Error("Your company name cannot be empty.");
+    if (!nm) return fail("Your company name cannot be empty.");
     patch.name = nm;
   }
   const industry = str(fd.get("industry")); if (industry) patch.industry = industry;
@@ -262,7 +269,7 @@ export async function updateOrgProfile(fd: FormData) {
     // The throw happens before the update, so NOTHING is saved — which is what
     // the message has to say. "those fields were skipped, the rest went through"
     // would be a nicer sentence and a false one.
-    throw new Error(
+    return fail(
       `Your accent colour and logo are part of the ${lowestPlanWith("whitelabel")} plan and above. Nothing was saved — remove those fields and try again, or upgrade to keep them.`,
     );
   }
@@ -297,7 +304,7 @@ export async function updateOrgProfile(fd: FormData) {
       */
       let href = "";
       try { const u = new URL(trimmed); if (u.protocol === "https:") href = u.href; } catch { href = ""; }
-      if (!href) throw new Error("The logo URL must be a full https:// address, for example https://yourdomain.com/logo.png");
+      if (!href) return fail("The logo URL must be a full https:// address, for example https://yourdomain.com/logo.png");
       patch.logo_url = href;
     }
   }
@@ -384,7 +391,7 @@ export async function deleteRecord(fd: FormData) {
   revalidatePath(path);
 }
 
-export async function generatePO() {
+export async function generatePO(): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg(); const sb = createClient();
   // Was hardcoded to "PetroChem Ltd / RM-204 Polymer Resin / ₹14.5 L" and written
   // straight into the customer's purchase_orders table. Now it drafts a PO for
@@ -397,7 +404,7 @@ export async function generatePO() {
     .sort((a, b) => (Number(a.on_hand) / Number(a.reorder_level)) - (Number(b.on_hand) / Number(b.reorder_level)))[0];
 
   if (!low) {
-    throw new Error("Nothing is below its reorder level right now, so there's no purchase order to draft.");
+    return fail("Nothing is below its reorder level right now, so there's no purchase order to draft.");
   }
 
   // Order back up to reorder level plus a fortnight of consumption.
@@ -423,7 +430,7 @@ export async function createInvoiceAI() {
   redirect("/invoice");
 }
 
-export async function sendReminderAI() {
+export async function sendReminderAI(): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg();
   const { user } = await getUserAndOrg();
   const sb = createClient();
@@ -439,7 +446,7 @@ export async function sendReminderAI() {
     .sort((a, b) => Number(b.amount) - Number(a.amount));
 
   if (!overdue.length) {
-    throw new Error("You have no overdue receivables right now — nothing to chase.");
+    return fail("You have no overdue receivables right now — nothing to chase.");
   }
 
   const total = overdue.reduce((a, i) => a + Number(i.amount || 0), 0);
@@ -524,7 +531,7 @@ export async function addWorkflow(fd: FormData) {
   revalidatePath("/workflows");
 }
 
-export async function runWorkflow(fd: FormData) {
+export async function runWorkflow(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg();
   const id = str(fd.get("id")); const name = str(fd.get("name"));
   const sb = createClient();
@@ -538,7 +545,7 @@ export async function runWorkflow(fd: FormData) {
   if (!steps.length) {
     await sb.from("workflow_runs").insert({ org_id: orgId, workflow_id: id, status: "failed", log: `"${name}" has no steps to run.` });
     revalidatePath("/workflows");
-    throw new Error("This workflow has no steps yet. Edit it and add some.");
+    return fail("This workflow has no steps yet. Edit it and add some.");
   }
 
   const { user } = await getUserAndOrg();
@@ -558,7 +565,7 @@ export async function runWorkflow(fd: FormData) {
   ["/workflows", "/dashboard", "/alerts"].forEach((p) => revalidatePath(p));
 }
 
-export async function updateStatus(fd: FormData) {
+export async function updateStatus(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg();
   const table = str(fd.get("table")); const id = str(fd.get("id")); const status = str(fd.get("status"));
   const path = str(fd.get("path")) || "/approvals";
@@ -587,7 +594,7 @@ export async function updateStatus(fd: FormData) {
     .update({ status }).eq("id", id).eq("org_id", orgId).select("id");
   if (error) throw new Error(error.message);
   if (!((changed as any[]) || []).length) {
-    throw new Error("That record could not be updated — it may have been changed or removed since this page loaded. Reload and try again.");
+    return fail("That record could not be updated — it may have been changed or removed since this page loaded. Reload and try again.");
   }
   await recomputeQuietly(orgId);
   await logActivity(orgId, "approval", `Set ${table} to ${status}`);
@@ -998,11 +1005,11 @@ export async function addCustomer(fd: FormData) {
 }
 
 // ---- Team invites ----
-export async function inviteMember(fd: FormData) {
+export async function inviteMember(fd: FormData): Promise<ActionResult | void> {
   const { orgId } = await requireRole("admin");
   const { user } = await getUserAndOrg();
   const email = str(fd.get("email")); const role = str(fd.get("role")) || "analyst";
-  if (!email) throw new Error("Email required");
+  if (!email) return fail("Enter the email address you want to invite.");
   const sb = createClient();
   const org = await sb.from("organizations").select("name, plan").eq("id", orgId).single();
   const orgName = (org.data as any)?.name || "our company";
@@ -1018,13 +1025,13 @@ export async function inviteMember(fd: FormData) {
     ]);
     const used = (members || 0) + (pending || 0);
     if (used >= cap) {
-      throw new Error(`Your plan includes ${cap} user${cap === 1 ? "" : "s"} and you've used ${used}. Upgrade under Billing to add more.`);
+      return fail(`Your plan includes ${cap} user${cap === 1 ? "" : "s"} and you've used ${used}. Upgrade under Billing to add more.`);
     }
   }
 
   // Don't stack duplicate invites for the same address.
   const { data: dupe } = await sb.from("invites").select("id").eq("org_id", orgId).ilike("email", email).eq("status", "pending").limit(1);
-  if (dupe && dupe.length) throw new Error(`${email} already has a pending invite.`);
+  if (dupe && dupe.length) return fail(`${email} already has a pending invite.`);
   const { error } = await sb.from("invites").insert({ org_id: orgId, email: email.toLowerCase(), role });
   if (error) throw new Error(error.message);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mnb-cortex.vercel.app";
@@ -1056,6 +1063,16 @@ async function requireRole(min: string) {
   const sb = createClient();
   const { data } = await sb.from("memberships").select("role").eq("org_id", orgId).eq("user_id", user.id).single();
   const role = (data as any)?.role || "viewer";
+  /*
+    STILL THROWS, DELIBERATELY. I converted this to a returned failure in the
+    sweep that moved recoverable errors off the error boundary, and it was
+    wrong: requireRole is a GUARD shared by about fifty actions, and its
+    contract is "returns an authorised context or does not return at all".
+    Handing back a value every caller would have to check turns one guard into
+    fifty opportunities to forget the check — which is the row-level-security
+    hole this function exists to prevent. A caller that wants to show the role
+    message inline should catch it; the boundary is the correct default.
+  */
   if ((ROLE_RANK[role] || 0) < (ROLE_RANK[min] || 0)) throw new Error(`This action requires the ${min} role or higher (you are ${role}).`);
   return { orgId, role };
 }
@@ -1268,17 +1285,17 @@ export async function revokeReportLink(fd: FormData) {
 
 // ---- Outbound webhooks ------------------------------------------------------
 
-export async function addWebhook(fd: FormData) {
+export async function addWebhook(fd: FormData): Promise<ActionResult | void> {
   const { orgId } = await requireRole("admin");
   await requireCapability(orgId, "webhooks", "Outbound webhooks");
   const url = str(fd.get("url"));
-  if (!/^https:\/\/.+/i.test(url)) throw new Error("Enter an https:// URL — plain http isn't accepted for webhooks.");
+  if (!/^https:\/\/.+/i.test(url)) return fail("Enter an https:// URL — plain http isn't accepted for webhooks.");
   const label = str(fd.get("label"));
   const events = str(fd.get("events")).split(",").map((e) => e.trim()).filter(Boolean);
 
   const { newSecret } = await import("@/lib/webhooks");
   const svc = serviceClient();
-  if (!svc) throw new Error("Service role not configured.");
+  if (!svc) return fail("This workspace is not fully configured on our side yet — please contact support and quote 'service role'.");
   const { error } = await svc.from("webhook_endpoints").insert({
     org_id: orgId, url, label: label || null, events, secret: newSecret(),
   });
@@ -1287,10 +1304,10 @@ export async function addWebhook(fd: FormData) {
   revalidatePath("/developers");
 }
 
-export async function deleteWebhook(fd: FormData) {
+export async function deleteWebhook(fd: FormData): Promise<ActionResult | void> {
   const { orgId } = await requireRole("admin");
   const svc = serviceClient();
-  if (!svc) throw new Error("Service role not configured.");
+  if (!svc) return fail("This workspace is not fully configured on our side yet — please contact support and quote 'service role'.");
   await svc.from("webhook_endpoints").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   revalidatePath("/developers");
 }
@@ -1305,13 +1322,13 @@ export async function testWebhook(fd: FormData) {
 
 // ---- Scheduled reports ------------------------------------------------------
 
-export async function addScheduledReport(fd: FormData) {
+export async function addScheduledReport(fd: FormData): Promise<ActionResult | void> {
   const { orgId } = await requireRole("admin");
   const svc = serviceClient();
-  if (!svc) throw new Error("Service role not configured.");
+  if (!svc) return fail("This workspace is not fully configured on our side yet — please contact support and quote 'service role'.");
   const mode = str(fd.get("mode")) || "brief";
   const cadence = str(fd.get("cadence")) || "weekly";
-  if (!["daily", "weekly", "monthly"].includes(cadence)) throw new Error("Cadence must be daily, weekly or monthly.");
+  if (!["daily", "weekly", "monthly"].includes(cadence)) return fail("Cadence must be daily, weekly or monthly.");
   const sendTo = str(fd.get("send_to"));
   const { error } = await svc.from("scheduled_reports").insert({
     org_id: orgId, mode, cadence, send_to: sendTo || null,
@@ -1321,10 +1338,10 @@ export async function addScheduledReport(fd: FormData) {
   revalidatePath("/reports");
 }
 
-export async function deleteScheduledReport(fd: FormData) {
+export async function deleteScheduledReport(fd: FormData): Promise<ActionResult | void> {
   const { orgId } = await requireRole("admin");
   const svc = serviceClient();
-  if (!svc) throw new Error("Service role not configured.");
+  if (!svc) return fail("This workspace is not fully configured on our side yet — please contact support and quote 'service role'.");
   await svc.from("scheduled_reports").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   revalidatePath("/reports");
 }
@@ -1342,11 +1359,11 @@ export async function deleteScheduledReport(fd: FormData) {
  * insert with org_id = null, so the platform console can see them and tenants
  * cannot. That left customers with a Leads module nothing could ever fill.
  */
-export async function addLead(fd: FormData) {
+export async function addLead(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg(); const sb = createClient();
   const name = str(fd.get("name"));
   const email = str(fd.get("email"));
-  if (!name && !email) throw new Error("A lead needs at least a name or an email address.");
+  if (!name && !email) return fail("A lead needs at least a name or an email address.");
   const { error } = await sb.from("leads").insert({
     org_id: orgId,
     name: name || null,
@@ -1365,14 +1382,14 @@ export async function addLead(fd: FormData) {
  * came from. There was no path between the two tables at all — `customers`
  * even has a "lead" status that had no relationship to the `leads` table.
  */
-export async function convertLead(fd: FormData) {
+export async function convertLead(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg(); const sb = createClient();
   const id = str(fd.get("id"));
 
   const { data: lead, error: readErr } = await sb.from("leads")
     .select("*").eq("id", id).eq("org_id", orgId).maybeSingle();
   if (readErr) throw new Error(readErr.message);
-  if (!lead) throw new Error("That lead no longer exists.");
+  if (!lead) return fail("That lead no longer exists — it may have been converted or removed already.");
 
   const { error } = await sb.from("customers").insert({
     org_id: orgId,
@@ -1392,10 +1409,10 @@ export async function convertLead(fd: FormData) {
 }
 
 // ---- Goals / OKRs ----
-export async function saveGoal(fd: FormData) {
+export async function saveGoal(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg(); const sb = createClient();
   const name = str(fd.get("name"));
-  if (!name) throw new Error("Give the goal a name.");
+  if (!name) return fail("Give the goal a name.");
   const metricKey = str(fd.get("metric_key"));
   const { error } = await sb.from("goals").insert({
     org_id: orgId,
@@ -1959,7 +1976,7 @@ export async function deleteTask(fd: FormData) {
  * They now live with the workspace and are evaluated in recomputeMetrics, which
  * already runs after every write.
  */
-export async function saveAlertRule(fd: FormData) {
+export async function saveAlertRule(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg();
   /*
     CUSTOM rules only. Every workspace gets the three default rules from
@@ -1973,7 +1990,7 @@ export async function saveAlertRule(fd: FormData) {
   const metric_key = str(fd.get("metric_key"));
   const op = str(fd.get("op")) === ">" ? ">" : "<";
   const threshold = num(fd.get("threshold"));
-  if (!metric_key) throw new Error("Pick which number to watch.");
+  if (!metric_key) return fail("Pick which number to watch.");
 
   const { error } = await sb.from("alert_rules")
     .upsert({ org_id: orgId, metric_key, op, threshold, enabled: true }, { onConflict: "org_id,metric_key,op" });

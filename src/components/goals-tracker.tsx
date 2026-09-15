@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { SafeForm } from "@/components/safe-form";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Plus, Trash2, Target, Link2 } from "lucide-react";
@@ -90,7 +91,7 @@ export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]
       </div>
 
       {adding && (
-        <form action={saveGoal} className="rounded-lg border border-dashed p-3 space-y-2">
+        <SafeForm action={saveGoal} className="rounded-lg border border-dashed p-3 space-y-2">
           <div className="flex flex-wrap items-end gap-2">
             <label className="text-xs text-muted-foreground">
               Track
@@ -140,7 +141,7 @@ export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]
             Linking a goal to one of your KPIs means Cortex reads the current value from your own data — you never
             have to update it by hand, and it can never go stale.
           </p>
-        </form>
+        </SafeForm>
       )}
 
       <div className="space-y-2">
@@ -173,10 +174,10 @@ export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]
                 <div className="text-xs text-muted-foreground mt-0.5">Tracked by hand — not linked to a KPI.</div>
               )}
             </div>
-            <form action={deleteGoal}>
+            <SafeForm action={deleteGoal}>
               <input type="hidden" name="id" value={g.id} />
               <button type="submit" className="text-muted-foreground hover:text-danger p-2 min-h-11 min-w-11 inline-flex items-center justify-center" aria-label="Delete goal"><Trash2 className="h-4 w-4" /></button>
-            </form>
+            </SafeForm>
           </div>
         ))}
         {!goals.length && (
