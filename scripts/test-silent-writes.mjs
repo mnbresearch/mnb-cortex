@@ -592,6 +592,95 @@ ok(`unchecked UPDATEs did not increase (${unchecked} <= ${ZERO_ROW_CEILING})`,
   unchecked <= ZERO_ROW_CEILING,
   "a new .update() binds error but never reads the row back — zero rows would report success");
 
+/* ───────────── J · the claims sweep, found by using the product ────────── */
+
+/*
+  Loading the sample dataset in a browser and reading the screen found three
+  things no assertion in this repo could have found, because all three are
+  about what the words SAY rather than what the code does.
+*/
+
+const dash = read("src/app/(app)/dashboard/page.tsx", "export default async function");
+
+/*
+  "Your business is needs attention." — `overall` was a verb phrase dropped
+  into "Your business is ___", so the branch that fires when something is
+  WRONG was the ungrammatical one. Grammatical on the other two.
+*/
+ok("the dashboard headline is a complete sentence per branch",
+  /const headline = reds >= 2\s*\n?\s*\? "Your business needs attention\."/.test(dash));
+ok("no fragment is interpolated after 'Your business is'",
+  !/Your business is \$\{overall\}/.test(dash),
+  "found the fragment that produced 'Your business is needs attention'");
+
+/*
+  A metric's status is green | yellow | red (metrics.ts:59) and the summary
+  enumerated two of three as though they were all — "14 metrics, 2 need
+  attention and 6 healthy", with six yellows silently missing. Arithmetic that
+  visibly fails, on the screen whose job is to be authoritative about
+  arithmetic.
+*/
+ok("the summary counts the third status", /const ambers = metrics\.filter\(\(m\) => m\.status === "yellow"\)\.length;/.test(dash));
+ok("the summary renders all three counts",
+  /\$\{needs\}, \$\{ambers\} worth watching and \$\{greens\} healthy/.test(dash));
+ok("reds pluralise correctly", /reds === 1 \? "needs" : "need"/.test(dash),
+  "'1 need attention' is the case this copy hits most often");
+
+/*
+  THE SEEDED ALERT CONTRADICTED THE SEED.
+
+  seed.sql said 'Receivables overdue crossed ₹72L' and '5 customers are >45
+  days past due'. The same function inserts three receivable invoices: Apex
+  ₹18 L at 48 days, Metro ₹24 L at 12 days, Gulf ₹30 L not yet due. Total is
+  ₹72 L, PAST DUE is ₹42 L, and exactly ONE customer is past 45 days. So it
+  reported the total as the overdue figure and multiplied one debtor into
+  five — on the first screen a prospect looks at, beside the REAL computed
+  alert that correctly says ₹42.00 L.
+*/
+/*
+  STRIPPED, for the third time in this suite and for the same reason. The fix
+  in seed.sql documents the removed alert by quoting it verbatim, so a raw grep
+  for its absence fails on the explanation. SQL block comments use the same
+  slash-star delimiters as JS, so stripComments handles them unchanged; the
+  double-dash line comments in that file carry no quoted text and can stay.
+
+  (And this comment had to be reworded: the first draft spelled the delimiters
+  out literally and closed itself early — the very trap read-code.mjs exists
+  to document.)
+*/
+const seedRaw = readFileSync(new URL("../supabase/seed.sql", import.meta.url), "utf8");
+const seed = stripComments(seedRaw);
+ok("the seed comment stripper kept the SQL", seed.includes("insert into alerts") && seed.includes("Apex Traders"));
+ok("the seed comment stripper removed the prose", !seed.includes("THE RECEIVABLES ALERT USED TO BE HERE"));
+ok("the contradictory seeded receivables alert is gone",
+  !/Receivables overdue crossed ₹72L/.test(seed));
+ok("no seeded alert claims five customers past 45 days",
+  !/5 customers are >45 days past due/.test(seed));
+ok("the seed still inserts its illustrative non-financial alerts",
+  /RM-204 will stock out in 9 days/.test(seed) && /Machine M-3 OEE/.test(seed));
+ok("every seeded alert is still tagged is_demo",
+  (seed.match(/insert into alerts[\s\S]*?;/)?.[0].match(/true\)/g) || []).length >= 3);
+/* The invoice figures the removed alert contradicted — pinned, so a future
+   edit to the amounts cannot silently re-create the mismatch. */
+ok("the seed's receivable invoices still total ₹72 L across three parties",
+  /'Apex Traders', 1800000/.test(seed) && /'Metro Mart', 2400000/.test(seed) && /'Gulf Imports', 3000000/.test(seed));
+
+/*
+  hasDemoData() probed four tables; clearDemoData() deletes from sixteen. The
+  comment above it records being bitten by exactly this once already, for
+  health_metrics. `alerts` was among the twelve still missing — and a stranded
+  seeded alert is a red warning about a business the customer does not own,
+  with no button left to remove it.
+*/
+ok("hasDemoData probes the same list clearDemoData deletes",
+  /for \(const t of DEMO_TABLES\) \{[\s\S]{0,400}?is_demo", true\)/.test(actions2)
+  || /for \(const t of DEMO_TABLES\)/.test(read("src/lib/actions.ts", "export async function hasDemoData")));
+const actions3 = read("src/lib/actions.ts", "export async function hasDemoData", "const DEMO_TABLES");
+ok("hasDemoData no longer hardcodes a short table list",
+  !/\["sales_orders", "finance_ledger", "inventory_items", "health_metrics"\]/.test(actions3));
+ok("a table predating is_demo is skipped rather than throwing",
+  /if \(error\) continue;/.test(actions3));
+
 /* ────────────────────────────────────────────────────── report ─────────── */
 
 console.log(`\nsilent writes: ${pass} passed, ${fails.length} failed`);

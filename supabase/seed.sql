@@ -64,9 +64,45 @@ end if;
     (p_org,'hr','yellow','Employee productivity down 7%','Concentrated in the Packing department. 3 high performers show elevated attrition risk.',0.79,'["Schedule retention conversations with at-risk staff","Add a second packing shift"]', true),
     (p_org,'market','yellow','Competitor launched a cheaper product','A regional competitor cut prices 8% on the entry SKU. Expect pressure in price-sensitive segments.',0.72,'["Introduce a value-tier SKU","Bundle to defend the premium tier"]', true);
 
-  -- Alerts
+  /* Alerts
+     ------------------------------------------------------------------------
+     THE RECEIVABLES ALERT USED TO BE HERE, AND IT CONTRADICTED THIS FILE.
+
+     It read:
+
+       'Receivables overdue crossed ₹72L'
+       '5 customers are >45 days past due. Cash impact is material.'
+
+     Both figures are wrong against the invoices this same function inserts
+     seventy lines below:
+
+       Apex Traders   ₹18 L   due 48 days ago   -> past due, >45 days
+       Metro Mart     ₹24 L   due 12 days ago   -> past due
+       Gulf Imports   ₹30 L   due in 8 days     -> not yet due
+
+     Total receivable is ₹72 L; PAST DUE is ₹42 L; and exactly ONE customer is
+     more than 45 days late, not five. So the alert reported the total as the
+     overdue figure and multiplied one debtor into five. It also said
+     "overdue" where every other surface now says "past due" — the vocabulary
+     that was deliberately unified because two labels for one number is how a
+     customer stops trusting either.
+
+     It has been REMOVED rather than corrected. recomputeMetrics already
+     derives the receivables warning from these very invoices and gets it
+     right — on /alerts it renders as "Receivables past due is now ₹42.00 L,
+     above the ₹5.00 L you set" — so a hardcoded second version was both
+     redundant and the only wrong number on the screen. Deleting it means the
+     receivables warning a prospect sees while evaluating the product is one
+     the engine actually computed from the sample data, which is a better
+     demonstration than a caption.
+
+     The three below survive because they illustrate modules the sample data
+     does not compute warnings for (production OEE, stockout timing, a sales
+     milestone). They name the sample business's own fictional entities —
+     RM-204, Machine M-3 — so they cannot be mistaken for a real reading, and
+     they are tagged is_demo like everything else here.
+     ------------------------------------------------------------------------ */
   insert into alerts (org_id, severity, title, body, module, is_demo) values
-    (p_org,'red','Receivables overdue crossed ₹72L','5 customers are >45 days past due. Cash impact is material.','finance', true),
     (p_org,'red','RM-204 will stock out in 9 days','Reorder now to protect Line B output.','inventory', true),
     (p_org,'yellow','Machine M-3 OEE fell below 70%','Downtime spiked on night shift.','production', true),
     (p_org,'green','New SKU crossed ₹50L in sales','Fastest-ramping product this quarter.','sales', true);

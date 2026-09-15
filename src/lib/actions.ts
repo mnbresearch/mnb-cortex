@@ -121,12 +121,83 @@ export async function hasDemoData(): Promise<boolean> {
     and ledger made Settings report "no sample data" while those four cards were
     still on screen, and the customer had no way left to remove them.
   */
-  for (const t of ["sales_orders", "finance_ledger", "inventory_items", "health_metrics"]) {
-    const { count } = await sb.from(t).select("id", { count: "exact", head: true })
+  /*
+    AND THE LIST IS NOW DEMO_TABLES, NOT A HAND-PICKED FOUR.
+
+    The comment above describes being bitten by exactly this once already:
+    health_metrics was missing, so Settings reported "no sample data" while
+    four seeded KPI cards were still on the dashboard and the customer had no
+    button left to remove them. The fix added one table to a list of three.
+
+    Twelve were still missing. clearDemoData() deletes from sixteen tables
+    (DEMO_TABLES); this probed four of them. So the same failure remained
+    reachable for `alerts`, `ai_insights`, `invoices`, `customers` and the
+    rest — and `alerts` is the one that matters most, because a seeded alert
+    is a red warning about a business the customer does not own.
+
+    Probing the same constant the deletion uses is what makes the two agree by
+    construction. One `head: true` count per table is a single index lookup;
+    the loop exits on the first hit, so a workspace with sample data usually
+    does one query, and only a clean workspace pays for all sixteen.
+  */
+  for (const t of DEMO_TABLES) {
+    const { count, error } = await sb.from(t).select("id", { count: "exact", head: true })
       .eq("org_id", orgId).eq("is_demo", true);
+    // A table that predates is_demo cannot hold demo rows — skip, do not fail.
+    if (error) continue;
     if ((count || 0) > 0) return true;
   }
   return false;
+}
+
+/**
+ * Save the six statutory answers.
+ *
+ * WHY "unknown" IS A VALUE YOU CAN CHOOSE, not just an absence.
+ *
+ * Every question offers "I'm not sure", and picking it stores "unknown"
+ * rather than omitting the key. That matters because it is the only way to
+ * UNDO an answer: an owner who ticked "no employees" by mistake, and later
+ * hires, needs a route back to seeing the PF deadline without deleting their
+ * whole profile. An absent key and a stored "unknown" behave identically
+ * downstream — both mean show — so the extra state costs nothing and buys a
+ * reversal.
+ *
+ * Only manager+ may set it. This is not cosmetic: the answers decide which
+ * statutory warnings the whole workspace stops receiving, so it belongs with
+ * the roles that can already change what the business does, not with the ones
+ * that can only read it.
+ */
+export async function updateStatutoryProfile(fd: FormData) {
+  const { orgId } = await requireRole("manager");
+  const sb = createClient();
+
+  const { PROFILE_QUESTIONS, parseProfile } = await import("@/lib/statutory-profile");
+  const next: Record<string, string> = {};
+  for (const q of PROFILE_QUESTIONS) {
+    const v = str(fd.get(q.key));
+    // Only accept values the question actually offered. Anything else — a
+    // tampered form, a renamed option — decays to "unknown", which shows
+    // everything, so a bad value can never hide a filing.
+    next[q.key] = q.options.some((o) => o.value === v) ? v : "unknown";
+  }
+  /*
+    Round-tripped through parseProfile before storing so the row can only ever
+    contain values the reader understands. The CHECK constraint in
+    2026_zzzf_statutory_profile.sql is the second line of defence; this is the
+    first, and it is the one that produces a sensible value rather than an
+    error the owner cannot act on.
+  */
+  const clean = parseProfile(next);
+
+  const { data, error } = await sb.from("organizations")
+    .update({ statutory_profile: clean }).eq("id", orgId).select("id");
+  if (error) throw new Error(error.message);
+  if (!((data as any[]) || []).length) {
+    throw new Error("Could not save your compliance profile — reload and try again.");
+  }
+  await logActivity(orgId, "settings", "Updated the compliance profile");
+  ["/compliance", "/gst", "/settings", "/dashboard"].forEach((p) => revalidatePath(p));
 }
 
 export async function updateOrgProfile(fd: FormData) {

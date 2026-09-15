@@ -52,7 +52,40 @@ export default async function Dashboard() {
   const chartKeys = fin.live ? ALL_KEYS.filter((s) => fin.keys.includes(s.k)) : ALL_KEYS;
   const reds = metrics.filter((m) => m.status === "red").length;
   const greens = metrics.filter((m) => m.status === "green").length;
-  const overall = reds >= 2 ? "needs attention" : reds === 1 ? "mostly healthy" : "healthy";
+  /*
+    THE THIRD STATE EXISTS AND THE HEADLINE IGNORED IT.
+
+    Found by loading the sample dataset and reading the screen: the banner said
+
+        "Your business is needs attention."
+        "You're tracking 14 metrics — 2 need attention and 6 healthy."
+
+    Three defects in the most prominent sentence in the product, and the first
+    two only appear when something is actually WRONG — the moment a customer is
+    most carefully deciding whether to trust the numbers:
+
+      1. `overall` was a verb phrase ("needs attention") dropped into "Your
+         business is ___", so the red branch read "Your business is needs
+         attention". Grammatical on the other two branches only.
+      2. A metric's status is "green" | "yellow" | "red" (metrics.ts:59), and
+         the sentence enumerated two of the three as though they were all of
+         them. 14 metrics, 2 red, 6 green — and six yellows silently missing,
+         so the arithmetic visibly failed on a screen whose entire job is to be
+         authoritative about arithmetic.
+      3. `${reds} need attention` reads "1 need attention" when exactly one
+         metric is red, which is also the case the copy is most likely to hit.
+
+    `headline` is now a complete sentence per branch rather than a fragment
+    assembled at the call site, and the body accounts for every metric.
+  */
+  const ambers = metrics.filter((m) => m.status === "yellow").length;
+  const headline = reds >= 2
+    ? "Your business needs attention."
+    : reds === 1
+      ? "Your business is mostly healthy."
+      : "Your business is healthy.";
+  /** "1 needs" / "2 need" — the copy hits reds === 1 often. */
+  const needs = `${reds} ${reds === 1 ? "needs" : "need"} attention`;
 
   return (
     <>
@@ -68,14 +101,14 @@ export default async function Dashboard() {
             <div className="rounded-lg bg-primary/15 p-2"><Sparkles className="h-5 w-5 text-primary" /></div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <p className="font-medium">{isReal && !hasMetrics ? "Let's get your real numbers in." : `Your business is ${overall}.`}</p>
+                <p className="font-medium">{isReal && !hasMetrics ? "Let's get your real numbers in." : headline}</p>
                 <Badge className="border-primary/30 text-primary">AI summary</Badge>
               </div>
               <p className="text-sm text-muted-foreground mt-1">
                 {isReal && !hasMetrics
                   ? "I don't have your numbers yet, so I won't guess. Upload a bank statement or GST return, or import a CSV, and I'll give you a real health read in seconds."
                   : isReal
-                    ? `You're tracking ${metrics.length} metric${metrics.length === 1 ? "" : "s"} — ${reds} need attention and ${greens} healthy. Ask me anything and I'll answer from your real data.`
+                    ? `You're tracking ${metrics.length} metric${metrics.length === 1 ? "" : "s"} — ${needs}, ${ambers} worth watching and ${greens} healthy. Ask me anything and I'll answer from your real data.`
                     : "This is a live demo with sample data. Sign in and import your numbers to see your own business here."}
               </p>
               {/*
