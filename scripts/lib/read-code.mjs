@@ -83,12 +83,42 @@ export function readCode(baseUrl, rel, landmarks = []) {
   const raw = readFileSync(new URL(rel, baseUrl), "utf8");
   const code = stripComments(raw);
   const missing = landmarks.filter((l) => !code.includes(l));
-  if (missing.length) {
-    throw new Error(
+  if (!missing.length) return code;
+
+  /*
+    TWO DIFFERENT FAULTS, AND THEY SENT THE READER THE SAME WAY.
+
+    A missing landmark used to always be reported as "stripping comments
+    removed code that must survive". That is only one of the two causes, and
+    it was the wrong one every time I actually hit this:
+
+      - the landmark is in the file but not in the stripped output — a
+        STRIPPER fault, and the original message was right;
+      - the landmark is not in the file at all — the code the caller was
+        about to assert on has been REMOVED OR RENAMED, which is usually the
+        regression the caller exists to catch.
+
+    Conflating them sends whoever reads the failure to debug the comment
+    stripper when the real answer is "somebody deleted that call site". Both
+    are now named for what they are, and the second reports the state that
+    matters: absent from the source, not lost in transit.
+  */
+  const gone = missing.filter((l) => !raw.includes(l));
+  const eaten = missing.filter((l) => raw.includes(l));
+  const parts = [];
+  if (gone.length) {
+    parts.push(
+      `readCode(${rel}): landmark absent from the SOURCE — the code it anchors ` +
+      `has been removed or renamed.\n` +
+      gone.map((m) => `  not in file: ${JSON.stringify(m)}`).join("\n"),
+    );
+  }
+  if (eaten.length) {
+    parts.push(
       `readCode(${rel}): stripping comments removed code that must survive.\n` +
-      missing.map((m) => `  missing landmark: ${JSON.stringify(m)}`).join("\n") +
+      eaten.map((m) => `  lost to the stripper: ${JSON.stringify(m)}`).join("\n") +
       `\n  (${raw.length} chars in, ${code.length} out)`,
     );
   }
-  return code;
+  throw new Error(parts.join("\n"));
 }

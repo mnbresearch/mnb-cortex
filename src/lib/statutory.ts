@@ -31,6 +31,20 @@
  * would destroy trust in every other warning we send.
  */
 
+/*
+  Relative, WITH the extension, rather than the "@/lib/…" alias used in most of
+  this codebase — and not a style choice.
+
+  scripts/test-seo-pages.mjs executes this module directly
+  (`await import("../src/lib/statutory.ts")`) so that the thirteen public
+  deadline pages can be checked against the REAL catalogue rather than a copy.
+  node resolves a relative specifier and does not resolve the alias, so writing
+  `@/lib/statutory-profile` here broke that suite immediately with
+  ERR_MODULE_NOT_FOUND. lib/deadline-seo.ts and lib/industry-seo.ts already
+  carry the same note for the same reason.
+*/
+import { applicability, excludedBecause, type StatutoryProfile } from "./statutory-profile.ts";
+
 export type Deadline = {
   id: string;
   name: string;
@@ -190,6 +204,14 @@ export function upcomingDeadlines(withinDays = 10, now = new Date()): Deadline[]
     if (daysAway < 0 || daysAway > withinDays) return;
     out.push({ id, name, what, due, daysAway, severity, appliesIf });
   };
+  /*
+    The profile filter deliberately does NOT happen in here. `push` is shared
+    by both loops and knows nothing about a workspace; filtering at the source
+    would make the excluded rules unrecoverable, which safety rule 3 in
+    lib/statutory-profile.ts forbids. See splitByProfile() below: it takes the
+    full list and returns both halves, so a caller can only ever shorten a
+    list it can still see the rest of.
+  */
 
   /*
     This month's monthly deadlines AND next month's.
@@ -271,4 +293,46 @@ export const URGENT_WITHIN_DAYS = 3;
 /** One deadline as a sentence. */
 export function describeDeadline(dl: Deadline): string {
   return `${dl.name} is due ${whenPhrase(dl.daysAway)} — ${dl.what}, if ${dl.appliesIf}.`;
+}
+
+/* ===========================================================================
+   SPLIT, NEVER FILTER.
+
+   Every caller that narrows the calendar to one workspace goes through here,
+   and it returns BOTH halves. That shape is the enforcement mechanism for
+   safety rule 3 in lib/statutory-profile.ts: a function that returned only
+   the applicable rules would let a page shorten its list with no way to show
+   what it dropped, and a silently shortened compliance list is
+   indistinguishable from a bug — or from a missed filing.
+
+   `hidden` carries the reason on each entry, in the owner's own words, so the
+   page can say "hidden because you told us you have no employees" rather than
+   the thing we must never say, which is "PF does not apply to you".
+   =========================================================================== */
+
+export type HiddenDeadline = Deadline & { hiddenBecause: string };
+
+export function splitByProfile(
+  all: Deadline[],
+  profile: StatutoryProfile,
+): { shown: Deadline[]; hidden: HiddenDeadline[] } {
+  const shown: Deadline[] = [];
+  const hidden: HiddenDeadline[] = [];
+  for (const dl of all) {
+    /*
+      The id carries a "-next" suffix for the second occurrence of a rule
+      within the window (see the wrap comment in upcomingDeadlines), and the
+      profile gates are keyed on the bare rule id. Stripping it here rather
+      than duplicating every key in the gate map means a rule cannot be
+      gated in its first occurrence and ungated in its second — which would
+      show January's TDS return to someone who told us they deduct no TDS.
+    */
+    const baseId = dl.id.replace(/-next$/, "");
+    if (applicability(baseId, profile) === "excluded") {
+      hidden.push({ ...dl, hiddenBecause: excludedBecause(baseId, profile) || "you told us this does not apply" });
+    } else {
+      shown.push(dl);
+    }
+  }
+  return { shown, hidden };
 }

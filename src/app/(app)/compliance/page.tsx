@@ -4,7 +4,10 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AIPanel } from "@/components/ai-panel";
-import { upcomingDeadlines, whenPhrase, URGENT_WITHIN_DAYS } from "@/lib/statutory";
+import { upcomingDeadlines, whenPhrase, URGENT_WITHIN_DAYS, splitByProfile } from "@/lib/statutory";
+import { getStatutoryProfile } from "@/lib/data";
+import { profileIsSet } from "@/lib/statutory-profile";
+import { StatutoryProfileForm } from "@/components/statutory-profile-form";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +31,7 @@ const periodic = [
 
 const tone: Record<string, string> = { danger: "bg-danger/10 text-danger border-danger/20", warn: "bg-warning/10 text-warning border-warning/20", flat: "border-border text-muted-foreground" };
 
-export default function Compliance() {
+export default async function Compliance() {
   /*
     What is actually due, now.
 
@@ -43,14 +46,35 @@ export default function Compliance() {
     a company with ROC filings — and telling a sole proprietor they must file
     AOC-4 would cost us their trust in every other warning we send.
   */
-  const soon = upcomingDeadlines(10);
+  const all = upcomingDeadlines(10);
+  /*
+    NARROWED TO THIS WORKSPACE — and the narrowing is visible.
+
+    The comment above is still true of the RULES: Cortex is not told anything
+    about a business it has not been told. What has changed is that it can now
+    be told, once, by the owner — and splitByProfile returns both halves so
+    this page can show what it hid and why.
+
+    An unanswered profile produces shown === all and hidden === [], so this
+    page is byte-identical to its previous behaviour until somebody answers.
+    That is the safety property, not a coincidence: see the header of
+    lib/statutory-profile.ts.
+  */
+  const profile = await getStatutoryProfile();
+  const { shown: soon, hidden } = splitByProfile(all, profile);
+  const answered = profileIsSet(profile);
 
   return (
     <>
       <Topbar title="Compliance Calendar" subtitle="India statutory due dates — never miss a filing" />
       <PageShell>
         {soon.length > 0 && (
-          <Section title="Due in the next 10 days" desc="Dated from today. Check which of these apply to you.">
+          <Section
+            title="Due in the next 10 days"
+            desc={answered
+              ? "Dated from today, and narrowed to the answers you gave below."
+              : "Dated from today. Check which of these apply to you — answer the six questions below and we will narrow it."}
+          >
             {/*
               The "today / tomorrow / N days" ternary and the bare `3` were
               inline below, and I then wrote a third copy of both into /gst —
@@ -79,6 +103,59 @@ export default function Compliance() {
             </div>
           </Section>
         )}
+
+        {/*
+          WHAT WE HID, AND WHY — never "this does not apply to you".
+
+          Safety rule 3 in lib/statutory-profile.ts: a filter that silently
+          shortens a compliance list is indistinguishable from a bug, or from
+          a missed filing. So every excluded deadline stays on this page with
+          its date, muted, carrying the owner's own answer as the reason.
+
+          The wording is always attributed: "hidden because you told us …".
+          We are in no position to assert anything about somebody's tax
+          affairs, and if the answer was wrong the sentence that shows them
+          why is also the sentence that tells them what to change.
+        */}
+        {hidden.length > 0 && (
+          <Section
+            title={`Hidden by your answers (${hidden.length})`}
+            desc="Still dated, still here. If any of these are wrong, change the answer below and it comes back."
+          >
+            <div className="space-y-2">
+              {hidden.map((d) => (
+                <Card key={d.id} className="p-4 flex items-start gap-3 opacity-70">
+                  <div className="h-10 w-16 rounded-lg grid place-items-center text-xs font-bold shrink-0 border text-muted-foreground">
+                    {whenPhrase(d.daysAway)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm line-through decoration-muted-foreground/40">{d.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {d.what} — hidden because <span className="italic">{d.hiddenBecause}</span>.
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/*
+          THE QUESTIONS THEMSELVES.
+
+          Placed after the dated list rather than before it: an owner arriving
+          at this page wants to know what is due, not to fill in a form. The
+          form is the thing that makes the list shorter next time.
+        */}
+        <Section
+          title="Which of these are actually yours?"
+          desc={answered
+            ? "Your answers. Six questions, changeable any time — anything left as “I’m not sure” keeps showing."
+            : "Six questions, asked once. Answer them and this page stops showing you other businesses’ deadlines."}
+        >
+          <StatutoryProfileForm profile={profile} />
+        </Section>
+
         <Section title="Every month" desc="Recurring monthly obligations (dates are typical; verify for your category)">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {monthly.map((d) => (

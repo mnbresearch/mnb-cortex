@@ -8,6 +8,8 @@ import { AIPanel } from "@/components/ai-panel";
 import {
   STATUTORY_CATALOGUE, nextOccurrence, daysUntilIST, whenPhrase, URGENT_WITHIN_DAYS,
 } from "@/lib/statutory";
+import { getStatutoryProfile } from "@/lib/data";
+import { applicability, excludedBecause } from "@/lib/statutory-profile";
 import { GST_RATES, GST_RATES_AS_OF } from "@/lib/gst-rates";
 import { DEADLINE_TOPICS } from "@/lib/deadline-seo";
 
@@ -74,14 +76,28 @@ function awayFrom(d: Date | null, now: Date): number {
   return d ? Math.max(0, daysUntilIST(d, now)) : Number.MAX_SAFE_INTEGER;
 }
 
-export default function GST() {
+export default async function GST() {
   const now = new Date();
+  /*
+    NARROWED, with the reason kept.
+
+    A monthly GST filer has no PMT-06 and no IFF; a QRMP filer has no monthly
+    GSTR-1 or GSTR-3B. Showing all seven to everyone was the noise this
+    profile exists to remove. Excluded rules are not dropped — they render
+    below, muted, saying which answer hid them, because safety rule 3 in
+    lib/statutory-profile.ts forbids a silently shortened compliance list.
+  */
+  const profile = await getStatutoryProfile();
   const rows = GST_RULE_IDS
     .map((id) => {
       const rule = STATUTORY_CATALOGUE.find((r) => r.id === id);
       if (!rule) return null;
       const next = nextOccurrence(id, now);
-      return { rule, next, href: topicFor(id), away: awayFrom(nextOccurrence(id, now), now) };
+      return {
+        rule, next, href: topicFor(id), away: awayFrom(nextOccurrence(id, now), now),
+        excluded: applicability(id, profile) === "excluded",
+        why: excludedBecause(id, profile),
+      };
     })
     .filter(Boolean)
     /*
@@ -105,7 +121,10 @@ export default function GST() {
     */
     .sort((a, b) => a!.away - b!.away) as Array<{
       rule: (typeof STATUTORY_CATALOGUE)[number]; next: Date | null; href: string | null; away: number;
+      excluded: boolean; why: string | null;
     }>;
+  const live = rows.filter((r) => !r.excluded);
+  const hidden = rows.filter((r) => r.excluded);
 
   return (
     <>
@@ -116,7 +135,7 @@ export default function GST() {
           desc="Read from the same calendar Cortex warns you from — not a second copy"
         >
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {rows.map(({ rule, next, href, away }) => {
+            {live.map(({ rule, next, href, away }) => {
               /*
                 "15 Sept" does not tell an owner that this is tomorrow, and
                 tomorrow is the only thing they need to know from this card.
@@ -165,6 +184,40 @@ export default function GST() {
             or <Link href="/compliance" className="text-primary underline">what is due for this workspace</Link>.
           </p>
         </Section>
+
+        {/*
+          WHAT YOUR ANSWERS HID — shown, not dropped.
+
+          Safety rule 3 in lib/statutory-profile.ts: a compliance list that
+          silently gets shorter is indistinguishable from a bug. A QRMP filer
+          should see that monthly GSTR-1 is absent BECAUSE they said quarterly,
+          so that if they switch schemes — or mis-answered — the sentence that
+          explains the absence is also the one that tells them what to change.
+
+          The reason is always attributed to the owner ("you told us …"), never
+          asserted by us. Cortex has no view on anybody's registration status.
+        */}
+        {hidden.length > 0 && (
+          <Section
+            title={`Not shown for you (${hidden.length})`}
+            desc="Based on your own answers. Wrong? Change them on the compliance page and these come straight back."
+          >
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {hidden.map(({ rule, next, why }) => (
+                <Card key={rule.id} className="p-4 opacity-70">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm line-through decoration-muted-foreground/40">{rule.name}</span>
+                    <Badge className={tone.low}>{next ? fmt.format(next) : `Day ${rule.day}`}</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">{why}</div>
+                </Card>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              <Link href="/compliance" className="text-primary underline">Review your compliance answers</Link>
+            </p>
+          </Section>
+        )}
 
         <Section title="Ask the GST assistant" desc="ITC, rates, place of supply, e-invoicing, returns">
           <AIPanel

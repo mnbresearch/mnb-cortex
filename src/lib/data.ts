@@ -3,6 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient, hasSupabase, serviceClient } from "@/lib/supabase/server";
 import { demoMetrics, demoInsights, demoAlerts, demoContext } from "@/lib/demo";
+import { parseProfile, UNKNOWN_PROFILE, type StatutoryProfile } from "@/lib/statutory-profile";
 import { SUPER_ADMINS } from "@/lib/operators";
 import { likeLiteral } from "@/lib/sql";
 import type { HealthMetric, AIInsight, Alert } from "@/types";
@@ -114,6 +115,34 @@ export async function getOrgProfile() {
   const sb = createClient();
   const { data } = await sb.from("organizations").select("*").eq("id", orgId).single();
   return data ? { ...data, userEmail: user?.email } : null;
+}
+
+/**
+ * The workspace's self-declared statutory circumstances.
+ *
+ * Six answers that decide which of the nineteen statutory rules in
+ * lib/statutory.ts are actually this business's. Returns UNKNOWN_PROFILE on
+ * every failure path — no org, no row, no column, malformed json — because
+ * unknown means SHOW EVERYTHING, so a broken read can only ever make the
+ * calendar noisier, never make a real filing disappear.
+ *
+ * That asymmetry is the whole safety design: see the header of
+ * lib/statutory-profile.ts.
+ */
+export async function getStatutoryProfile(): Promise<StatutoryProfile> {
+  try {
+    const org = await currentOrg();
+    if (!org) return UNKNOWN_PROFILE;
+    const sb = createClient();
+    const { data, error } = await sb
+      .from("organizations").select("statutory_profile").eq("id", org).maybeSingle();
+    // A deployment that has not run 2026_zzzf_statutory_profile.sql yet must
+    // behave exactly as it did before the column existed.
+    if (error || !data) return UNKNOWN_PROFILE;
+    return parseProfile((data as any).statutory_profile);
+  } catch {
+    return UNKNOWN_PROFILE;
+  }
 }
 
 // Demo data is shown ONLY to logged-out visitors on the public /dashboard preview
@@ -265,20 +294,61 @@ When answering: say plainly that you don't have their numbers yet, then tell the
     does not helpfully drop the qualifier and assert an obligation the business
     may not have.
   */
+  /*
+    NARROWED BY WHAT THE OWNER TOLD US — and the caveat survives the narrowing.
+
+    Two distinct changes here, and conflating them would be the bug:
+
+      1. The LIST is filtered, so a QRMP filer's assistant stops volunteering
+         monthly GSTR-1 dates. This is the point of the profile: an assistant
+         that mentions four filings when two are real trains the owner to
+         ignore all four.
+
+      2. The CAVEAT stays. The profile answers six questions; nineteen rules
+         exist, and some (advance tax, deliberately) are ungated because no
+         self-declared answer settles them. So "shown" means "not excluded by
+         your answers", NOT "confirmed to apply to you", and the instruction
+         below still forbids the model asserting an obligation.
+
+    The answered facts are given to the model separately, as the owner's own
+    statements with that attribution, because they make its replies concretely
+    better — "you're on QRMP, so it's PMT-06 on the 25th, not 3B on the 20th"
+    is only sayable if it knows. What it must never do is convert the owner's
+    self-declaration into our assessment of their tax position.
+  */
   let dueLines: string[] = [];
+  let profileLines: string[] = [];
   try {
-    const { upcomingDeadlines } = await import("@/lib/statutory");
-    dueLines = upcomingDeadlines(14).slice(0, 6)
+    const { upcomingDeadlines, splitByProfile } = await import("@/lib/statutory");
+    const { PROFILE_QUESTIONS, profileIsSet } = await import("@/lib/statutory-profile");
+    const profile = await getStatutoryProfile();
+    const { shown } = splitByProfile(upcomingDeadlines(14), profile);
+    dueLines = shown.slice(0, 6)
       .map((d) => `- ${d.name} in ${d.daysAway} day(s) (${d.due.toISOString().slice(0, 10)}): ${d.what} — applies if ${d.appliesIf}`);
+    if (profileIsSet(profile)) {
+      profileLines = PROFILE_QUESTIONS
+        .filter((q) => profile[q.key] !== "unknown")
+        .map((q) => {
+          const opt = q.options.find((o) => o.value === profile[q.key]);
+          return `- ${q.question} ${opt ? opt.label : profile[q.key]}`;
+        });
+    }
   } catch { /* never let a deadline lookup break the whole context */ }
+
+  const prof = profileLines.length
+    ? `\n\nWHAT THE OWNER TOLD US ABOUT THEIR COMPLIANCE SETUP:\n${profileLines.join("\n")}\n` +
+      `(These are their own answers, not verified facts, and they may be out of date. ` +
+      `Use them to be specific, but if something turns on one of them, say which answer you are relying on.)`
+    : "";
 
   const due = dueLines.length
     ? `\n\nSTATUTORY DEADLINES COMING UP:\n${dueLines.join("\n")}\n` +
-      `(These are the standard Indian due dates. You do NOT know which apply to this business — ` +
-      `always keep the "if" condition when you mention one, and never state that they have missed or must file something.)`
+      `(These are the standard Indian due dates, with anything the owner's answers ruled out already removed. ` +
+      `That is not the same as knowing they apply — always keep the "if" condition when you mention one, ` +
+      `and never state that they have missed or must file something.)`
     : "";
 
-  return `KEY METRICS:\n${lines.join("\n")}\n\nACTIVE INSIGHTS:\n${insLines.join("\n")}${due}`;
+  return `KEY METRICS:\n${lines.join("\n")}\n\nACTIVE INSIGHTS:\n${insLines.join("\n")}${prof}${due}`;
 }
 
 export const getDocumentsList = () => fetchRows("documents", "created_at");
