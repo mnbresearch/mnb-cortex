@@ -301,7 +301,18 @@ ok("a suggestion fills the field", /function useSuggestion[\s\S]{0,200}?setInput
 ok("the panel finally applies the aria-label three pages were passing",
   /aria-label=\{ariaLabel \|\| placeholder\}/.test(panel));
 
-const gst = read("src/app/(app)/gst/page.tsx", "export default function GST");
+/*
+  Anchored on "function GST(" rather than the full signature. The landmark
+  exists to prove comment-stripping did not eat the code, not to pin the
+  declaration's exact shape — and pinning the shape broke this suite for real:
+  adding `async` to the page (so it could read the statutory profile) turned
+  "export default function GST" into a landmark that no longer existed, and
+  readCode threw. The suite CRASHED rather than reporting a failure, which my
+  chunked runner was grepping output for the word "failed" and therefore
+  counted as green. Two lessons, both applied: anchor on the stable part, and
+  verify suites by exit code.
+*/
+const gst = read("src/app/(app)/gst/page.tsx", "function GST(");
 ok("/gst reads the statutory catalogue instead of its own array",
   /from "@\/lib\/statutory"/.test(gst));
 ok("/gst reads the shared GST rates", /from "@\/lib\/gst-rates"/.test(gst));
