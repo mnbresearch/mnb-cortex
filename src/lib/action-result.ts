@@ -144,3 +144,74 @@ export function messageForThrown(e: unknown): string {
     ? `${FALLBACK_MESSAGE} Reference: ${d}`
     : FALLBACK_MESSAGE;
 }
+
+/*
+  ============================================================================
+  DID IT REACH US? — and the reason that question decides whether to offer
+  a retry button rather than just a nicer sentence.
+  ============================================================================
+
+  I hit this live: two saves on the compliance form returned 503 during a
+  deploy and produced nothing at all. The fix in the previous commit made that
+  visible, but the sentence it shows is the generic "that didn't save", which
+  leaves the person to guess what to do next.
+
+  The obvious improvement — a Try again button — is unsafe by default, and
+  this codebase has already paid for that lesson: form-buttons.tsx exists
+  because "Add invoice" pressed twice inserted the invoice twice. A retry is
+  the same double submission with a friendlier label.
+
+  So two judgements have to be made, and they are different judgements.
+
+  FIRST: did the request reach the server?
+
+  `digest` is the signal. Next stamps it on errors that were thrown INSIDE a
+  server action and serialised back, so its presence means the action ran. Its
+  absence means the failure happened before any response we can read — a dead
+  connection, a 503 HTML page from the edge, a function that never booted.
+
+  This is a strong signal but NOT a proof, and the wording downstream must not
+  pretend otherwise: a function can 503 after its INSERT has committed. So
+  "unreached" means "we have no evidence it landed", never "nothing happened".
+
+  SECOND: if it did not land, is repeating it safe?
+
+  That cannot be inferred here — it is a property of each action, so each call
+  site declares it (see SafeForm's `repeatable`). The rule:
+
+    REPEATABLE — the action converges on the same state however many times it
+      runs. A single-row UPDATE keyed by the org, an UPSERT, a DELETE by id.
+      updateOrgProfile, updateStatutoryProfile, saveAlertRule, deleteWebhook
+      and deleteScheduledReport qualify. updateStatutoryProfile also writes
+      one row to `activity` via logActivity, so a repeat leaves a duplicate
+      audit line — noise in a log, not damage to a business record, which is
+      why it still qualifies. Being precise about that is the point: "safe to
+      repeat" is a claim about the customer's data, not a claim of perfect
+      idempotence.
+
+    NOT REPEATABLE — anything that INSERTs a business row. inviteMember,
+      addLead, saveGoal, addWebhook, addScheduledReport, generatePO,
+      sendReminderAI, runWorkflow, convertLead, updateStatus. These get told
+      to reload and check first, because the one scenario where a retry does
+      real harm is precisely the one we cannot rule out.
+*/
+export type FailureKind = "unreached" | "server";
+
+export function classifyFailure(e: unknown): FailureKind {
+  const d = (e as any)?.digest;
+  return typeof d === "string" && d ? "server" : "unreached";
+}
+
+/** No evidence it arrived, and repeating it converges on the same state. */
+export const UNREACHED_RETRYABLE =
+  "That didn't reach us — it may be your connection, or a hiccup on our side. Nothing you typed has been lost.";
+
+/**
+ * No evidence it arrived, but a repeat could duplicate a record.
+ *
+ * The wording has to carry real uncertainty without being alarming, and it
+ * must not tell them it is safe to press again — that is the one instruction
+ * that could cost them a duplicate invoice.
+ */
+export const UNREACHED_CHECK_FIRST =
+  "That didn't reach us, so it most likely didn't save — but we can't be certain. Reload the page and check before sending it again, in case it did go through.";

@@ -37,7 +37,7 @@ import { SubmitButton } from "@/components/form-buttons";
 */
 export function StatutoryProfileForm({ profile }: { profile: StatutoryProfile }) {
   return (
-    <SafeForm action={updateStatutoryProfile} successMessage="Saved. Your calendar below now reflects these answers.">
+    <SafeForm action={updateStatutoryProfile} repeatable successMessage="Saved. Your calendar below now reflects these answers.">
       <div className="grid md:grid-cols-2 gap-4">
         {PROFILE_QUESTIONS.map((q) => (
           <Card key={q.key} className="p-4">

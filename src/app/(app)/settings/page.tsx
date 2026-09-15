@@ -64,7 +64,7 @@ export default async function Settings() {
             <AiInstructionsPanel canEdit={canEditAi} />
 
             <Section title="Company profile" desc="The business Cortex watches for you">
-              <SafeForm action={updateOrgProfile} className="grid sm:grid-cols-3 gap-3" successMessage="Company profile saved.">
+              <SafeForm action={updateOrgProfile} repeatable className="grid sm:grid-cols-3 gap-3" successMessage="Company profile saved.">
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-1">Company name
                   <input className={inp} name="name" defaultValue={profile?.name || ""} required />
                 </label>

@@ -44,7 +44,7 @@ export default async function Reports() {
                     {r.last_sent ? ` · last sent ${new Date(r.last_sent).toLocaleDateString("en-IN")}` : " · not sent yet"}
                   </span>
                 </div>
-                <SafeForm action={deleteScheduledReport}>
+                <SafeForm action={deleteScheduledReport} repeatable>
                   <input type="hidden" name="id" value={r.id} />
                   <button className="rounded-lg border h-8 px-3 text-xs text-danger hover:bg-danger/10">Remove</button>
                 </SafeForm>

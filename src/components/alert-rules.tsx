@@ -115,7 +115,7 @@ export function AlertRules({ metrics = [], rules = [] }: { metrics?: LiveMetric[
         </div>
 
         {metrics.length > 0 && (
-          <SafeForm action={saveAlertRule} className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-3">
+          <SafeForm action={saveAlertRule} repeatable className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-3">
             <span className="text-sm text-muted-foreground">Alert me when</span>
             <select
               name="metric_key" value={draftMetric}

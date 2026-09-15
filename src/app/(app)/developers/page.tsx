@@ -142,7 +142,7 @@ export default async function Developers() {
                   <div className="flex items-center gap-1.5 shrink-0">
                     <SafeForm action={testWebhook}><input type="hidden" name="id" value={h.id} />
                       <button className="rounded-lg border h-8 px-3 text-xs hover:bg-accent">Send test</button></SafeForm>
-                    <SafeForm action={deleteWebhook}><input type="hidden" name="id" value={h.id} />
+                    <SafeForm action={deleteWebhook} repeatable><input type="hidden" name="id" value={h.id} />
                       <button className="rounded-lg border h-8 px-3 text-xs text-danger hover:bg-danger/10">Remove</button></SafeForm>
                   </div>
                 </div>

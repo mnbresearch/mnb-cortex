@@ -336,6 +336,181 @@ t("S4 no form is bound to an action that can fail recoverably without SafeForm",
     "these forms can receive a failure they cannot display:\n  " + offenders.join("\n  "));
 });
 
+/* ========================================================================
+   DID IT REACH US, AND IS A REPEAT SAFE?
+
+   Two independent judgements, and conflating them is how you ship a Try
+   again button that duplicates an invoice. form-buttons.tsx already exists
+   because "Add invoice" pressed twice inserted the invoice twice; a retry is
+   the same double submission wearing a friendlier label.
+   ======================================================================== */
+
+const { classifyFailure, UNREACHED_RETRYABLE, UNREACHED_CHECK_FIRST } = M;
+
+t("F1 a digest means it reached the server and threw", () => {
+  assert.equal(classifyFailure(Object.assign(new Error("x"), { digest: "2541004096" })), "server");
+});
+
+t("F2 no digest means we have no evidence it landed", () => {
+  for (const e of [new Error("Failed to fetch"), new TypeError("NetworkError"), {}, null, undefined, "x", 0]) {
+    assert.equal(classifyFailure(e), "unreached", JSON.stringify(e));
+  }
+});
+
+t("F3 an empty or non-string digest is not evidence of arrival", () => {
+  /* Defensive: treating a junk digest as "server" would suppress the retry
+     button on exactly the connection failures it is meant for. */
+  assert.equal(classifyFailure({ digest: "" }), "unreached");
+  assert.equal(classifyFailure({ digest: 42 }), "unreached");
+  assert.equal(classifyFailure({ digest: null }), "unreached");
+});
+
+t("F4 the retryable wording never claims nothing was written", () => {
+  /*
+    A 503 can happen AFTER a commit. The message may say the person's typing
+    is safe — it is, it is still in the form — but it must not assert the
+    database was untouched, which we cannot know.
+  */
+  assert.ok(!/nothing was saved|nothing was written|no changes were made/i.test(UNREACHED_RETRYABLE),
+    `overclaims: ${UNREACHED_RETRYABLE}`);
+  assert.ok(/didn't reach us/i.test(UNREACHED_RETRYABLE), UNREACHED_RETRYABLE);
+});
+
+t("F5 the non-retryable wording carries the uncertainty and says to check", () => {
+  assert.ok(/can't be certain|cannot be certain/i.test(UNREACHED_CHECK_FIRST), UNREACHED_CHECK_FIRST);
+  assert.ok(/reload/i.test(UNREACHED_CHECK_FIRST), UNREACHED_CHECK_FIRST);
+  assert.ok(/check before/i.test(UNREACHED_CHECK_FIRST), UNREACHED_CHECK_FIRST);
+  /* Must never tell them it is safe to press again. */
+  assert.ok(!/try again|safe to/i.test(UNREACHED_CHECK_FIRST), UNREACHED_CHECK_FIRST);
+});
+
+t("F6 the two messages are different", () => {
+  assert.notEqual(UNREACHED_RETRYABLE, UNREACHED_CHECK_FIRST);
+});
+
+/* ---- SafeForm's branching ---- */
+
+const SF = readCode(import.meta.url, "../src/components/safe-form.tsx", ["classifyFailure", "repeatable"]);
+
+t("F7 repeatable defaults to false", () => {
+  assert.ok(/repeatable = false/.test(SF),
+    "repeatable does not default to false — every form would offer a retry");
+});
+
+t("F8 the retry button is gated on BOTH unreached and repeatable", () => {
+  const i = SF.indexOf('classifyFailure(e) === "unreached"');
+  assert.ok(i > 0, "the unreached branch is gone");
+  const branch = SF.slice(i, i + 320);
+  assert.ok(/setCanRetry\(repeatable\)/.test(branch),
+    "canRetry is not tied to the call site's repeatable declaration");
+  assert.ok(/repeatable \? UNREACHED_RETRYABLE : UNREACHED_CHECK_FIRST/.test(branch),
+    "both wordings are not selected by repeatable");
+});
+
+t("F9 a server-side throw never offers a retry", () => {
+  /*
+    The dangerous one. A throw from inside the action is precisely the case
+    where a write may have partially committed, so canRetry must not be set
+    on that path — even for an action whose repeat is otherwise safe.
+  */
+  const i = SF.indexOf("messageForThrown(e)");
+  assert.ok(i > 0);
+  const tail = SF.slice(SF.indexOf("catch (e)"), SF.length);
+  const unreachedAt = tail.indexOf('=== "unreached"');
+  const thrownAt = tail.indexOf("messageForThrown(e)");
+  assert.ok(unreachedAt < thrownAt, "the unreached branch must come first and return");
+  const afterUnreachedReturn = tail.slice(tail.indexOf("return;", unreachedAt));
+  assert.ok(!/setCanRetry\(true\)|setCanRetry\(repeatable\)/.test(afterUnreachedReturn),
+    "a retry is enabled after the unreached branch — a server throw would offer it");
+});
+
+t("F10 a RETURNED failure never offers a retry", () => {
+  /* It ran and refused. The identical submission earns the identical refusal;
+     the person has to change something first. */
+  /*
+    Bounded to the branch's own `return;`. Written as a fixed 400-character
+    window first, which ran past the closing brace into the catch block and
+    failed on the retry branch's setCanRetry — a test measuring the wrong
+    region, not a product fault. Worth recording: a window wide enough to
+    catch the bug is also wide enough to invent one.
+  */
+  const i = SF.indexOf("isActionResult(result)");
+  assert.ok(i > 0, "the returned-failure branch is gone");
+  const branch = SF.slice(i, SF.indexOf("return;", i) + 7);
+  assert.ok(branch.length < 200, `branch slice looks wrong (${branch.length} chars)`);
+  assert.ok(!/setCanRetry\(true\)|setCanRetry\(repeatable\)/.test(branch),
+    "a returned failure enables the retry button");
+});
+
+t("F11 canRetry is cleared at the start of every submission", () => {
+  const i = SF.indexOf("async function run(");
+  const head = SF.slice(i, i + 260);
+  assert.ok(/setCanRetry\(false\)/.test(head),
+    "a stale retry button survives into the next attempt");
+});
+
+t("F12 the retry resends the captured submission, not a re-read of the form", () => {
+  assert.ok(/lastSubmission\.current = fd/.test(SF), "the submission is not captured");
+  const i = SF.indexOf("function retry(");
+  const body = SF.slice(i, i + 220);
+  assert.ok(/lastSubmission\.current/.test(body), "retry does not use the captured submission");
+  assert.ok(!/new FormData/.test(body), "retry rebuilds the form data instead of resending it");
+});
+
+/* ---- the classification of each call site ---- */
+
+t("F13 only single-row updates, upserts and deletes are marked repeatable", () => {
+  /*
+    THE ASSERTION THAT MATTERS. If an action that INSERTs is ever marked
+    repeatable, a customer on a bad connection gets a Try again button that
+    can add a second invoice, lead or invite. Derived from actions.ts rather
+    than from a list, so a future change to what an action does is caught
+    even if nobody revisits the call site.
+  */
+  const marked = new Set();
+  for (const abs of walk(new URL("../src/", import.meta.url).pathname)) {
+    const src = stripComments(readFileSync(abs, "utf8"));
+    for (const m of src.matchAll(/<SafeForm action=\{(\w+)\}\s+repeatable/g)) marked.add(m[1]);
+  }
+  assert.ok(marked.size >= 5, `only ${marked.size} call sites marked repeatable`);
+
+  for (const name of marked) {
+    const body = bodyOf(name);
+    assert.ok(
+      !/\.insert\(/.test(body),
+      `${name} is marked repeatable but INSERTs — a retry could duplicate a record`,
+    );
+    assert.ok(
+      /\.update\(|\.upsert\(|\.delete\(/.test(body),
+      `${name} is marked repeatable but does not update, upsert or delete`,
+    );
+  }
+});
+
+t("F14 the known inserting actions are NOT marked repeatable", () => {
+  const inserters = ["inviteMember", "addLead", "saveGoal", "addWebhook",
+    "addScheduledReport", "generatePO", "sendReminderAI", "runWorkflow",
+    "convertLead", "updateStatus"];
+  const offenders = [];
+  for (const abs of walk(new URL("../src/", import.meta.url).pathname)) {
+    const src = stripComments(readFileSync(abs, "utf8"));
+    for (const name of inserters) {
+      if (new RegExp(`<SafeForm action=\\{${name}\\}\\s+repeatable`).test(src)) {
+        offenders.push(`${abs.split("/src/")[1]}: ${name}`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], "inserting actions marked repeatable:\n  " + offenders.join("\n  "));
+});
+
+t("F15 every inserting action really does insert (the list is not stale)", () => {
+  /* Guards F14 against rot: if one of these stops inserting, the list should
+     shrink deliberately rather than sit there asserting nothing. */
+  for (const name of ["inviteMember", "addLead", "saveGoal", "addWebhook", "generatePO"]) {
+    assert.ok(/\.insert\(/.test(bodyOf(name)), `${name} no longer inserts — revisit F14`);
+  }
+});
+
 /* ======================================================================== */
 
 console.log(`\naction result: ${pass} passed, ${fail_} failed`);
