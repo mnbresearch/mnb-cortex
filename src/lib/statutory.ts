@@ -82,6 +82,40 @@ const MONTHLY: Array<{ id: string; day: number; name: string; what: string; seve
  * because the PERCENTAGE differs each time, and "pay your advance tax" without
  * saying 15% or 75% is not information anyone can act on.
  */
+/**
+ * How much notice an obligation actually needs, in days.
+ *
+ * WHY THIS IS PER-RULE AND NOT ONE NUMBER.
+ *
+ * Every caller used to pass a single window — /compliance 10 days, the
+ * dashboard 14 — and every deadline was measured against it. That is right for
+ * a monthly GST return, which one person can do in an afternoon, and useless
+ * for the ones that need somebody else's time.
+ *
+ * The tax audit report is the case that exposed it. Ten days' notice of a
+ * filing your AUDITOR has to prepare and upload is not an early warning; by
+ * then the engagement should have been running for weeks. On the day the
+ * report deadline was 14 days out, /compliance said nothing about it at all —
+ * so splitting the date out of the ITR fixed the number and still left the
+ * owner unwarned.
+ *
+ * So each rule carries the notice it needs. The caller's window is a floor,
+ * not a ceiling: `Math.max(withinDays, leadDays)`, so nothing that used to be
+ * warned about stops being warned about.
+ */
+const LEAD_DAYS: Record<string, number> = {
+  /* Needs an auditor booked, fieldwork done, and a report uploaded. */
+  "tax-audit-report": 45,
+  /* Returns and ROC filings: a month, because they depend on closed books. */
+  "itr-audit": 30,
+  itr: 30,
+  roc: 30,
+  mgt7: 30,
+  /* Instalments need the year's liability estimated first. */
+  "adv-q1": 15, "adv-q2": 15, "adv-q3": 15, "adv-q4": 15,
+  "tds-q1": 15, "tds-q2": 15, "tds-q3": 15, "tds-q4": 15,
+};
+
 const FIXED: Array<{ id: string; month: number; day: number; name: string; what: string; severity: Deadline["severity"]; appliesIf: string }> = [
   { id: "adv-q1", month: 6, day: 15, name: "Advance tax — 1st instalment", what: "15% of the year's estimated liability",
     severity: "medium", appliesIf: "your annual tax liability will exceed ₹10,000" },
@@ -237,7 +271,14 @@ export function upcomingDeadlines(withinDays = 10, now = new Date()): Deadline[]
   const push = (id: string, name: string, what: string, due: Date,
                 severity: Deadline["severity"], appliesIf: string) => {
     const daysAway = Math.round((due.getTime() - today.getTime()) / 86_400_000);
-    if (daysAway < 0 || daysAway > withinDays) return;
+    /*
+      The rule's own notice period, or the caller's window — whichever is
+      longer. See LEAD_DAYS: a caller cannot know that an audit report needs
+      six weeks and a GSTR-3B needs ten days, and it should not have to.
+      Keyed on the base id so the "-next" duplicates inherit it.
+    */
+    const lead = Math.max(withinDays, LEAD_DAYS[id.replace(/-next$/, "")] ?? 0);
+    if (daysAway < 0 || daysAway > lead) return;
     out.push({ id, name, what, due, daysAway, severity, appliesIf });
   };
   /*

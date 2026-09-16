@@ -160,13 +160,31 @@ check(istToday(pastMidnightIST).d === 17,
   const gap = Math.round((retDate - repDate) / 86400000);
   check(gap >= 28 && gap <= 32, "the gap between them is about a month", `got ${gap} days`);
 
-  /* On 16 September 2026 the report is 14 days out. This is the warning that
-     did not exist — the whole point of splitting the two. */
-  const sept = upcomingDeadlines(20, at("2026-09-16"));
+  /*
+    On 16 September 2026 the report is 14 days out, and /compliance asks for a
+    TEN day window. Splitting the dates apart was not enough on its own: the
+    date was then correct and still silent, because a 14-day-away deadline
+    falls outside a 10-day window. Ten days' notice of your auditor's filing is
+    not an early warning anyway, so the rule now carries its own notice period.
+
+    Asserted at the window the page actually uses, not a generous one.
+  */
+  const sept = upcomingDeadlines(10, at("2026-09-16"));
   const warned = sept.find((x) => x.id === "tax-audit-report");
   check(warned?.daysAway === 14,
-    "on 16 Sep 2026 the audit report is warned about, 14 days out",
-    `got ${warned ? warned.daysAway : "no warning at all"}`);
+    "on 16 Sep 2026 the audit report IS warned about at a 10-day window, 14 days out",
+    `got ${warned ? warned.daysAway : "no warning at all — lead time not applied"}`);
+
+  /* Six weeks out it is already warned; seven weeks is too early to be useful. */
+  check(upcomingDeadlines(10, at("2026-08-20")).some((x) => x.id === "tax-audit-report"),
+    "…and 41 days out too, which is when an auditor can still be booked");
+  check(!upcomingDeadlines(10, at("2026-08-05")).some((x) => x.id === "tax-audit-report"),
+    "but not 56 days out, so the band does not fill up with distant dates");
+
+  /* The floor property: a longer lead must never DROP an existing warning. */
+  const monthly = upcomingDeadlines(10, at("2026-09-16"));
+  check(monthly.some((x) => x.id === "gstr3b" && x.daysAway === 4),
+    "monthly obligations are unaffected — GSTR-3B is still 4 days out");
 
   /* Still conditional: never asserted at a business we know nothing about. */
   check(/44AB|audit threshold/i.test(rep?.appliesIf ?? ""),
