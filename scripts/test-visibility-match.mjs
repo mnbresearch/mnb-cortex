@@ -235,6 +235,88 @@ const check = (c, n, d = "") => (c ? pass++ : failures.push(`${n}${d ? "\n      
     "the drafted fix is given the cited sources to work from");
 }
 
+
+/* ============== the shapes that broke it in live production ============== */
+/*
+  Both of these came back from real Gemini answers on the first run after the
+  rewrite shipped. Neither was in the original suite, which is why they reached
+  a customer-facing screen.
+*/
+{
+  /* A labelled-block answer: every option described under the same bold
+     sub-heads. Those heads sit where a brand name sits, and the live report
+     offered "Why it fits x13", "Pricing x6" and "Cost x6" as the businesses
+     recommended instead of the customer. */
+  const labelled = [
+    "Here is how the main options compare:",
+    "1. **What it is**",
+    "   A cloud accounting suite.",
+    "2. **Pricing**",
+    "   From Rs 749/month.",
+    "3. **Why it fits**",
+    "   Strong GST support.",
+    "4. **What it is**",
+    "   A desktop package.",
+    "5. **Pricing**",
+    "   One-time licence.",
+    "6. **Why it fits**",
+    "   Every CA knows it.",
+    "7. **Zoho Books**",
+    "   The actual product name, mentioned once.",
+  ].join("\n");
+
+  const got = namedBrands(labelled);
+  check(!got.some((g) => /^why it fits$/i.test(g)),
+    "a repeated field label is not reported as a competitor",
+    `"Why it fits" appeared as a recommended business in production — got ${JSON.stringify(got)}`);
+  check(!got.some((g) => /^(pricing|cost|what it is)$/i.test(g)),
+    "…nor Pricing, Cost or What it is", JSON.stringify(got));
+  check(got.includes("Zoho Books"),
+    "…while a real brand in the same answer survives", JSON.stringify(got));
+
+  /* The blocklist alone cannot keep up with labels a model invents, so the
+     structural rule is the one that has to hold: anything repeated across the
+     items is furniture. */
+  const invented = [
+    "1. **Squiggle Factor**", "   x", "2. **Squiggle Factor**", "   y",
+    "3. **Squiggle Factor**", "   z", "4. **Deccan Spares**", "   a real one",
+  ].join("\n");
+  const inv = namedBrands(invented);
+  check(!inv.includes("Squiggle Factor"),
+    "an invented label that repeats is dropped without being on any list",
+    JSON.stringify(inv));
+  check(inv.includes("Deccan Spares"), "and the single real name is kept");
+
+  /* An unclosed parenthetical came back as part of a name. */
+  const paren = "1. Clear (formerly ClearTax / Clear Books\n2. Vyapar — mobile first";
+  const pr = namedBrands(paren);
+  check(pr.includes("Clear"), "an unclosed bracket is trimmed off the name", JSON.stringify(pr));
+  check(!pr.some((x) => x.includes("(")), "no bracket survives in a name", JSON.stringify(pr));
+
+  /* The known-good shape must be untouched by all of the above. */
+  const good = [
+    "1. **Zoho Books**", "   Cloud based.",
+    "2. **TallyPrime**", "   The gold standard.",
+    "3. **Vyapar**", "   Mobile first.",
+  ].join("\n");
+  const g = namedBrands(good);
+  check(g.length === 3 && g.includes("Zoho Books") && g.includes("TallyPrime") && g.includes("Vyapar"),
+    "the ordinary ranked-list answer still yields exactly its three brands",
+    JSON.stringify(g));
+}
+
+/* ================= the cross-check engine must be grounded =============== */
+{
+  const { readFileSync } = await import("node:fs");
+  const lib = readFileSync("src/lib/ai/visibility.ts", "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  check(/engines\.slice\(1\)\.find\(\(e\) => e\.grounded\)/.test(lib),
+    "the second engine is chosen only if it has live web access",
+    "Groq has no web access; cross-checking against it costs calls and proves nothing");
+  check(/id: "groq", ask: askGroq, grounded: false/.test(lib),
+    "Groq is marked ungrounded so it can never be picked as the cross-check");
+}
+
 console.log(`\nvisibility matching: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   console.log("\nFAILURES:");

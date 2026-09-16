@@ -151,14 +151,23 @@ async function askGroq(prompt: string): Promise<EngineAnswer> {
   } catch { return NO_ANSWER; }
 }
 
-type Engine = { id: string; ask: (p: string) => Promise<EngineAnswer> };
+type Engine = { id: string; ask: (p: string) => Promise<EngineAnswer>; grounded: boolean };
 
 /** Grounded engines first: a live-web answer is the one a buyer would get. */
 function availableEngines(): Engine[] {
   const out: Engine[] = [];
-  if (aiKey("GEMINI_API_KEY")) out.push({ id: "gemini", ask: askGemini });
-  if (aiKey("OPENAI_API_KEY")) out.push({ id: "openai", ask: askOpenAI });
-  if (aiKey("GROQ_API_KEY")) out.push({ id: "groq", ask: askGroq });
+  if (aiKey("GEMINI_API_KEY")) out.push({ id: "gemini", ask: askGemini, grounded: true });
+  if (aiKey("OPENAI_API_KEY")) out.push({ id: "openai", ask: askOpenAI, grounded: true });
+  /*
+    Groq is model KNOWLEDGE, not an answer engine — no live web. It stays as a
+    last-resort primary so a workspace with only this key still gets something,
+    but it must never be the cross-check engine. On the first live run after I
+    shipped the cross-check, the only second key configured was Groq, so the
+    run spent four extra calls on a model that cannot see the web and then
+    reported "Llama 3.3 · no answer" in warning colour — a scary-looking line
+    for a comparison that was meaningless even when it worked.
+  */
+  if (aiKey("GROQ_API_KEY")) out.push({ id: "groq", ask: askGroq, grounded: false });
   return out;
 }
 
@@ -251,7 +260,14 @@ export async function runVisibility(
   /* Primary engine answers every prompt; a second engine cross-checks a few. */
   const jobs: Array<{ prompt: string; engine: Engine }> = [];
   for (const p of clean) jobs.push({ prompt: p, engine: engines[0] });
-  if (engines[1] && crossCheck > 0) for (const p of clean.slice(0, crossCheck)) jobs.push({ prompt: p, engine: engines[1] });
+  /*
+    Cross-check only against another GROUNDED engine. Comparing a live-web
+    answer with a model's recollection tells you nothing about whether buyers
+    find the brand — the two are answering different questions — and it costs
+    real calls to find that out.
+  */
+  const second = engines.slice(1).find((e) => e.grounded);
+  if (second && crossCheck > 0) for (const p of clean.slice(0, crossCheck)) jobs.push({ prompt: p, engine: second });
 
   const raw = await pool(jobs, 6, async (job) => ({ job, ans: await job.engine.ask(job.prompt) }));
 

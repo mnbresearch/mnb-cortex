@@ -200,6 +200,26 @@ const NOT_A_NAME = new Set([
 ]);
 
 /**
+ * Field labels, not businesses.
+ *
+ * Models often answer a "compare the options" prompt as a set of labelled
+ * blocks — "**What it is**", "**Pricing**", "**Why it fits**" — one per
+ * attribute, repeated for every option. Those bold heads sit exactly where a
+ * brand name sits, so the extractor read them as competitors and the report
+ * offered "Why it fits ×13" and "Pricing ×6" as the businesses being
+ * recommended instead of the customer. Live production output, on the first
+ * real run after I shipped it.
+ */
+const FIELD_LABEL = new Set([
+  "what it is", "why it fits", "why it works", "who it is for", "who it's for",
+  "best for", "ideal for", "pricing", "price", "cost", "costs", "features",
+  "key features", "capabilities", "key capabilities", "ai capabilities",
+  "pros", "cons", "limitations", "drawbacks", "overview", "summary", "verdict",
+  "bottom line", "key strengths", "strengths", "weaknesses", "notes",
+  "availability", "support", "integrations", "use case", "use cases",
+]);
+
+/**
  * The brands an answer actually recommends.
  *
  * Competitors were previously only counted if the customer typed them in, so
@@ -213,21 +233,51 @@ const NOT_A_NAME = new Set([
  * market.
  */
 export function namedBrands(answer: string): string[] {
-  const out: string[] = [];
-  for (const it of listItems(answer)) {
+  const items = listItems(answer);
+  const heads: string[] = [];
+
+  for (const it of items) {
     let head = it.text;
     const bold = head.match(/^\*\*(.+?)\*\*/) || head.match(/^__(.+?)__/);
     if (bold) head = bold[1];
     else head = head.split(/\s+[–—-]\s+|[:(]|\.\s|,\s/)[0];
     head = head.replace(/\*\*/g, "").replace(/^\W+|\W+$/g, "").trim();
+    /* Drop an unclosed parenthetical tail: "Clear (formerly ClearTax / Clear
+       Books" came back from a live answer with the bracket never closed. */
+    if ((head.match(/\(/g) || []).length > (head.match(/\)/g) || []).length) {
+      head = head.split("(")[0].trim();
+    }
 
     const words = head.split(/\s+/);
     if (head.length < 2 || head.length > 60 || words.length > 6) continue;
     if (!/[A-Z]/.test(head)) continue;
     if (NOT_A_NAME.has(words[0].toLowerCase())) continue;
+    if (FIELD_LABEL.has(head.toLowerCase())) continue;
     /* A whole sentence is not a name. */
     if (words.length > 3 && head === head.toLowerCase()) continue;
-    out.push(head);
+    heads.push(head);
+  }
+
+  /*
+    STRUCTURAL GUARD, and the one that actually generalises.
+    A business is named once or twice in an answer; a FIELD LABEL is repeated
+    in every block, which is why the live report showed "Why it fits ×13". No
+    blocklist can keep up with the labels a model might invent, but the
+    repetition is intrinsic to what a label is. So a head that recurs across a
+    quarter or more of the items is treated as template furniture, not a brand.
+  */
+  const freq = new Map<string, number>();
+  for (const h of heads) freq.set(h.toLowerCase(), (freq.get(h.toLowerCase()) || 0) + 1);
+  const repeatedLimit = Math.max(2, Math.ceil(items.length * 0.25));
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const h of heads) {
+    const k = h.toLowerCase();
+    if ((freq.get(k) || 0) >= repeatedLimit) continue;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(h);
   }
   return out;
 }
