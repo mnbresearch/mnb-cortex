@@ -2,7 +2,7 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
-import { getMsmeExposure, listVendors, COVERED } from "@/lib/msme";
+import { getMsmeExposure, listVendors, syncVendorsFromPayables, COVERED } from "@/lib/msme";
 import { VendorClassifier } from "@/components/vendor-classifier";
 import { AlertTriangle, Info, HelpCircle } from "lucide-react";
 
@@ -23,6 +23,15 @@ const rupee = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
  * a tax warning that an owner will act on.
  */
 export default async function Msme() {
+  /*
+    Sync BEFORE listing, and sequentially, because the list is what the
+    classifier renders from. Nothing ever created a vendor row, so this page
+    told every customer to classify suppliers and then showed them an empty
+    "no suppliers on file yet" box — see syncVendorsFromPayables() for the full
+    shape of it. Running it here rather than only in the importer means a
+    workspace that imported payables yesterday is fixed by visiting the page.
+  */
+  await syncVendorsFromPayables();
   const [exp, vendors] = await Promise.all([getMsmeExposure(), listVendors()]);
 
   return (

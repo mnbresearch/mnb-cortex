@@ -196,6 +196,129 @@ check(/COVERED\s*=\s*new Set\(\["micro", "small"\]\)/.test(MSME),
   "lib/msme.ts still covers micro and small only",
   "adding medium here would inflate a statutory warning");
 
+/* ============ a payable imported AFTER the migration must still classify ====
+   THE ORDERING THIS SUITE USED TO GET BACKWARDS.
+
+   build() inserts its fixture bills and only then applies 2026_msme_43bh.sql,
+   whose final statement backfills `vendors` from existing payables. That order
+   cannot happen in production: a customer imports payables months after the
+   migration ran. The backfill is a one-time INSERT, not a trigger, so every
+   payable imported afterwards produced NO vendor row — and VendorClassifier,
+   which needs vendor ids, rendered "No suppliers on file yet. They appear here
+   automatically from your payable bills" to a workspace that had just imported
+   twenty-two of them. 43B(h) exposure stayed permanently unclassified.
+
+   Reproduced in the real order below, then checked against the fix.
+   ========================================================================== */
+{
+  const org2 = (await db.query(
+    "insert into organizations (name) values ('Imported later') returning id")).rows[0].id;
+
+  /* Migration is already applied at this point — this is a LATER import. */
+  await db.query(
+    `insert into invoices (org_id, party, amount, type, issue_date, status)
+     values ($1, 'Nirmal Castings (MSME)', 316000, 'payable', current_date - 100, 'pending')`,
+    [org2]);
+
+  const vendorCount = async () =>
+    Number((await db.query("select count(*)::int c from vendors where org_id = $1", [org2])).rows[0].c);
+  const exposure = async () =>
+    (await db.query("select * from cortex_msme_exposure($1)", [org2])).rows;
+
+  check(await vendorCount() === 0,
+    "reproduced: a payable imported after the migration creates no vendor row",
+    "if this fails the backfill became a trigger and the sync may be redundant");
+
+  const derived = await exposure();
+  check(derived.length === 1 && derived[0].udyam_category === "unclassified",
+    "…so the supplier shows up in the exposure table but cannot be classified",
+    `got ${JSON.stringify(derived.map((r) => [r.party, r.udyam_category]))}`);
+
+  /*
+    What syncVendorsFromPayables() does, in SQL. The real risk in that function
+    is not the insert, it is whether a row created from the bill's `party`
+    string JOINS BACK to that bill — the RPC matches on cortex_norm_name(), so
+    a name we store verbatim must normalise to the same value. Asserted here
+    because a sync that creates rows which never match would leave the feature
+    just as dead while looking fixed.
+  */
+  await db.query(
+    `insert into vendors (org_id, name)
+     select distinct i.org_id, trim(i.party) from invoices i
+      where i.org_id = $1 and i.type = 'payable' and coalesce(trim(i.party), '') <> ''
+     on conflict (org_id, name) do nothing`, [org2]);
+
+  check(await vendorCount() === 1, "the sync creates exactly one vendor row");
+
+  await db.query(
+    "update vendors set udyam_category = 'micro' where org_id = $1", [org2]);
+  const classified = await exposure();
+  check(classified.length === 1 && classified[0].udyam_category === "micro",
+    "and it joins back to the bill, so classifying it actually lands",
+    `got ${JSON.stringify(classified.map((r) => [r.party, r.udyam_category]))}`);
+  check(classified[0].past_window === true && Number(classified[0].total_amount) === 316000,
+    "the now-classified bill reports as real exposure",
+    `got past_window=${classified[0].past_window} amount=${classified[0].total_amount}`);
+
+  /* A name with different punctuation must still match — the join is normalised,
+     and "(MSME)" / extra spaces are exactly what a Tally export produces. */
+  const org3 = (await db.query(
+    "insert into organizations (name) values ('Punctuation') returning id")).rows[0].id;
+  await db.query(
+    `insert into invoices (org_id, party, amount, type, issue_date, status)
+     values ($1, 'Nirmal  Castings (MSME)', 100000, 'payable', current_date - 100, 'pending')`,
+    [org3]);
+  await db.query(
+    "insert into vendors (org_id, name, udyam_category) values ($1, 'Nirmal Castings MSME', 'small')",
+    [org3]);
+  const punct = (await db.query("select * from cortex_msme_exposure($1)", [org3])).rows;
+  check(punct.length === 1 && punct[0].udyam_category === "small",
+    "normalised join tolerates spacing and punctuation differences",
+    `got ${JSON.stringify(punct.map((r) => [r.party, r.udyam_category]))}`);
+}
+
+/* The page must run the sync, and before it lists what to classify.
+
+   COMMENTS STRIPPED FIRST. The first version of this block did not, and both
+   mutations passed: the comment above the call explains the fix and therefore
+   names syncVendorsFromPayables(), so the regex matched the prose after the
+   call itself had been deleted, and indexOf() found the comment rather than
+   the statement so the ordering check was meaningless too. A test that cannot
+   fail is worse than no test, because it reports confidence it has not earned.
+   Both mutations are checked below in the header of this suite's run. */
+{
+  const raw = readFileSync("src/app/(app)/msme/page.tsx", "utf8");
+  const page = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  check(/await syncVendorsFromPayables\(\)/.test(page),
+    "/msme runs the vendor sync",
+    "without it the classifier is empty and 43B(h) stays unknown forever");
+  const iSync = page.indexOf("syncVendorsFromPayables()");
+  const iList = page.indexOf("listVendors()");
+  check(iSync !== -1 && iList !== -1 && iSync < iList,
+    "…before listing vendors, or the first visit still shows an empty classifier",
+    `sync at ${iSync}, listVendors at ${iList}`);
+  check(/export async function syncVendorsFromPayables/.test(MSME),
+    "the sync lives in lib/msme.ts beside the exposure it unblocks");
+
+  /*
+    HONEST LIMIT OF THIS SUITE. The SQL above proves that a vendor row whose
+    name is the bill's `party` string joins back to that bill. It does NOT
+    execute the TypeScript that writes the row — that needs a Supabase client,
+    which this harness does not have. Mutating the insert to store `raw + " #"`
+    left all assertions green, so the one link genuinely uncovered is "does the
+    TS store the party verbatim".
+
+    Hence this narrow guard. It is a weaker check than execution and is not
+    pretending otherwise; it exists so the specific mutation that slipped
+    through cannot slip through silently.
+  */
+  const lib = MSME.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  check(/toAdd\.push\(\{\s*org_id:\s*orgId,\s*name:\s*raw\s*\}\)/.test(lib),
+    "the vendor row stores the party name verbatim, so the normalised join matches",
+    "any transformation here must be mirrored in cortex_norm_name or the row never joins");
+}
+
 await db.close();
 
 console.log(`\nmsme: ${pass} passed, ${failures.length} failed`);
