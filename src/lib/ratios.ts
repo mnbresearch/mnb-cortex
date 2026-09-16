@@ -65,7 +65,24 @@ export function computeRatios(v: RatioInputs): Ratios {
     assetTurn: div(v.revenue, v.totalAssets),
     netMargin: v.revenue > 0 ? (v.netProfit / v.revenue) * 100 : null,
     roe: equityOk ? (v.netProfit / v.equity) * 100 : null,
-    roa: div(v.netProfit, v.totalAssets),
+    /*
+      PERCENT, like the two above it.
+
+      I broke this. Extracting these ratios out of the component, I replaced
+      `s(netProfit, totalAssets) * 100` with a bare div() and dropped the
+      hundred — so a healthy 12.1% return on assets rendered as "0.1%", which
+      reads as a business that has almost stopped working. It shipped to
+      production and an external reviewer found it by noticing that the three
+      numbers on screen could not coexist: net margin 10.0% and asset turnover
+      1.2x forces ROA = 12%, not 0.1%.
+
+      My own 46-assertion suite missed it because it checked ROA's GRADE and
+      never its VALUE, and 0.121 grades "bad" exactly as -2% would. That gap is
+      closed by the identity test in test-ratios.mjs: ROA must equal net margin
+      × asset turnover, which is true by definition and cannot be satisfied by
+      a value that is off by a factor of a hundred.
+    */
+    roa: v.totalAssets > 0 ? (v.netProfit / v.totalAssets) * 100 : null,
   };
 }
 

@@ -98,6 +98,51 @@ const rowFor = (inputs, key) => ratioRows(computeRatios(inputs)).find((r) => r.k
   check(rowFor(base, "current").val === "2.10", "current ratio still formats to 2 dp");
 }
 
+/* ==================== the identity that catches a factor of 100 ========== */
+/*
+  ROA = net profit / assets, and that is identically (net profit / revenue) ×
+  (revenue / assets) — net margin × asset turnover. It is arithmetic, not a
+  convention, so it holds for every input and makes a unit error impossible to
+  miss.
+
+  THIS IS THE TEST THAT SHOULD HAVE EXISTED. The previous suite asserted ROA's
+  grade and never its value, so when a refactor dropped the ×100 and turned a
+  12.1% return into "0.1%", all 46 assertions still passed: 0.121 grades "bad"
+  exactly as −2% does. The number reached production and was found by a reader
+  noticing that net margin 10.0% beside asset turnover 1.2× cannot produce
+  ROA 0.1%. Checking grades is not checking arithmetic.
+*/
+{
+  const r = computeRatios(base);
+  const identity = (r.netMargin / 100) * r.assetTurn * 100;
+  check(Math.abs(r.roa - identity) < 0.01,
+    "ROA equals net margin × asset turnover, as it must by definition",
+    `roa=${r.roa} but margin×turnover=${identity.toFixed(3)} — a mismatch here is a unit error`);
+
+  /* Pinned in absolute terms too, so the identity cannot be satisfied by two
+     numbers that are both wrong by the same factor. */
+  check(Math.abs(r.roa - 12.142857142857142) < 0.0001,
+    "ROA on the default figures is 12.1%, not 0.1%",
+    `₹51 L profit on ₹4.2 Cr of assets — got ${r.roa}`);
+  check(rowFor(base, "roa").val === "12.1%", "…and renders as 12.1%", rowFor(base, "roa").val);
+  check(rowFor(base, "roa").grade === "good",
+    "a 12.1% return grades good, where 0.1% graded bad",
+    `got ${rowFor(base, "roa").grade}`);
+
+  /* Every percentage ratio must be on the same scale. */
+  for (const k of ["netMargin", "roe", "roa"]) {
+    const v = computeRatios(base)[k];
+    check(v > 1, `${k} is expressed in percent, not as a decimal fraction`, `got ${v}`);
+  }
+
+  /* The identity holds for a loss-making business too. */
+  const loss = { ...base, netProfit: -2100000 };
+  const lr = computeRatios(loss);
+  check(Math.abs(lr.roa - (lr.netMargin / 100) * lr.assetTurn * 100) < 0.01,
+    "…and still holds when the business is loss-making");
+  check(lr.roa < 0, "a loss produces a negative ROA", `got ${lr.roa}`);
+}
+
 /* ============================ grade() itself ============================= */
 {
   check(grade(null, () => true, () => true) === "na", "null can never be graded good");

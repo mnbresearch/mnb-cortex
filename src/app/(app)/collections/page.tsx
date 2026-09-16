@@ -159,6 +159,10 @@ export default async function Collections() {
           policy={{ enabled: policy.enabled, autoSend: policy.auto_send, maxPerDay: policy.max_per_day }}
           candidates={chaseable.slice(0, 40)}
           blocked={blocked.slice(0, 40)}
+          /* The true sizes travel with the truncated lists, so the console can
+             say "showing the 40 oldest" instead of reporting 40 as the total. */
+          totalChaseable={chaseable.length}
+          totalBlocked={blocked.length}
           pending={pending}
         />
 

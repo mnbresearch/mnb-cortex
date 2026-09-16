@@ -29,12 +29,23 @@ type Candidate = {
  * reads as something the owner can fix in a minute.
  */
 export function CollectionsConsole({
-  policy, candidates, blocked, pending,
+  policy, candidates, blocked, pending, totalChaseable, totalBlocked,
 }: {
   policy: { enabled: boolean; autoSend: boolean; maxPerDay: number };
   candidates: Candidate[];
   blocked: Candidate[];
   pending: any[];
+  /**
+   * The size of the FULL set, before the page truncated it for display.
+   *
+   * Passed in rather than measured here, because this component only ever
+   * receives a page of the data and cannot know what it is missing. Reading
+   * `candidates.length` as the total is what let the heading claim 40 while
+   * the summary card said 54. Optional so the count degrades to the visible
+   * length rather than to a wrong number.
+   */
+  totalChaseable?: number;
+  totalBlocked?: number;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -180,7 +191,27 @@ export function CollectionsConsole({
 
       {candidates.length > 0 && (
         <Card className="p-4">
-          <div className="text-sm font-medium mb-2">Overdue and chaseable ({candidates.length})</div>
+          {/*
+            COUNT THE WHOLE SET, SHOW A PAGE OF IT.
+
+            This read `({candidates.length})` — the length of the array it was
+            handed, which the page truncates with `chaseable.slice(0, 40)`. So
+            the heading announced "Overdue and chaseable (40)" directly beneath
+            a summary card reading 54, and fourteen overdue invoices were absent
+            from the only list a customer can review, with nothing on the page
+            admitting it. A count derived from a truncated list is not a count.
+
+            Drafting was never affected — the scheduler re-derives candidates
+            through findCandidates(), which has no cap, so all 54 would have
+            been chased. The lie was in the review surface, which is worse in
+            its own way: the operator approves what they can see.
+          */}
+          <div className="text-sm font-medium mb-2">
+            Overdue and chaseable ({totalChaseable ?? candidates.length})
+            {typeof totalChaseable === "number" && totalChaseable > candidates.length && (
+              <span className="font-normal text-muted-foreground"> · showing the {candidates.length} oldest</span>
+            )}
+          </div>
           <div className="divide-y">
             {candidates.map((c) => (
               <div key={c.invoiceId} className="flex flex-wrap items-center justify-between gap-3 py-2.5 text-sm">
@@ -209,7 +240,12 @@ export function CollectionsConsole({
 
       {blocked.length > 0 && (
         <Card className="p-4">
-          <div className="text-sm font-medium mb-2">Not being chased ({blocked.length})</div>
+          <div className="text-sm font-medium mb-2">
+            Not being chased ({totalBlocked ?? blocked.length})
+            {typeof totalBlocked === "number" && totalBlocked > blocked.length && (
+              <span className="font-normal text-muted-foreground"> · showing the first {blocked.length}</span>
+            )}
+          </div>
           {/*
             Shown with reasons rather than hidden. "No email on file" is
             something the owner can fix in a minute; a silently short list just
