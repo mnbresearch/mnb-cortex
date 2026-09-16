@@ -253,8 +253,25 @@ export default async function GST() {
               </Card>
             ))}
           </div>
+          {/*
+            THIS LINE USED TO SAY the old-rate documents "need reissuing".
+
+            That is wrong, and expensively so. An invoice raised correctly at
+            12% or 28% before the change stays valid — the rate that applies is
+            the one at the time of supply, not the rate in force when you
+            happen to look at the document. Reissuing valid invoices breaks the
+            audit trail, throws GSTR-1 and GSTR-3B out of agreement with the
+            books, and puts the buyer's input tax credit at risk for tax that
+            was correctly charged and paid.
+
+            A compliance page is read as an instruction. It should not tell
+            anyone to redo paperwork that is already right.
+          */}
           <p className="text-xs text-muted-foreground mt-3">
-            The 12% and 28% slabs were abolished on 22 September 2025. If you still have documents quoting them, they need reissuing.
+            The 12% and 28% slabs were abolished on 22 September 2025. Invoices raised at those rates
+            before the change remain valid — the rate follows the time of supply, so historical documents
+            do not need reissuing. For supplies straddling the change date, the time-of-supply rules decide
+            the rate; check those with your CA before amending anything.
           </p>
         </Section>
       </PageShell>

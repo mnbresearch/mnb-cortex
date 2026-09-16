@@ -100,7 +100,7 @@ export default async function Forecast() {
         <ScenarioPlanner baseline={baseline} />
 
         <Section title="AI forecast" desc="A CFO-grade 90-day outlook grounded in your live numbers">
-          <AIPanel mode="forecast" placeholder="Optional: focus the forecast (e.g. 'if we win the Dubai order' or 'cash only')" cta="Generate 90-day forecast" saveMode="strategy" />
+          <AIPanel inputOptional mode="forecast" placeholder="Optional: focus the forecast (e.g. 'if we win the Dubai order' or 'cash only')" cta="Generate 90-day forecast" saveMode="strategy" />
         </Section>
 
         <Section title="What's driving the forecast" desc="The levers the model is weighting most">

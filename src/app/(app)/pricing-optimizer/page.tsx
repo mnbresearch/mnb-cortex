@@ -64,7 +64,7 @@ export default async function PricingOptimizer() {
         </Section>
 
         <Section title="Build a full pricing strategy" desc="Cortex models elasticity, GST and competitor response">
-          <AIPanel mode="pricing" placeholder="Optional: focus (e.g. 'B2B contracts' or 'how much can I raise Premium-X?')" cta="Optimise my pricing" saveMode="strategy" />
+          <AIPanel inputOptional mode="pricing" placeholder="Optional: focus (e.g. 'B2B contracts' or 'how much can I raise Premium-X?')" cta="Optimise my pricing" saveMode="strategy" />
         </Section>
       </PageShell>
     </>

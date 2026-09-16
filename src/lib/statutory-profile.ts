@@ -161,6 +161,13 @@ const GATES: Record<string, Gate> = {
   */
   itr: (p) => (p.audit === "no" ? "applies" : p.audit === "yes" ? "excluded" : "unknown"),
   "itr-audit": yesNo("audit"),
+  /*
+    Same gate as the return it precedes: if they are in audit, both the report
+    and the return are theirs. Gated separately rather than folded into
+    "itr-audit" so that the 30 Sep date can be warned about on its own — which
+    is the entire point of splitting them.
+  */
+  "tax-audit-report": yesNo("audit"),
 };
 
 /** Does this rule apply to this workspace? "unknown" unless they told us. */
@@ -206,6 +213,7 @@ export function excludedBecause(ruleId: string, p: StatutoryProfile): string | n
     case "itr":
       return "you told us your accounts are subject to a 44AB audit, so the later ITR date applies instead";
     case "itr-audit":
+    case "tax-audit-report":
       return "you told us your accounts are not subject to a 44AB audit";
     default:
       /*

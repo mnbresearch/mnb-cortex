@@ -36,7 +36,7 @@ async function extractPdf(f: File): Promise<string> {
 
 export function AIPanel({
   mode, placeholder, cta, multiline = false, allowFile = false, saveMode,
-  suggestions,
+  suggestions, inputOptional = false,
   "aria-label": ariaLabel,
 }: {
   mode: string; placeholder: string; cta: string; multiline?: boolean; allowFile?: boolean; saveMode?: string;
@@ -56,6 +56,22 @@ export function AIPanel({
    */
   suggestions?: string[];
   /**
+   * True when the analysis runs off workspace data and the box is a refinement.
+   *
+   * WHY THIS EXISTS. `run()` opened with `if (!input.trim()) return;` — a bare
+   * early return, before the loading state, before the output was cleared, and
+   * with nothing rendered. Nine panels label the field "Optional: focus…", so
+   * the documented way to use them was to press Generate with it empty. That
+   * did nothing at all: no spinner, no result, no error. Worse, because the
+   * return came before `setOut("")`, a previous answer stayed on screen, so the
+   * failure looked like a refreshed result.
+   *
+   * With this set the empty case is the normal case and runs. Without it, an
+   * empty box is a real validation error and now says so instead of going
+   * quiet — a required field is allowed, a silently required one is not.
+   */
+  inputOptional?: boolean;
+  /**
    * ACTUALLY APPLIED NOW.
    *
    * /sops, /investor and /contracts already passed `aria-label`, and this
@@ -68,6 +84,7 @@ export function AIPanel({
   const [input, setInput] = useState("");
   const [out, setOut] = useState("");
   const [loading, setLoading] = useState(false);
+  const [needsInput, setNeedsInput] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
 
@@ -87,7 +104,16 @@ export function AIPanel({
   }
 
   async function run() {
-    if (mode !== "pulse" && !input.trim()) return;
+    /*
+      Empty and required is a validation error the user can see and act on.
+      Empty and optional runs. Neither is a silent return any more.
+    */
+    if (!input.trim() && !inputOptional && mode !== "pulse") {
+      setNeedsInput(true);
+      fieldRef.current?.focus();
+      return;
+    }
+    setNeedsInput(false);
     setLoading(true); setOut("");
     try {
       const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode, input }) });
@@ -120,12 +146,14 @@ export function AIPanel({
       )}
       {multiline ? (
         <textarea ref={fieldRef as React.RefObject<HTMLTextAreaElement>}
-          value={input} onChange={(e) => setInput(e.target.value)} placeholder={placeholder} rows={5}
+          value={input} onChange={(e) => { setInput(e.target.value); if (needsInput) setNeedsInput(false); }} placeholder={placeholder}
+          aria-invalid={needsInput || undefined} rows={5}
           aria-label={ariaLabel || placeholder}
           className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-y" />
       ) : (
         <input ref={fieldRef as React.RefObject<HTMLInputElement>}
-          value={input} onChange={(e) => setInput(e.target.value)} placeholder={placeholder}
+          value={input} onChange={(e) => { setInput(e.target.value); if (needsInput) setNeedsInput(false); }} placeholder={placeholder}
+          aria-invalid={needsInput || undefined}
           aria-label={ariaLabel || placeholder}
           onKeyDown={(e) => { if (e.key === "Enter") run(); }}
           className="w-full rounded-lg border bg-background px-3 h-11 text-sm outline-none focus:ring-2 focus:ring-ring" />
@@ -154,6 +182,14 @@ export function AIPanel({
       )}
 
       <Button onClick={run} disabled={loading}><Sparkles className="h-4 w-4" aria-hidden="true" /> {loading ? "Working…" : cta}</Button>
+
+      {/* The error the silent return never showed. role="alert" so it is
+          announced, not just drawn. */}
+      {needsInput && (
+        <p role="alert" className="text-sm text-danger">
+          Add something to work from first — this one needs your input, not just the button.
+        </p>
+      )}
 
       {/*
         ANNOUNCED, because this is the product's main interaction and it was

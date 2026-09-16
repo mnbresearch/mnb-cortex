@@ -53,6 +53,13 @@ export function ScenarioPlanner({ baseline }: { baseline?: ScenarioBaseline } = 
   const BASE_REVENUE = baseline?.revenue ?? 0;
   const BASE_MARGIN = baseline?.margin ?? 0.12;
   const BASE_COSTS = BASE_REVENUE * (1 - BASE_MARGIN);
+  /*
+    Cash is tracked as "do we know it" separately from its value. `?? 0` alone
+    made an unknown reserve indistinguishable from an empty bank account, and
+    the runway card then divided by it and printed "0.0 mo" in red — asserting
+    the business is out of cash when Cortex simply has not been told.
+  */
+  const cashKnown = typeof baseline?.cash === "number";
   const CASH_RESERVE = baseline?.cash ?? 0;
   const [g, setG] = useState(5);     // revenue growth %/mo
   const [p, setP] = useState(0);     // price change %
@@ -67,17 +74,37 @@ export function ScenarioPlanner({ baseline }: { baseline?: ScenarioBaseline } = 
     const profit = revenue - costs;
     const margin = revenue > 0 ? profit / revenue : 0;
     const dProfit = profit - BASE_REVENUE * BASE_MARGIN;
-    const runwayMonths = profit >= 0 ? Infinity : CASH_RESERVE / -profit;
+    /*
+      Infinity means "profitable, so it does not run out". null means "we
+      cannot say". They are different answers and used to be the same one:
+      with no figures at all, revenue and costs were both 0, profit was 0,
+      `profit >= 0` held, and the card rendered a green "Cash-positive" for a
+      workspace that had never told us a single number. Missing data came out
+      the other end as good news, on the page an owner opens to find out
+      whether they are about to run out of money.
+    */
+    const runwayMonths: number | null =
+      !real ? null : profit >= 0 ? Infinity : cashKnown ? CASH_RESERVE / -profit : null;
     // 6-month revenue trajectory for the sparkline
     const traj = Array.from({ length: 6 }, (_, i) => BASE_REVENUE * Math.pow(1 + g / 100, i) * (1 + p / 100));
     return { revenue, costs, profit, margin, dProfit, runwayMonths, traj };
-  }, [g, p, c, h]);
+    /* baseline-derived values belong in the deps too — they were missing, so a
+       workspace whose figures arrived after first paint kept the old model. */
+  }, [g, p, c, h, real, cashKnown, BASE_REVENUE, BASE_MARGIN, BASE_COSTS, CASH_RESERVE]);
 
   function reset() { setG(5); setP(0); setC(3); setH(0); setOut(""); }
 
   async function stressTest() {
     setLoading(true); setOut("");
-    const input = `Scenario the owner is considering (monthly): revenue growth ${g}%/mo, price change ${p}%, cost inflation ${c}%, ${h} new hires at ~₹${COST_PER_HIRE.toLocaleString("en-IN")}/mo each. Model output: projected monthly revenue ${inr(m.revenue)}, costs ${inr(m.costs)}, net profit ${inr(m.profit)} (margin ${(m.margin * 100).toFixed(1)}%), profit change vs today ${inr(m.dProfit)}, runway ${m.runwayMonths === Infinity ? "cash-positive" : m.runwayMonths.toFixed(1) + " months"}. Stress-test this decision.`;
+    /* `.toFixed()` on a null runway would throw; "cash-positive" for an unknown
+       one would lie to the model as well as to the reader. */
+    const runwayPhrase =
+      m.runwayMonths === null
+        ? "runway not calculable (cash balance unknown)"
+        : m.runwayMonths === Infinity
+          ? "cash-positive, so no runway limit at this rate"
+          : `runway ${m.runwayMonths.toFixed(1)} months`;
+    const input = `Scenario the owner is considering (monthly): revenue growth ${g}%/mo, price change ${p}%, cost inflation ${c}%, ${h} new hires at ~₹${COST_PER_HIRE.toLocaleString("en-IN")}/mo each. Model output: projected monthly revenue ${inr(m.revenue)}, costs ${inr(m.costs)}, net profit ${inr(m.profit)} (margin ${(m.margin * 100).toFixed(1)}%), profit change vs today ${inr(m.dProfit)}, ${runwayPhrase}. Stress-test this decision.`;
     try {
       const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "scenario", input }) });
       const j = await r.json(); setOut(j.text || "No response.");
@@ -118,26 +145,46 @@ export function ScenarioPlanner({ baseline }: { baseline?: ScenarioBaseline } = 
         <Slider label="New hires" value={h} min={0} max={20} step={1} unit="" onChange={setH} />
       </div>
 
+      {/*
+        With no baseline every one of these is arithmetic on zero, so they are
+        shown as unknown rather than as results. The sliders still move and the
+        model still runs — there is just nothing truthful to display yet.
+      */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Metric label="Monthly revenue" value={inr(m.revenue)} />
-        <Metric label="Net profit" value={inr(m.profit)} tone={m.profit >= 0 ? "up" : "down"} />
-        <Metric label="Net margin" value={`${(m.margin * 100).toFixed(1)}%`} tone={marginUp ? "up" : "down"} />
-        <Metric label="Cash runway" value={m.runwayMonths === Infinity ? "Cash-positive" : `${m.runwayMonths.toFixed(1)} mo`} tone={m.runwayMonths === Infinity ? "up" : m.runwayMonths < 4 ? "down" : "flat"} />
+        <Metric label="Monthly revenue" value={real ? inr(m.revenue) : "—"} />
+        <Metric label="Net profit" value={real ? inr(m.profit) : "—"} tone={real ? (m.profit >= 0 ? "up" : "down") : "flat"} />
+        <Metric label="Net margin" value={real ? `${(m.margin * 100).toFixed(1)}%` : "—"} tone={real ? (marginUp ? "up" : "down") : "flat"} />
+        <Metric
+          label="Cash runway"
+          value={m.runwayMonths === null ? "—" : m.runwayMonths === Infinity ? "Cash-positive" : `${m.runwayMonths.toFixed(1)} mo`}
+          tone={m.runwayMonths === null ? "flat" : m.runwayMonths === Infinity ? "up" : m.runwayMonths < 4 ? "down" : "flat"}
+        />
       </div>
+      {real && !cashKnown && (
+        <p className="text-xs text-muted-foreground -mt-2">
+          Runway needs your cash balance — Cortex doesn&rsquo;t have it yet, so it isn&rsquo;t estimating one.
+        </p>
+      )}
 
-      <div className="rounded-lg border p-4 bg-background/40">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-muted-foreground">6-month revenue trajectory</span>
-          <Badge className={m.dProfit >= 0 ? "bg-success/10 text-success border-success/20" : "bg-danger/10 text-danger border-danger/20"}>
-            {m.dProfit >= 0 ? "+" : ""}{inr(m.dProfit)} profit vs today
-          </Badge>
+      {real && (
+        <div className="rounded-lg border p-4 bg-background/40">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-muted-foreground">6-month revenue trajectory</span>
+            <Badge className={m.dProfit >= 0 ? "bg-success/10 text-success border-success/20" : "bg-danger/10 text-danger border-danger/20"}>
+              {m.dProfit >= 0 ? "+" : ""}{inr(m.dProfit)} profit vs today
+            </Badge>
+          </div>
+          <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-16">
+            <polyline points={pts} fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+          </svg>
         </div>
-        <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-16">
-          <polyline points={pts} fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-        </svg>
-      </div>
+      )}
 
-      <Button onClick={stressTest} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Stress-testing…" : "Stress-test this with Cortex"}</Button>
+      {/* Nothing to stress-test without a baseline, and a credit should not be
+          spent finding that out. */}
+      <Button onClick={stressTest} disabled={loading || !real} title={real ? undefined : "Import your sales or a bank statement first"}>
+        <Sparkles className="h-4 w-4" /> {loading ? "Stress-testing…" : "Stress-test this with Cortex"}
+      </Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
     </Card>
     </>

@@ -76,7 +76,7 @@ export default async function ActionCenter() {
       <Topbar title="AI Action Center" subtitle="Everything that needs a decision — ranked by impact" />
       <PageShell>
         <Section title="This week's action plan" desc="Generated fresh from your live business snapshot">
-          <AIPanel mode="actions" placeholder="" cta="Generate my prioritised action plan" saveMode="strategy" />
+          <AIPanel inputOptional mode="actions" placeholder="" cta="Generate my prioritised action plan" saveMode="strategy" />
         </Section>
 
         <Section

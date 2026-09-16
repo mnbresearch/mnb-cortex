@@ -1,0 +1,172 @@
+/**
+ * "Unknown" must never render as good news.
+ *
+ * Four defects found in an external review, all the same mistake wearing
+ * different clothes: a value the product does not have, or cannot meaningfully
+ * compute, being passed to something that grades, colours or reassures.
+ *
+ *   /ratios   negative equity produced debt/equity −12.00 in green next to
+ *             "≤1 conservative", and ROE +100% in green next to "≥15% strong".
+ *   /forecast an empty workspace produced a green "Cash-positive" runway.
+ *   /forecast and /risks: pressing Generate with the optional focus box empty
+ *             returned early and silently, leaving a stale result on screen.
+ *   /gst      told users valid historical invoices "need reissuing".
+ *
+ * The first is executable against the real module. The rest are structural, so
+ * they are asserted against source — weaker, but enough to catch a revert.
+ */
+
+import { readFileSync } from "node:fs";
+import { computeRatios, ratioRows, grade } from "../src/lib/ratios.ts";
+
+let pass = 0;
+const failures = [];
+const check = (c, n, d = "") => (c ? pass++ : failures.push(`${n}${d ? "\n      " + d : ""}`));
+const src = (p) => readFileSync(new URL("../" + p, import.meta.url), "utf8");
+
+const base = {
+  currentAssets: 18900000, currentLiabilities: 9000000, inventory: 5200000,
+  debt: 12000000, equity: 26000000, ebit: 6600000, interest: 1400000,
+  revenue: 51000000, totalAssets: 42000000, netProfit: 5100000,
+};
+const rowFor = (inputs, key) => ratioRows(computeRatios(inputs)).find((r) => r.key === key);
+
+/* ============================ the reported case, exactly as reported ===== */
+/*
+  Debt ₹1.2 Cr, equity −₹10 L, net profit −₹10 L. Before the fix this rendered
+  debt/equity −12.00 and ROE 100%, both green.
+*/
+{
+  const insolvent = { ...base, debt: 12000000, equity: -1000000, netProfit: -1000000 };
+  const r = computeRatios(insolvent);
+
+  check(r.equityOk === false, "negative equity is flagged, not absorbed");
+  check(r.de === null, "debt/equity is not computed on negative equity", `got ${r.de}`);
+  check(r.roe === null, "ROE is not computed on negative equity", `got ${r.roe}`);
+
+  const de = rowFor(insolvent, "de");
+  const roe = rowFor(insolvent, "roe");
+  check(de.grade === "na", `debt/equity is ungraded, not "good" (was green at −12.00)`, `got ${de.grade}`);
+  check(roe.grade === "na", `ROE is ungraded, not "good" (was green at +100%)`, `got ${roe.grade}`);
+  check(de.val === "—" && roe.val === "—", "both read as unknown rather than a number");
+  check(!de.val.includes("-12") && !roe.val.includes("100"),
+    "neither of the two originally-reported numbers can appear");
+
+  /* The specific arithmetic trap: two negatives cancelling into a strong-looking
+     positive. If anyone reintroduces a plain division this fails loudly. */
+  const naiveRoe = (insolvent.netProfit / insolvent.equity) * 100;
+  check(naiveRoe === 100, "…and the naive formula really would have said +100%",
+    `sanity check of the bug itself: got ${naiveRoe}`);
+
+  /* Ratios that do not depend on equity must still work — the guard should be
+     surgical, not a blanket refusal to show anything. */
+  check(rowFor(insolvent, "current").grade !== "na", "liquidity is still graded");
+  check(rowFor(insolvent, "netMargin").grade === "bad", "a negative net margin still grades bad");
+}
+
+/* Zero equity is the same class and was also green (0/0 → 0 → "conservative"). */
+{
+  const r = computeRatios({ ...base, equity: 0 });
+  check(r.de === null && r.roe === null, "zero equity is ungraded too");
+}
+
+/* ============================ missing inputs are not measurements ======== */
+{
+  const empty = {
+    currentAssets: 0, currentLiabilities: 0, inventory: 0, debt: 0, equity: 0,
+    ebit: 0, interest: 0, revenue: 0, totalAssets: 0, netProfit: 0,
+  };
+  const rows = ratioRows(computeRatios(empty));
+  check(rows.every((r) => r.grade === "na"),
+    "an entirely empty form grades nothing at all",
+    `graded: ${rows.filter((r) => r.grade !== "na").map((r) => `${r.key}=${r.grade}`).join(", ")}`);
+  check(rows.every((r) => r.val === "—"), "and shows no numbers it does not have");
+  check(rows.every((r) => r.hint && r.hint.length > 3),
+    "every unknown says what is missing, so “—” is never unexplained");
+
+  /* No interest expense is not "0x coverage, dangerous" — it is no debt cost. */
+  check(rowFor({ ...base, interest: 0 }, "coverage").grade === "na",
+    "no interest expense is not graded as terrible interest coverage");
+}
+
+/* ============================ the healthy path is untouched ============== */
+{
+  const rows = ratioRows(computeRatios(base));
+  check(rows.every((r) => r.grade !== "na"), "the default healthy figures all still compute");
+  check(rowFor(base, "de").grade === "good", "0.46 debt/equity still grades good");
+  check(rowFor(base, "roe").grade === "good", "19.6% ROE still grades good");
+  check(rowFor(base, "current").val === "2.10", "current ratio still formats to 2 dp");
+}
+
+/* ============================ grade() itself ============================= */
+{
+  check(grade(null, () => true, () => true) === "na", "null can never be graded good");
+  check(grade(5, (n) => n >= 3, () => true) === "good", "good wins when it applies");
+  check(grade(2, (n) => n >= 3, (n) => n >= 1.5) === "warn", "warn is the middle band");
+  check(grade(1, (n) => n >= 3, (n) => n >= 1.5) === "bad", "bad is the floor");
+}
+
+/* ============================ the component uses the module ============== */
+{
+  const c = src("src/components/financial-ratios.tsx");
+  check(/computeRatios|ratioRows/.test(c), "the ratios component renders from the shared module");
+  check(!/\(a: number, b: number\) => b \? a \/ b : 0/.test(c),
+    "the zero-fallback divider is gone from the component");
+  check(/equityOk/.test(c), "negative equity is surfaced in the UI, not just handled");
+}
+
+/* ============================ forecast: unknown ≠ cash-positive ========== */
+{
+  const c = src("src/components/scenario-planner.tsx");
+  check(/runwayMonths: number \| null/.test(c),
+    "runway can be unknown, not only finite-or-Infinity");
+  check(/!real \? null/.test(c),
+    "no baseline yields an unknown runway rather than a cash-positive one");
+  check(/cashKnown/.test(c),
+    "an unknown cash balance is distinguished from a zero one");
+  check(/m\.runwayMonths === null \? "—"/.test(c),
+    "and the card renders it as unknown");
+  /* The exact regression: Infinity must no longer be reachable with no data. */
+  check(!/runwayMonths = profit >= 0 \? Infinity/.test(c),
+    "profit>=0 alone can no longer mean cash-positive");
+}
+
+/* ============================ no silent early return ===================== */
+{
+  const c = src("src/components/ai-panel.tsx");
+  check(!/if \(mode !== "pulse" && !input\.trim\(\)\) return;/.test(c),
+    "the silent early return is gone");
+  check(/inputOptional/.test(c), "panels can declare that their input is genuinely optional");
+  check(/setNeedsInput\(true\)/.test(c) && /role="alert"/.test(c),
+    "a required-but-empty field now says so, out loud");
+
+  /* Every panel whose placeholder promises "Optional" must actually accept
+     empty input — that mismatch is what made the failure so confusing. */
+  const optional = [
+    "forecast", "costs", "pricing-optimizer", "benchmarks", "risks",
+    "boardroom", "investor", "action-center", "brief",
+  ];
+  for (const page of optional) {
+    const p = src(`src/app/(app)/${page}/page.tsx`);
+    check(/<AIPanel inputOptional/.test(p), `/${page} accepts an empty focus`);
+  }
+}
+
+/* ============================ GST: no bogus reissue instruction ========== */
+{
+  const c = src("src/app/(app)/gst/page.tsx");
+  check(!/they need reissuing/.test(c),
+    "the blanket 'reissue your old invoices' instruction is gone");
+  check(/time of supply/i.test(c),
+    "and the page explains that the rate follows the time of supply");
+  check(/do not need reissuing|remain valid/i.test(c),
+    "historical invoices are explicitly described as still valid");
+}
+
+console.log(`\nratios & unknowns: ${pass} passed, ${failures.length} failed`);
+if (failures.length) {
+  console.log("\nFAILURES:");
+  failures.forEach((f) => console.log("  ✗ " + f));
+  process.exit(1);
+}
+console.log("  Unknown reads as unknown; nothing ungradeable is shown as good news.");

@@ -14,7 +14,8 @@
  * date computed by hand.
  */
 
-import { upcomingDeadlines, describeDeadline, istToday } from "../src/lib/statutory.ts";
+import { readFileSync } from "node:fs";
+import { upcomingDeadlines, describeDeadline, istToday, statutoryRule } from "../src/lib/statutory.ts";
 
 let pass = 0;
 const failures = [];
@@ -125,6 +126,82 @@ const pastMidnightIST = new Date("2026-09-16T19:00:00Z"); // 00:30 IST on the 17
 check(istToday(pastMidnightIST).d === 17,
   "…and rolls over at IST midnight, not UTC midnight",
   `got day ${istToday(pastMidnightIST).d}`);
+
+/* ------------------------------ the audit report is not the return */
+/*
+  These two were one line. The catalogue had no 44AB audit-report entry at all,
+  and /compliance printed "ITR + Tax Audit — 31 Oct" as a single obligation, so
+  a business planning from Cortex prepared its audit report a month after it
+  was due. The report is 30 September; the return it supports is 31 October.
+
+  Pinned by date, by gap, and by separateness, because collapsing them again
+  would be the easiest possible regression to make and the most expensive one
+  to discover.
+*/
+{
+  const rep = statutoryRule("tax-audit-report");
+  const ret = statutoryRule("itr-audit");
+
+  check(rep !== null, "the 44AB audit report exists as its own rule",
+    "without it nothing warns before the return's date");
+  check(rep?.month === 9 && rep?.day === 30,
+    "the audit report is 30 September",
+    `got ${rep?.day}/${rep?.month}`);
+  check(ret?.month === 10 && ret?.day === 31,
+    "the audit ITR is 31 October",
+    `got ${ret?.day}/${ret?.month}`);
+  check(rep?.id !== ret?.id && rep?.name !== ret?.name,
+    "they are two distinct obligations, not one row");
+
+  /* A month apart, in that order — the property that actually matters. */
+  const repDate = new Date(Date.UTC(2026, (rep?.month ?? 1) - 1, rep?.day));
+  const retDate = new Date(Date.UTC(2026, (ret?.month ?? 1) - 1, ret?.day));
+  check(repDate < retDate, "the report falls before the return");
+  const gap = Math.round((retDate - repDate) / 86400000);
+  check(gap >= 28 && gap <= 32, "the gap between them is about a month", `got ${gap} days`);
+
+  /* On 16 September 2026 the report is 14 days out. This is the warning that
+     did not exist — the whole point of splitting the two. */
+  const sept = upcomingDeadlines(20, at("2026-09-16"));
+  const warned = sept.find((x) => x.id === "tax-audit-report");
+  check(warned?.daysAway === 14,
+    "on 16 Sep 2026 the audit report is warned about, 14 days out",
+    `got ${warned ? warned.daysAway : "no warning at all"}`);
+
+  /* Still conditional: never asserted at a business we know nothing about. */
+  check(/44AB|audit threshold/i.test(rep?.appliesIf ?? ""),
+    "the report carries its applicability condition");
+}
+
+/* ------------------------ no screen holds its own copy of a date */
+/*
+  /compliance kept a hand-typed `periodic` array that had drifted from this
+  catalogue: it showed ROC as "30 Sep / 31 Oct" where the catalogue says AOC-4
+  is 30 Oct and MGT-7 is 29 Nov. Two screens of the same product gave a
+  customer two different filing schedules. The page renders the catalogue now,
+  and this check fails if anyone types dates back into it.
+*/
+{
+  const raw = readFileSync(new URL("../src/app/(app)/compliance/page.tsx", import.meta.url), "utf8");
+  /*
+    Comments stripped first. What matters is what the page RENDERS; the comment
+    explaining why a bad row was deleted necessarily quotes that row, and a
+    check that cannot tell the difference would forbid documenting the fix.
+    (It caught exactly that on first run, which is the right failure to have.)
+  */
+  const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  check(/STATUTORY_CATALOGUE/.test(raw),
+    "/compliance renders from the shared catalogue");
+  const hardcoded = src.match(/\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/g);
+  check(!hardcoded,
+    "/compliance contains no hand-typed due dates",
+    `found ${hardcoded?.join(", ")}`);
+  check(!/ITR \+ Tax Audit/.test(src),
+    "the conflated 'ITR + Tax Audit' row is gone for good");
+  check(!/periodic\s*=|const monthly\s*=/.test(src),
+    "neither hand-typed table survives");
+}
 
 console.log(`\nstatutory: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {

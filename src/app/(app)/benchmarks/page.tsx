@@ -88,7 +88,7 @@ export default async function Benchmarks() {
         </Section>
 
         <Section title="Ask for a deeper benchmark" desc="Cortex compares any area to sector peers">
-          <AIPanel mode="benchmark" placeholder="Optional: focus (e.g. 'working capital vs peers' or 'margin structure')" cta="Benchmark my business" saveMode="strategy" />
+          <AIPanel inputOptional mode="benchmark" placeholder="Optional: focus (e.g. 'working capital vs peers' or 'margin structure')" cta="Benchmark my business" saveMode="strategy" />
         </Section>
       </PageShell>
     </>

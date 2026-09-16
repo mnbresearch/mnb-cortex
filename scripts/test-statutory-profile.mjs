@@ -93,7 +93,10 @@ t("R1.6 answering ONE question hides only that question's rules", () => {
     employees: ["pf"],
     tds: ["tds", "tds-q1", "tds-q2", "tds-q3", "tds-q4"],
     company: ["roc", "mgt7"],
-    audit: ["itr", "itr-audit"],
+    /* The audit answer governs three rules, not two: the audit report itself
+       (30 Sep), the return that follows it (31 Oct), and the non-audit return
+       it displaces (31 Jul). */
+    audit: ["itr", "itr-audit", "tax-audit-report"],
     gstTds: ["gstr7"],
   };
   for (const q of PROFILE_QUESTIONS) {
@@ -524,8 +527,9 @@ t("W1 a QRMP proprietorship with two staff sees a short, correct list", () => {
   const { shown, hidden } = splitByProfile(everyDeadline, p);
   const s = shown.map((d) => d.id).sort();
   const h = hidden.map((d) => d.id).sort();
-  /* Hidden: monthly GST returns, GST TDS, both ROC filings, the audit ITR. */
-  assert.deepEqual(h, ["gstr1", "gstr3b", "gstr7", "itr-audit", "mgt7", "roc"]);
+  /* Hidden: monthly GST returns, GST TDS, both ROC filings, and — because they
+     told us they are not under audit — both the audit report and the audit ITR. */
+  assert.deepEqual(h, ["gstr1", "gstr3b", "gstr7", "itr-audit", "mgt7", "roc", "tax-audit-report"]);
   /* Shown: their quarterly GST, PF, all five TDS obligations, advance tax, ITR. */
   for (const id of ["pmt06", "iff", "pf", "tds", "tds-q1", "tds-q4", "itr", "adv-q1"]) {
     assert.ok(s.includes(id), `${id} should be shown`);

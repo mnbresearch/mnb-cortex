@@ -129,13 +129,26 @@ export const DEADLINE_TOPICS: DeadlineTopic[] = [
   },
   {
     slug: "tax-audit-due-date",
-    ids: ["itr-audit"],
-    h1: "Tax audit and ITR due date",
-    title: "Tax audit due date — ITR under section 44AB",
+    /*
+      TWO IDS, BECAUSE THEY ARE TWO DEADLINES.
+
+      This page listed only "itr-audit" under the heading "Tax audit and ITR
+      due date", so the single date it showed — 31 October — was the return,
+      presented as though it were also the audit date. Someone searching "tax
+      audit due date", which is what this page ranks for, got the wrong month
+      for the thing they searched for: the 44AB report is due 30 September, a
+      month earlier, and it is the auditor who files it.
+
+      Listing both ids renders both dates separately with their own
+      applicability, which is the only honest way to answer the query.
+    */
+    ids: ["tax-audit-report", "itr-audit"],
+    h1: "Tax audit due date — the report and the return are a month apart",
+    title: "Tax audit due date — 44AB report and the ITR that follows",
     description:
-      "Where turnover crosses the section 44AB audit threshold, the return is due later than the non-audit date. The date and who it applies to.",
+      "The section 44AB audit report and the income tax return in audit cases are two separate deadlines, a month apart. Both dates, and who each applies to.",
     standfirst:
-      "Crossing the 44AB threshold moves your return date — it does not remove the obligation to have been ready earlier.",
+      "The audit report comes first and your auditor files it; the return follows a month later. Planning for the later date means missing the earlier one.",
   },
   {
     slug: "aoc-4-due-date",

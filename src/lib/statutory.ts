@@ -93,7 +93,24 @@ const FIXED: Array<{ id: string; month: number; day: number; name: string; what:
     severity: "high", appliesIf: "your annual tax liability will exceed ₹10,000" },
   { id: "itr", month: 7, day: 31, name: "Income Tax Return", what: "Non-audit cases",
     severity: "high", appliesIf: "your accounts are not subject to audit" },
-  { id: "itr-audit", month: 10, day: 31, name: "ITR with tax audit", what: "Audit cases under section 44AB",
+  /*
+    THE AUDIT REPORT IS NOT THE RETURN. They are a month apart.
+
+    This entry did not exist. The catalogue jumped straight to "ITR with tax
+    audit — 31 Oct", and /compliance printed the two as one line reading
+    "ITR + Tax Audit — 31 Oct". A business reading that prepares its audit
+    report for the end of October, having already missed it by a month: the
+    report under s.44AB is due one month BEFORE the return, and it is the
+    auditor's filing, so it has to be commissioned earlier still.
+
+    Missing a statutory date by a month, on the page sold as the thing that
+    stops you missing statutory dates, is the worst failure this product has.
+    Both dates now exist separately, and test-statutory.mjs pins the gap.
+  */
+  { id: "tax-audit-report", month: 9, day: 30, name: "Tax audit report (44AB)",
+    what: "Form 3CA/3CB with 3CD, signed and uploaded by your auditor — due a month before the return, not with it",
+    severity: "high", appliesIf: "your turnover crosses the 44AB audit threshold" },
+  { id: "itr-audit", month: 10, day: 31, name: "ITR with tax audit", what: "The return itself, in audit cases — a month after the audit report",
     severity: "high", appliesIf: "your turnover crosses the 44AB audit threshold" },
   { id: "roc", month: 10, day: 30, name: "AOC-4 (ROC)", what: "Annual financial statements, within 30 days of the AGM",
     severity: "medium", appliesIf: "you are a company registered with the MCA" },
@@ -148,6 +165,25 @@ export const STATUTORY_CATALOGUE: StatutoryRule[] = [
 /** One rule by id, or null. */
 export function statutoryRule(id: string): StatutoryRule | null {
   return STATUTORY_CATALOGUE.find((r) => r.id === id) || null;
+}
+
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * How a rule's due date reads in a reference table: "day 20", "30 Sep".
+ *
+ * Exported so that /compliance can render the catalogue instead of keeping its
+ * own copy. It kept one — a `periodic` array typed into JSX that had drifted
+ * from these definitions in two places at once: it printed ROC as
+ * "30 Sep / 31 Oct" when the catalogue says AOC-4 is 30 Oct and MGT-7 is
+ * 29 Nov, and it printed "ITR + Tax Audit — 31 Oct" as a single obligation.
+ *
+ * A customer comparing the signed-in calendar with the public one saw two
+ * different sets of filing dates from the same company. Formatting lives here
+ * so the next table that needs a label cannot start a third copy.
+ */
+export function ruleWhen(r: StatutoryRule): string {
+  return r.cadence === "monthly" ? `day ${r.day}` : `${r.day} ${MONTH_ABBR[(r.month ?? 1) - 1]}`;
 }
 
 /**

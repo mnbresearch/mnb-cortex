@@ -3,8 +3,9 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
-import { mdToHtml } from "@/lib/utils";
+import { inr, mdToHtml } from "@/lib/utils";
 import { ExampleFigures } from "@/components/example-figures";
+import { computeRatios, ratioRows, type Grade, type RatioRow } from "@/lib/ratios";
 
 export function FinancialRatios() {
   const [v, setV] = useState({
@@ -14,40 +15,53 @@ export function FinancialRatios() {
   });
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
 
-  const r = useMemo(() => {
-    const s = (a: number, b: number) => b ? a / b : 0;
-    return {
-      current: s(v.currentAssets, v.currentLiabilities),
-      quick: s(v.currentAssets - v.inventory, v.currentLiabilities),
-      de: s(v.debt, v.equity),
-      coverage: s(v.ebit, v.interest),
-      assetTurn: s(v.revenue, v.totalAssets),
-      netMargin: s(v.netProfit, v.revenue) * 100,
-      roe: s(v.netProfit, v.equity) * 100,
-      roa: s(v.netProfit, v.totalAssets) * 100,
-    };
-  }, [v]);
+  /*
+    The arithmetic and the grading thresholds live in lib/ratios.ts, which is
+    pure and therefore testable — see scripts/test-ratios.mjs, which pins the
+    negative-equity case that used to render green. This component decides how
+    the result looks, not what it means.
+  */
+  const r = useMemo(() => computeRatios(v), [v]);
+  const rows = useMemo(() => ratioRows(r), [r]);
 
-  const RATIOS = [
-    { g: "Liquidity", items: [
-      { k: "Current ratio", val: r.current.toFixed(2), good: r.current >= 1.5, warn: r.current >= 1, hint: "≥1.5 healthy" },
-      { k: "Quick ratio", val: r.quick.toFixed(2), good: r.quick >= 1, warn: r.quick >= 0.8, hint: "≥1 healthy" },
-    ]},
-    { g: "Leverage", items: [
-      { k: "Debt / equity", val: r.de.toFixed(2), good: r.de <= 1, warn: r.de <= 2, hint: "≤1 conservative" },
-      { k: "Interest coverage", val: r.coverage.toFixed(1) + "x", good: r.coverage >= 3, warn: r.coverage >= 1.5, hint: "≥3x safe" },
-    ]},
-    { g: "Efficiency & returns", items: [
-      { k: "Asset turnover", val: r.assetTurn.toFixed(2) + "x", good: r.assetTurn >= 1, warn: r.assetTurn >= 0.5, hint: "higher is better" },
-      { k: "Net margin", val: r.netMargin.toFixed(1) + "%", good: r.netMargin >= 10, warn: r.netMargin >= 5, hint: "≥10% strong" },
-      { k: "Return on equity", val: r.roe.toFixed(1) + "%", good: r.roe >= 15, warn: r.roe >= 8, hint: "≥15% strong" },
-      { k: "Return on assets", val: r.roa.toFixed(1) + "%", good: r.roa >= 8, warn: r.roa >= 4, hint: "≥8% strong" },
-    ]},
-  ];
+  const GROUPS: Array<RatioRow["group"]> = ["Liquidity", "Leverage", "Efficiency & returns"];
+
+  const gradeClass: Record<Grade, string> = {
+    good: "text-success", warn: "text-warning", bad: "text-danger", na: "text-muted-foreground",
+  };
 
   async function analyse() {
     setLoading(true); setOut("");
-    const input = `Financial ratios: current ${r.current.toFixed(2)}, quick ${r.quick.toFixed(2)}, debt/equity ${r.de.toFixed(2)}, interest coverage ${r.coverage.toFixed(1)}x, asset turnover ${r.assetTurn.toFixed(2)}x, net margin ${r.netMargin.toFixed(1)}%, ROE ${r.roe.toFixed(1)}%, ROA ${r.roa.toFixed(1)}%. Assess this company's financial health vs Indian SME norms — what's strong, what's a concern, and the 3 priorities to fix.`;
+    /*
+      Only send what was computable. These are `number | null` now, so the old
+      unconditional .toFixed() would throw on any uncomputed ratio — and before
+      that, it was shipping "-12.00" to the model as a debt/equity reading and
+      asking it to assess a business off the back of it.
+
+      Negative equity is stated in words instead, because that is the fact; a
+      ratio derived from it would just launder it back into a number.
+    */
+    const parts: string[] = [];
+    const add = (label: string, val: number | null, unit = "", dp = 2) => {
+      if (val !== null) parts.push(`${label} ${val.toFixed(dp)}${unit}`);
+    };
+    add("current", r.current); add("quick", r.quick);
+    add("debt/equity", r.de);
+    add("interest coverage", r.coverage, "x", 1);
+    add("asset turnover", r.assetTurn, "x", 1);
+    add("net margin", r.netMargin, "%", 1);
+    add("ROE", r.roe, "%", 1);
+    add("ROA", r.roa, "%", 1);
+
+    const caveats: string[] = [];
+    if (!r.equityOk) {
+      caveats.push(
+        `Equity is ${v.equity < 0 ? `negative (${inr(v.equity)})` : "zero"}, so debt/equity and ROE are not meaningful and have been omitted deliberately — do not infer them or treat their absence as neutral. Address the negative net worth directly.`,
+      );
+    }
+    if (parts.length === 0) caveats.push("No ratio could be computed from the figures entered.");
+
+    const input = `Financial ratios: ${parts.join(", ") || "none computable"}.${caveats.length ? " " + caveats.join(" ") : ""} Assess this company's financial health vs Indian SME norms — what's strong, what's a concern, and the 3 priorities to fix. Do not invent any ratio that was not supplied.`;
     try { const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "strategy", input }) }); const j = await res.json(); setOut(j.text || "No response."); }
     catch { setOut("Network error reaching the AI."); } finally { setLoading(false); }
   }
@@ -72,14 +86,29 @@ export function FinancialRatios() {
       </Card>
 
       <Card className="p-5 space-y-4">
-        {RATIOS.map((grp) => (
-          <div key={grp.g}>
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{grp.g}</div>
+        {/*
+          Stated, not graded. When equity is negative this is the finding — the
+          leverage and return rows above it are blank precisely because there is
+          nothing meaningful to say about returns on a negative base.
+        */}
+        {!r.equityOk && (
+          <div role="status" className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm">
+            <b className="text-danger">Equity is {v.equity < 0 ? "negative" : "zero"}.</b>{" "}
+            {v.equity < 0
+              ? "Liabilities exceed assets — a negative net worth. "
+              : "There is no equity base to measure against. "}
+            Leverage and return ratios cannot be graded in this state, so they read “—” rather than
+            a number. This is worth taking to your CA rather than reading off a dashboard.
+          </div>
+        )}
+        {GROUPS.map((g) => (
+          <div key={g}>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{g}</div>
             <div className="space-y-1.5">
-              {grp.items.map((it) => (
-                <div key={it.k} className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{it.k} <span className="text-xs">· {it.hint}</span></span>
-                  <span className={`font-semibold tabular-nums ${it.good ? "text-success" : it.warn ? "text-warning" : "text-danger"}`}>{it.val}</span>
+              {rows.filter((it) => it.group === g).map((it) => (
+                <div key={it.key} className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{it.label} <span className="text-xs">· {it.hint}</span></span>
+                  <span className={`font-semibold tabular-nums ${gradeClass[it.grade]}`}>{it.val}</span>
                 </div>
               ))}
             </div>

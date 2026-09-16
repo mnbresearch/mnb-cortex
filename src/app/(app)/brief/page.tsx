@@ -12,7 +12,7 @@ export default function Brief() {
       <Topbar title="Daily CEO Brief" subtitle="The one thing that matters today, in 60 seconds" />
       <PageShell>
         <Section title="Today's brief" desc="Freshly generated from your live business snapshot">
-          <AIPanel mode="brief" placeholder="" cta="Generate today's brief" saveMode="strategy" />
+          <AIPanel inputOptional mode="brief" placeholder="" cta="Generate today's brief" saveMode="strategy" />
         </Section>
         <BriefEmailer />
         <Section title="Automate it" desc="Never open the app to stay informed">
