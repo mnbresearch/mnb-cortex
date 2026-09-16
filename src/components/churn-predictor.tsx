@@ -55,7 +55,7 @@ export function ChurnPredictor({ seed }: { seed?: Cust[] } = {}) {
   async function retentionPlan() {
     setLoading(true); setOut("");
     const top = scored.filter((c) => c.risk >= 40).slice(0, 5);
-    const input = "Customers at churn risk (highest first):\n" + top.map((c) => `- ${c.name}: ${inr(c.value)}/mo, ${c.daysSince} days since last order, ${c.tickets} open tickets, sentiment ${c.sentiment}, churn risk ${c.risk}%`).join("\n") + "\nGive a specific retention play for each (what to do, who does it, what to offer), ordered by revenue at risk.";
+    const input = "Customers at churn risk (highest first):\n" + top.map((c) => `- ${c.name}: ${inr(c.value)}/yr, ${c.daysSince} days since last order, ${c.tickets} open tickets, sentiment ${c.sentiment}, churn risk ${c.risk}%`).join("\n") + "\nGive a specific retention play for each (what to do, who does it, what to offer), ordered by revenue at risk.";
     try {
       const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "strategy", input }) });
       const j = await r.json(); setOut(j.text || "No response.");
@@ -73,7 +73,7 @@ export function ChurnPredictor({ seed }: { seed?: Cust[] } = {}) {
       <div className="flex items-center justify-between">
         <div className="font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-warning" /> Churn risk model</div>
         <Badge className={revenueAtRisk > 0 ? "bg-danger/10 text-danger border-danger/20" : "border-border text-muted-foreground"}>
-          {inr(revenueAtRisk)}/mo at high risk
+          {inr(revenueAtRisk)}/yr at high risk
         </Badge>
       </div>
 
@@ -81,7 +81,14 @@ export function ChurnPredictor({ seed }: { seed?: Cust[] } = {}) {
         <table className="w-full text-sm">
           <thead><tr className="text-left text-muted-foreground border-b">
             <th className="py-2 pr-3 font-medium">Customer</th>
-            <th className="py-2 pr-3 font-medium">₹/mo</th>
+            {/*
+                          WAS "₹/mo". The figure is the customer's revenue over
+                          the loaded period — the same value /rfm correctly
+                          labels ₹/yr — so calling it monthly overstated
+                          "revenue at risk" by up to twelve times and would
+                          have set retention priorities off the wrong number.
+                        */}
+                        <th className="py-2 pr-3 font-medium">₹/yr</th>
             <th className="py-2 pr-3 font-medium">Days idle</th>
             <th className="py-2 pr-3 font-medium">Tickets</th>
             <th className="py-2 pr-3 font-medium">Sentiment</th>

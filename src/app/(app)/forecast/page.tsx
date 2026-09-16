@@ -3,19 +3,34 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { AIPanel } from "@/components/ai-panel";
 import { ScenarioPlanner, type ScenarioBaseline } from "@/components/scenario-planner";
 import { TrendingUp, Wallet, AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-const drivers = [
-  { label: "Revenue momentum", detail: "West region + Premium-X ramp", tone: "up" },
-  { label: "Margin pressure", detail: "RM-204 input cost +9%, unrepriced", tone: "down" },
-  { label: "Receivables drag", detail: "₹72 L overdue, 5 accounts >45 days", tone: "down" },
-  { label: "New SKU adoption", detail: "Premium-X mix rising each week", tone: "up" },
-];
+/*
+  THE DRIVER CARDS ARE GONE, NOT REWORDED.
+
+  They were four hardcoded strings — "West region + Premium-X ramp",
+  "RM-204 input cost +9%, unrepriced", "₹72 L overdue, 5 accounts >45 days",
+  "Premium-X mix rising each week" — sitting under the heading "What's driving
+  the forecast · The levers the model is weighting most", immediately below a
+  section promising "a CFO-grade 90-day outlook grounded in your live numbers".
+
+  None of it was this workspace's. There is no Premium-X and no RM-204 in the
+  data; the products are Oil Seal OS-45, Gear Set GS-7, Axle Shaft AX-120. The
+  real overdue figure is ₹2.54 Cr, not ₹72 L. So the page named invented
+  products, an invented input-cost rise and an understated receivables number
+  as the causes of the customer's own forecast, three and a half times off, and
+  claimed live grounding in the sentence above them.
+
+  Deleting them is the fix rather than relabelling them "example", because the
+  section's entire claim is that these are the levers being weighted. An
+  example lever is not a lever. The AI forecast above already explains its
+  reasoning from the real figures, and the 90-day cards beside it are computed.
+  If driver cards come back they must be derived from metric ids, not typed.
+*/
 
 /**
  * The scenario baseline, from the workspace's own KPIs.
@@ -99,25 +114,10 @@ export default async function Forecast() {
 
         <ScenarioPlanner baseline={baseline} />
 
-        <Section title="AI forecast" desc="A CFO-grade 90-day outlook grounded in your live numbers">
+        <Section title="AI forecast" desc="A 90-day outlook built from the figures in this workspace">
           <AIPanel inputOptional mode="forecast" placeholder="Optional: focus the forecast (e.g. 'if we win the Dubai order' or 'cash only')" cta="Generate 90-day forecast" saveMode="strategy" />
         </Section>
 
-        <Section title="What's driving the forecast" desc="The levers the model is weighting most">
-          <div className="grid sm:grid-cols-2 gap-3">
-            {drivers.map((d) => (
-              <Card key={d.label} className="p-4 flex items-start justify-between">
-                <div>
-                  <div className="font-medium text-sm">{d.label}</div>
-                  <div className="text-sm text-muted-foreground">{d.detail}</div>
-                </div>
-                <Badge className={d.tone === "up" ? "bg-success/10 text-success border-success/20" : "bg-danger/10 text-danger border-danger/20"}>
-                  {d.tone === "up" ? "Tailwind" : "Headwind"}
-                </Badge>
-              </Card>
-            ))}
-          </div>
-        </Section>
       </PageShell>
     </>
   );

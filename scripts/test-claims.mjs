@@ -192,6 +192,58 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
   }
 }
 
+
+/* ============ four findings from the populated-workspace review ========== */
+/*
+  Each of these was confirmed in the live UI. None is a crash, which is why the
+  route sweep, the console and the server logs were all clean while the screens
+  were wrong.
+*/
+{
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/^\s*\/\/.*$/gm, "");
+  const src = (rel) => strip(readFileSync(join(ROOT, rel), "utf8"));
+
+  /* A2 — the MSME table headed "Unpaid" over total_amount, which since the
+     over-count fix holds ONLY past-window bills. A supplier with a live open
+     bill read zero. */
+  const msme = src("src/app/(app)/msme/page.tsx");
+  check(!/>Unpaid<\/th>/.test(msme),
+    "the MSME table no longer labels aged exposure as \"Unpaid\"",
+    "Aarti Fasteners read Rs 0 with an unpaid Rs 2,52,000 bill on /finance");
+  check(/Unpaid total/.test(msme) && /Past window/.test(msme),
+    "it shows total unpaid and past-window exposure as separate columns");
+  check(/r\.total_amount \+ r\.other_amount/.test(msme),
+    "the unpaid total adds the bills still inside the window back in",
+    "total_amount alone hid Rs 6.93 L of unpaid payables");
+
+  /* A3 — churn labelled the same figure /rfm calls per-year as per-month. */
+  const churn = src("src/components/churn-predictor.tsx");
+  check(!/₹\/mo/.test(churn), "churn no longer labels the column per month");
+  check(/₹\/yr/.test(churn), "…it matches the per-year label /rfm uses");
+  check(!/\/mo at high risk/.test(churn),
+    "and the revenue-at-risk badge is not per month either",
+    "it overstated revenue at risk by up to twelve times");
+
+  /* A5 — the KPI counted non-lost orders and called them orders. */
+  const metrics = src("src/lib/metrics.ts");
+  check(/label: "Orders \(MTD, excl\. lost\)"/.test(metrics),
+    "the orders KPI is named for the population it counts",
+    "62 on the dashboard against 64 on /sales, with no definition on either");
+
+  /* A6 — invented drivers under a live-grounding claim. */
+  const forecast = src("src/app/(app)/forecast/page.tsx");
+  for (const ghost of ["Premium-X", "RM-204", "West region", "₹72 L"]) {
+    check(!forecast.includes(ghost),
+      `/forecast no longer names "${ghost}" as a driver of the customer's forecast`,
+      "none of it exists in the workspace; real overdue is Rs 2.54 Cr, not Rs 72 L");
+  }
+  check(!/grounded in your live numbers/.test(forecast),
+    "…and the section no longer claims live grounding beside example figures");
+  check(!/What's driving the forecast/.test(forecast),
+    "the hardcoded driver section is deleted rather than relabelled",
+    "an example lever is not a lever");
+}
+
 console.log(`\nclaims: ${pass} passed, ${fails.length} failed`);
 if (fails.length) {
   for (const f of fails) console.log("  FAIL " + f);

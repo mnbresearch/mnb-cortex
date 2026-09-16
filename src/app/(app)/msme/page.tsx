@@ -112,7 +112,26 @@ export default async function Msme() {
                       <tr className="text-left text-muted-foreground border-b">
                         <th className="py-2 pr-4 font-medium">Supplier</th>
                         <th className="py-2 pr-3 font-medium">Udyam</th>
-                        <th className="py-2 pr-3 font-medium text-right">Unpaid</th>
+                        {/*
+                          TWO COLUMNS, BECAUSE total_amount IS NOT "UNPAID".
+
+                          Since the over-count fix, cortex_msme_exposure returns
+                          total_amount as ONLY the bills past their statutory
+                          window, with the rest in other_amount. This column was
+                          still headed "Unpaid", so a supplier whose bills are
+                          all inside the window showed zero — Aarti Fasteners
+                          read ₹0 on this page while /finance carried a live
+                          unpaid BILL-2016 for ₹2,52,000. The column also summed
+                          to ₹19.60 L against ₹26.53 L of actual unpaid
+                          payables, quietly hiding ₹6.93 L that is simply not
+                          late yet.
+
+                          Reading "you owe them nothing" when you owe them
+                          ₹2.5 lakh is how a payment gets missed and the 43B(h)
+                          exposure this page exists to prevent gets created.
+                        */}
+                        <th className="py-2 pr-3 font-medium text-right">Unpaid total</th>
+                        <th className="py-2 pr-3 font-medium text-right">Past window</th>
                         <th className="py-2 pr-3 font-medium text-right">Oldest</th>
                         <th className="py-2 font-medium">Status</th>
                       </tr>
@@ -125,7 +144,10 @@ export default async function Msme() {
                           <tr key={r.party} className="border-b last:border-0">
                             <td className="py-2 pr-4">{r.party}</td>
                             <td className="py-2 pr-3 capitalize text-muted-foreground">{r.udyam_category.replace("_", " ")}</td>
-                            <td className="py-2 pr-3 text-right tabular-nums">{rupee(r.total_amount)}</td>
+                            <td className="py-2 pr-3 text-right tabular-nums">{rupee(r.total_amount + r.other_amount)}</td>
+                            <td className={`py-2 pr-3 text-right tabular-nums ${r.total_amount > 0 ? "" : "text-muted-foreground"}`}>
+                              {r.total_amount > 0 ? rupee(r.total_amount) : "—"}
+                            </td>
                             <td className="py-2 pr-3 text-right tabular-nums">{r.oldest_days}d</td>
                             <td className="py-2">
                               {danger ? (

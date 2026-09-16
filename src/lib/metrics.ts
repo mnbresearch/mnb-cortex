@@ -358,7 +358,15 @@ export async function recomputeMetrics(orgId: string): Promise<{
     const nowCount = ordersByMonth.get(thisMonth) || 0;
     const prevCount = ordersByMonth.get(lastMonth) || 0;
     metrics.push({
-      metric_key: "orders", label: "Orders (MTD)", value: nowCount, unit: "count",
+      /*
+        NAMED FOR WHAT IT COUNTS. `orders_windowed` in the aggregate filters
+        `status <> 'lost'`, so this is won plus open — never every order. On a
+        workspace with 64 orders (60 won, 2 open, 2 lost) the card read
+        "Orders (MTD): 62" while /sales described 64 orders and "60 won of 64",
+        and nothing on either screen said which population was which. Three
+        numbers, one noun, no definition.
+      */
+      metric_key: "orders", label: "Orders (MTD, excl. lost)", value: nowCount, unit: "count",
       delta_pct: delta(nowCount, prevCount),
       status: nowCount >= prevCount ? "green" : "yellow",
       trend: buckets.slice(-7).map((b) => ordersByMonth.get(b) || 0),
