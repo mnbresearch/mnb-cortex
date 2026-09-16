@@ -52,7 +52,9 @@ export async function POST(req: Request) {
     }
 
     // Teaser: 3 prompts only (keeps the public endpoint cheap).
-    const report = await runVisibility(brand, [], defaultPrompts(category, location), 3);
+    /* crossCheck: 0 — this endpoint is free and unauthenticated, so it stays
+       at one engine and three calls. See runVisibility's note. */
+    const report = await runVisibility(brand, [], defaultPrompts(category, location), 3, { crossCheck: 0 });
     const shown = report.results.filter((r) => r.mentioned).length;
 
     // Notify the operator (best-effort) so warm leads surface immediately.

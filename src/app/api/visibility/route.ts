@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runVisibility, draftAeoFix, defaultPrompts } from "@/lib/ai/visibility";
+import { previousRun, saveRun } from "@/lib/visibility-history";
 import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundIfCharged, type ChargeResult } from "@/lib/credits";
 
@@ -52,10 +53,32 @@ export async function POST(req: Request) {
       }, { status: 200 });
     }
 
-    let fix = "";
-    try { fix = await draftAeoFix(brand, category, location, report.missing); } catch { /* fix optional */ }
+    /*
+      Read the previous run BEFORE storing this one, or the comparison is
+      against itself and every run reports no change.
+    */
+    const previous = await previousRun(brand, category, location);
 
-    return NextResponse.json({ ok: true, report, fix, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
+    let fix = "";
+    try {
+      fix = await draftAeoFix(brand, category, location, report.missing, {
+        competitors: report.competitors,
+        citations: report.citations,
+      });
+    } catch { /* fix optional */ }
+
+    /*
+      Saving is reported, not assumed. The check ran and the credits are
+      legitimately spent either way, so a storage failure must not fail the
+      request — but it must not be silent either, because the customer would
+      otherwise believe they have history they do not have.
+    */
+    const saved = await saveRun(report, category, location);
+
+    return NextResponse.json({
+      ok: true, report, fix, previous, saved,
+      charged: gate.enforced ? gate.cost : 0, balance: gate.balance,
+    });
   } catch (e: any) {
     await refundIfCharged(gate, "visibility");
     return NextResponse.json({ ok: false, error: e?.message || "Visibility check failed — check the AI key. Your credits have not been used." }, { status: 200 });
