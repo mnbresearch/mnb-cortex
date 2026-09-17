@@ -1,29 +1,29 @@
-import { serviceClient } from "@/lib/supabase/server";
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // 1x1 transparent GIF
 const PIXEL = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
 
-/** Open-tracking pixel. Increments the recipient's open counter. */
-export async function GET(req: Request) {
-  const r = new URL(req.url).searchParams.get("r");
-  if (r) {
-    const sb = serviceClient();
-    if (sb) {
-      try {
-        const { data } = await sb.from("campaign_recipients").select("open_count,opened_at").eq("id", r).maybeSingle();
-        if (data) {
-          await sb.from("campaign_recipients").update({
-            open_count: ((data as any).open_count || 0) + 1,
-            opened_at: (data as any).opened_at || new Date().toISOString(),
-          }).eq("id", r);
-        }
-      } catch { /* never block the pixel */ }
-    }
-  }
+/**
+ * LEGACY open pixel. Serves the image and records nothing.
+ *
+ * It used to take `?r=` off the query string and use it as a primary key
+ * against `campaign_recipients` with the SERVICE-ROLE client, which bypasses
+ * row-level security — no session, no key, no org constraint. Anyone holding a
+ * recipient UUID could inflate another workspace's open counters from outside
+ * that workspace. See the sibling click route for the full reasoning.
+ *
+ * The live sender points at /api/t/o/<token>, which keys on a 16-byte random
+ * token stored on the row. The only producer of these ?r= links was
+ * mailmerge.buildHtml(), which had no callers and is deleted. This stays only
+ * so a pixel in an already-delivered email still returns an image.
+ */
+export async function GET() {
   return new Response(PIXEL, {
-    headers: { "Content-Type": "image/gif", "Cache-Control": "no-cache, no-store, must-revalidate", "Content-Length": String(PIXEL.length) },
+    headers: {
+      "Content-Type": "image/gif",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "Content-Length": String(PIXEL.length),
+    },
   });
 }

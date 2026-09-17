@@ -154,10 +154,28 @@ for (const f of ["src/app/api/track/click/route.ts", "src/app/api/t/c/[token]/ro
   }
 }
 
-/* Both link builders must sign, or every legitimate link breaks silently. */
-for (const f of ["src/lib/branded-email.ts", "src/lib/mailmerge.ts"]) {
-  const src = readFileSync(join(root, f), "utf8");
-  if (!/signDestination\(/.test(src)) {
+/*
+  ANY module that builds a click-tracking URL must sign the destination —
+  unsigned links land on our homepage instead of the customer's site.
+
+  This used to name branded-email.ts and mailmerge.ts as a fixed pair. It now
+  asks the real question instead: whoever builds one of these URLs must sign
+  it. mailmerge.buildHtml() was deleted — it had no callers and was the only
+  producer of the id-keyed /api/track/* links, which allowed an unauthenticated
+  cross-tenant write — so mailmerge builds no destinations at all now and the
+  fixed list reported a regression that was the fix.
+
+  Written as a rule rather than a roster so a third builder cannot be added
+  without being covered, and a deleted one does not look like a failure.
+*/
+const BUILDERS = ["src/lib/branded-email.ts", "src/lib/mailmerge.ts", "src/lib/collections/envelope.ts"];
+for (const f of BUILDERS) {
+  let src;
+  try { src = readFileSync(join(root, f), "utf8"); } catch { continue; }
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  /* Only a module that actually emits a tracking URL has to sign. */
+  const buildsTrackedLink = /\/api\/t\/c\/|\/api\/track\/click/.test(code);
+  if (buildsTrackedLink && !/signDestination\(/.test(code)) {
     failures.push(`${f} signs the destinations it builds\n      unsigned links now land on our homepage instead of the customer's site`);
   } else pass++;
 }

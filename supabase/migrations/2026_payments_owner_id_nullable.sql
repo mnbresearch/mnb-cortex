@@ -90,6 +90,16 @@ end $$;
   ever acquires an owner_id, the other app's `owner_id = auth.uid()` policy
   starts matching it and hands that user write access to their own billing
   record. It should always be zero.
+
+  IT READS owner_id THROUGH to_jsonb() RATHER THAN BY NAME, and that is not
+  style. `where owner_id is not null` is resolved when the statement is PARSED,
+  so on a database where the other product has never run — a from-scratch
+  rebuild, which is to say the restore path — this whole file failed with
+  `column "owner_id" does not exist`, and it failed AFTER the DO block above had
+  correctly decided there was nothing to do. The fix was guarded; its own
+  verification was not. to_jsonb(p) ->> 'owner_id' asks the same question of
+  whatever columns the row actually has, so the check survives the column being
+  absent and still fails loudly if a Cortex row ever carries one.
 */
 select
   check_name,
@@ -107,8 +117,10 @@ from (
   union all
   select
     '2. No Cortex row carries an owner_id',
-    not exists (select 1 from payments where org_id is not null and owner_id is not null),
+    not exists (select 1 from payments p
+                 where p.org_id is not null and (to_jsonb(p) ->> 'owner_id') is not null),
     (select count(*)::text || ' Cortex row(s) with an owner_id — must be 0'
-       from payments where org_id is not null and owner_id is not null)
+       from payments p
+      where p.org_id is not null and (to_jsonb(p) ->> 'owner_id') is not null)
 ) t
 order by check_name;

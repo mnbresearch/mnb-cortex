@@ -502,11 +502,31 @@ export default async function SuperAdmin() {
               and read the SQL before you run it.
             </p>
             <p className="text-sm text-muted-foreground max-w-3xl mt-2">
-              Two real gaps remain. Supabase <b>auth users are not included</b>, so restored rows
-              would reference people who no longer exist. And the repo&apos;s schema is maintained by
-              hand while the live database is edited through the dashboard, so it can drift —{" "}
-              <code className="text-xs">npm run dump:schema</code> compares them. Customer API keys
-              and webhook secrets are <b>redacted</b> and must be reissued after a restore.
+              {/*
+                THIS SAID auth users are NOT included. They are — backup.ts
+                dumps them through the Admin API as `auth_users`, and the
+                manifest in that same file states so. The copy told an operator
+                the most important part of the file was missing, which on a bad
+                day is the sentence that makes them conclude a restore is
+                pointless. The real constraint is narrower: the ids and emails
+                are there, the passwords are not, and the accounts have to be
+                recreated before the SQL will apply at all.
+              */}
+              Three things to know. Supabase <b>auth users are included</b> (as{" "}
+              <code className="text-xs">auth_users</code>) but <b>without passwords</b>, which the
+              Admin API does not return — so a restore means recreating those accounts with their
+              original ids FIRST, or the very first insert fails its foreign key and the whole
+              transaction rolls back. People then sign in again by magic link or Google. The
+              repo&apos;s schema is maintained by hand while the live database is edited through the
+              dashboard, so it can drift — <code className="text-xs">npm run dump:schema</code>{" "}
+              compares them. Customer API keys and webhook secrets are <b>redacted</b> and must be
+              reissued after a restore.
+            </p>
+            <p className="text-sm text-warning max-w-3xl mt-2">
+              Nothing schedules this. A backup exists only when someone clicks the button below, so
+              the newest copy is as old as the last time anyone did. It is also not a point-in-time
+              snapshot — tables are read one after another over minutes — and it does not include
+              Supabase Storage objects.
             </p>
             <p className="text-sm text-danger/90 max-w-3xl mt-2">
               Treat the downloaded file like the database itself: it is every customer&apos;s

@@ -1,41 +1,48 @@
 import { NextResponse } from "next/server";
-import { serviceClient } from "@/lib/supabase/server";
 import { safeDestination } from "@/lib/track-link";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Click-tracking redirect. Records the click, then forwards to the real URL. */
+/**
+ * LEGACY click link. Redirects only — it no longer records anything.
+ *
+ * WHAT WAS WRONG: this endpoint took `?r=` straight off the query string and
+ * used it as a primary key against `campaign_recipients` with the SERVICE-ROLE
+ * client, which bypasses row-level security:
+ *
+ *     sb.from("campaign_recipients").select(...).eq("id", r)
+ *     sb.from("campaign_recipients").update({...}).eq("id", r)
+ *
+ * No session, no API key, no org constraint. Anyone on the internet holding a
+ * recipient UUID could inflate another workspace's open and click counters and
+ * stamp its `clicked_at` / `opened_at`. Not a data leak — nothing is returned —
+ * but an unauthenticated write into a tenant's analytics, from outside the
+ * tenant, which is a boundary that should never be crossable.
+ *
+ * WHY THE ROUTE STAYS. The live sender does not use it: campaigns render
+ * through renderBrandedEmail() and point at /api/t/c/<token>, which keys on a
+ * 16-byte random token stored on the row (see the token twin, and
+ * api/email/campaigns/route.ts where it is minted). The only code that ever
+ * produced these ?r= links was mailmerge.buildHtml(), which had no callers and
+ * has been deleted with this change.
+ *
+ * But an email already delivered cannot be edited. If any message in anyone's
+ * inbox still carries this shape, deleting the route turns a real link into a
+ * 404 for a reader who did nothing wrong. So the redirect survives — signature
+ * checked exactly as before — and only the write is gone. Tracking for those
+ * historical links stops, which is the correct trade: a counter is worth less
+ * than a boundary.
+ */
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
-  const r = params.get("r");
-  const u = params.get("u");
 
   /*
-    The previous check allowed ANY http(s) host, which is an open redirect on an
-    unauthenticated endpoint sitting on the domain we ask customers to trust
-    with their bank statements. safeDestination() requires an HMAC signature for
-    anything off our own origin, and falls back to our homepage otherwise.
-    See lib/track-link.ts.
+    Unchanged, and still load-bearing. safeDestination() requires an HMAC for
+    any host that is not ours and falls back to the homepage otherwise, so this
+    cannot be used as an open redirect on a domain customers trust with their
+    bank statements. See lib/track-link.ts.
   */
-  const dest = safeDestination(u, params.get("s"));
-
-  if (r) {
-    const sb = serviceClient();
-    if (sb) {
-      try {
-        const { data } = await sb.from("campaign_recipients").select("click_count,clicked_at,open_count,opened_at").eq("id", r).maybeSingle();
-        if (data) {
-          await sb.from("campaign_recipients").update({
-            click_count: ((data as any).click_count || 0) + 1,
-            clicked_at: (data as any).clicked_at || new Date().toISOString(),
-            // a click implies an open, even if the pixel was blocked
-            open_count: Math.max((data as any).open_count || 0, 1),
-            opened_at: (data as any).opened_at || new Date().toISOString(),
-          }).eq("id", r);
-        }
-      } catch { /* never block the redirect */ }
-    }
-  }
+  const dest = safeDestination(params.get("u"), params.get("s"));
   return NextResponse.redirect(dest, 302);
 }

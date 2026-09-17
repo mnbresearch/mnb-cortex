@@ -1,0 +1,115 @@
+# THE ORDER THESE FILES MUST BE APPLIED IN.
+#
+# WHY THIS FILE EXISTS.
+#
+# Until now the apply order was "whatever readdirSync().sort() returns", and
+# that is not an order anybody chose — it is an accident of the names. Six
+# files could not be applied to an empty database because each referenced
+# something a later-sorting file creates:
+#
+#   2026_default_weekly_brief.sql   needs scheduled_reports  (2026_integrations_layer.sql)
+#   2026_integrations_lockdown.sql  needs user_org_rank()    (2026_tenancy.sql)
+#   2026_rls_privilege_fix.sql      needs user_org_rank()    (2026_tenancy.sql)
+#   2026_msme_43bh.sql              needs cortex_norm_name() (2026_sales_order_customer_link.sql)
+#   2026_msme_exposure_fix.sql      needs cortex_norm_name() (2026_sales_order_customer_link.sql)
+#   2026_payments_owner_id_nullable.sql — see the note at the end
+#
+# Production is fine: those dependencies were applied months earlier, by hand,
+# in the order they were written. Only a rebuild-from-scratch was broken —
+# which is the one scenario where being broken matters, because it is the
+# restore path. A backup you can restore needs a schema to restore INTO.
+#
+# So the order is now declared here rather than inferred, and
+# scripts/rehearse-restore.mjs applies exactly this list against a real
+# PostgreSQL on every run. Adding a file without listing it fails the
+# rehearsal; listing a file that does not exist fails it too. There is one
+# order, it is in one place, and it is executed rather than described.
+#
+# WHY NOT JUST RENAME THE FILES so the sort comes out right? Because sixty-odd
+# comments, twenty test scripts and every RUN-*.sql note in this repo refer to
+# these files by name, and a rename would silently break that trail while
+# looking tidy. The names are history; this file is the order.
+#
+# Lines starting with # are comments. One filename per line. Applied top to
+# bottom, after supabase/schema.sql, supabase/rls.sql and supabase/migration_*.sql.
+
+# ---------------------------------------------------------------------------
+# Dependency providers. These define objects the rest of the list references,
+# so they go first regardless of where their names would sort.
+# ---------------------------------------------------------------------------
+2026_tenancy.sql                  # user_org_rank(), the rank ladder every policy below uses
+2026_integrations_layer.sql       # scheduled_reports, integrations
+2026_sales_order_customer_link.sql # cortex_norm_name(), used by MSME and RFM
+
+# ---------------------------------------------------------------------------
+# Everything else, in name order. Keep it that way unless a dependency forces
+# otherwise — and if it does, move the PROVIDER up into the block above rather
+# than shuffling this one.
+# ---------------------------------------------------------------------------
+2026_action_board.sql
+2026_agents.sql
+2026_alert_rules.sql
+2026_alert_rules_dismiss.sql
+2026_autorenew.sql
+2026_collections.sql
+2026_collections_safety.sql
+2026_collections_whatsapp.sql
+2026_cortex_memory.sql
+2026_cortex_payments.sql
+2026_credit_metering.sql
+2026_credits.sql
+2026_cron_fairness.sql
+2026_default_alert_rules.sql
+2026_default_weekly_brief.sql
+2026_definer_grant_sweep.sql
+2026_demo_isolation.sql
+2026_erasure_retention.sql
+2026_hardening.sql
+2026_integrations_lockdown.sql
+2026_invoice_documents.sql
+2026_metric_snapshots.sql
+2026_metrics_layer.sql
+2026_module_sync.sql
+2026_msme_43bh.sql
+2026_msme_exposure_fix.sql
+2026_org_billing_guard.sql
+2026_payments_owner_id_nullable.sql
+2026_public_report_no_demo.sql
+2026_referrals.sql
+2026_renewal_notices.sql
+2026_rls_privilege_fix.sql
+2026_scale_indexes.sql
+2026_seed_demo_customers.sql
+2026_seed_rpc_lockdown.sql
+2026_signup_trigger.sql
+2026_sync_layer.sql
+2026_sync_layer_fix.sql
+2026_system_status.sql
+2026_tenancy_aggregate.sql
+2026_tenancy_alert_rules.sql
+2026_tenancy_goals.sql
+2026_tenant_leads.sql
+2026_upsert_arbiter_fix.sql
+2026_weekly_plan_sends.sql
+2026_write_rank_gates.sql
+2026_zz_aggregate_ist_overdue.sql
+2026_zzx_missing_columns.sql
+2026_zzy_default_cash_rule_unit.sql
+2026_zzz_definer_final_lockdown.sql
+2026_zzza_lead_detail.sql
+2026_zzzb_funnel_events.sql
+2026_zzzc_lifecycle_sends.sql
+2026_zzzd_practice_pool.sql
+2026_zzze_api_key_hash.sql
+2026_zzzf_statutory_profile.sql
+2026_zzzg_visibility_runs.sql
+2026_zzzh_api_ingest_issue_date.sql
+
+# A NOTE ON 2026_payments_owner_id_nullable.sql.
+#
+# It is the one file here that is not ours to order. `payments` belongs to a
+# different product sharing this Supabase project, and its owner_id column was
+# added by that product's own migrations, which are not in this repo. From
+# scratch, the column does not exist and the ALTER fails — not an ordering bug
+# but a cross-product dependency, so the file now guards on the column's
+# existence and does nothing when it is absent. See the file itself.

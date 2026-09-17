@@ -57,8 +57,12 @@ export const BACKUP_TABLES = [
      would have produced a restore with no Cortex payment history at all. */
   "subscriptions", "cortex_payments", "credit_ledger", "renewal_notices",
   "customers", "leads", "sales_pipeline", "sales_orders", "purchase_orders",
-  "invoices", "finance_ledger", "inventory_items", "employees", "meetings",
-  "production_runs",
+  "invoices", "quotes", "vendors", "finance_ledger", "inventory_items",
+  "employees", "meetings", "production_runs",
+  // Collections. Order is load-bearing: threads reference invoices, messages
+  // reference threads, so a restore that writes them the other way round hits
+  // a foreign key. (collection_policies keys only on organizations.)
+  "collection_policies", "collection_threads", "collection_messages",
   // The customer's own conversation history with the AI. Omitted from the first
   // version of this list because it was built by grepping .from("…") in the app
   // code and these are reached through a different path — which is exactly the
@@ -71,8 +75,24 @@ export const BACKUP_TABLES = [
   "agent_specs", "agent_runs", "workflows", "workflow_runs",
   "integrations", "api_keys", "webhook_endpoints", "webhook_deliveries",
   "email_campaigns", "campaign_recipients", "email_templates", "email_replies",
-  "email_optouts", "weekly_email_sends", "scheduled_reports",
+  "email_optouts", "weekly_email_sends", "weekly_plan_sends", "lifecycle_sends",
+  "scheduled_reports",
   "app_settings", "system_status",
+  // The customer's own work and the record of what we did to them: the action
+  // board and the decisions logged against it, what the referral programme owes
+  // whom, every AI-visibility run they paid for, and the metric snapshots that
+  // are the only history behind every "up 12% on last month" in the product.
+  "action_tasks", "decisions", "referrals", "visibility_runs", "metric_snapshots",
+  // Operational, and each one is load-bearing after a restore:
+  //   platform_switches    — the collections kill switch. Losing it restores a
+  //                          database in which a switch somebody deliberately
+  //                          turned OFF is back ON, and the product resumes
+  //                          messaging that customer's debtors.
+  //   erased_subscriptions — who exercised erasure. Losing it re-enrols people
+  //                          who asked to be forgotten.
+  //   funnel_events        — the acquisition record; unreconstructable.
+  //   cron_cursors         — where the rotating jobs had got to.
+  "platform_switches", "erased_subscriptions", "funnel_events", "cron_cursors",
   // Added with the features that created them. Forgetting this is how a table
   // ends up outside the backup for months — it already happened once with
   // production_runs and chat_*, so it is now part of adding a table.
@@ -97,6 +117,12 @@ export const DELIBERATELY_EXCLUDED = [
   // without --force. One dead table would have disabled the restore path for
   // every real one. If it is ever created and used, add it back then.
   "org_billing_log",
+  // Belongs to the school/tuition app that shares this Supabase project (see
+  // supabase/migrations/2026_payments_owner_id_nullable.sql). Cortex writes
+  // nothing to it that is not also in cortex_payments, and backing up another
+  // product's customer records into a file Cortex operators download would be
+  // an access-control failure dressed up as diligence.
+  "payments",
 ];
 
 /**

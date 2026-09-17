@@ -345,6 +345,11 @@ export async function addInvoice(fd: FormData) {
     org_id: orgId, invoice_no: "INV-" + seqSuffix(),
     party: str(fd.get("party")), amount: num(fd.get("amount")),
     status: str(fd.get("status")) || "pending", type: str(fd.get("type")) || "receivable",
+    /* The date the bill was RAISED. MSME exposure ages from this; when it is
+       absent cortex_msme_exposure falls back to created_at, which measures from
+       data entry and systematically under-states 43B(h). Defaults to today,
+       which is the honest reading of "entered now, no date given". */
+    issue_date: str(fd.get("issue_date")) || new Date().toISOString().slice(0,10),
     due_date: str(fd.get("due_date")) || new Date(Date.now()+15*864e5).toISOString().slice(0,10) });
   if (error) throw new Error(error.message);
   await recomputeQuietly(orgId);
@@ -1254,7 +1259,25 @@ export async function runAutopilot() {
 
 // ---- Shareable public report links ----
 export async function createReportLink() {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  /*
+    ADMIN, not analyst.
+
+    This was requireWriteOrg() — rank 2. Publishing the workspace's revenue,
+    cash position, receivables and margin to an unauthenticated URL that never
+    expires is not a writing task, it is a disclosure decision, and rank 2 is
+    the rank you give someone to let them edit records.
+
+    The comment below is right that the token is the only thing protecting the
+    link. It reasons carefully about the token's entropy and not at all about
+    who is allowed to mint one. An analyst could hand out a permanent public
+    view of the company's finances, and nothing in the product would show an
+    owner that it had happened.
+
+    Revoking deliberately stays at analyst: taking a link away is strictly
+    safer than leaving it up, and an analyst who created one before this change
+    must still be able to kill it without waiting for an admin.
+  */
+  const { orgId } = await requireRole("admin"); const sb = createClient();
   /*
     This token is the ONLY thing protecting the link.
 

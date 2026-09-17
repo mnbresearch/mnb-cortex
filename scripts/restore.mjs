@@ -102,10 +102,63 @@ function lit(v) {
   It is reported here instead, so whoever is running the restore knows the
   accounts exist in the file and how to bring them back.
 */
+/*
+  THE SIX TABLES THAT CANNOT LAND UNTIL THE AUTH ACCOUNTS EXIST.
+
+  Each has a foreign key to auth.users, and auth.users is precisely what this
+  file cannot recreate. Until now every table went into ONE transaction, so the
+  first `profiles` row referencing a deleted account raised
+
+      insert or update on table "profiles" violates foreign key constraint
+      "profiles_id_fkey"
+
+  and the COMMIT never came — rolling back the customers, the invoices, the
+  ledger, the entire restore, over a login. The rehearsal did not catch it
+  because it only ever seeded tables with no auth dependency.
+
+  So they are emitted LAST, each in a transaction of its own. If the accounts
+  are not back yet, you lose exactly these six and keep everything else; if
+  profiles fails, memberships still gets its chance. Re-running the file after
+  recreating the accounts fills them in, because every insert is ON CONFLICT
+  DO NOTHING.
+
+  The list is not maintained by hand alone: scripts/rehearse-restore.mjs derives
+  the same set from pg_constraint against a real build of the schema and fails
+  if the two disagree, so a seventh such table cannot appear unnoticed.
+*/
+/* Six tables reference auth.users directly:
+
+     profiles          id IS the auth user id — no account, no row
+     memberships       user_id NOT NULL
+     chat_threads      user_id, nullable, but a present value is still checked
+     integrations      created_by
+     email_campaigns   created_by
+     email_templates   created_by
+
+   and three more are children of those, so deferring only the six would have
+   made things WORSE — chat_messages would have been inserted in the main
+   transaction while chat_threads was still to come, and the foreign key that
+   used to fail at the end would now fail in the middle, taking everything:
+
+     chat_messages         → chat_threads
+     campaign_recipients   → email_campaigns
+     email_replies         → email_campaigns
+
+   The whole dependency closure moves together. Order within it is parents
+   first, inherited from BACKUP_TABLES, which the backup file preserves. */
+const AUTH_DEPENDENT = [
+  "profiles", "memberships",
+  "chat_threads", "chat_messages",
+  "integrations",
+  "email_campaigns", "campaign_recipients", "email_templates", "email_replies",
+];
+
 const authUsers = Array.isArray(data.auth_users) ? data.auth_users : null;
-const tables = Object.keys(data)
+const allTables = Object.keys(data)
   .filter((t) => t !== "auth_users")
   .filter((t) => !only.length || only.includes(t));
+const tables = allTables.filter((t) => !AUTH_DEPENDENT.includes(t));
+const authTables = allTables.filter((t) => AUTH_DEPENDENT.includes(t));
 
 let statements = 0;
 let rowsOut = 0;
@@ -116,7 +169,9 @@ out.push(`-- Source backup: ${file}`);
 out.push(`-- Taken at:      ${manifest.takenAt}`);
 out.push(`-- Complete:      ${manifest.complete}`);
 out.push("--");
-out.push("-- Wrapped in a transaction: either the whole restore lands or none of it does.");
+out.push("-- The bulk of the data is in ONE transaction: it all lands or none of it does.");
+out.push("-- The tables that reference Supabase auth accounts follow at the end, each in");
+out.push("-- its own transaction, so a missing login cannot roll back your ledger.");
 out.push("-- Inserts use ON CONFLICT DO NOTHING, so existing rows are left alone. If you");
 out.push("-- intend to REPLACE a table, delete from it explicitly first, in your own");
 out.push("-- statement, having thought about it.");
@@ -132,15 +187,15 @@ out.push("");
 out.push("BEGIN;");
 out.push("");
 
-for (const table of tables) {
+/** Emit the INSERTs for one table. Batched so a single statement never becomes
+ *  unreadably large — and so a failure tells you roughly where it happened. */
+function emitTable(table) {
   const rows = data[table] || [];
-  if (!rows.length) { out.push(`-- ${table}: 0 rows`); continue; }
+  if (!rows.length) { out.push(`-- ${table}: 0 rows`); return; }
 
   const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
   out.push(`-- ${table}: ${rows.length} rows`);
 
-  // Batched so a single statement never becomes unreadably large — and so a
-  // failure tells you roughly where it happened.
   const BATCH = 200;
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
@@ -156,8 +211,38 @@ for (const table of tables) {
   out.push("");
 }
 
+for (const table of tables) emitTable(table);
+
 out.push("COMMIT;");
 out.push("");
+
+if (authTables.length) {
+  out.push("-- ===========================================================================");
+  out.push("-- TABLES THAT NEED THE AUTH ACCOUNTS BACK FIRST");
+  out.push("--");
+  out.push("-- Everything above is committed by this point and is not at risk from what");
+  out.push("-- follows. These tables have foreign keys into auth.users, which this file");
+  out.push("-- cannot recreate — Supabase owns that schema and the backup holds no");
+  out.push("-- passwords by design.");
+  out.push("--");
+  out.push("-- If the accounts are not back yet, expect these to fail with");
+  out.push("--   violates foreign key constraint \"…_fkey\"");
+  out.push("-- and that is the intended outcome: you lose these tables, not the restore.");
+  out.push("-- Recreate the users with the Admin API REUSING THE IDS printed by this");
+  out.push("-- script, then run this same file again — every insert is ON CONFLICT DO");
+  out.push("-- NOTHING, so the rows above are untouched and these fill in.");
+  out.push("--");
+  out.push("-- One transaction each, deliberately: profiles failing must not take");
+  out.push("-- memberships, and neither must take the other four.");
+  out.push("-- ===========================================================================");
+  out.push("");
+  for (const table of authTables) {
+    out.push("BEGIN;");
+    emitTable(table);
+    out.push("COMMIT;");
+    out.push("");
+  }
+}
 
 if (authUsers) {
   say("");
@@ -171,7 +256,11 @@ if (authUsers) {
   say("");
 }
 
-say(`Tables:     ${tables.length}`);
+say(`Tables:     ${tables.length + authTables.length}`);
+if (authTables.length) {
+  say(`  of which ${authTables.length} are deferred to their own transactions at the end of the`);
+  say(`  file because they depend on auth accounts: ${authTables.join(", ")}`);
+}
 say(`Rows:       ${rowsOut.toLocaleString()}`);
 say(`Statements: ${statements}`);
 

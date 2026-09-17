@@ -110,6 +110,10 @@ export default async function Finance() {
         <CollapsibleForm title="Add invoice" action={addInvoice}>
           <Field name="party" label="Party" required />
           <Field name="amount" label="Amount (₹)" type="number" />
+          {/* Invoice date, not just due date. The 43B(h) clock runs from when
+              the bill was raised; without it the statutory age is measured from
+              the moment somebody typed it in, which is always too recent. */}
+          <Field name="issue_date" label="Invoice date" type="date" />
           <Field name="due_date" label="Due date" type="date" />
           <SelectField name="type" label="Type" options={["receivable","payable"]} />
           <SelectField name="status" label="Status" options={["pending","paid","overdue"]} />

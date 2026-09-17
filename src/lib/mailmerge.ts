@@ -21,29 +21,16 @@ export function mergeVars(text: string, r: Recipient): string {
     .replace(/\{\{\s*company\s*\}\}/gi, r.company || "");
 }
 
-/**
- * Builds the final HTML for one recipient:
- *  - escapes text, turns bare URLs into click-tracked links,
- *  - preserves line breaks,
- *  - appends an invisible open-tracking pixel.
- */
-export function buildHtml(bodyText: string, opts: { origin: string; recipientId: string }): string {
-  const { origin, recipientId } = opts;
-  const parts = esc(bodyText).split(/(https?:\/\/[^\s<]+)/g);
-  const withLinks = parts.map((p) => {
-    if (/^https?:\/\//.test(p)) {
-      /* Signed — see lib/track-link.ts. Without `s` the click endpoint sends
-         the reader to our homepage rather than following an unverified host. */
-      const tracked = `${origin}/api/track/click?r=${encodeURIComponent(recipientId)}&u=${encodeURIComponent(p)}&s=${signDestination(p)}`;
-      return `<a href="${tracked}" style="color:#9A7B1F">${p}</a>`;
-    }
-    return p;
-  }).join("");
-  const html = withLinks.replace(/\n/g, "<br/>");
-  const pixel = `<img src="${origin}/api/track/open?r=${encodeURIComponent(recipientId)}" width="1" height="1" alt="" style="display:none" />`;
-  return `<div style="font-family:system-ui,Arial,sans-serif;max-width:600px;margin:auto;font-size:15px;line-height:1.6;color:#111">
-    ${html}
-    <div style="margin-top:28px;padding-top:14px;border-top:1px solid #eee;font-size:12px;color:#999">Sent via MNB Cortex</div>
-    ${pixel}
-  </div>`;
-}
+/*
+  buildHtml() WAS HERE AND IS DELETED.
+
+  It had no callers anywhere in the repo, and it was the only thing that ever
+  produced /api/track/open?r=<id> and /api/track/click?r=<id> — links that keyed
+  an unauthenticated service-role write on a caller-supplied row id. Campaigns
+  render through renderBrandedEmail() in lib/branded-email.ts, which uses the
+  per-recipient token minted in api/email/campaigns/route.ts and points at
+  /api/t/o/<token> and /api/t/c/<token>.
+
+  Deleted rather than repointed, because reviving dead code to fix it is how it
+  comes back. mergeVars and MERGE_TOKENS below are live and unchanged.
+*/

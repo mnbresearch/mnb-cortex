@@ -61,6 +61,14 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
   if (!svc) return { ok: false, error: "Service role not configured." };
 
   const order = await getOrder(orderId);
+  /*
+    "Could not ask" is retryable; "asked, not paid" is not. Collapsing the two
+    is how a captured payment reached an acknowledged webhook with no record of
+    itself — see the note on getOrder in lib/pay/cashfree.ts.
+  */
+  if (order.unknown) {
+    return { ok: false, retryable: true, error: "Could not reach Cashfree to confirm this order. Will retry." };
+  }
   if (!order.paid) return { ok: false, pending: true, error: "Payment not completed yet." };
 
   const orgId = (order.customerId || "").trim();
@@ -344,13 +352,39 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
         label: `the ${ref} plan (${cycle === "annual" ? "annual" : "monthly"})`, endsAt });
       return { orgId, ok: true, kind: "plan", plan: ref, cycle, endsAt };
     }
-    return { orgId, ok: true, already: true, kind: "plan", plan: ref, cycle };
+    /*
+      NOT-NEW, SO THE CLAIM EXISTS. That does not mean the plan was granted.
+
+      Same hazard as the credits branch: the claim row is written before the
+      grant, so a process that dies in between leaves `status: "paid"` beside a
+      workspace still on its old plan. This used to return `already: true`
+      immediately, which told Cashfree the webhook was handled and ended the
+      retries — the customer had paid and was still locked out, and the row read
+      as revenue.
+
+      The organisation row is the evidence, so read it. `subscription_ends_at`
+      in the future on the plan that was bought means the grant landed; anything
+      else means it did not, and we fall through to grant it now. The grant
+      below is an idempotent update keyed on the org, so re-running it is safe.
+    */
+    const { data: orgNow } = await svc.from("organizations")
+      .select("plan, subscription_ends_at").eq("id", orgId).maybeSingle();
+    const granted =
+      String((orgNow as any)?.plan || "") === ref &&
+      Boolean((orgNow as any)?.subscription_ends_at) &&
+      new Date(String((orgNow as any).subscription_ends_at)).getTime() > Date.now();
+    if (granted) {
+      return { orgId, ok: true, already: true, kind: "plan", plan: ref, cycle,
+        endsAt: String((orgNow as any).subscription_ends_at) };
+    }
+    return { orgId, ok: false, retryable: true,
+      error: `Order ${orderId} is recorded as paid but the ${ref} plan is not active on this workspace. Retrying.` };
   }
 
   if (type === "credits") {
     const pack = CREDIT_PACKS.find((p) => p.id === ref);
     if (!pack) return { orgId, ok: false, error: "Unknown credit pack." };
-    if (isNew) {
+    {
       // The ledger reason carries the order id, which makes the grant itself
       // idempotent. That matters because releaseClaim() below re-opens the order
       // for a webhook retry: without this, a grant that COMMITTED but whose
@@ -364,6 +398,26 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
         } catch { return null; }
       };
 
+      /*
+        THE CHECK NOW RUNS WHETHER OR NOT WE CLAIMED THE ORDER, and that is the
+        fix.
+
+        This whole block used to sit inside `if (isNew)`, with a bare
+        `return { ok: true, already: true }` for the not-new case — a claim
+        found, therefore assumed granted. But the claim is written BEFORE the
+        grant. If the process dies in between — a lambda hitting its wall clock,
+        a dropped connection — the row says "paid" and no credits exist. Every
+        subsequent retry then took the not-new path, reported success, and
+        Cashfree stopped retrying. The customer paid, received nothing, and the
+        row counted as revenue in the operator console: indistinguishable from a
+        good sale, with no error anywhere.
+
+        The ledger is the only honest evidence that the grant happened, so it is
+        what we consult. Asking it on every path costs one indexed read and
+        turns "we have a claim" into "we have a grant". The grant below is
+        idempotent on the same reason, so falling through is safe even if two
+        retries race.
+      */
       const prior = await alreadyGranted();
       if (prior !== null) return { orgId, ok: true, already: true, kind: "credits", credits: pack.credits, balance: prior };
 
@@ -384,7 +438,6 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
         return { orgId, ok: false, retryable: true, error: e?.message || "Could not add the credits. Please contact support." };
       }
     }
-    return { orgId, ok: true, already: true, kind: "credits", credits: pack.credits };
   }
 
   return { orgId, ok: false, error: "Unknown order type." };

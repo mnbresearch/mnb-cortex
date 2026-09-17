@@ -50,10 +50,37 @@ export async function createOrder(opts: {
   } catch (e: any) { return { ok: false, error: e?.message || "Cashfree error." }; }
 }
 
-export async function getOrder(orderId: string): Promise<{ paid: boolean; amount: number; note: string; customerId: string }> {
-  if (!hasCashfree() || !orderId) return { paid: false, amount: 0, note: "", customerId: "" };
+/**
+ * Read one order from Cashfree.
+ *
+ * `unknown: true` means WE COULD NOT FIND OUT — not that the order is unpaid.
+ *
+ * Those were the same value before, and it lost money silently. Every failure
+ * here — a socket error, a 401 from a rotated key, a 429, a 5xx, a non-JSON
+ * body — returned `{ paid: false }`, identical to a genuine "not paid yet".
+ * settleOrder turned that into `{ ok: false, pending: true }`, and the webhook
+ * treats `pending` as neither retryable nor loggable, so it fell through to
+ * `return { ok: true }`. Cashfree was told the event was handled and never
+ * retried. Money captured, nothing granted, and not one row, log line or
+ * console entry anywhere to find it by.
+ *
+ * Note the missing `r.ok` check in the old version: a 401 body was parsed as
+ * JSON and `j.order_status` read as undefined, so an expired API key looked
+ * exactly like an unpaid order — for every order, until someone noticed.
+ *
+ * The caller must treat `unknown` as retryable. "I don't know" and "no" are
+ * different answers and only one of them is safe to act on.
+ */
+export async function getOrder(orderId: string): Promise<{ paid: boolean; amount: number; note: string; customerId: string; unknown?: boolean }> {
+  if (!hasCashfree() || !orderId) return { paid: false, amount: 0, note: "", customerId: "", unknown: true };
   try {
     const r = await fetch(base() + "/orders/" + encodeURIComponent(orderId), { headers: headers() });
+    if (!r.ok) {
+      /* 404 is a real answer: Cashfree has no such order, so it cannot be paid.
+         Everything else — auth, rate limit, server error — is us failing to
+         ask, not them answering. */
+      return { paid: false, amount: 0, note: "", customerId: "", unknown: r.status !== 404 };
+    }
     const j = await r.json();
     return {
       paid: j?.order_status === "PAID",
@@ -61,5 +88,5 @@ export async function getOrder(orderId: string): Promise<{ paid: boolean; amount
       note: String(j?.order_note || ""),
       customerId: String(j?.customer_details?.customer_id || ""),
     };
-  } catch { return { paid: false, amount: 0, note: "", customerId: "" }; }
+  } catch { return { paid: false, amount: 0, note: "", customerId: "", unknown: true }; }
 }

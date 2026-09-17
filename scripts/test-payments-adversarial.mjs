@@ -387,9 +387,30 @@ console.log("\nTHE LEDGER MUST BE OURS ALONE");
   check("the constant points at cortex_payments",
         /PAYMENTS_TABLE = "cortex_payments"/.test(table));
 
+  /*
+    Backups must capture OUR payment history and not the school app's.
+
+    This used to be written as `backup.ts must not contain the string
+    "payments,"` — which passed for the wrong reason, because the shared table
+    was simply unmentioned. Then `payments` was added to DELIBERATELY_EXCLUDED,
+    with a note that copying another product's customer records into a file
+    Cortex operators download is an access-control failure, and the test failed
+    on the fix. Silence and a documented refusal are not the same thing, and the
+    test could not tell them apart. It now reads the two lists.
+  */
   const backup = src("src/lib/backup.ts");
-  check("backups capture cortex_payments, not the other product's table",
-        /"cortex_payments"/.test(backup) && !/"payments",/.test(backup));
+  const list = (name) => {
+    const m = backup.match(new RegExp(`${name} = \\[([\\s\\S]*?)\\];`));
+    return m ? [...m[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]) : [];
+  };
+  const backedUp = list("BACKUP_TABLES");
+  const excluded = list("DELIBERATELY_EXCLUDED");
+  check("backups capture cortex_payments",
+        backedUp.includes("cortex_payments"));
+  check("...and never the other product's shared `payments` table",
+        !backedUp.includes("payments"));
+  check("...with that exclusion stated on the record, not left to silence",
+        excluded.includes("payments"));
 
   const mig = readFileSync(join(ROOT, "supabase/migrations/2026_cortex_payments.sql"), "utf8");
   check("the new table is service-role only (RLS on, no policy)",

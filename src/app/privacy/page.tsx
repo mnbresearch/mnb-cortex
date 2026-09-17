@@ -182,9 +182,24 @@ export default function Privacy() {
       <H2>8. Data Retention</H2>
       <P>
         We retain personal and business data for as long as your workspace is active or as needed to provide the
-        service, comply with legal obligations, resolve disputes, and enforce our agreements. Routine backups
-        are purged on a rolling schedule.
+        service, comply with legal obligations, resolve disputes, and enforce our agreements. Copies of your
+        data may exist in operational exports taken for recovery purposes; these are deleted when they are no
+        longer needed, and a verified deletion request covers them.
       </P>
+      {/*
+        THIS SAID: "Routine backups are purged on a rolling schedule."
+
+        There is no routine backup and no rolling schedule. Nothing in the
+        product runs one — no cron entry, no workflow, no scheduler. A backup
+        exists only when an operator clicks a button in the superadmin console.
+        The sentence described a retention regime to customers, in a privacy
+        policy, that does not exist.
+
+        The replacement says only what is true today: exports are taken for
+        recovery, and deletion covers them. If scheduled backups are built
+        later, this paragraph is where the schedule gets described — once it
+        actually runs.
+      */}
       <P>
         <strong>What survives a deletion, and why.</strong> When a workspace is deleted we remove its business
         data, but we keep the <em>financial record</em> of payments and subscriptions with the workspace link

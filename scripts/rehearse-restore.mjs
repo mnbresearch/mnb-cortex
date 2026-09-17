@@ -74,6 +74,40 @@ step("1. Applying supabase/migrations to an empty database");
 // tables had no schema in the repo. They do. Scanning every SQL file is the
 // difference between a true and a false statement about whether your backups
 // are restorable.)
+/**
+ * The declared apply order, checked against what is actually on disk.
+ *
+ * A manifest that drifts from the directory is worse than no manifest, because
+ * it looks authoritative. So this refuses both ways: a .sql file nobody listed
+ * never gets applied (and its tables silently vanish from the rebuild), and a
+ * listed file that no longer exists means the order is describing a repo that
+ * is gone. Either one stops the rehearsal here rather than showing up later as
+ * a mysteriously missing table.
+ */
+function migrationOrder() {
+  const dir = join(ROOT, "supabase", "migrations");
+  const declared = readFileSync(join(dir, "ORDER.txt"), "utf8")
+    .split("\n")
+    .map((l) => l.replace(/#.*$/, "").trim())
+    .filter(Boolean);
+  const onDisk = readdirSync(dir).filter((f) => f.endsWith(".sql"));
+
+  const unlisted = onDisk.filter((f) => !declared.includes(f)).sort();
+  const phantom = declared.filter((f) => !onDisk.includes(f));
+  const dupes = declared.filter((f, i) => declared.indexOf(f) !== i);
+
+  if (unlisted.length || phantom.length || dupes.length) {
+    console.log("\nFAIL  supabase/migrations/ORDER.txt does not match the directory");
+    if (unlisted.length) console.log(`  not listed, so never applied: ${unlisted.join(", ")}`);
+    if (phantom.length) console.log(`  listed but not on disk:       ${phantom.join(", ")}`);
+    if (dupes.length) console.log(`  listed twice:                 ${[...new Set(dupes)].join(", ")}`);
+    console.log("  Add the file to ORDER.txt — position it after whatever it depends on.");
+    process.exit(1);
+  }
+  ok(`ORDER.txt declares all ${declared.length} migrations, and nothing that is not there`);
+  return declared;
+}
+
 const sqlFiles = [
   join(ROOT, "supabase", "schema.sql"),
   // rls.sql was MISSING from this list, and its absence produced a false
@@ -93,8 +127,15 @@ const sqlFiles = [
   join(ROOT, "supabase", "rls.sql"),
   ...readdirSync(join(ROOT, "supabase")).filter((f) => f.startsWith("migration") && f.endsWith(".sql"))
     .sort().map((f) => join(ROOT, "supabase", f)),
-  ...readdirSync(join(ROOT, "supabase", "migrations")).filter((f) => f.endsWith(".sql"))
-    .sort().map((f) => join(ROOT, "supabase", "migrations", f)),
+  // supabase/migrations/ is applied in the order DECLARED in ORDER.txt, not in
+  // filename order. Filename order is an accident of the names and it was
+  // wrong: six files referenced objects that a later-sorting file creates, so
+  // a database built from this repo was missing vendors, scheduled_reports
+  // policies and the MSME exposure view. Production was fine — those
+  // dependencies went in by hand, months apart, in the order they were
+  // written — so the breakage only existed in the rebuild-from-scratch path,
+  // which is the restore path. See supabase/migrations/ORDER.txt.
+  ...migrationOrder().map((f) => join(ROOT, "supabase", "migrations", f)),
 ];
 
 // Two things exist in Supabase but not in a bare Postgres, and neither says
@@ -107,7 +148,17 @@ await db.exec(`
   create schema if not exists auth;
   create table if not exists auth.users (
     id uuid primary key default gen_random_uuid(),
-    email text
+    email text,
+    -- The repo's own signup trigger (2026_signup_trigger.sql) reads
+    -- new.raw_user_meta_data. A two-column stub therefore made every insert
+    -- into auth.users fail with: record "new" has no field
+    -- raw_user_meta_data — which is why the rehearsal had never once seeded a
+    -- user and never once tested the tables that hang off one. The stub has to
+    -- carry the columns our own code touches or it is not standing in for
+    -- anything.
+    raw_user_meta_data jsonb default '{}'::jsonb,
+    raw_app_meta_data jsonb default '{}'::jsonb,
+    created_at timestamptz default now()
   );
   create or replace function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
   create or replace function auth.role() returns text language sql stable as $$ select 'authenticated'::text $$;
@@ -180,12 +231,96 @@ ok(`${live.length} tables exist: ${live.join(", ")}`);
   happened: org_billing_log is defined in a migration, used by nothing, and was
   never applied to production.)
 */
+/*
+  1c — and the other direction: every table that exists must be accounted for.
+
+  1b alone only proves the list contains nothing fictional. It says nothing
+  about what the list is MISSING, and missing is the failure that matters: the
+  first version of this file was built by grepping `.from("…")` in the app code,
+  and sixteen tables were simply never in it — the whole collections engine,
+  vendors, the action board, every metric snapshot, the kill switch, the
+  erasure record. A backup ran green, reported `complete: true`, and silently
+  did not contain them. Nobody would have found out until a restore.
+
+  So the schema is the source of truth and the code must justify itself against
+  it: a table is either backed up or deliberately excluded, in writing. Adding a
+  table without doing one of those two things fails here, which is the only
+  point at which it is cheap to notice.
+*/
 {
   const backupSrc = readFileSync(join(ROOT, "src", "lib", "backup.ts"), "utf8");
-  const listed = [...backupSrc.match(/BACKUP_TABLES = \[([\s\S]*?)\];/)[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+  /* Strip comments FIRST. Both arrays are heavily commented, and one of those
+     comments contains the string "payments" while explaining why the real entry
+     is cortex_payments — scraped raw, that comment silently registers a table
+     nobody listed. A test that reads its own prose as data proves nothing. */
+  const code = backupSrc.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const arr = (name) =>
+    [...code.match(new RegExp(`${name} = \\[([\\s\\S]*?)\\];`))[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+  const listed = arr("BACKUP_TABLES");
+  const excluded = arr("DELIBERATELY_EXCLUDED");
+
   const missing = listed.filter((t) => !live.includes(t));
   if (missing.length) bad(`BACKUP_TABLES lists ${missing.length} table(s) that do not exist: ${missing.join(", ")} — every backup would report itself incomplete`);
   else ok(`all ${listed.length} tables in BACKUP_TABLES exist in the schema`);
+
+  const unaccounted = live.filter((t) => !listed.includes(t) && !excluded.includes(t));
+  if (unaccounted.length) {
+    bad(`${unaccounted.length} table(s) are in neither BACKUP_TABLES nor DELIBERATELY_EXCLUDED: ${unaccounted.join(", ")}`);
+    bad("  A backup omitting them still reports itself complete. Add each to one list or the other, with a reason.");
+  } else {
+    ok(`every one of the ${live.length} tables is either backed up (${listed.length}) or excluded on the record (${excluded.length})`);
+  }
+}
+
+/* 1d — restore.mjs's deferred list must match what the schema actually says -- */
+/*
+  scripts/restore.mjs hard-codes the tables it emits in separate transactions,
+  because it has no database connection and cannot ask. A hand-kept list drifts,
+  and the drift is silent: add a created_by to a table next month and its rows
+  quietly rejoin the main transaction, where one missing account rolls back
+  every customer record again.
+
+  So the authority is the schema. pg_constraint is asked which tables reference
+  auth.users, that set is closed over its children, and the answer must equal
+  the list in the script.
+*/
+{
+  const direct = (await db.query(`
+    select distinct c.conrelid::regclass::text as t
+      from pg_constraint c
+      join pg_class f on f.oid = c.confrelid
+      join pg_namespace n on n.oid = f.relnamespace
+     where c.contype = 'f' and n.nspname = 'auth' and f.relname = 'users'
+  `)).rows.map((r) => r.t.replace(/^public\./, "").replace(/"/g, ""));
+
+  const closure = new Set(direct);
+  for (let grew = true; grew; ) {
+    grew = false;
+    const kids = (await db.query(`
+      select distinct c.conrelid::regclass::text as child, c.confrelid::regclass::text as parent
+        from pg_constraint c where c.contype = 'f'
+    `)).rows;
+    for (const { child, parent } of kids) {
+      const ch = child.replace(/^public\./, "").replace(/"/g, "");
+      const pa = parent.replace(/^public\./, "").replace(/"/g, "");
+      if (closure.has(pa) && !closure.has(ch) && ch !== pa) { closure.add(ch); grew = true; }
+    }
+  }
+
+  const restoreSrc = readFileSync(join(ROOT, "scripts", "restore.mjs"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const declared = [...restoreSrc.match(/AUTH_DEPENDENT = \[([\s\S]*?)\];/)[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+
+  const expected = [...closure].filter((t) => live.includes(t)).sort();
+  const got = [...declared].sort();
+  const missing = expected.filter((t) => !got.includes(t));
+  const extra = got.filter((t) => !expected.includes(t));
+  if (missing.length || extra.length) {
+    if (missing.length) bad(`restore.mjs AUTH_DEPENDENT is missing ${missing.join(", ")} — those rows would go in the main transaction and a missing account would roll the whole restore back`);
+    if (extra.length) bad(`restore.mjs AUTH_DEPENDENT lists ${extra.join(", ")}, which has no path to auth.users — deferring it needlessly splits the restore`);
+  } else {
+    ok(`restore.mjs defers exactly the ${expected.length} tables that reach auth.users: ${expected.join(", ")}`);
+  }
 }
 
 /* 2 — seed deliberately awkward data -------------------------------------- */
@@ -219,8 +354,45 @@ try {
   console.log(`  note  could not seed organizations/customers — ${String(e.message).split("\n")[0].slice(0, 90)}`);
 }
 
+/*
+  A workspace with PEOPLE in it — and this is the part the rehearsal was missing.
+
+  profiles, memberships and chat_threads all have foreign keys into auth.users,
+  which a restore cannot recreate. Every earlier version of this file seeded
+  only tables with no auth dependency, so it rehearsed a restore that no real
+  customer's data would ever look like, and it passed while the real thing
+  would have rolled back at the first profile row.
+*/
+const U1 = "aaaaaaaa-0000-0000-0000-000000000001";
+const U2 = "aaaaaaaa-0000-0000-0000-000000000002";
+let hasPeople = false;
+try {
+  await db.exec(`
+    insert into auth.users (id, email) values
+      ('${U1}', 'owner@example.in'), ('${U2}', 'analyst@example.in');
+    /* handle_new_user() has already created these two profile rows — inserting
+       a user fires the real signup trigger, which is worth exercising. This
+       only names them. */
+    insert into profiles (id, full_name) values
+      ('${U1}', 'Priya Sharma'), ('${U2}', 'Arun Nair')
+    on conflict (id) do update set full_name = excluded.full_name;
+    insert into memberships (org_id, user_id, role) values
+      ('11111111-1111-1111-1111-111111111111', '${U1}', 'owner'),
+      ('11111111-1111-1111-1111-111111111111', '${U2}', 'analyst');
+    insert into chat_threads (id, org_id, user_id, title) values
+      ('22222222-2222-2222-2222-222222222222',
+       '11111111-1111-1111-1111-111111111111', '${U1}', 'Why is cash down?');
+    insert into chat_messages (thread_id, role, content) values
+      ('22222222-2222-2222-2222-222222222222', 'user', 'Why is cash down this month?');
+  `);
+  hasPeople = true;
+} catch (e) {
+  console.log(`  note  could not seed profiles/memberships — ${String(e.message).split("\n")[0].slice(0, 110)}`);
+}
+
 const seeded = (await db.query("select key, value from system_status order by key")).rows;
 ok(`${seeded.length} rows seeded into system_status`);
+if (hasPeople) ok("2 auth accounts with profiles, memberships, a chat thread and a message — the rows a restore cannot re-link on its own");
 if (hasOrgs) {
   const c = (await db.query("select count(*)::int as n from customers")).rows[0].n;
   ok(`1 organization + ${c} customers seeded (exercises the FK ordering a restore depends on)`);
@@ -299,7 +471,30 @@ else bad("--force did not override the refusal");
 /* 5 — destroy the data, exactly as a bad migration would ------------------- */
 step("5. Deleting every row (simulating the disaster)");
 // Children first, or the foreign keys refuse to let you have your disaster.
+/*
+  Triggers off for the wipe only. cortex_guard_last_owner() refuses to let the
+  last owner's membership be deleted — correct behaviour, and it is not what is
+  being tested here; a disaster does not politely observe our business rules.
+  It goes back to 'origin' immediately afterwards, because a restore run with
+  foreign keys disabled would prove nothing at all, and the assertions below
+  depend on those keys being live.
+*/
+await db.exec(`set session_replication_role = replica;`);
 for (const t of [...BACKUP_TABLES].reverse()) await db.exec(`delete from "${t}";`);
+// And the accounts, because that is the disaster as it actually arrives: the
+// auth schema is Supabase's, a restore cannot write to it, and whoever is
+// recovering has not yet recreated the logins. Leaving them in place here is
+// what let every previous rehearsal pass on a scenario that cannot happen.
+await db.exec(`delete from auth.users;`);
+await db.exec(`set session_replication_role = origin;`);
+{
+  /* Prove the keys are back on before anything is restored. If this ever
+     silently stayed in 'replica', every FK assertion below would pass for the
+     wrong reason — the restore would "work" because nothing was checked. */
+  const role = (await db.query("show session_replication_role")).rows[0].session_replication_role;
+  if (role === "origin") ok("foreign keys re-enabled before the restore (they were off only for the wipe)");
+  else bad(`session_replication_role is '${role}' — the restore would run with foreign keys disabled and prove nothing`);
+}
 const afterWipe = (await db.query("select count(*)::int as n from system_status")).rows[0].n;
 if (afterWipe === 0) ok("all rows gone — database is now in the state you would panic about");
 else bad(`expected 0 rows after wipe, found ${afterWipe}`);
@@ -323,11 +518,76 @@ else ok("auth accounts are correctly kept OUT of the SQL");
   else bad(`the restore did not report the auth accounts. Saw: ${text.slice(0, 200)}`);
 }
 
-try {
-  await db.exec(gen.sql);
-  ok("restore.sql executed against Postgres without error");
-} catch (e) {
-  bad(`restore.sql failed to execute: ${String(e.message).split("\n")[0]}`);
+/*
+  Execute it the way psql executes a file: transaction by transaction. A block
+  that fails aborts ITS transaction and psql moves on to the next BEGIN — which
+  is the entire point of splitting the file, and would be invisible if the
+  rehearsal ran the whole string as one call and stopped at the first error.
+*/
+const blocks = gen.sql.match(/BEGIN;[\s\S]*?COMMIT;/g) || [];
+/* db.exec() stops at the first error and never reaches the block's COMMIT, so
+   the session is left inside an aborted transaction and everything after it
+   fails with "current transaction is aborted" — an artefact of this harness,
+   not of the restore. psql reaches the COMMIT, which ends the aborted
+   transaction, and carries on. The explicit ROLLBACK reproduces that, and
+   without it every later block reports a failure it did not have. */
+const runBlock = async (sql) => {
+  try { await db.exec(sql); return null; }
+  catch (e) {
+    await db.exec("rollback;").catch(() => {});
+    return String(e.message).split("\n")[0];
+  }
+};
+const blockErrors = [];
+for (const [i, b] of blocks.entries()) {
+  const err = await runBlock(b);
+  if (err) blockErrors.push([i, err]);
+}
+if (blocks.length < 2) bad(`expected the auth-dependent tables in transactions of their own; found ${blocks.length} transaction(s)`);
+
+/*
+  THE POINT OF THIS WHOLE SECTION.
+
+  The accounts are gone, so the profiles/memberships/chat blocks MUST fail —
+  there is no honest way to insert a row pointing at a user that does not
+  exist. What must not happen is the failure taking the ledger with it. Before
+  the split, one BEGIN wrapped everything and a single profile row rolled back
+  the entire restore: the customers, the invoices, the payments, all of it,
+  over a login.
+*/
+if (blockErrors.length) {
+  const fk = blockErrors.filter(([, m]) => /foreign key|violates/i.test(m));
+  ok(`${blockErrors.length} block(s) failed, as they must with the accounts gone — ${fk.length} on foreign keys`);
+} else if (hasPeople) {
+  bad("no block failed — the auth foreign keys are not being enforced, so this rehearsal proves nothing about them");
+}
+{
+  const n = (await db.query("select count(*)::int as n from system_status")).rows[0].n;
+  if (n === seeded.length) ok("the ledger restored anyway — a missing login no longer rolls back the rest of the database");
+  else bad(`system_status has ${n} rows, expected ${seeded.length} — an auth failure took the main restore down with it`);
+}
+
+/* And the other half: once the accounts are back, re-running the SAME file
+   must fill in what it could not before. That is the documented recovery
+   procedure, so it is tested rather than asserted. */
+if (hasPeople) {
+  await db.exec(`insert into auth.users (id, email) values
+    ('${U1}', 'owner@example.in'), ('${U2}', 'analyst@example.in')
+    on conflict (id) do nothing;`);
+  const stillFailing = [];
+  for (const [i, b] of blocks.entries()) {
+    const err = await runBlock(b);
+    if (err) stillFailing.push([i, err]);
+  }
+  if (stillFailing.length) {
+    bad(`re-running after recreating the accounts still failed: ${stillFailing.map(([, m]) => m).join("; ").slice(0, 200)}`);
+  } else {
+    const p = (await db.query("select count(*)::int as n from profiles")).rows[0].n;
+    const m = (await db.query("select count(*)::int as n from memberships")).rows[0].n;
+    const cm = (await db.query("select count(*)::int as n from chat_messages")).rows[0].n;
+    if (p === 2 && m === 2 && cm === 1) ok("re-running the file after recreating the 2 accounts restored profiles, memberships and the chat history");
+    else bad(`after recreating the accounts: profiles=${p} memberships=${m} chat_messages=${cm}, expected 2/2/1`);
+  }
 }
 
 /* 7 — verify cell by cell -------------------------------------------------- */
