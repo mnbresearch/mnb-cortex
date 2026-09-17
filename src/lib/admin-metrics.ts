@@ -90,7 +90,7 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
     const since = new Date(Date.now() - 30 * DAY).toISOString();
     const priceOf = new Map(PLANS.map((p) => [p.id, p.monthly]));
 
-    const [paymentsRes, failedRes, orgsRes, ledgerRes] = await Promise.all([
+    const [paymentsRes, failedRes, ungrantedRes, orgsRes, ledgerRes] = await Promise.all([
       /*
         Still filtered on `kind`, even though cortex_payments is now ours alone.
 
@@ -104,7 +104,22 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
         deleted workspace while keeping the financial record, and an org_id
         filter would silently drop that history from the totals.
       */
-      sb.from(PAYMENTS_TABLE).select("order_id, amount, status, created_at, org_id, kind, ref").eq("status", "paid").not("kind", "is", null).order("created_at", { ascending: false }).limit(20_000),
+      /*
+        A PARTIALLY REFUNDED PAYMENT USED TO VANISH FROM REVENUE ENTIRELY.
+
+        This was `.eq("status", "paid")`, and a refund overwrites the status
+        with `refunded:…`. Full refunds dropping out is correct. But partial
+        refunds now exist — ₹500 back on ₹8,000 — and dropping the whole row
+        reports ₹0 of revenue for a sale that kept ₹7,500. The refunded amount
+        is subtracted below instead, which is what the number means.
+      */
+      sb.from(PAYMENTS_TABLE).select("order_id, amount, status, created_at, org_id, kind, ref, refunded_amount")
+        /* An explicit list rather than a LIKE on "refunded:%": the statuses are
+           written from one place (refund.ts) and enumerating them here means a
+           new one shows up as missing revenue in a test rather than as a
+           pattern that silently starts matching something else. */
+        .in("status", ["paid", "refunded:reversed", "refunded:partial", "refunded:recorded_only"])
+        .not("kind", "is", null).order("created_at", { ascending: false }).limit(20_000),
       /*
         THE PAYMENTS THAT TOOK MONEY AND GRANTED NOTHING.
 
@@ -123,25 +138,83 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
         So the one section of the console titled "Money" was structurally
         incapable of displaying the cases where money went wrong. The customer
         always found out first. Kept as a separate query rather than widening
-        the one above, so revenue stays a sum of paid rows only.
+        the one above, so the revenue figure stays a sum of money actually
+        received. (The query above is no longer `.eq("status","paid")` — it
+        includes refunded rows and nets the refunded amount off. This comment
+        used to describe the old filter, which is the sort of drift that makes
+        a comment worse than none.)
+
+        AND THEN THE LIST OF THREE WAS ITSELF INCOMPLETE.
+
+        grant_failed is written by the subscription handler when a recurring
+        debit is taken and the workspace update fails. It was read by exactly
+        one other line of code — the idempotency check that writes it — and
+        appeared in neither the revenue total nor this list. A customer on
+        autorenew paid, got nothing, and the product displayed that fact
+        nowhere at all.
+
+        refunded:recorded_only is the status written when a REVERSAL FAILED:
+        we refunded the money and the customer kept the product. Also absent.
+
+        And the biggest one is not a status: `paid` with no granted_at. `paid`
+        is written to CLAIM an order, before the entitlement exists, so a
+        process that died in between leaves a row that reads as a normal sale
+        and counts as revenue. It is handled as its own query below, because
+        the grace period matters — a payment settled ninety seconds ago is
+        mid-flight, not broken.
       */
-      sb.from(PAYMENTS_TABLE).select("order_id, amount, status, created_at, org_id, kind, ref")
-        .in("status", ["amount_mismatch", "grant_unverified", "unknown_ref"])
+      sb.from(PAYMENTS_TABLE).select("order_id, amount, status, created_at, org_id, kind, ref, granted_at")
+        .in("status", ["amount_mismatch", "grant_unverified", "unknown_ref", "grant_failed",
+                       "refunded:recorded_only", "refund_unmatched", "refund_needs_review",
+                       "sub_no_plan_note", "sub_unknown_plan", "sub_amount_below_cycle"])
+        .order("created_at", { ascending: false }).limit(200),
+      /*
+        PAID, AND NOT CONFIRMED DELIVERED. The queue the reconciliation job
+        works, shown to the operator so a discrepancy is visible between runs
+        rather than only in a cron log.
+      */
+      sb.from(PAYMENTS_TABLE).select("order_id, amount, status, created_at, org_id, kind, ref, granted_at")
+        .eq("status", "paid").is("granted_at", null)
+        .lt("created_at", new Date(Date.now() - 20 * 60_000).toISOString())
         .order("created_at", { ascending: false }).limit(200),
       sb.from("organizations").select("id, name, plan, subscription_status, subscription_ends_at, credits").limit(5_000),
       // Only AI charges. Refunds and grants carry other reasons.
       sb.from("credit_ledger").select("org_id, reason, delta, created_at").lt("delta", 0).gte("created_at", since).limit(100_000),
     ]);
 
+    /*
+      A FAILED QUERY IS NOT ₹0 OF REVENUE.
+
+      Every one of these results had its error discarded, so a query that broke
+      — a column not yet migrated, a timeout — rendered the Money section as
+      live: true with zero revenue and no explanation. An operator reading that
+      screen would conclude the business had taken nothing.
+    */
+    const qErr = paymentsRes.error || failedRes?.error || ungrantedRes?.error || orgsRes.error || ledgerRes?.error;
+    if (qErr) {
+      return { ...empty, reason: `A platform query failed: ${qErr.message}. Figures are withheld rather than shown as zero.` };
+    }
     const payments = (paymentsRes.data as any[]) || [];
-    const failedRows = (failedRes?.data as any[]) || [];
+    /*
+      One list for the operator: everything where money moved and the customer
+      did not get what they paid for, whatever shape the failure took. Merged
+      here rather than in the query because they are two different questions —
+      a status that says "wrong", and a status that says "fine" beside a
+      granted_at that says otherwise.
+    */
+    const failedRows = [
+      ...((failedRes?.data as any[]) || []),
+      ...((ungrantedRes?.data as any[]) || []).map((p) => ({ ...p, status: "paid_not_granted" })),
+    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     const orgs = (orgsRes.data as any[]) || [];
     const ledger = (ledgerRes.data as any[]) || [];
 
     const cutoff = Date.now() - 30 * DAY;
     let revenueTotal = 0, revenue30d = 0;
     for (const p of payments) {
-      const amt = Number(p.amount) || 0;
+      /* NET of anything sent back. Money we took and returned is not revenue,
+         and a partial refund reduces the sale rather than erasing it. */
+      const amt = Math.max(0, (Number(p.amount) || 0) - (Number(p.refunded_amount) || 0));
       revenueTotal += amt;
       if (new Date(p.created_at).getTime() >= cutoff) revenue30d += amt;
     }
@@ -197,12 +270,21 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
       "— / — / ₹3.0K", which is unactionable: the section promises to surface
       exactly this case and could not identify a single one.
     */
+    /*
+      NET, LIKE THE TOTAL. This list is described above as "the actual rows
+      behind the revenue figure", and it was showing gross amounts while the
+      total netted refunds off — so a fully refunded ₹8,999 appeared as ₹8,999
+      beside ₹0 of revenue, and the drill-down contradicted the number it was
+      supposed to explain. A total you cannot reconcile against its own rows is
+      exactly the kind of figure this module exists to stop.
+    */
+    const net = (p: any) => Math.max(0, (Number(p.amount) || 0) - (Number(p.refunded_amount) || 0));
     const recentPayments = payments.slice(0, 15).map((p: any) => ({
       order_id: String(p.order_id || "—"),
       org: orgName.get(p.org_id)?.name || "—",
       kind: String(p.kind || "—"),
       ref: String(p.ref || "—"),
-      amount: Number(p.amount) || 0,
+      amount: net(p),
       when: p.created_at,
       unattributed: !p.org_id || !orgName.get(p.org_id),
     }));
@@ -210,7 +292,7 @@ export async function getPlatformEconomics(): Promise<PlatformEconomics> {
     const unattributedCount = payments.filter((p: any) => !p.org_id || !orgName.get(p.org_id)).length;
     const unattributedAmount = payments
       .filter((p: any) => !p.org_id || !orgName.get(p.org_id))
-      .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+      .reduce((sum: number, p: any) => sum + net(p), 0);
 
     return {
       live: true,

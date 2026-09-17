@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { settleOrder } from "@/lib/pay/settle";
+import { getOrder } from "@/lib/pay/cashfree";
 import { getUserAndOrg } from "@/lib/data";
 import { enforce } from "@/lib/ratelimit";
 
@@ -30,6 +31,30 @@ export async function POST(req: Request) {
     checkout — which happens once or twice per purchase — and far below useful
     enumeration.
   */
+  /*
+    ADMIN, like the route that STARTS a payment.
+
+    This took membership as sufficient while /api/pay/cashfree/order requires
+    admin — so the endpoint that begins a purchase was better guarded than the
+    one that activates it. That asymmetry stopped being cosmetic when settle
+    learned to repair a grant: driving this endpoint writes to
+    `organizations.plan` and `subscription_ends_at`, and a viewer — the role you
+    give a bookkeeper — could aim it at any order id belonging to the
+    workspace. The repair window bounds what that can do; the role check is
+    what makes it nobody's business but an admin's.
+
+    It costs the customer nothing: the webhook is the reliable activation path,
+    and a non-admin returning from checkout simply sees the page update a few
+    seconds later instead of instantly.
+  */
+  const { hasRole } = await import("@/lib/roles");
+  if (!(await hasRole("admin"))) {
+    return NextResponse.json(
+      { ok: false, error: "Only an admin or owner can confirm a payment. It will activate automatically in a moment." },
+      { status: 403 },
+    );
+  }
+
   const over = await enforce([{ key: `pay:verify:org:${orgId}`, limit: 60, windowSecs: 3600 }]);
   if (over) {
     return NextResponse.json(
@@ -38,18 +63,37 @@ export async function POST(req: Request) {
     );
   }
 
+  /*
+    OWNERSHIP FIRST, THEN SETTLE. The order of these two was wrong.
+
+    This used to call settleOrder() and only then compare the order's workspace
+    to the caller's. No entitlement was ever divertible — the grant is keyed to
+    the order's own customer_id — but it meant any signed-in user could drive
+    the full grant path, including its writes, against a STRANGER's order, sixty
+    times an hour. The 403 below was closing the response while leaving the
+    side effects open.
+
+    One extra read from Cashfree buys the check. The webhook remains the
+    reliable activation path, so a stranger being refused here costs the real
+    customer nothing.
+  */
+  const probe = await getOrder(orderId);
+  if (probe.unknown) {
+    return NextResponse.json(
+      { ok: false, retryable: true, error: "We could not reach the payment provider. Your payment is safe — refresh in a minute, or the webhook will activate it automatically." },
+      { status: 503 },
+    );
+  }
+  const owner = (probe.customerId || "").trim();
+  if (owner && owner !== orgId) {
+    return NextResponse.json({ ok: false, error: "That order belongs to a different workspace." }, { status: 403 });
+  }
+
   const res = await settleOrder(orderId);
 
-  /*
-    Do not report on another workspace's order.
-
-    settleOrder is keyed to the order's own customer_id, so no entitlement can
-    be diverted — the grant always goes to the workspace that paid. But the
-    RESULT was returned to whoever asked, which let any signed-in user probe an
-    order id and learn its plan, amount and settlement state. Nothing about
-    another business's purchases belongs in this response.
-  */
-  if (res.ok && (res as any).orgId && (res as any).orgId !== orgId) {
+  /* Belt and braces: settleOrder resolves the workspace from the order itself,
+     so if the two ever disagree with the probe above, say nothing about it. */
+  if ((res as any).orgId && (res as any).orgId !== orgId) {
     return NextResponse.json({ ok: false, error: "That order belongs to a different workspace." }, { status: 403 });
   }
 

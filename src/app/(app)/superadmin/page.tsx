@@ -17,6 +17,29 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * What each failure status means, in the words an operator needs at 9am.
+ *
+ * A map rather than a nested ternary, because the ternary covered exactly three
+ * statuses and the list has grown to ten — and the fall-through said "Amount
+ * paid did not match the price" for every one of the seven it did not know,
+ * which is worse than saying nothing: it explained a grant_failed renewal as a
+ * pricing mismatch and sent whoever read it looking in the wrong place.
+ */
+const WENT_WRONG: Record<string, string> = {
+  grant_unverified: "We could not confirm the plan was applied — check the workspace, then set it by hand.",
+  unknown_ref: "The order named a plan or pack that is not in the catalogue — grant the equivalent by hand.",
+  amount_mismatch: "Amount paid did not match the price — check Cashfree before granting.",
+  paid_not_granted: "Money taken and the entitlement never confirmed. The reconciliation job retries this nightly; if it persists, grant by hand.",
+  grant_failed: "A RENEWAL was debited and the plan was not extended. The customer has paid for this cycle — extend it by hand.",
+  "refunded:recorded_only": "We refunded the money and could NOT reverse the entitlement. The customer has both — reverse by hand.",
+  refund_unmatched: "A refund arrived for an order we hold no record of. Check Cashfree: the original payment's webhook may never have landed.",
+  refund_needs_review: "A refund arrived and we could not tell how much. Nothing was reversed — decide the reversal by hand.",
+  sub_no_plan_note: "A recurring mandate with no plan note was debited. Nothing could be granted — identify the plan in Cashfree.",
+  sub_unknown_plan: "A mandate names a plan id that does not exist, live or retired. It will debit again next cycle.",
+  sub_amount_below_cycle: "A recurring debit came in below the cycle price, so nothing was granted. Check whether it was a part payment.",
+};
+
 export default async function SuperAdmin() {
   const allowed = await isSuperAdmin();
   const email = await currentEmail();
@@ -54,6 +77,33 @@ export default async function SuperAdmin() {
       .from("platform_switches").select("collections_enabled, reason, updated_at").limit(1).maybeSingle();
     sw = (data as any) ?? null;
   } catch { /* table not migrated — the panel below says so rather than lying */ }
+
+  /*
+    THE OPERATOR'S OWN QUEUE.
+
+    Every money-side failure used to end in one of two places: console.error in
+    a serverless runtime that discards yesterday's logs, or — in the refund
+    handler — an alert inserted into the CUSTOMER's own dashboard feed, which
+    meant a chargeback notice went to the person who raised it. There was no
+    operator queue at all, so "the operator finds out" was an aspiration in a
+    comment.
+  */
+  let opsAlerts: any[] = [];
+  let opsAlertsAvailable = true;
+  try {
+    /* READ THE ERROR. A missing table returns { error } rather than throwing,
+       so the catch alone left opsAlertsAvailable true and an unmigrated
+       operator_alerts rendered as "no incidents" — the most dangerous possible
+       reading of a queue that exists to show incidents. */
+    const { data, error } = await serviceClient()!
+      .from("operator_alerts")
+      .select("id, at, severity, kind, title, body, org_id, order_id")
+      .is("resolved_at", null)
+      .order("at", { ascending: false }).limit(25);
+    if (error) opsAlertsAvailable = false;
+    opsAlerts = (data as any[]) || [];
+  } catch { opsAlertsAvailable = false; }
+
   const totalMembers = rows.reduce((s, r) => s + r.members, 0);
 
   // ---- Adoption ----
@@ -109,6 +159,51 @@ export default async function SuperAdmin() {
           <Card className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Users className="h-4 w-4 text-primary" /> Total members</div><div className="text-2xl font-bold mt-1">{totalMembers}</div></Card>
           <Card className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Activity className="h-4 w-4 text-primary" /> Orgs with live data</div><div className="text-2xl font-bold mt-1">{activated}</div></Card>
         </div>
+
+        {/*
+          FIRST THING ON THE PAGE, above revenue and adoption, because it is the
+          only section where somebody is currently worse off. Unresolved
+          incidents from the money path: a refund that could not be reversed, a
+          renewal debited with nothing granted, a refund for an order we have no
+          record of, a reconciliation run that could not fix something.
+        */}
+        {opsAlerts.length > 0 && (
+          <Section title="Needs you" desc="Money-side incidents nobody else will see — newest first">
+            <Card className="p-0 overflow-hidden border-danger/40">
+              <div className="divide-y">
+                {opsAlerts.map((a) => (
+                  <div key={a.id} className="p-3 text-sm">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className={`h-4 w-4 mt-0.5 shrink-0 ${a.severity === "red" ? "text-danger" : "text-warning"}`} />
+                      <div className="min-w-0">
+                        <div className="font-medium">{a.title}</div>
+                        {a.body && <div className="text-muted-foreground mt-0.5 break-words">{a.body}</div>}
+                        <div className="text-xs text-muted-foreground mt-1 font-mono">
+                          {new Date(a.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                          {a.order_id ? ` · ${a.order_id}` : ""}
+                          {` · ${a.kind}`}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <div className="text-xs text-muted-foreground mt-2">
+              These stay listed until <code>operator_alerts.resolved_at</code> is set. Nothing clears them automatically —
+              an incident that disappears on its own is an incident nobody dealt with.
+            </div>
+          </Section>
+        )}
+        {!opsAlertsAvailable && (
+          <Card className="p-4 border-warning/40 bg-warning/5">
+            <div className="text-sm">
+              <b className="text-warning">Operator alerts unavailable.</b> Could not read <code>operator_alerts</code> —
+              run <code>supabase/migrations/2026_zzzi_payment_integrity.sql</code>. Until then, money-side incidents are
+              recorded nowhere you can see.
+            </div>
+          </Card>
+        )}
 
         {/* The screen that answers "is this making money?". Nothing in the product
             showed revenue against what the AI actually costs — which is exactly
@@ -280,11 +375,7 @@ export default async function SuperAdmin() {
                                 <td className="px-2 py-1.5 font-mono truncate max-w-[190px]" title={p.order_id}>{p.order_id}</td>
                                 <td className="px-2 py-1.5 truncate max-w-[150px]">{p.org}</td>
                                 <td className="px-2 py-1.5">
-                                  {p.status === "grant_unverified"
-                                    ? "We could not confirm the plan was applied — check the workspace, then set it by hand."
-                                    : p.status === "unknown_ref"
-                                      ? `Order named "${p.ref}", which is not a current plan or pack — grant the equivalent by hand.`
-                                      : "Amount paid did not match the price — check Cashfree before granting."}
+                                  {WENT_WRONG[p.status] || `Recorded as "${p.status}" — check Cashfree and the workspace by hand.`}
                                 </td>
                                 <td className="px-2 py-1.5 text-right tabular">{inr(p.amount)}</td>
                               </tr>

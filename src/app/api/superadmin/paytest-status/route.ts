@@ -51,9 +51,15 @@ export async function GET() {
     /* And the grant itself — the ledger reason embeds the order id, so this
        proves the credit came from THIS payment and not from an allowance
        top-up that happened to land at the same moment. */
+    /* Escaped, for the same reason as the reversal query below: an order id is
+       `mnb_<ms>_<5 chars>` and `_` is a LIKE single-character wildcard, so an
+       unescaped pattern can match a DIFFERENT order's grant and report this
+       payment as credited when it was not. This line was left unescaped while
+       the comment thirty lines down described the problem as fixed. */
+    const gid = String(payment.order_id).replace(/([%_\\])/g, "\\$1");
     const { data: led } = await svc.from("credit_ledger")
       .select("reason, delta, balance_after")
-      .eq("org_id", orgId).like("reason", `topup:pack_test:${payment.order_id}`).limit(1);
+      .eq("org_id", orgId).like("reason", `topup:pack_test:${gid}`).limit(1);
     const l = (led as any[])?.[0];
     ledgerReason = l ? `${l.reason} (delta ${l.delta}, balance ${l.balance_after})` : "NOT FOUND";
   }
@@ -72,9 +78,25 @@ export async function GET() {
   let reversalLedger: string | null = null;
   let refundAlert: string | null = null;
   if (payment?.order_id) {
+    /*
+      A PREFIX MATCH, because the reason now carries the refund EVENT's id.
+
+      This was `.eq("reason", "refund_reversal:<order>")`, which stopped
+      matching the moment partial refunds became real: the reason is
+      `refund_reversal:<order>:<eventId>`, one row per refund event, because
+      two partial refunds on one order are two distinct reversals and a single
+      reason would have collided. Left as an equality check, the one screen
+      built to prove the refund path works would have reported every reversal
+      as absent.
+
+      The underscore in an order id is a LIKE wildcard, so it is escaped —
+      otherwise this can match another order's reversal.
+    */
+    const oid = String(payment.order_id).replace(/([%_\\])/g, "\\$1");
     const { data: rev } = await svc.from("credit_ledger")
       .select("reason, delta, balance_after")
-      .eq("org_id", orgId).eq("reason", `refund_reversal:${payment.order_id}`).limit(1);
+      .eq("org_id", orgId).like("reason", `refund_reversal:${oid}%`)
+      .order("created_at", { ascending: false }).limit(1);
     const r = (rev as any[])?.[0];
     reversalLedger = r ? `${r.reason} (delta ${r.delta}, balance ${r.balance_after})` : null;
 

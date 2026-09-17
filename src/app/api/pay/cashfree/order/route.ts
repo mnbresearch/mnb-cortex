@@ -106,5 +106,60 @@ export async function POST(req: Request) {
       phone: customerPhone || undefined,
     },
   });
+
+  /*
+    RECORD THE INTENT. This is the other half of a reconcilable system.
+
+    Until now this route created an order at Cashfree and wrote nothing locally.
+    Our entire knowledge of a payment arrived with the webhook — so if the
+    webhook never arrived (a deploy mid-delivery, a signature mismatch after a
+    key rotation, an outage that outlasted Cashfree's retries), the payment
+    existed at Cashfree and nowhere in our system. There was no query anybody
+    could write to find it, because you cannot diff two sets while holding only
+    one of them. That is why "add a reconciliation job" was not a small task:
+    there was nothing to reconcile against.
+
+    One row per checkout started, carrying what we believe was being bought.
+    api/cron/reconcile walks the ones that never settled and asks Cashfree
+    directly.
+
+    Best effort, and deliberately AFTER the order exists: a failure to record
+    the intent must not stop a customer paying. The failure mode is the one we
+    already had — an unreconcilable payment — not a blocked checkout.
+  */
+  if (res.ok && res.orderId) {
+    try {
+      const { serviceClient } = await import("@/lib/supabase/server");
+      const svc = serviceClient();
+      const [kind, ref, cyc] = note.split(":");
+      const ins = await svc?.from("payment_intents").insert({
+        order_id: res.orderId, org_id: orgId, kind, ref: ref || null,
+        cycle: kind === "plan" ? (cyc === "annual" ? "annual" : "monthly") : null,
+        amount,
+      }).select("order_id");
+      /*
+        READ THE ERROR. PostgREST returns { error }; it does not throw, so the
+        catch below never fired for the failures that actually happen — a
+        missing table, an FK violation, RLS. A checkout with no intent row is
+        invisible to the only queue that catches a lost webhook, which is
+        exactly the payment nobody would ever find.
+      */
+      if (!ins || ins.error || !(ins.data as any[])?.length) {
+        console.error("[pay/order] payment intent NOT recorded for", res.orderId, ins?.error?.message || "no row returned");
+        const { operatorAlert } = await import("@/lib/operator-alert");
+        await operatorAlert({
+          kind: "payment_intent_not_recorded",
+          severity: "amber",
+          title: `Checkout started with no reconcilable record`,
+          body: `Order ${res.orderId} (₹${amount}, ${note}) was created at Cashfree but could not be written to `
+            + `payment_intents: ${ins?.error?.message || "no row returned"}. If its webhook is lost, nothing will `
+            + `find it. Check the table exists — 2026_zzzi_payment_integrity.sql creates it.`,
+          orgId, orderId: res.orderId, email: false,
+        });
+      }
+    } catch (e: any) {
+      console.error("[pay/order] recording the payment intent threw:", e?.message);
+    }
+  }
   return NextResponse.json(res);
 }

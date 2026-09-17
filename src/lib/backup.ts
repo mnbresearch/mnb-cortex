@@ -93,6 +93,16 @@ export const BACKUP_TABLES = [
   //   funnel_events        — the acquisition record; unreconstructable.
   //   cron_cursors         — where the rotating jobs had got to.
   "platform_switches", "erased_subscriptions", "funnel_events", "cron_cursors",
+  // The money path's own records. payment_intents is how a payment taken at
+  // Cashfree whose webhook never arrived can still be found; operator_alerts is
+  // the incident queue. Losing either means losing the ability to reconcile.
+  //
+  // payment_refunds is one row per refund event and it is the IDEMPOTENCY
+  // record: restoring without it, every refund webhook still in Cashfree's
+  // retry window would reverse a second time. It was added to this list by the
+  // rehearsal failing — the reverse-coverage check written yesterday caught a
+  // table added today, which is the whole point of it.
+  "payment_intents", "operator_alerts", "payment_refunds",
   // Added with the features that created them. Forgetting this is how a table
   // ends up outside the backup for months — it already happened once with
   // production_runs and chat_*, so it is now part of adding a table.

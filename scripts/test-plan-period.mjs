@@ -136,7 +136,21 @@ console.log("\nREFUND REVERSAL — untested until a real refund happens");
   const strip = (x) => x.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   const r = strip(fs.readFileSync(new URL("../src/lib/pay/refund.ts", import.meta.url), "utf8"));
 
-  check("a plan refund shortens by the days that payment bought", /DAYS\(cycle\)/.test(r));
+  /*
+    Was `/DAYS\(cycle\)/` — the name of a local helper that no longer exists,
+    and which took the cycle from the WORKSPACE rather than from the payment.
+    Refunding one ₹799 month on a workspace that had once bought annual removed
+    365 days. The arithmetic now lives in lib/pay/refund-math.ts, where it is
+    executed rather than pattern-matched (see test-refund-math.mjs), so this
+    asserts the wiring: the right number of days, taken from the right cycle.
+  */
+  check("a plan refund shortens by the days that payment bought",
+        /daysToRemove\(boughtDays, plan, daysRemovedSoFar\)/.test(r));
+  check("...measured in the plan the workspace is on now, not the one it was sold as",
+        /equivalentDays\(/.test(r),
+        "30 days of Command downgraded to Try is worth ~1,500 days of Try; removing a flat 30 leaves four years in place");
+  check("...and the cycle comes from the payment row, not the workspace",
+        /p\.cycle/.test(r));
   check("...and never backdates the period before now", /Math\.max\(back, floor\)/.test(r));
   check("...marking it cancelled only when the period is fully consumed", /lapsed \?/.test(r));
 

@@ -163,7 +163,48 @@ console.log("\nREFUNDS — reversal arithmetic");
         shorten(now + 5 * DAY, 30, now) === now);
 
   const refund = src("src/lib/pay/refund.ts");
-  check("reversal is idempotent on the payment status", /startsWith\("refunded"\)/.test(refund));
+  /*
+    THIS ASSERTION USED TO READ `/startsWith\("refunded"\)/`, and it was
+    pinning the bug.
+
+    Keying idempotency on the status string failed in both directions. Two
+    concurrent deliveries of one REFUND_SUCCESS both read a not-yet-refunded
+    status and both reversed — double clawback. And a reversal that FAILED still
+    wrote `refunded:recorded_only`, so every retry short-circuited on the
+    prefix: the refund was never applied, for ever, and the customer kept both
+    the money and the product.
+
+    The guarantee is what matters, not the mechanism, so that is what is checked
+    now: a conditional claim the database arbitrates, and a release when the
+    reversal did not happen.
+  */
+  check("the reversal is claimed per EVENT, in a table the database arbitrates",
+        /from\("payment_refunds"\)\s*\.insert\(/.test(refund) && /event_id: eventId/.test(refund));
+  check("...and a duplicate delivery loses that claim rather than reversing again",
+        /duplicate key\|23505/.test(refund) && /already handled/.test(refund));
+  check("a FAILED reversal releases its claim so a retry can try again",
+        /from\("payment_refunds"\)\s*\.delete\(\)/.test(refund));
+  check("how much was already reversed is a SUM over events, not a column two handlers overwrite",
+        /priorEvents/.test(refund) && /reduce\(/.test(refund));
+  check("the event id is not derived from the refund amount",
+        !/evt_\$\{Math\.round/.test(refund),
+        "two distinct partials of the same amount would collide and the second would reverse nothing");
+  /* The CALL SITE, not the presence of the helper. Checking `/likeEscape\(/`
+     passed while the call had been changed back to a raw order id, because the
+     function's own definition still matched. */
+  check("order ids are escaped before being used as LIKE patterns",
+        /const oid = likeEscape\(orderId\)/.test(refund),
+        "an underscore in mnb_1726_x9k2f is a LIKE wildcard and can match another order's grant");
+  check("the refund AMOUNT is read from the event, not assumed to be the whole payment",
+        /readRefundAmount\(/.test(refund) && /refundAmount/.test(refund));
+  check("the period reversed comes from the payment's own cycle, not the workspace's",
+        /p\.cycle/.test(refund));
+  check("a renewal chargeback (kind subscription:<plan>) is reversed too",
+        /startsWith\("subscription:"\)/.test(refund));
+  check("a refund for an unknown order is RECORDED, not dropped",
+        /refund_unmatched/.test(refund));
+  check("the operator is told, not the customer's own dashboard feed",
+        /operatorAlert\(/.test(refund));
   check("grant_credits is called with all five arguments (p_user included)",
         /p_org[\s\S]{0,120}p_user[\s\S]{0,120}p_reason/.test(refund));
   check("an alert is raised even when nothing could be reversed",
@@ -458,7 +499,18 @@ console.log("\nOUR OWN RECEIPT — the gateway's carries the wrong product name"
         "a renewal is the charge a customer is least likely to recognise — they clicked nothing");
 
   /* Mail must never affect whether the customer got what they paid for. */
-  check("every call is fire-and-forget", (settle.match(/void sendPaymentReceipt/g) || []).length >= 3);
+  /*
+    THE PROPERTY, NOT A COUNT. This was `>= 3 occurrences of "void
+    sendPaymentReceipt"`, which broke when the read-back-success path stopped
+    returning early and fell through to the common tail — one fewer call site,
+    same guarantee, and the duplicated receipt was the thing removed. Counting
+    call sites asserts the shape of the code; what matters is that EVERY call is
+    fire-and-forget, so mail can never decide whether a paid customer got their
+    plan.
+  */
+  const receiptCalls = settle.match(/\w*\s*sendPaymentReceipt\(/g) || [];
+  check(`every receipt call is fire-and-forget (${receiptCalls.length} found)`,
+        receiptCalls.length >= 2 && receiptCalls.every((c) => /void\s*sendPaymentReceipt\(/.test(c)));
   check("...and the sender never throws", /return sendEmail\(/.test(r) && !/throw /.test(r));
 }
 

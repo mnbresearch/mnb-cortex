@@ -104,6 +104,7 @@
 2026_zzzf_statutory_profile.sql
 2026_zzzg_visibility_runs.sql
 2026_zzzh_api_ingest_issue_date.sql
+2026_zzzi_payment_integrity.sql
 
 # A NOTE ON 2026_payments_owner_id_nullable.sql.
 #

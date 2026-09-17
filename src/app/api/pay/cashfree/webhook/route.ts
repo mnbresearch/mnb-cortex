@@ -68,7 +68,14 @@ export async function POST(req: Request) {
     Refunds and disputes are handled below, on their own terms.
   */
   const isRefund = /REFUND|DISPUTE|CHARGEBACK/i.test(type);
-  const isOrderPaid = !isRefund && /PAYMENT_SUCCESS/i.test(type);
+  /*
+    ANCHORED. `/PAYMENT_SUCCESS/i` also matches SUBSCRIPTION_PAYMENT_SUCCESS,
+    and that event reaches the subscription handler below as well — so if such
+    a payload ever carried data.order.order_id, one debit would run both the
+    order grant and the renewal grant. Today it degrades to "pending" because
+    the id is not a Cashfree order, which is luck rather than a guard.
+  */
+  const isOrderPaid = !isRefund && /^PAYMENT_SUCCESS/i.test(type) && !/SUBSCRIPTION/i.test(type);
 
   if (orderId && isOrderPaid) {
     /*
@@ -192,16 +199,62 @@ async function handleSubscriptionEvent(type: string, body: any) {
     // Cashfree retries.
     throw new Error(`cannot reach Cashfree for ${ref}: ${detail.error || "unknown"}`);
   }
+  const { operatorAlert } = await import("@/lib/operator-alert");
+
+  /**
+   * A debit we could not turn into a grant.
+   *
+   * THREE EXITS IN THIS FUNCTION USED TO `return` AFTER A console.error, and
+   * each of them is a real recurring debit against a real card:
+   *
+   *   - the mandate carries no plan note;
+   *   - the plan id is not in the catalogue;
+   *   - the amount is below the cycle price.
+   *
+   * No payments row was written at any of them (the claim is created further
+   * down), so the money existed at Cashfree and nowhere in our system — not in
+   * revenue, not in the failed-payments list, not in any query anybody could
+   * write. The evidence was a log line in a serverless runtime that discards
+   * yesterday's logs. Every month, silently, for as long as the mandate lives.
+   */
+  const recordUngranted = async (reason: string, note: string, amount: number | null) => {
+    const id = `sub_${ref}_ungranted_${new Date().toISOString().slice(0, 10)}`;
+    try {
+      await svc.from(PAYMENTS_TABLE).upsert(
+        { order_id: id, org_id: orgId, kind: `subscription_ungranted`, ref, amount, status: reason, provider: "cashfree" },
+        { onConflict: "order_id", ignoreDuplicates: true },
+      );
+    } catch { /* the alert below is the backstop */ }
+    await operatorAlert({
+      kind: reason,
+      severity: "red",
+      title: `Recurring debit on ${ref} granted nothing`,
+      body: `${type}. ${note} Workspace ${orgId}. This mandate will be debited again next cycle and will fail the same way `
+        + `until it is fixed or cancelled.`,
+      orgId, orderId: id,
+    });
+  };
+
   if (!detail.planId) {
     // Reached Cashfree, but the mandate carries no plan note (created outside
-    // this app). Retrying will never fix that, so ack — but make it loud,
-    // because it means a real debit is going ungranted.
-    console.error(`[cashfree-sub] mandate ${ref} has no plan note; cannot grant. Event ${type}.`);
+    // this app). Retrying will never fix that, so ack — but record it, because
+    // it means a real debit is going ungranted.
+    await recordUngranted("sub_no_plan_note", `The mandate carries no plan note, so we cannot tell what was bought.`, null);
     return;
   }
-  const { PLANS } = await import("@/lib/config");
-  const plan = PLANS.find((p) => p.id === detail.planId);
-  if (!plan) { console.error("[cashfree-sub] unknown plan", detail.planId); return; }
+  /*
+    ALL_PLANS, not PLANS. Four plan ids have been retired, and a mandate created
+    against one of them keeps debiting the customer every cycle. `PLANS.find`
+    returned undefined, the handler logged and returned, and the customer was
+    charged monthly for a plan they never received. They bought it while it was
+    on sale; resolving retired ids is how they get what they paid for.
+  */
+  const { ALL_PLANS } = await import("@/lib/config");
+  const plan = ALL_PLANS.find((p) => p.id === detail.planId);
+  if (!plan) {
+    await recordUngranted("sub_unknown_plan", `Plan id "${detail.planId}" is not in the catalogue, live or retired.`, null);
+    return;
+  }
 
   const annual = Boolean(detail.annual);
   const expected = annual ? plan.annual : plan.monthly;
@@ -213,8 +266,44 @@ async function handleSubscriptionEvent(type: string, body: any) {
     sub.payment_amount ?? sub.amount ?? body?.data?.payment?.payment_amount ?? body?.data?.amount ?? NaN,
   );
   if (Number.isFinite(amount) && amount < expected * 0.95) {
-    console.warn(`[cashfree-sub] ignoring ${type} for ${ref}: paid ${amount}, cycle costs ${expected}`);
+    /*
+      Not a cycle payment. Refusing to grant is right — the ₹1 authorisation
+      debit must never buy a month — but returning silently was not: if this is
+      a genuine part-payment or a price change we did not follow, a customer has
+      been debited and has nothing.
+    */
+    await recordUngranted("sub_amount_below_cycle",
+      `Debited ₹${amount} but the ${annual ? "annual" : "monthly"} cycle costs ₹${expected}.`, amount);
     return;
+  }
+  if (!Number.isFinite(amount)) {
+    /*
+      WE DO NOT KNOW WHAT WAS DEBITED. The old code carried on and wrote
+      `amount: expected` — our own record then asserted the catalogue price for
+      a debit whose amount we never learned, and admin-metrics summed that
+      invention into revenue. The grant still proceeds (the mandate is ours and
+      the plan is known), but the row records null and the operator is told, so
+      the number in the console is either true or absent.
+    */
+    /*
+      RED, AND EMAILED. The plan IS granted — the mandate is ours, the plan is
+      known, and the ₹1 authorisation debit is excluded by event type, so
+      refusing would punish a customer who has paid. But an amount we could not
+      read is the one field this handler needs and did not get, it means our
+      revenue figure is missing a real payment, and if the field names have
+      changed then EVERY renewal from now on is in this state. That is not an
+      "amber, look at it sometime".
+    */
+    await operatorAlert({
+      kind: "sub_amount_unreadable",
+      severity: "red",
+      title: `Renewal on ${ref} granted with an unknown amount`,
+      body: `${type}: none of the amount fields we read were present, so the payment row records no amount `
+        + `rather than assuming the ₹${expected} list price. The plan WAS granted. Check Cashfree for the real `
+        + `figure, and check whether the webhook payload shape has changed — if it has, every renewal is now `
+        + `recording no amount and revenue is understated.`,
+      orgId,
+    });
   }
 
   // ---- Idempotency ---------------------------------------------------------
@@ -225,15 +314,53 @@ async function handleSubscriptionEvent(type: string, body: any) {
   const paymentId = String(
     sub.cf_payment_id ?? sub.payment_id ?? body?.data?.payment?.cf_payment_id ?? body?.data?.cf_payment_id ?? "",
   );
-  // Prefer Cashfree's payment id. The fallback must be STABLE across a retry, so
-  // it is anchored to the period this debit is paying for — not to wall-clock
-  // "today", which changes at UTC midnight mid-retry and would grant twice.
-  const periodAnchor = String((org as any).subscription_ends_at || "none").slice(0, 10);
-  const claimId = `sub_${ref}_${paymentId || `cycle_${periodAnchor}`}`;
+  /*
+    THE FALLBACK ANCHOR WAS THE VALUE THE GRANT MOVES.
+
+    It was `subscription_ends_at.slice(0,10)`, described as "anchored to the
+    period this debit is paying for". But the grant below sets
+    subscription_ends_at. So a retried delivery carrying no cf_payment_id read
+    the ALREADY-EXTENDED date, computed a different claim id, claimed cleanly,
+    and bought the customer another cycle for free. The comment asserted
+    stability about the one field the function mutates.
+
+    Instead of inventing a stable id, ask the question that actually matters:
+    HAS THIS EXTENSION ALREADY BEEN APPLIED? Every renewal grant records the
+    end date it produced in period_to, so if a row for this mandate already
+    carries the workspace's current end date, this delivery is a repeat.
+
+    The recency window is what separates a retry from a genuine next cycle —
+    both look identical by date alone, because ends_at only moves at grant
+    time. Cashfree retries within hours; cycles are 30 or 365 days. Six hours
+    sits between the two by three orders of magnitude. The failure direction is
+    stated plainly: a duplicate delivery with no payment id arriving more than
+    six hours later would grant twice, and a genuine cycle shorter than six
+    hours would be dropped — and this product sells no such cycle.
+  */
+  const currentEnds = (org as any).subscription_ends_at || null;
+  if (!paymentId && currentEnds) {
+    const { data: applied } = await svc.from(PAYMENTS_TABLE)
+      .select("order_id, created_at, period_to")
+      .eq("ref", ref).eq("period_to", currentEnds)
+      .gte("created_at", new Date(Date.now() - 6 * 3600_000).toISOString())
+      .limit(1);
+    if (Array.isArray(applied) && applied.length > 0) {
+      console.warn(`[cashfree-sub] ${type} for ${ref} already extended to ${currentEnds} by ${(applied[0] as any).order_id}; not granting again.`);
+      return;
+    }
+  }
+  const claimId = `sub_${ref}_${paymentId || `cycle_${String(currentEnds || "none").slice(0, 10)}`}`;
   const { data: claimed, error: claimErr } = await svc
     .from(PAYMENTS_TABLE)
     .upsert(
-      { order_id: claimId, org_id: orgId, kind: `subscription:${plan.id}`, ref, amount: Number.isFinite(amount) ? amount : expected, status: "paid", provider: "cashfree" },
+      /*
+        `amount: null` when we could not read it — see the note above. Recording
+        the list price for an unknown debit made the revenue total an assertion
+        about money nobody had counted.
+      */
+      { order_id: claimId, org_id: orgId, kind: `subscription:${plan.id}`, ref,
+        amount: Number.isFinite(amount) ? amount : null, status: "paid", provider: "cashfree",
+        cycle: annual ? "annual" : "monthly" },
       { onConflict: "order_id", ignoreDuplicates: true },
     )
     .select("order_id");
@@ -245,14 +372,23 @@ async function handleSubscriptionEvent(type: string, body: any) {
     if (!missingTable) throw new Error(`idempotency claim failed: ${claimErr.message}`);
     console.warn("[cashfree-sub] payments table missing — granting without idempotency");
   } else if (!(claimed as any[])?.length) {
-    // A row already exists for this debit. That means "already granted" ONLY if
-    // it is marked paid — an earlier attempt that failed mid-grant leaves
-    // `grant_failed`, and treating that as done would swallow the cycle. Same
-    // reasoning as settleOrder().
-    const { data: prior } = await svc.from(PAYMENTS_TABLE).select("status").eq("order_id", claimId).maybeSingle();
-    if (String((prior as any)?.status || "paid") === "paid") return; // genuinely done
-    console.warn(`[cashfree-sub] re-attempting a previously failed grant for ${claimId}`);
-    await svc.from(PAYMENTS_TABLE).update({ status: "paid" }).eq("order_id", claimId);
+    /*
+      A row already exists for this debit. "Already granted" is now decided by
+      granted_at, not by the status.
+
+      The old test was `String(prior?.status || "paid") === "paid"`, which has
+      two faults. The status column is nullable — erasure.ts already rewrites
+      these rows — so a NULL status defaulted to "paid" and the cycle was
+      dropped as already done. And "paid" is written to CLAIM the debit, before
+      the grant, so a row that says paid is not evidence that anything was
+      granted; that is precisely the failure this branch exists to repair.
+    */
+    const { data: prior } = await svc.from(PAYMENTS_TABLE)
+      .select("status, granted_at").eq("order_id", claimId).maybeSingle();
+    if ((prior as any)?.granted_at) return; // genuinely done
+    console.warn(`[cashfree-sub] re-attempting an unconfirmed grant for ${claimId} (status ${String((prior as any)?.status ?? "null")})`);
+    const reopen = await svc.from(PAYMENTS_TABLE).update({ status: "paid" }).eq("order_id", claimId).select("order_id");
+    if (reopen.error) console.error(`[cashfree-sub] could not re-open ${claimId}:`, reopen.error.message);
   }
 
   // ---- Grant --------------------------------------------------------------
@@ -282,12 +418,50 @@ async function handleSubscriptionEvent(type: string, body: any) {
     console.error("[cashfree-sub] grant failed", updErr?.message);
     // Mark rather than delete. A debit WAS received, so once Cashfree stops
     // retrying this row is the only evidence of it for reconciliation and
-    // support. Because it is no longer 'paid', the claim branch above re-opens
-    // it on the next attempt instead of deduplicating the retry away.
+    // support. Because granted_at is still null, the claim branch above
+    // re-opens it on the next attempt instead of deduplicating the retry away.
     try {
       await svc.from(PAYMENTS_TABLE).update({ status: "grant_failed" }).eq("order_id", claimId);
     } catch { /* best effort — the throw below still triggers a retry */ }
+    /*
+      AND TELL SOMEBODY. `grant_failed` was written by this line and read by
+      exactly one other: the idempotency check above. admin-metrics excluded it
+      from revenue AND from the failed-payments list, so a recurring debit that
+      granted nothing appeared on no screen in the product. Cashfree retries for
+      a while and then stops, and after that the row is the only trace — a row
+      nobody was looking at.
+    */
+    await operatorAlert({
+      kind: "sub_grant_failed",
+      severity: "red",
+      title: `Renewal debit taken but the plan was not extended`,
+      body: `${type} on mandate ${ref} (${plan.id}, ₹${Number.isFinite(amount) ? amount : "amount unknown"}). `
+        + `The workspace update failed: ${updErr?.message || "unknown error"}. Cashfree will retry; if it stops, `
+        + `extend ${orgId} by hand — the customer has paid for this cycle.`,
+      orgId, orderId: claimId,
+    });
     throw new Error(updErr?.message || "grant failed");
+  }
+
+  /* The grant is confirmed. Record what it produced: granted_at is what makes
+     "paid" mean "received", and period_to is what lets a retry recognise an
+     extension that has already been applied. */
+  try {
+    const mark = await svc.from(PAYMENTS_TABLE)
+      .update({ granted_at: new Date().toISOString(), period_to: endsAt })
+      .eq("order_id", claimId).select("order_id");
+    if (mark.error || !(mark.data as any[])?.length) {
+      console.error(`[cashfree-sub] could not mark ${claimId} as granted:`, mark.error?.message || "no row matched");
+    }
+  } catch {
+    /*
+      Logged, not swallowed silently — and note what does NOT happen: the
+      reconciliation job deliberately refuses to repair subscription rows
+      (their ids are not Cashfree order ids), so it escalates them to a person
+      rather than re-checking them. An unmarked renewal is therefore a row
+      somebody has to look at, not one that fixes itself.
+    */
+    console.error(`[cashfree-sub] could not mark ${claimId} as granted; it will be escalated by reconciliation.`);
   }
 
   const { emitQuietly } = await import("@/lib/webhooks");
