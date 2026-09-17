@@ -103,6 +103,10 @@ export const BACKUP_TABLES = [
   // rehearsal failing — the reverse-coverage check written yesterday caught a
   // table added today, which is the whole point of it.
   "payment_intents", "operator_alerts", "payment_refunds",
+  // What happened to every email we sent. Losing it loses the answer to "was
+  // this customer's reminder actually delivered", which is the only record of
+  // it — the provider keeps its own for a while, we keep ours for good.
+  "email_sends",
   // Added with the features that created them. Forgetting this is how a table
   // ends up outside the backup for months — it already happened once with
   // production_runs and chat_*, so it is now part of adding a table.
@@ -127,6 +131,11 @@ export const DELIBERATELY_EXCLUDED = [
   // without --force. One dead table would have disabled the restore path for
   // every real one. If it is ever created and used, add it back then.
   "org_billing_log",
+  // Health-probe samples. High-churn monitoring telemetry with a few hours of
+  // useful life: restoring yesterday's latency measurements tells you nothing,
+  // and they would dominate every snapshot. The DELIVERY records (email_sends)
+  // are backed up — those are the ones that answer a customer's question.
+  "email_probes",
   // Belongs to the school/tuition app that shares this Supabase project (see
   // supabase/migrations/2026_payments_owner_id_nullable.sql). Cortex writes
   // nothing to it that is not also in cortex_payments, and backing up another

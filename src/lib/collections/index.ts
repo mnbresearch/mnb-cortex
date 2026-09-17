@@ -547,8 +547,22 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
       a duplicate dunning message is the specific thing this module exists to
       avoid doing.
     */
+    /*
+      THE CLAIM SAYS "sending", NOT "sent".
+
+      It used to write `status: "sent", sent_at: now()` BEFORE calling the
+      provider. The claim itself is necessary — two overlapping cron runs must
+      not both chase the same debtor — but the word was a lie for the duration
+      of the request, and a process that died in between left a message
+      permanently marked as sent that never went. The "Prove" page counts those
+      as reminders delivered, and the owner then believes their customer has
+      been chased when nobody has.
+
+      sent_at is set with the status, on the way out, once the provider has
+      actually taken it.
+    */
     const { data: claimed } = await svc.from("collection_messages")
-      .update({ status: "sent", sent_at: new Date().toISOString() })
+      .update({ status: "sending" })
       .eq("id", m.id).eq("status", "approved").select("id");
     if (!claimed || !claimed.length) continue;
 
@@ -568,8 +582,34 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
           ownFrom: sender.from, replyTo: sender.replyTo,
         });
         const r = await sendEmail(m.recipient, m.subject || "Payment reminder", env.html,
-          { from: env.from, replyTo: env.replyTo });
-        ok = r.sent; err = r.reason;
+          { from: env.from, replyTo: env.replyTo, kind: "collections", orgId });
+        ok = r.sent; err = r.reason; providerId = r.providerId;
+        /*
+          A TIMEOUT IS NOT A FAILURE, and this is the one path where the
+          difference is somebody else's inbox. `state: "unknown"` means the
+          provider may have taken the message; marking it failed would let the
+          next run send the same debtor the same reminder again. It is parked
+          for a human instead, with the correlation id to look it up by.
+        */
+        if (!ok && r.state === "unknown") {
+          await svc.from("collection_messages").update({
+            status: "failed", sent_at: null,
+            error: `UNCONFIRMED — the email provider did not answer (${r.correlationId}). `
+              + `It may have been delivered. Check before re-sending.`,
+          }).eq("id", m.id);
+          const { operatorAlert } = await import("@/lib/operator-alert");
+          await operatorAlert({
+            kind: "collections_send_unconfirmed",
+            severity: "amber",
+            title: `A collections reminder may or may not have gone out`,
+            body: `Message ${m.id} to ${m.recipient}: the email provider did not answer within the timeout `
+              + `(${r.correlationId}). It is marked failed so nothing auto-sends again, but it may have been `
+              + `delivered — check email_sends and the provider before re-sending to a debtor.`,
+            orgId, email: false,
+          });
+          failed++;
+          continue;
+        }
       } else if (waGate && waGate.ok) {
         /*
           A template, never sendText().
@@ -603,7 +643,16 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
 
     if (ok) {
       sent++;
-      await svc.from("collection_messages").update({ provider_id: providerId ?? null }).eq("id", m.id);
+      /* NOW it is sent: the provider has it, and we have its id. */
+      const fin = await svc.from("collection_messages")
+        .update({ status: "sent", sent_at: new Date().toISOString(), provider_id: providerId ?? null })
+        .eq("id", m.id).select("id");
+      if (fin.error || !(fin.data as any[])?.length) {
+        /* The message DID go out; only our record of it failed. Say so loudly
+           rather than leaving a row stuck at "sending", which the next run
+           would not pick up and no screen explains. */
+        console.error(`[collections] sent ${m.id} but could not record it:`, fin.error?.message || "no row matched");
+      }
       // Advance the thread only on a real send.
       const { data: th } = await svc.from("collection_threads")
         .select("attempts").eq("id", m.thread_id).single();

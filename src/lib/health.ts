@@ -307,9 +307,177 @@ async function checkEmail(): Promise<Check> {
     body field nobody parses.
   */
   if (!key) return { name: "Email", status: "down", detail: "RESEND_API_KEY not configured", critical: true };
-  const r = await ping("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${key}` } });
-  if (r.ok) return { name: "Email", status: "operational", critical: true };
-  return { name: "Email", status: r.status === 401 || r.status === 403 ? "down" : "degraded", detail: r.error || `HTTP ${r.status}`, critical: true };
+
+  /*
+    WHAT THIS USED TO DO, AND WHY IT WAS WRONG.
+
+        const r = await ping("https://api.resend.com/domains", …);   // 6s
+        return r.ok ? operational
+             : { status: 401/403 ? "down" : "degraded", detail: r.error };
+
+    One request, one chance, a 6-second ceiling, and an AbortError became
+
+        Email: degraded — "no response in 6000ms"     (critical: true)
+
+    So a cold TLS handshake on a fresh serverless instance looked exactly like
+    an outage of the only enabled collections channel. Nothing was recorded, so
+    afterwards nobody could tell whether it had happened once or twenty times;
+    and the verdict ignored the one piece of evidence that actually settles the
+    question — whether real messages were going out at that moment. The status
+    page said critical while the email console listed messages delivered
+    minutes earlier. Both were reading the same service.
+
+    THREE CHANGES:
+
+      a SECOND ATTEMPT, so one blip is a blip. The first probe gets a short
+      budget (3.5s, well inside the endpoint's own deadline) and a failure is
+      confirmed rather than believed;
+
+      a RECORD of every sample — duration, HTTP status, error, correlation id —
+      in email_probes, which is what makes a pattern visible and a stale sample
+      recognisable as stale;
+
+      a VERDICT that prefers real deliveries. The rules live in
+      lib/email-state.ts, where they are executed by tests instead of described
+      here: two consecutive failures is a fault, one is not, a 401 is immediate,
+      and a sample older than the staleness window is reported as "not measured
+      recently" rather than as either good or bad news.
+  */
+  const correlationId = `probe_${Date.now().toString(36)}`;
+  const PROBE_TIMEOUT = 3_500;
+  let r = await ping("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${key}` } }, PROBE_TIMEOUT);
+  if (!r.ok && r.status === 0) {
+    /* Confirm before accusing. A retry costs one cheap GET and is the
+       difference between a false alarm and a finding. */
+    r = await ping("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${key}` } }, PROBE_TIMEOUT);
+  }
+
+  const sample = { ok: r.ok, ms: r.ms, status: r.status, at: Date.now(), error: r.error };
+  const [history, sends] = await Promise.all([
+    recordAndReadProbes(sample, correlationId),
+    recentSendOutcomes(),
+  ]);
+
+  const { probeVerdict } = await import("@/lib/email-state");
+  const v = probeVerdict({
+    probes: history,
+    acceptedSends: sends.accepted,
+    rejectedSends: sends.rejected,
+    now: Date.now(),
+  });
+
+  /*
+    AND TELL SOMEBODY. The incident that prompted all of this was found by a
+    person reading the status page by hand; nothing alerted. An email fault is
+    an operator incident — it is the only enabled collections channel here —
+    so a confirmed fault goes to the operator queue. Only a genuine fault, and
+    only when it is not already open, because an alert that arrives on every
+    blip is an alert that gets filtered.
+  */
+  if (v.status !== "operational" && !v.fromDeliveries) {
+    void alertEmailFault(v.status, v.detail, correlationId);
+  }
+
+  return {
+    name: "Email",
+    status: v.status,
+    detail: `${v.detail} [probe ${correlationId}, measured ${Math.round(v.ageMs / 1000)}s ago]`,
+    critical: true,
+  };
+}
+
+/** Keep the sample, and read back the recent history the verdict needs. */
+async function recordAndReadProbes(
+  sample: { ok: boolean; ms: number; status: number; at: number; error?: string },
+  correlationId: string,
+): Promise<Array<{ ok: boolean; ms: number; status: number; at: number; error?: string }>> {
+  const sb = serviceClient();
+  if (!sb) return [sample];
+  try {
+    const { error } = await sb.from("email_probes").insert({
+      ok: sample.ok, ms: sample.ms, http_status: sample.status || null,
+      error: sample.error ? String(sample.error).slice(0, 300) : null,
+      correlation_id: correlationId,
+    });
+    /* Logged, not swallowed: if the table is missing, the verdict silently
+       loses its history and falls back to single-sample behaviour — the exact
+       thing being fixed — so that must be visible. */
+    if (error) console.error("[health] email probe not recorded:", error.message);
+
+    const { data } = await sb.from("email_probes")
+      .select("ok, ms, http_status, error, at")
+      .order("at", { ascending: false }).limit(5);
+    const rows = ((data as any[]) || []).map((p) => ({
+      ok: Boolean(p.ok), ms: Number(p.ms) || 0, status: Number(p.http_status) || 0,
+      at: new Date(p.at).getTime(), error: p.error || undefined,
+    }));
+    /* The row we just wrote may not be readable yet; put the live sample first
+       either way, deduplicated by timestamp. */
+    return [sample, ...rows.filter((p) => Math.abs(p.at - sample.at) > 1000)];
+  } catch {
+    return [sample];
+  }
+}
+
+/**
+ * What actually happened to real messages in the last quarter of an hour.
+ *
+ * This is the evidence the old probe did not consult, and the reason the
+ * status page could contradict the email console. A provider that has just
+ * accepted our mail is not down, whatever a GET to /domains did.
+ */
+async function recentSendOutcomes(): Promise<{ accepted: number[]; rejected: number[] }> {
+  const sb = serviceClient();
+  if (!sb) return { accepted: [], rejected: [] };
+  try {
+    const since = new Date(Date.now() - 15 * 60_000).toISOString();
+    const { data, error } = await sb.from("email_sends")
+      .select("status, accepted_at, failed_at, queued_at")
+      .gte("queued_at", since).limit(200);
+    if (error) return { accepted: [], rejected: [] };
+    const accepted: number[] = [];
+    const rejected: number[] = [];
+    for (const row of ((data as any[]) || [])) {
+      const t = new Date(row.accepted_at || row.failed_at || row.queued_at).getTime();
+      if (row.status === "accepted" || row.status === "delivered") accepted.push(t);
+      else if (row.status === "failed" || row.status === "bounced") rejected.push(t);
+      /* `queued` and `unknown` are counted as neither: one is not an outcome
+         yet and the other is explicitly "we do not know". Treating either as a
+         failure would re-create the false alarm in a new place. */
+    }
+    accepted.sort((a, b) => b - a);
+    rejected.sort((a, b) => b - a);
+    return { accepted, rejected };
+  } catch {
+    return { accepted: [], rejected: [] };
+  }
+}
+
+/** One operator alert per fault, not one per health check. */
+async function alertEmailFault(status: string, detail: string, correlationId: string): Promise<void> {
+  try {
+    const sb = serviceClient();
+    if (!sb) return;
+    /* Already open? Say nothing. /api/health is polled by uptime monitors, so
+       alerting on every check would mean an email a minute during an incident. */
+    const { data: open } = await sb.from("operator_alerts")
+      .select("id").eq("kind", "email_provider_fault").is("resolved_at", null)
+      .gte("at", new Date(Date.now() - 6 * 3600_000).toISOString()).limit(1);
+    if (Array.isArray(open) && open.length > 0) return;
+
+    const { operatorAlert } = await import("@/lib/operator-alert");
+    await operatorAlert({
+      kind: "email_provider_fault",
+      severity: status === "down" ? "red" : "amber",
+      title: `Email is ${status}`,
+      body: `${detail}. Email is the only enabled collections channel, so reminders, invites, receipts and `
+        + `renewal notices are affected. Probe ${correlationId}; the samples are in email_probes and the `
+        + `per-message outcomes in email_sends.`,
+      email: status === "down",
+    });
+  } catch (e: any) {
+    console.error("[health] could not raise the email fault alert:", e?.message);
+  }
 }
 
 /** Are the payment credentials live? */

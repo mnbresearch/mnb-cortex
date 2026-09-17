@@ -1040,12 +1040,31 @@ export async function inviteMember(fd: FormData): Promise<ActionResult | void> {
   const { error } = await sb.from("invites").insert({ org_id: orgId, email: email.toLowerCase(), role });
   if (error) throw new Error(error.message);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mnb-cortex.vercel.app";
-  await sendEmail(email, `You're invited to ${orgName} on MNB Cortex`,
+  const mail = await sendEmail(email, `You're invited to ${orgName} on MNB Cortex`,
     `<h2>You've been invited</h2><p>${user?.email || "A teammate"} invited you to join <b>${orgName}</b> on MNB Cortex as <b>${role}</b>.</p>
      <p>Sign in with this email address to accept: <a href="${appUrl}/login">${appUrl}/login</a></p>
-     <p>— MNB Cortex, the AI COO for SMEs</p>`);
+     <p>— MNB Cortex, the AI COO for SMEs</p>`,
+    { kind: "invite", orgId });
   await logActivity(orgId, "crud", `Invited ${email} as ${role}`);
   revalidatePath("/admin");
+
+  /*
+    TELL THE ADMIN IF THE EMAIL DID NOT GO.
+
+    The invite row is created either way — that is deliberate, because the
+    person can still sign in with that address and the invite will be waiting.
+    But the result of sendEmail was discarded, so the UI said the invite had
+    been sent while nothing had left the building, and the admin sat waiting
+    for a colleague who was never told. The row is the durable part; the
+    sentence is the honest part.
+  */
+  if (!mail.sent) {
+    return fail(
+      mail.state === "unknown"
+        ? `${email} is invited, but we could not confirm the email went out (${mail.correlationId}). They can sign in with this address; check before re-sending.`
+        : `${email} is invited, but the invitation email could not be sent: ${mail.reason || "unknown error"}. They can still sign in with this address to accept.`,
+    );
+  }
 }
 export async function cancelInvite(fd: FormData) {
   /*
