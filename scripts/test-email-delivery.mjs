@@ -37,18 +37,19 @@ const out = mkdtempSync(join(tmpdir(), "emailstate-"));
 
 try {
   execFileSync(join(root, "node_modules", ".bin", "tsc"),
-    ["src/lib/email-state.ts", "--outDir", out, "--module", "esnext", "--target", "es2022",
+    ["src/lib/email-state.ts", "src/lib/email-webhook.ts", "--outDir", out, "--module", "esnext", "--target", "es2022",
      "--moduleResolution", "bundler", "--skipLibCheck"],
     { cwd: root, stdio: "pipe" });
 } catch (e) {
   console.error("Could not compile src/lib/email-state.ts\n" + (e.stdout || e).toString().slice(0, 800));
   process.exit(1);
 }
-{
-  const f = join(out, "email-state.js");
+for (const name of ["email-state.js", "email-webhook.js"]) {
+  const f = join(out, name);
   writeFileSync(f, readFileSync(f, "utf8").replace(/^import ["']server-only["'];?\s*$/m, ""));
 }
 const { classifyAttempt, probeVerdict } = await import(pathToFileURL(join(out, "email-state.js")).href);
+const { verifySvix, mapEventToStatus } = await import(pathToFileURL(join(out, "email-webhook.js")).href);
 
 let pass = 0;
 const failures = [];
@@ -301,57 +302,86 @@ console.log("\nTHE SEND PATH — bounded, keyed, and recorded");
 }
 
 /* ======================================================================= */
-console.log("\nTHE WEBHOOK SIGNATURE");
+console.log("\nTHE WEBHOOK SIGNATURE — executed against real HMACs");
 /* ======================================================================= */
 
 {
-  const { verifySvix } = await import(pathToFileURL(join(root, "src/app/api/email/events/route.ts")).href)
-    .catch(() => ({ verifySvix: null }));
+  /*
+    THIS BLOCK USED TO ASSERT THINGS ABOUT THE ROUTE'S SOURCE TEXT, because the
+    function was defined inside the route and a route cannot be imported (it
+    pulls in next/server). Exporting it from the route to make it testable is
+    what broke the production build:
 
-  if (!verifySvix) {
-    /* The route imports next/server, which does not load bare in Node. Verify
-       the algorithm against an independent implementation of the same spec
-       instead — the point is that the signature we accept is the one Svix
-       produces, and that is checkable without importing the route. */
-    const secret = "whsec_" + Buffer.from("a-test-signing-secret-bytes").toString("base64");
-    const id = "msg_2abc";
-    const ts = String(Math.floor(NOW / 1000));
-    const bodyStr = JSON.stringify({ type: "email.delivered", data: { email_id: "re_123" } });
-    const keyBytes = Buffer.from(secret.slice("whsec_".length), "base64");
-    const sig = crypto.createHmac("sha256", keyBytes).update(`${id}.${ts}.${bodyStr}`).digest("base64");
+        Type error: "verifySvix" is not a valid Route export field
 
-    const route = readFileSync(join(root, "src/app/api/email/events/route.ts"), "utf8");
-    ok("the signed content is id.timestamp.body, in that order",
-       /\$\{id\}\.\$\{timestamp\}\.\$\{body\}/.test(route));
-    ok("the secret's base64 body is used as the key, not the whsec_ string",
-       /slice\("whsec_"\.length\)/.test(route) && /from\(keyB64, "base64"\)/.test(route));
-    ok("the raw body is hashed before any parsing",
-       route.indexOf("await req.text()") < route.indexOf("JSON.parse(raw)"),
-       "JSON.parse then stringify changes whitespace and key order, and the signature can never match");
-    ok("a replay window is enforced", /TOLERANCE_SECONDS/.test(route));
-    ok("comparison is timing-safe", /timingSafeEqual/.test(route));
-    ok("no secret configured refuses the request", /status: 503/.test(route),
-       "an unauthenticated endpoint that writes delivery state lets anyone mark a bounce as delivered");
-    ok("a bad signature returns 401 and logs the reason, not returns it",
-       /status: 401/.test(route) && /console\.error\("\[email-events\] rejected:/.test(route));
-    ok(`a correctly signed digest is computable (${sig.slice(0, 8)}…)`, sig.length > 20);
-  } else {
-    const secret = "whsec_" + Buffer.from("a-test-signing-secret-bytes").toString("base64");
-    const id = "msg_2abc";
-    const ts = String(Math.floor(NOW / 1000));
-    const bodyStr = JSON.stringify({ type: "email.delivered", data: { email_id: "re_123" } });
-    const keyBytes = Buffer.from(secret.slice("whsec_".length), "base64");
-    const good = crypto.createHmac("sha256", keyBytes).update(`${id}.${ts}.${bodyStr}`).digest("base64");
+    A route may export only method handlers and config. It lives in
+    lib/email-webhook.ts now, so these are real signatures checked by the real
+    code rather than regexes over a file.
+  */
+  const secret = "whsec_" + Buffer.from("a-test-signing-secret-bytes").toString("base64");
+  const id = "msg_2abc";
+  const ts = String(Math.floor(NOW / 1000));
+  const bodyStr = JSON.stringify({ type: "email.delivered", data: { email_id: "re_123" } });
+  const keyBytes = Buffer.from(secret.slice("whsec_".length), "base64");
+  const sign = (i2, t2, b2) =>
+    crypto.createHmac("sha256", keyBytes).update(`${i2}.${t2}.${b2}`).digest("base64");
+  const good = sign(id, ts, bodyStr);
 
-    ok("a correct signature verifies",
-       verifySvix({ secret, id, timestamp: ts, signature: `v1,${good}`, body: bodyStr, now: NOW }).ok === true);
-    ok("a tampered body is refused",
-       verifySvix({ secret, id, timestamp: ts, signature: `v1,${good}`, body: bodyStr + " ", now: NOW }).ok === false);
-    ok("a stale timestamp is refused",
-       verifySvix({ secret, id, timestamp: String(Math.floor(NOW / 1000) - 3600), signature: `v1,${good}`, body: bodyStr, now: NOW }).ok === false);
-    ok("a missing header is refused",
-       verifySvix({ secret, id, timestamp: ts, signature: "", body: bodyStr, now: NOW }).ok === false);
-  }
+  ok("a correctly signed event verifies",
+     verifySvix({ secret, id, timestamp: ts, signature: `v1,${good}`, body: bodyStr, now: NOW }).ok === true);
+
+  ok("a tampered body is refused",
+     verifySvix({ secret, id, timestamp: ts, signature: `v1,${good}`, body: bodyStr + " ", now: NOW }).ok === false,
+     "the raw body must be what is hashed — parsing and re-serialising changes whitespace and key order");
+
+  ok("a signature lifted from a DIFFERENT event is refused",
+     verifySvix({ secret, id, timestamp: ts, signature: `v1,${sign("msg_other", ts, bodyStr)}`, body: bodyStr, now: NOW }).ok === false,
+     "the id is part of the signed content, so a signature cannot be moved between events");
+
+  ok("a replayed event outside the window is refused",
+     verifySvix({ secret, id, timestamp: String(Math.floor(NOW / 1000) - 3600),
+                  signature: `v1,${sign(id, String(Math.floor(NOW / 1000) - 3600), bodyStr)}`,
+                  body: bodyStr, now: NOW }).ok === false,
+     "a captured 'delivered' event could otherwise be replayed over a bounce for ever");
+
+  ok("...and one inside the window is accepted",
+     verifySvix({ secret, id, timestamp: String(Math.floor(NOW / 1000) - 60),
+                  signature: `v1,${sign(id, String(Math.floor(NOW / 1000) - 60), bodyStr)}`,
+                  body: bodyStr, now: NOW }).ok === true);
+
+  ok("a missing signature header is refused",
+     verifySvix({ secret, id, timestamp: ts, signature: "", body: bodyStr, now: NOW }).ok === false);
+
+  ok("no secret configured refuses everything",
+     verifySvix({ secret: "", id, timestamp: ts, signature: `v1,${good}`, body: bodyStr, now: NOW }).ok === false,
+     "an unauthenticated endpoint that writes delivery state lets anyone mark a bounce as delivered");
+
+  ok("a rotated key still verifies when one of several signatures matches",
+     verifySvix({ secret, id, timestamp: ts, signature: `v1,AAAA v1,${good}`, body: bodyStr, now: NOW }).ok === true,
+     "Svix sends space-separated versioned signatures during a key rotation");
+
+  ok("an unknown signature version alone is refused",
+     verifySvix({ secret, id, timestamp: ts, signature: `v9,${good}`, body: bodyStr, now: NOW }).ok === false);
+
+  /* Which events mean what. */
+  eq("email.delivered marks delivered", mapEventToStatus("email.delivered"), "delivered");
+  eq("email.bounced marks bounced", mapEventToStatus("email.bounced"), "bounced");
+  eq("email.complained marks complained", mapEventToStatus("email.complained"), "complained");
+  eq("email.sent changes nothing", mapEventToStatus("email.sent"), null,
+     "that is the acceptance we already recorded ourselves");
+  eq("email.opened changes nothing", mapEventToStatus("email.opened"), null,
+     "an open is tracking; a spam filter's preview is not a read receipt");
+  eq("email.delivery_delayed changes nothing", mapEventToStatus("email.delivery_delayed"), null);
+
+  /* And the route must still be a route. */
+  const route = readFileSync(join(root, "src/app/api/email/events/route.ts"), "utf8");
+  ok("the route imports the verification rather than defining it",
+     /from "@\/lib\/email-webhook"/.test(route));
+  ok("the raw body is hashed before any parsing",
+     route.indexOf("await req.text()") < route.indexOf("JSON.parse(raw)"));
+  ok("no secret configured returns 503", /status: 503/.test(route));
+  ok("a bad signature returns 401 and logs the reason rather than returning it",
+     /status: 401/.test(route) && /console\.error\("\[email-events\] rejected:/.test(route));
 }
 
 /* ======================================================================= */

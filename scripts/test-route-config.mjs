@@ -103,6 +103,62 @@ console.log("\nRuntime must be nodejs where the model SDKs need it");
   check("no AI route is pinned to the edge runtime", edgeAi.length === 0);
 }
 
+/* ========================================================================= */
+console.log("\nA route file may export ONLY handlers and config");
+/* ========================================================================= */
+/*
+  THIS CHECK EXISTS BECAUSE THE PRODUCTION BUILD CAUGHT WHAT I COULD NOT.
+
+  api/email/events/route.ts exported a helper — verifySvix — so that a test
+  could execute it instead of grepping its source. Next.js refuses that:
+
+      Type error: Route "src/app/api/email/events/route.ts" does not match the
+      required types of a Next.js Route. "verifySvix" is not a valid Route
+      export field.
+
+  `tsc --noEmit` passes, because the rule is Next's and not TypeScript's, and
+  the only thing that enforces it is a full `next build` — which takes longer
+  than this sandbox allows a command to run. So the error reached the deploy.
+
+  The lesson is not "be more careful"; it is that a rule enforced only by a
+  step you cannot always run needs a cheap local equivalent. This is that
+  equivalent: it reads every route file and refuses any export that Next does
+  not accept. It costs milliseconds and cannot flake.
+
+  The fix for the original defect was to move the function into
+  lib/email-webhook.ts, where the test now imports and runs it for real.
+*/
+{
+  const ALLOWED = new Set([
+    "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
+    "dynamic", "dynamicParams", "revalidate", "fetchCache", "runtime",
+    "preferredRegion", "maxDuration", "generateStaticParams",
+    "metadata", "generateMetadata",
+  ]);
+  const offenders = [];
+  for (const f of files) {
+    const src = readFileSync(f, "utf8");
+    const names = [];
+    for (const m of src.matchAll(/^export\s+(?:async\s+)?(?:function|const|let|var|class)\s+(\w+)/gm)) {
+      names.push(m[1]);
+    }
+    /* `export type` and `export interface` are erased at compile time and are
+       accepted by Next, so they are not offenders — but a re-export of a value
+       (`export { x }`) is, and is caught here too. */
+    for (const m of src.matchAll(/^export\s*\{([^}]*)\}/gm)) {
+      for (const part of m[1].split(",")) {
+        const name = part.trim().split(/\s+as\s+/).pop()?.trim();
+        if (name) names.push(name);
+      }
+    }
+    for (const n of names) {
+      if (!ALLOWED.has(n)) offenders.push(`${relative(API, f)} exports ${n}`);
+    }
+  }
+  check(`no route exports anything Next rejects (${files.length} routes scanned)`, offenders.length === 0);
+  for (const o of offenders) console.log(`        ${o}`);
+}
+
 console.log("");
 if (fail) { console.log(`${fail} FAILED, ${pass} passed\n`); process.exit(1); }
 console.log(`all ${pass} passed\n`);
