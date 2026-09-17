@@ -39,6 +39,7 @@ import { draftReminder, containsForbidden, type Tone, type Channel } from "@/lib
 */
 export type { Policy } from "@/lib/collections-shared";
 import type { Policy } from "@/lib/collections-shared";
+import { runGate, decideMessage, shouldTripBreaker } from "./rules";
 
 export const DEFAULT_POLICY: Policy = {
   enabled: false,
@@ -413,18 +414,13 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
     every customer's collections with no indication why. The switch exists to be
     used deliberately, not to become a single point of failure.
   */
+  let platformEnabled = true;
   try {
     const { data } = await svc.rpc("cortex_collections_enabled");
-    if (data === false) {
-      return { sent: 0, failed: 0, held: 0, note: "Sending is paused across Cortex right now. Your drafts are safe and will go out once it resumes." };
-    }
+    if (data === false) platformEnabled = false;
   } catch { /* switch unreadable — carry on rather than halt everyone */ }
 
   const p = await getPolicy(orgId);
-  if (!p.enabled) return { sent: 0, failed: 0, held: 0, note: "Collections is switched off." };
-  if (!withinQuietHours(p)) {
-    return { sent: 0, failed: 0, held: 0, note: `Outside your sending window (${p.send_from_hour}:00–${p.send_to_hour}:00 IST).` };
-  }
 
   /*
     Daily ceiling, counted from what has actually gone out today — where
@@ -442,8 +438,21 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
   const { count: sentToday } = await svc.from("collection_messages")
     .select("id", { count: "exact", head: true })
     .eq("org_id", orgId).eq("status", "sent").gte("sent_at", startOfDay.toISOString());
-  const room = Math.max(0, p.max_per_day - (sentToday || 0));
-  if (room === 0) return { sent: 0, failed: 0, held: 0, note: `Daily limit of ${p.max_per_day} already reached.` };
+
+  /*
+    The run-level gates — kill switch, workspace switch, quiet hours, daily
+    ceiling — are decided by runGate() in ./rules.ts so they can be executed by
+    a test. They used to be four inline returns spread through this function,
+    reachable only with a live database and a real provider, so the safety
+    suite could do nothing but grep this file for phrases. See the header of
+    rules.ts.
+  */
+  const gate = runGate({
+    platformEnabled, policy: p, sentToday: sentToday || 0,
+    now: new Date(), withinWindow: withinQuietHours,
+  });
+  if (!gate.allowed) return { sent: 0, failed: 0, held: 0, note: gate.note };
+  const room = gate.room;
 
   const { data: queue } = await svc.from("collection_messages")
     .select("id, thread_id, channel, recipient, subject, body, attempt")
@@ -468,11 +477,6 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
     : null;
 
   for (const m of ((queue as any[]) || [])) {
-    if (!m.recipient) {
-      await svc.from("collection_messages").update({ status: "skipped", error: "No recipient on file" }).eq("id", m.id);
-      continue;
-    }
-
     /*
       Re-assert the limits HERE, per message, not only at draft time.
 
@@ -492,21 +496,34 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
       .select("attempts, last_sent_at, status, party, amount, invoices(invoice_no)")
       .eq("id", m.thread_id).single();
     const t0: any = th0 || {};
-    const partyNorm = normalizeCustomerName(String(t0.party || "")) || "";
-    const dncNow = new Set(p.do_not_contact.map((x) => normalizeCustomerName(x)).filter((x): x is string => Boolean(x)));
 
-    let refuse: string | null = null;
-    if (t0.status === "recovered") refuse = "Invoice was paid";
-    else if (t0.status === "excluded") refuse = "Excluded from collections";
-    else if (Number(t0.attempts || 0) >= p.max_attempts) refuse = `Already sent ${p.max_attempts} reminders`;
-    else if (partyNorm && dncNow.has(partyNorm)) refuse = "Added to your do-not-contact list";
-    else if (t0.last_sent_at &&
-             Date.now() - new Date(t0.last_sent_at).getTime() < p.min_gap_days * 86_400_000) {
-      refuse = `Last reminder was under ${p.min_gap_days} days ago`;
-    }
-    if (refuse) {
+    /*
+      One decision, made in ./rules.ts, so every branch below is reachable by
+      scripts/test-collections-engine.mjs. The WhatsApp readiness check is
+      folded in rather than sitting further down, so the order of refusals is
+      fixed in one place and testable: paid beats attempts beats do-not-contact
+      beats the gap, and an unconfigured channel is a skip, never a failure.
+    */
+    const decision = decideMessage({
+      policy: p,
+      thread: { status: t0.status ?? null, attempts: t0.attempts ?? null, last_sent_at: t0.last_sent_at ?? null, party: t0.party ?? null },
+      message: { recipient: m.recipient ?? null, channel: m.channel ?? null },
+      now: new Date(),
+      normalise: normalizeCustomerName,
+      channelReady: m.channel === "whatsapp" && waGate ? waGate.ok : true,
+      channelNotReadyReason: m.channel === "whatsapp" && waGate && !waGate.ok ? waGate.reason.slice(0, 300) : undefined,
+    });
+
+    if (decision.action === "cancel") {
       await svc.from("collection_messages")
-        .update({ status: "cancelled", error: refuse }).eq("id", m.id);
+        .update({ status: decision.reason === "No recipient on file" ? "skipped" : "cancelled", error: decision.reason })
+        .eq("id", m.id);
+      continue;
+    }
+    if (decision.action === "skip") {
+      await svc.from("collection_messages")
+        .update({ status: "skipped", error: decision.reason }).eq("id", m.id);
+      skipped++;
       continue;
     }
 
@@ -524,13 +541,6 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
       stays visible with the reason attached, so the owner sees the sentence
       that tells them what to connect.
     */
-    if (m.channel === "whatsapp" && waGate && !waGate.ok) {
-      await svc.from("collection_messages")
-        .update({ status: "skipped", error: waGate.reason.slice(0, 300) }).eq("id", m.id);
-      skipped++;
-      continue;
-    }
-
     /*
       Claim before sending, exactly as the alert digest and workflow scheduler
       do. Two overlapping cron runs must not both deliver the same reminder —
@@ -622,7 +632,7 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
     only trips when there have been repeated failures AND nothing has got
     through, so an occasional bounce on a busy workspace does not switch it off.
   */
-  if (failed > 0 && sent === 0) {
+  if (shouldTripBreaker({ sent, failed, skipped })) {
     try { await svc.rpc("cortex_collections_trip_check", { p_org: orgId }); }
     catch { /* breaker not migrated yet — the sends already failed safely */ }
   }

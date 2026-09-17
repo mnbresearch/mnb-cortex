@@ -187,13 +187,28 @@ const rowFor = (inputs, key) => ratioRows(computeRatios(inputs)).find((r) => r.k
 
   /* Every panel whose placeholder promises "Optional" must actually accept
      empty input — that mismatch is what made the failure so confusing. */
-  const optional = [
-    "forecast", "costs", "pricing-optimizer", "benchmarks", "risks",
-    "boardroom", "investor", "action-center", "brief",
-  ];
-  for (const page of optional) {
-    const p = src(`src/app/(app)/${page}/page.tsx`);
-    check(/<AIPanel inputOptional/.test(p), `/${page} accepts an empty focus`);
+  /*
+    Where the panel is rendered, per route. /brief moved its AIPanel into
+    components/brief-panel.tsx when the page gained real empty and generated
+    states, so checking the page file alone reported a regression that was not
+    one — the prop had moved, not gone. The map keeps the assertion pointed at
+    whichever file actually renders the panel.
+  */
+  const optional = {
+    forecast: "src/app/(app)/forecast/page.tsx",
+    costs: "src/app/(app)/costs/page.tsx",
+    "pricing-optimizer": "src/app/(app)/pricing-optimizer/page.tsx",
+    benchmarks: "src/app/(app)/benchmarks/page.tsx",
+    risks: "src/app/(app)/risks/page.tsx",
+    boardroom: "src/app/(app)/boardroom/page.tsx",
+    investor: "src/app/(app)/investor/page.tsx",
+    "action-center": "src/app/(app)/action-center/page.tsx",
+    brief: "src/components/brief-panel.tsx",
+  };
+  for (const [page, file] of Object.entries(optional)) {
+    const p = src(file);
+    check(/<AIPanel[\s\S]{0,200}inputOptional/.test(p), `/${page} accepts an empty focus`,
+      `looked in ${file}`);
   }
 }
 

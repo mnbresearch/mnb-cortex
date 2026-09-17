@@ -98,9 +98,25 @@ check(/status: "skipped"[\s\S]{0,120}waGate\.reason/.test(CODE) ||
   "a WhatsApp setup refusal is written as 'skipped'",
   "'failed' would feed the breaker and switch email off too");
 
-const skipBlock = CODE.match(/m\.channel === "whatsapp" && waGate && !waGate\.ok[\s\S]{0,400}?\n    \}/);
+/*
+  THE GUARANTEE, NOT THE OLD SHAPE OF IT.
+
+  This used to match an inline `if (m.channel === "whatsapp" && waGate &&
+  !waGate.ok)` block in sendApproved and assert that the block wrote "skipped"
+  and never "failed". That block has moved: the readiness check is now part of
+  decideMessage() in lib/collections/rules.ts, which returns action "skip", and
+  sendApproved writes "skipped" for it. Same behaviour, different structure —
+  and scripts/test-collections-engine.mjs now EXECUTES it rather than reading
+  it, including the mutation where a skip is downgraded to a cancel.
+
+  What still has to be true here, and is worth pinning separately: the
+  handler for a skip decision writes "skipped" and nothing else, because
+  "failed" is what feeds the breaker and switches the working email channel
+  off with it.
+*/
+const skipBlock = CODE.match(/decision\.action === "skip"[\s\S]{0,300}?\n    \}/);
 check(skipBlock && /status: "skipped"/.test(skipBlock[0]) && !/status: "failed"/.test(skipBlock[0]),
-  "…and that block writes ONLY 'skipped'",
+  "…and the skip branch writes ONLY 'skipped'",
   skipBlock ? "it also writes 'failed' somewhere in the same block" : "could not find the refusal block to check");
 
 check(/status = 'failed'/.test(BREAKER) && !/status = 'skipped'/.test(BREAKER),
