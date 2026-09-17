@@ -36,7 +36,7 @@ async function extractPdf(f: File): Promise<string> {
 
 export function AIPanel({
   mode, placeholder, cta, multiline = false, allowFile = false, saveMode,
-  suggestions, inputOptional = false,
+  suggestions, inputOptional = false, onResult,
   "aria-label": ariaLabel,
 }: {
   mode: string; placeholder: string; cta: string; multiline?: boolean; allowFile?: boolean; saveMode?: string;
@@ -71,6 +71,16 @@ export function AIPanel({
    * quiet — a required field is allowed, a silently required one is not.
    */
   inputOptional?: boolean;
+  /**
+   * Told when a result arrives, so a page can stop asserting it already has one.
+   *
+   * /brief headed its panel "Freshly generated from your live business
+   * snapshot" as a static string, above a button that had not been pressed.
+   * The page claimed a brief existed while asking the reader to create one.
+   * Nothing here knew whether anything had been generated, so the page could
+   * not tell the truth without being told.
+   */
+  onResult?: (text: string, at: Date) => void;
   /**
    * ACTUALLY APPLIED NOW.
    *
@@ -118,7 +128,10 @@ export function AIPanel({
     try {
       const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode, input }) });
       const j = await r.json();
-      setOut(j.text || "No response.");
+      const text = j.text || "";
+      setOut(text || "No response.");
+      /* Only a real answer counts as generated — "No response." is not one. */
+      if (text) onResult?.(text, new Date());
     } catch { setOut("Network error reaching the AI."); }
     finally { setLoading(false); }
   }

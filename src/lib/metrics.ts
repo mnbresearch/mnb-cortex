@@ -366,7 +366,16 @@ export async function recomputeMetrics(orgId: string): Promise<{
         and nothing on either screen said which population was which. Three
         numbers, one noun, no definition.
       */
-      metric_key: "orders", label: "Orders (MTD, excl. lost)", value: nowCount, unit: "count",
+      /*
+        Says which orders, positively.
+
+        "Orders (MTD)" counted 62 where /sales showed 64. My first correction
+        was "Orders (MTD, excl. lost)", which is accurate but defines the
+        number by what it leaves out — a reader still has to subtract to know
+        what they are looking at. Naming the population directly is better:
+        these are the open and won ones.
+      */
+      metric_key: "orders", label: "Open + won orders (MTD)", value: nowCount, unit: "count",
       delta_pct: delta(nowCount, prevCount),
       status: nowCount >= prevCount ? "green" : "yellow",
       trend: buckets.slice(-7).map((b) => ordersByMonth.get(b) || 0),

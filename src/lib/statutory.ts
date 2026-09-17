@@ -248,6 +248,32 @@ function istDate(y: number, m: number, d: number): Date {
   return new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T00:00:00+05:30`);
 }
 
+/**
+ * A deadline's date as YYYY-MM-DD, in IST. The ONLY correct way to print one.
+ *
+ * WHY THIS EXISTS: `due.toISOString().slice(0, 10)` is off by a day, always.
+ *
+ * istDate() builds the due date at midnight IST — "2026-09-30T00:00:00+05:30" —
+ * which is 18:30 UTC on the 29th. toISOString() renders UTC, so slicing it
+ * yields "2026-09-29" for a deadline that falls on the 30th.
+ *
+ * lib/data.ts did exactly that when assembling the deadline list for the AI
+ * context, beside a `daysAway` that IS computed in IST. So the model was handed
+ * "Tax audit report (44AB) in 13 day(s) (2026-09-29)" — a countdown pointing at
+ * the 30th next to a date reading the 29th — and repeated the wrong date into
+ * the weekly plan while /compliance showed the right one. Two screens of one
+ * product giving different statutory dates, for the filing that is two weeks
+ * away, from a single character of timezone handling.
+ *
+ * Every surface that prints a deadline date must come through here.
+ */
+export function istISO(due: Date): string {
+  const [d, m, y] = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric",
+  }).format(due).split("/");
+  return `${y}-${m}-${d}`;
+}
+
 /** Today's IST calendar date, whatever timezone the server runs in. */
 export function istToday(now = new Date()): { y: number; m: number; d: number } {
   const [d, m, y] = new Intl.DateTimeFormat("en-GB", {

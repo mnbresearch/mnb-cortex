@@ -226,8 +226,8 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
 
   /* A5 — the KPI counted non-lost orders and called them orders. */
   const metrics = src("src/lib/metrics.ts");
-  check(/label: "Orders \(MTD, excl\. lost\)"/.test(metrics),
-    "the orders KPI is named for the population it counts",
+  check(/label: "Open \+ won orders \(MTD\)"/.test(metrics),
+    "the orders KPI names the population it counts, positively",
     "62 on the dashboard against 64 on /sales, with no definition on either");
 
   /* A6 — invented drivers under a live-grounding claim. */
@@ -242,6 +242,67 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
   check(!/What's driving the forecast/.test(forecast),
     "the hardcoded driver section is deleted rather than relabelled",
     "an example lever is not a lever");
+}
+
+
+/* ================= one canonical date, printed in IST ==================== */
+/*
+  /plan said the 44AB audit report was due 29 September while /compliance said
+  30 September — and the plan's own countdown, "in 13 days" from 17 September,
+  resolved to the 30th. Both came from the same rule; only the formatting
+  differed.
+
+  lib/statutory.ts builds a due date at midnight IST, so toISOString() renders
+  it in UTC as the previous evening and slicing gives the day before. data.ts
+  did exactly that when handing deadlines to the model, which then repeated the
+  wrong date into weekly plans. Every deadline in the AI context was a day
+  early, on the one surface where a customer reads a date and acts on it.
+*/
+{
+  const stat = readFileSync(join(ROOT, "src/lib/statutory.ts"), "utf8");
+  const data = readFileSync(join(ROOT, "src/lib/data.ts"), "utf8");
+  check(/export function istISO/.test(stat),
+    "there is one canonical IST date formatter for deadlines");
+  check(!/due\.toISOString\(\)/.test(data),
+    "the AI context no longer formats a deadline with toISOString",
+    "midnight IST renders as the previous day in UTC — every date was a day early");
+  check(/istISO\(d\.due\)/.test(data),
+    "…it uses istISO instead");
+  const offenders = [];
+  for (const f of ["src/lib/data.ts", "src/lib/weekly-update.ts", "src/lib/health.ts"]) {
+    try {
+      const t = readFileSync(join(ROOT, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      if (/\.due\.toISOString\(\)/.test(t)) offenders.push(f);
+    } catch { /* file may not exist */ }
+  }
+  check(offenders.length === 0,
+    "no surface prints a deadline date through toISOString",
+    offenders.join(", "));
+}
+
+/* ===================== the brief does not claim to exist ================= */
+{
+  /* Comments stripped — brief-panel.tsx quotes the old "Freshly generated"
+     string to explain why it went, and a check that cannot tell prose from
+     code would forbid documenting the fix. Third time this trap has caught me
+     today; it is now the default for every source assertion here. */
+  const decomment = (t) => t.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, "").replace(/^\s*\/\/.*$/gm, "");
+  const briefPage = decomment(readFileSync(join(ROOT, "src/app/(app)/brief/page.tsx"), "utf8"));
+  const panel = decomment(readFileSync(join(ROOT, "src/components/brief-panel.tsx"), "utf8"));
+  const emailer = decomment(readFileSync(join(ROOT, "src/components/brief-emailer.tsx"), "utf8"));
+
+  check(!/Freshly generated/.test(briefPage) && !/Freshly generated/.test(panel),
+    "/brief no longer claims a brief was freshly generated before one exists",
+    "the page asserted a brief existed while asking the reader to create it");
+  check(/Nothing generated yet today/.test(panel),
+    "the empty state says plainly that nothing has been generated");
+  check(/Generated at \$\{/.test(panel),
+    "…and a generated brief carries the time it was built",
+    "\"freshly\" is a claim about time that a static string can never honour");
+  check(/onResult/.test(panel), "the panel learns when a result actually arrives");
+  check(/does not email the one shown above/.test(emailer),
+    "the emailer says it builds its own brief rather than sending the on-screen one",
+    "/api/brief/email generates server-side, so it could send a different brief");
 }
 
 console.log(`\nclaims: ${pass} passed, ${fails.length} failed`);

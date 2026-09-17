@@ -28,8 +28,20 @@ export function BriefEmailer() {
 
   return (
     <Card className="p-4">
-      <div className="font-semibold text-sm flex items-center gap-2"><Mail className="h-4 w-4 text-primary" /> Email me this brief</div>
-      <div className="text-sm text-muted-foreground mt-1">Sends today's brief to your account email address.</div>
+      {/*
+        "Email me THIS brief" was wrong in a way worth naming. /api/brief/email
+        builds its own brief server-side; it does not send whatever is on
+        screen. So after generating one and pressing this, a customer could
+        receive a different brief from the one they had just read, with nothing
+        explaining the difference.
+
+        The suggested fix elsewhere was to disable this until a brief had been
+        generated on screen — but that would be wrong here, because this button
+        genuinely works on its own and is the point of "never open the app".
+        The copy is what needed correcting, not the behaviour.
+      */}
+      <div className="font-semibold text-sm flex items-center gap-2"><Mail className="h-4 w-4 text-primary" /> Email me a brief</div>
+      <div className="text-sm text-muted-foreground mt-1">Builds a fresh brief from your current figures and sends it to your account email address — it does not email the one shown above.</div>
       <div className="flex flex-wrap items-center gap-2 mt-3">
         <Button onClick={send} disabled={loading}>{status === "ok" ? <Check className="h-4 w-4" /> : <Mail className="h-4 w-4" />} {loading ? "Sending…" : "Send brief"}</Button>
       </div>

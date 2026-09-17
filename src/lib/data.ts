@@ -319,12 +319,15 @@ When answering: say plainly that you don't have their numbers yet, then tell the
   let dueLines: string[] = [];
   let profileLines: string[] = [];
   try {
-    const { upcomingDeadlines, splitByProfile } = await import("@/lib/statutory");
+    const { upcomingDeadlines, splitByProfile, istISO } = await import("@/lib/statutory");
     const { PROFILE_QUESTIONS, profileIsSet } = await import("@/lib/statutory-profile");
     const profile = await getStatutoryProfile();
     const { shown } = splitByProfile(upcomingDeadlines(14), profile);
     dueLines = shown.slice(0, 6)
-      .map((d) => `- ${d.name} in ${d.daysAway} day(s) (${d.due.toISOString().slice(0, 10)}): ${d.what} — applies if ${d.appliesIf}`);
+      /* istISO, never toISOString — the due date is midnight IST, so UTC
+         renders it as the previous day and the model repeats that date into
+         plans and reports. See the note on istISO in lib/statutory.ts. */
+      .map((d) => `- ${d.name} in ${d.daysAway} day(s) (${istISO(d.due)}): ${d.what} — applies if ${d.appliesIf}`);
     if (profileIsSet(profile)) {
       profileLines = PROFILE_QUESTIONS
         .filter((q) => profile[q.key] !== "unknown")
