@@ -305,6 +305,92 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
     "/api/brief/email generates server-side, so it could send a different brief");
 }
 
+/* ========================================================================= */
+/*  PLAYBOOKS — every one must point at a module that exists                 */
+/* ========================================================================= */
+/*
+  A "templates" or "playbooks" section is the single most likely place for
+  invented features to come back. It is written in the language of outcomes,
+  it looks like copy rather than like a claim, and nobody checks whether the
+  thing it describes is wired to anything — which is exactly how "10,000+
+  businesses served", the ₹8.4L figure and the three written testimonials got
+  onto this site in the first place.
+
+  So the playbook list is generated from lib/playbooks.ts, and every entry
+  there names the module that implements it. If a module is renamed or
+  removed, the landing page stops describing it, here, before a customer ever
+  reads the promise.
+*/
+{
+  const { PLAYBOOKS } = await import("../src/lib/playbooks.ts");
+  const routes = new Set(NAV.map((n) => n.href));
+
+  check(PLAYBOOKS.length > 0, "playbooks are defined", String(PLAYBOOKS.length));
+
+  const orphans = PLAYBOOKS.filter((p) => !routes.has(p.module));
+  check(orphans.length === 0,
+    `every playbook resolves to a real module (${PLAYBOOKS.length} checked)`,
+    orphans.map((p) => `${p.id} → ${p.module}`).join(", "));
+
+  /* Each one has to say what it watches AND what it does. A playbook that only
+     watches is a dashboard tile, and the whole positioning rests on the
+     difference. */
+  const thin = PLAYBOOKS.filter((p) => !p.watches || !p.does || p.does.length < 30);
+  check(thin.length === 0, "every playbook states both the trigger and the action",
+    thin.map((p) => p.id).join(", "));
+
+  /* The engine field is the honest part of "AI-native": statutory arithmetic
+     must not quietly become a model call. */
+  const statutory = PLAYBOOKS.filter((p) => ["msme-43bh", "statutory", "receivables"].includes(p.id));
+  check(statutory.length === 3 && statutory.every((p) => p.engine === "rules"),
+    "the statutory and ageing playbooks are decided by rules, not by a model",
+    statutory.map((p) => `${p.id}:${p.engine}`).join(", "));
+
+  /* The landing page and the investor page must both render the real list
+     rather than a hand-typed copy of it. */
+  const landing = read("src/app/page.tsx");
+  const investors = read("src/app/investors/page.tsx");
+  check(/PLAYBOOKS\.map/.test(landing), "the landing page renders the real playbook list");
+  check(/PLAYBOOKS\.(map|length)/.test(investors), "the investor page does too");
+  check(/PLAYBOOKS\.length/.test(landing),
+    "…and counts them rather than printing a number",
+    "a typed count is what drifted twice before");
+}
+
+/* ========================================================================= */
+/*  THE INVESTOR PAGE MAY NOT GROW A TRACTION NUMBER                        */
+/* ========================================================================= */
+/*
+  The investor page is the highest-temptation surface in the repository: it is
+  read by people we want to impress, and nobody who reads it can check it
+  against the database. It previously carried a KPI band of AbroBot figures
+  presented under a Cortex heading.
+
+  The rule is narrow and mechanical: no customer/revenue/ARR/MRR/GMV figure on
+  that page until the product can reproduce it on demand. Product depth
+  (modules, agents, industries) is fine — those are computed from the code by
+  the page itself.
+*/
+{
+  const investors = read("src/app/investors/page.tsx");
+  const BANNED_METRICS = [
+    [/\b\d[\d,]*\+?\s*(paying\s+)?(customers|businesses|workspaces|users|SMEs)\b/i,
+     "a customer count"],
+    [/(ARR|MRR|GMV)\b/i, "a revenue metric"],
+    [/₹\s?\d[\d,.]*\s?(Cr|crore|L|lakh|K)\b.*\b(revenue|ARR|MRR|GMV|collected|recovered)\b/i,
+     "a revenue figure"],
+    [/\b\d+%\s*(growth|MoM|month-on-month|retention)\b/i, "a growth or retention rate"],
+  ];
+  for (const [re, what] of BANNED_METRICS) {
+    check(!re.test(investors), `the investor page publishes no ${what}`,
+      "put it here when the product can reproduce it on demand — see docs/positioning.md §9");
+  }
+  /* And it must keep saying so, so the omission reads as a choice. */
+  check(/no revenue chart on this page/i.test(investors),
+    "…and says out loud why there is no revenue chart",
+    "an absent number with no explanation looks like an oversight rather than a standard");
+}
+
 console.log(`\nclaims: ${pass} passed, ${fails.length} failed`);
 if (fails.length) {
   for (const f of fails) console.log("  FAIL " + f);

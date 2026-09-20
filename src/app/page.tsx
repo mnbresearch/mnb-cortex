@@ -13,6 +13,8 @@ import { PublicHeader, PublicFooter } from "@/components/public-chrome";
 import { ProductPreview } from "@/components/product-preview";
 import { AskCortexDemo } from "@/components/demo";
 import { IndustryPicker } from "@/components/industry-picker";
+import { PLAYBOOKS } from "@/lib/playbooks";
+import { INDUSTRIES } from "@/lib/industries";
 import { HealthCheckClient } from "@/components/health-check-client";
 
 const FAQS = [
@@ -71,7 +73,14 @@ const OLD_NEW = [
   { old: "A GST or TDS date passes and you find out from a notice.", now: "Every statutory deadline that applies to you, warned before — not after." },
   { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Vyapar and Busy files as they come." },
   { old: "You're too busy running the business to sit and analyse it.", now: "One email on Monday: the three things worth your attention this week." },
-  { old: "Your CA opens thirty files to find the client in trouble.", now: "The Practice console ranks every client by who needs them — on one screen." },
+  /*
+    WAS a line about a CA opening thirty files. True, and it made a
+    cross-industry system read as accounting software — which is the single
+    biggest thing wrong with how this product was being described. Firms are a
+    CHANNEL (see the audience section, and docs/positioning.md §4); they are
+    not the frame. What replaces it is the problem every industry here shares.
+  */
+  { old: "Every tool shows you a different version of the truth.", now: "One workspace reads all of it together — orders, invoices, stock, ledger — and answers from your own rows." },
 ];
 
 // The whole platform, grouped by the job it does for you.
@@ -166,11 +175,25 @@ const LOOP = [
   { k: "Executes", d: "Drafts POs, invoices, reminders, emails and reports for you." },
 ];
 
+/*
+  EIGHT, NOT FOUR — and the last one is a channel, not a vertical.
+
+  The old list was four generic buckets ending in "Founders & CXOs", which is
+  not an industry and tells a distributor nothing. The playbooks above already
+  name which businesses feel each problem most; this section should agree with
+  them. A clinic has receivables and a statutory calendar and no reorder point;
+  a distributor has all three. Saying so is more convincing than saying
+  "any business".
+*/
 const AUDIENCE = [
-  { t: "Manufacturers", d: "Stock-outs, margins, production and receivables — watched daily." },
-  { t: "D2C & retail", d: "Funnels, CAC, inventory and pricing in one place." },
-  { t: "Services & agencies", d: "Project profitability, capacity and proposals." },
-  { t: "Founders & CXOs", d: "A COO-grade brain for every decision, at a fraction of the cost." },
+  { t: "Manufacturers", d: "Receivables, the MSME clock on supplier bills, stock cover and margin per line." },
+  { t: "D2C & retail", d: "Reorder before the shelf empties, who is drifting away, and what discounting is costing." },
+  { t: "Distribution & wholesale", d: "Ageing debtors across hundreds of accounts, ranked by who to call first." },
+  { t: "Services & agencies", d: "Project profitability, the invoices nobody chased, and the Monday plan." },
+  { t: "Clinics & healthcare", d: "Collections without awkward phone calls, and every statutory date that applies." },
+  { t: "Construction & contracting", d: "Retention and running bills that age quietly, plus the 45-day MSME exposure." },
+  { t: "SaaS & subscriptions", d: "Churn signals, renewals, and revenue that leaks a month before you notice." },
+  { t: "CA & consulting firms", d: "One console across every client workspace, ranked by who needs you this week. A firm is a channel to its clients, not a different product." },
 ];
 
 const COMPARE: [string, string, string, string, string][] = [
@@ -263,7 +286,8 @@ export default function Home() {
               Cortex reads your Tally, Vyapar or Excel exports and watches them every day. It tells you{" "}
               <span className="text-foreground font-medium">who hasn&rsquo;t paid</span>,{" "}
               <span className="text-foreground font-medium">what&rsquo;s due</span> and{" "}
-              <span className="text-foreground font-medium">what&rsquo;s about to run out</span> — by email, before it costs you.
+              <span className="text-foreground font-medium">what&rsquo;s about to run out</span> — then drafts the reminder and sends it when you approve.
+              {" "}Manufacturing, retail, D2C, services, distribution, clinics, construction: {INDUSTRIES.length} industries, one workspace.
               Keep your accounting software. This is the part it was never built to do.
             </p>
             <div className="flex flex-wrap items-center gap-3 lg:justify-end">
@@ -446,11 +470,115 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="03">What it is</SectionLabel>
           <Reveal>
+            {/*
+              THE POSITION, IN ONE PARAGRAPH. See docs/positioning.md §1.
+
+              The old version said "monitors, predicts, recommends and
+              executes … and gets sharper every week", which is four verbs and
+              a promise. What a buyer needs is the specific shape of the thing:
+              it reads THEIR numbers, names a SPECIFIC risk, and DOES something
+              — and it does not replace what they already run, which is a sales
+              asset rather than a limitation.
+            */}
             <p className="font-display display-3 tracking-tightest mt-8 max-w-5xl leading-[1.15]">
-              Dashboards store numbers. Chatbots forget you. <span className="text-primary">MNB Cortex remembers — and acts.</span> One operating
-              brain that monitors, predicts, recommends and executes across your whole company — and gets sharper every week you use it.
+              Your accounting software records what happened. A dashboard waits for you to open it.{" "}
+              <span className="text-primary">Cortex reads your own numbers every day, names the thing that is about to cost you money — the customer, the amount, the date — and then does something about it.</span>
+            </p>
+            <p className="mt-6 text-muted-foreground max-w-3xl leading-7">
+              It is the layer between your books and your business. You keep Tally, Vyapar or your spreadsheets;
+              Cortex is the part they were never built to do.
             </p>
           </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- PLAYBOOKS ----------
+        THE UNIT THE BUYER ACTUALLY WANTS.
+
+        128 modules is a true number and a bad opening line: breadth reads as a
+        free-tools site, and an owner deciding in five seconds is not asking
+        "how much is there?" — they are asking "what will this do for me on
+        Tuesday?". A playbook answers that in their own language: what it
+        watches, what it does about it.
+
+        Every card is generated from lib/playbooks.ts, and every entry there
+        names the module that implements it. scripts/test-claims.mjs fails if
+        one points at a module that does not exist — because a "templates"
+        section written by hand is exactly where invented features come back.
+      */}
+      <section id="playbooks" className="px-5 lg:px-10 py-24 lg:py-32 border-t">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="◆">Playbooks</SectionLabel>
+          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
+            You don&rsquo;t configure it.<br />The playbooks are <span className="text-primary">already running.</span>
+          </h2>
+          <p className="mt-4 text-muted-foreground max-w-2xl leading-7">
+            Import your file and {PLAYBOOKS.length} playbooks start watching the same day — each one a specific thing that costs
+            Indian businesses money, with the action attached. No rules to write, no dashboard to build.
+          </p>
+
+          <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden">
+            {PLAYBOOKS.map((p) => (
+              <div key={p.id} className="bg-card p-6 lg:p-7 hover:bg-accent/30 transition-colors flex flex-col">
+                <div className="font-display text-xl lg:text-2xl tracking-tightest">{p.name}</div>
+                <div className="mt-4 space-y-3 text-sm flex-1">
+                  <div>
+                    <div className="eyebrow text-[10px]">Watches</div>
+                    <p className="text-muted-foreground leading-6 mt-1">{p.watches}</p>
+                  </div>
+                  <div>
+                    <div className="eyebrow text-[10px]">Does</div>
+                    <p className="text-muted-foreground leading-6 mt-1">{p.does}</p>
+                  </div>
+                </div>
+                <div className="mt-5 flex flex-wrap items-center gap-1.5">
+                  {p.industries.length === 0
+                    ? <span className="rounded-md bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-medium">Every business</span>
+                    : p.industries.map((i) => (
+                        <span key={i} className="rounded-md bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">{i}</span>
+                      ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/*
+            WHAT "AI-NATIVE" MEANS HERE, said precisely — because the phrase is
+            usually empty, and because the distinction is the product.
+
+            A model that is asked to compute a statutory deadline will
+            eventually get one wrong, and a wrong tax date destroys the trust
+            everything else depends on. So the rules decide, the model reads
+            and writes, and the product acts. See lib/playbooks.ts.
+          */}
+          <div className="mt-12 grid md:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden">
+            {[
+              { k: "Rules decide", d: "The 45-day MSME window, the statutory calendar, ageing, reorder points — arithmetic over your own rows, in tested code. Not a prompt, because a wrong tax date is worse than no product." },
+              { k: "The model reads and writes", d: "It looks up your actual invoices and orders, explains what it found in plain English or Hinglish, and drafts the message you were going to have to write." },
+              { k: "The product acts", d: "Draft, you approve, it sends — in your business's name — and stops the moment the invoice is marked paid. A recommendation nobody executes is a PDF." },
+            ].map((x) => (
+              <div key={x.k} className="bg-card p-7">
+                <div className="font-display text-xl tracking-tightest">{x.k}</div>
+                <p className="mt-2.5 text-sm text-muted-foreground leading-6">{x.d}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Breadth, shown rather than asserted. */}
+          <div className="mt-10">
+            <div className="eyebrow">Tuned for {INDUSTRIES.length} industries</div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {INDUSTRIES.map((i: any) => (
+                <Link
+                  key={i.slug}
+                  href={`/industries/${i.slug}`}
+                  className="rounded-full border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                >
+                  {i.name}
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
