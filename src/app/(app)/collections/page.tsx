@@ -147,9 +147,25 @@ export default async function Collections() {
               <Card className="p-4 border-primary/20 bg-primary/5 text-sm flex items-start gap-2.5">
                 <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" aria-hidden="true" />
                 <div>
+                  {/*
+                    WAS: "Cortex never messages your customers without you."
+
+                    Unqualified, and untrue of one configuration of this very
+                    page. "Send without asking me" (collections-settings.tsx) is
+                    a checkbox an owner can turn on, and when it is on the
+                    nightly run drafts and sends in the same pass with no
+                    per-message approval — lib/collections/index.ts writes the
+                    row straight to `approved`.
+
+                    The promise is real and worth making; it just has a
+                    condition, and a safety promise with an unstated condition
+                    is the kind that gets discovered at the worst moment. What
+                    is unconditionally true is the default, so that is what is
+                    claimed.
+                  */}
                   <span className="font-medium">Collections is off.</span>{" "}
                   Nothing has been drafted and nothing can be sent. Turn it on below, generate the drafts, and read them —
-                  you approve every message before it leaves. Cortex never messages your customers without you.
+                  every message waits for your approval unless you switch that off yourself.
                 </div>
               </Card>
             )

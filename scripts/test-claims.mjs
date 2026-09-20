@@ -358,6 +358,103 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
 }
 
 /* ========================================================================= */
+/*  THE EASE PROMISES — each one is a claim about work the user does not do  */
+/* ========================================================================= */
+/*
+  The landing page now leads with three steps and an explicit "then you do
+  nothing". That is the most persuasive thing on the page and the most
+  dangerous: a claim about EFFORT is disproved on day one, by the customer, in
+  the product, at the exact moment they were deciding to trust it.
+
+  Each of these binds a sentence on the page to the mechanism that makes it
+  true, so the sentence dies with the mechanism instead of outliving it.
+*/
+{
+  const landing = read("src/app/page.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+
+  /* "no mapping screen" / "reads your column names itself" */
+  if (/no mapping screen|reads your column names|matches your column/i.test(landing)) {
+    const importMap = read("src/lib/import-map.ts");
+    check(/export function resolveHeaders/.test(importMap),
+      "the 'no column mapping' promise still has its mechanism",
+      "the page says Cortex matches headers itself but lib/import-map.ts no longer exports resolveHeaders()");
+    const actions = read("src/lib/actions.ts");
+    check(/resolveHeaders\(/.test(actions),
+      "…and the import path actually calls it",
+      "resolveHeaders exists but nothing imports rows through it");
+  }
+
+  /* "it is off until you turn it on" / "waits for you to approve it".
+     This is a SAFETY promise — the one where being wrong means a stranger got
+     an email from the customer's business — so it is checked against the
+     defaults rather than against prose. */
+  if (/off until you turn it on|waits for you to approve|holds it for your approval/i.test(landing)) {
+    const collections = read("src/lib/collections/index.ts");
+    const policy = collections.match(/DEFAULT_POLICY[^=]*=\s*\{[\s\S]{0,400}?\}/);
+    check(!!policy && /enabled:\s*false/.test(policy[0]),
+      "collections still ships switched off, as the page promises",
+      "DEFAULT_POLICY.enabled is no longer false — the page tells owners it cannot contact anyone until they allow it");
+    check(!!policy && /auto_send:\s*false/.test(policy[0]),
+      "…and unattended sending is still opt-in",
+      "DEFAULT_POLICY.auto_send is no longer false");
+    check(/\.eq\("status",\s*"approved"\)/.test(collections),
+      "…and only approved messages are ever sent",
+      "sendApproved no longer filters on status='approved', so a draft could leave");
+  }
+
+  /*
+    "see your own dashboard and overdue list before you buy anything".
+
+    A pricing claim, and the page used to carry a "free trial" that did not
+    exist (TRIAL_DAYS = 0) — so this one is checked hard. What makes it true is
+    PAYWALL_ALLOW, not a trial.
+  */
+  if (/before you (buy|pay) anything/i.test(landing)) {
+    const paywall = read("src/lib/paywall.ts");
+    const allow = paywall.match(/PAYWALL_ALLOW[^=]*=\s*\[([\s\S]*?)\]/);
+    check(!!allow, "PAYWALL_ALLOW is found in lib/paywall");
+    for (const route of ["/import", "/receivables", "/dashboard"]) {
+      check(!!allow && allow[1].includes(`"${route}"`),
+        `an unpaid workspace can still reach ${route}, as the page promises`,
+        `${route} left PAYWALL_ALLOW — the landing page says you can see it before paying`);
+    }
+  }
+
+  /* "one planned email a week". The scheduled cadence, not a cap — and it is
+     only honest while the weekly plan is the only SCHEDULED mail. */
+  if (/one planned email a week/i.test(landing)) {
+    const autopilot = read("src/app/api/cron/autopilot/route.ts");
+    check(/weekly[-_]?[Pp]lan/.test(autopilot),
+      "the weekly plan the page promises is still actually scheduled",
+      "nothing in the autopilot cron sends a weekly plan any more");
+  }
+
+  /*
+    NO TIME PROMISE THE PRODUCT CANNOT KEEP.
+
+    "3 min from your first import to your first warning" survived once as a lie
+    for months (alerts were a day away by cron) because it sounded like copy.
+    Anything of that shape now has to be deliberate: hours and days are
+    unbounded enough to be safe, a specific minute count is not.
+  */
+  /*
+    className is stripped first, and the first run of this check is why:
+    `flex-1 min-w-0` contains the substring "1 min" and failed the build on a
+    Tailwind utility. Claims live in prose, never in a class attribute, so
+    scanning one is pure false-positive surface — and a guard that cries wolf
+    is a guard somebody deletes.
+  */
+  const prose = landing.replace(/className=(?:"[^"]*"|\{`[^`]*`\})/g, "");
+  const timeClaims = [...prose.matchAll(/\b(\d+)\s*-?\s*(?:min|minute|second|sec)s?\b/gi)]
+    .map((m) => m[0].trim().toLowerCase().replace(/\s+/g, " "));
+  const ALLOWED_TIME = new Set(["60-second", "60 second", "60 seconds", "3 min", "2 min"]);
+  const rogue = timeClaims.filter((t) => !ALLOWED_TIME.has(t));
+  check(rogue.length === 0,
+    "no new stopwatch promise slipped onto the landing page",
+    `${rogue.join(", ")} — a time claim is disproved by the customer on day one; add it to ALLOWED_TIME only with a mechanism behind it`);
+}
+
+/* ========================================================================= */
 /*  THE INVESTOR PAGE MAY NOT GROW A TRACTION NUMBER                        */
 /* ========================================================================= */
 /*

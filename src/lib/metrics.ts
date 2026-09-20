@@ -826,11 +826,30 @@ export async function recomputeQuietly(orgId: string | null | undefined): Promis
  * would now be ignoring a return value. This one exists for the handful of
  * write paths that should tell the owner what just changed.
  *
- * Returns [] on every failure path, so a caller can always treat the result as
- * "nothing worth reporting" without checking for null.
+ * RETURNS `ok` AS WELL AS THE INSIGHTS, and that second field is the whole
+ * point of this signature.
+ *
+ * It used to return `DerivedInsight[]` alone, `[]` on every failure path, with
+ * a comment saying a caller "can always treat the result as nothing worth
+ * reporting". That is true of a caller who only wants to revalidate. It was
+ * false, and visibly so, of the import screen: a clean file and a recompute
+ * that never ran both arrived as `[]`, and the owner was told
+ *
+ *     "Nothing needs your attention from this file."
+ *
+ * — a positive assertion about their business, made at the exact moment
+ * nothing had been analysed. The failure is already recorded for /api/health
+ * by noteRecomputeFailure; it simply had no way of reaching the person
+ * standing in front of the screen.
+ *
+ * So: `ok: false` means the numbers were not derived and nothing may be
+ * claimed about them. `ok: true, insights: []` means they were derived and
+ * there is genuinely nothing to flag.
  */
-export async function recomputeAndReport(orgId: string | null | undefined): Promise<DerivedInsight[]> {
-  if (!orgId) return [];
+export async function recomputeAndReport(
+  orgId: string | null | undefined,
+): Promise<{ ok: boolean; insights: DerivedInsight[] }> {
+  if (!orgId) return { ok: false, insights: [] };
   try {
     const res = await recomputeMetrics(orgId);
     // Swallowing the reason is right for the CALLER — a failed recompute must
@@ -840,13 +859,13 @@ export async function recomputeAndReport(orgId: string | null | undefined): Prom
     // why. Recording it lets /api/health and the dashboard tell the truth.
     if (!res.ok) {
       await noteRecomputeFailure(orgId, res.reason || "unknown");
-      return [];
+      return { ok: false, insights: [] };
     }
     await clearRecomputeFailure(orgId);
-    return res.insights || [];
+    return { ok: true, insights: res.insights || [] };
   } catch (e: any) {
     await noteRecomputeFailure(orgId, e?.message || "unknown");
-    return [];
+    return { ok: false, insights: [] };
   }
 }
 

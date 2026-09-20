@@ -725,6 +725,22 @@ export type ImportOutcome = {
   skippedReason?: string;
   /** The worst thing Cortex now knows about this workspace. */
   warning?: { title: string; detail: string; severity: string; route?: string } | null;
+  /**
+   * Whether the analysis behind `warning` actually ran.
+   *
+   * WITHOUT THIS FIELD THE SCREEN LIED. `warning: null` had two causes — a
+   * clean file, and a recompute that failed — and the import screen rendered
+   * the first for both: "Nothing needs your attention from this file. No
+   * overdue receivables, no supplier past the 45-day mark, nothing below
+   * reorder level."
+   *
+   * Every clause of that is an assertion about the owner's business, and when
+   * the recompute had failed not one of them had been checked. The rows were
+   * saved, so there was no error to show either; the worse the failure, the
+   * more reassuring the screen. A misconfigured service role could hand
+   * somebody a clean bill of health over ₹40 L of overdue invoices.
+   */
+  analysed?: boolean;
 };
 
 export async function importRows(fd: FormData): Promise<ImportOutcome> {
@@ -771,7 +787,7 @@ export async function importRows(fd: FormData): Promise<ImportOutcome> {
           : wrote.error,
       };
     }
-    const insights = await recomputeAndReport(orgId);
+    const analysis = await recomputeAndReport(orgId);
     await logActivity(orgId, "import", `Imported ${wrote.written} rows into ${table} (CSV)`);
     REVALIDATE_AFTER_IMPORT.forEach((p) => revalidatePath(p));
     return {
@@ -783,7 +799,8 @@ export async function importRows(fd: FormData): Promise<ImportOutcome> {
       totalCols: match.total,
       missing: match.missing,
       ...accountForRows(rows.length, capped, wrote.written),
-      warning: topWarning(insights),
+      warning: topWarning(analysis.insights),
+      analysed: analysis.ok,
     };
   } catch (e: any) { return { inserted: 0, error: e?.message || "Import failed" }; }
 }
@@ -879,7 +896,7 @@ export async function importFromUrl(fd: FormData): Promise<ImportOutcome> {
           : wrote.error,
       };
     }
-    const insights = await recomputeAndReport(orgId);
+    const analysis = await recomputeAndReport(orgId);
     await logActivity(orgId, "import", `Imported ${wrote.written} rows into ${table} (URL)`);
     REVALIDATE_AFTER_IMPORT.forEach((p) => revalidatePath(p));
     /*
@@ -896,7 +913,8 @@ export async function importFromUrl(fd: FormData): Promise<ImportOutcome> {
       totalCols: match.total,
       missing: match.missing,
       ...accountForRows(rows.length, capped, wrote.written),
-      warning: topWarning(insights),
+      warning: topWarning(analysis.insights),
+      analysed: analysis.ok,
     };
   } catch (e: any) { return { inserted: 0, error: e?.message || "Import failed" }; }
 }

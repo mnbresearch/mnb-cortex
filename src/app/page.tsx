@@ -17,11 +17,27 @@ import { PLAYBOOKS } from "@/lib/playbooks";
 import { INDUSTRIES } from "@/lib/industries";
 import { HealthCheckClient } from "@/components/health-check-client";
 
+/*
+  ORDERED BY WHAT STOPS THE SALE, not by what is interesting to explain.
+
+  This list used to open with "How is this different from an ERP or CRM?" — a
+  category question, and one only a reader who has already decided to take the
+  product seriously will ask. The questions that actually stand between an SME
+  owner and signing up are all about effort and risk, and they were at
+  positions three and five or missing entirely.
+
+  So: setup time, then what they do daily, then whether it touches their books,
+  then whether it can embarrass them in front of a customer. The positioning
+  question comes after, for the reader still there.
+*/
 const FAQS = [
-  { q: "How is this different from an ERP or CRM?", a: "ERPs and CRMs store data. MNB Cortex reads across all of it, diagnoses problems, predicts what's coming, recommends actions, and executes the busywork — like a COO, not a filing cabinet." },
+  { q: "How long does setup take?", a: "Minutes, not weeks. Create the workspace, drop in a CSV export from Tally, Vyapar, Busy or your spreadsheet, and the first finding appears on that same screen. There is no column mapping, no configuration and nobody to book a call with. If you'd rather not use your own file yet, load a sample dataset in one click." },
+  { q: "What do I have to do every day?", a: "Nothing. Cortex re-reads your numbers overnight on its own. You get one planned email a week — the three things worth your attention — and beyond that it only writes to you when something has actually gone wrong. You don't have to log in to keep it working." },
+  { q: "Do I have to stop using Tally or my accountant?", a: "No. Keep both. Cortex never becomes your books and never writes to them — it reads an export and sits on top. Your accountant carries on exactly as before, and most of them prefer a client who spots the 45-day MSME problem before year end." },
+  { q: "Will it contact my customers on its own?", a: "Not unless you let it. Chasing ships switched off. When you turn it on, Cortex writes each message in your business's name and holds it for your approval — and stops the moment the invoice is marked paid. There is a setting to let it send unattended, off by default, and it's yours to decide." },
+  { q: "Do I need to be technical?", a: "No. You ask questions in plain language — English or Hinglish — the way you'd ask your accountant, and Cortex looks up your actual invoices and orders to answer. Nothing to install, nothing to code." },
+  { q: "How is this different from an ERP or CRM?", a: "Those record what already happened and wait for you to open them. Cortex reads across all of it every day, names the specific thing about to cost you money, and drafts the action. It doesn't replace them — it does the part they were never built to do." },
   { q: "Is my data safe?", a: "Yes. Every workspace is isolated with Postgres row-level security, traffic is encrypted with TLS, sensitive keys use AES-256-GCM, and you can export or delete your data anytime." },
-  { q: "Do I need to be technical?", a: "No. You ask questions in plain language (English or Hinglish), load a demo dataset or connect your tools, and Cortex does the analysis and drafting for you." },
-  { q: "Which businesses is it built for?", a: "Indian SMEs — manufacturers, D2C and retail brands, services and agencies, and founders who want a COO-grade brain without a COO-grade salary." },
   { q: "How does billing work?", a: "Cortex runs on credits. Buy a ₹149 pack and use it with no subscription, or pick a plan from ₹799/mo for a monthly allowance — billed securely via Cashfree. Your free Business Health Check needs no card at all. Prices are in INR; international customers are onboarded by our team." },
 ];
 
@@ -64,6 +80,63 @@ const STATS = [
   { to: 19, suffix: "", label: "statutory deadlines tracked" },
   { to: 1, suffix: "", label: "planned email a week — the rest only when something breaks" },
   { to: 3, suffix: " min", label: "from your first import to your first warning" },
+];
+
+/*
+  THREE STEPS — because the objection that loses this sale is not "I don't
+  believe you", it is "this looks like work".
+
+  An owner running a ₹4 crore distribution business has been sold software
+  before. What they remember is the implementation: the consultant, the column
+  mapping, the six weeks, the training, the thing they stopped using. Every
+  capability listed further down this page reads, to that person, as more of
+  that. So the effort has to be answered before the value, and it has to be
+  answered in a number they can hold: three.
+
+  EVERY LINE HERE IS A CLAIM ABOUT WORK THE USER DOES OR DOES NOT HAVE TO DO,
+  and each one is checkable:
+
+    no column mapping    lib/import-map.ts resolveHeaders() matches headers
+                         against alias lists; csv-import.tsx renders the result
+                         and offers no control to change it
+    finding on the same  lib/actions.ts awaits recomputeAndReport() and returns
+    screen               topWarning(insights) — see the guard in test-claims
+    approval by default  lib/collections DEFAULT_POLICY is enabled:false and
+                         auto_send:false; sendApproved() filters status
+                         'approved'
+    nothing daily        /api/cron/autopilot, 04:30 UTC, sweeps without the
+                         owner touching anything
+
+  The `did` field is deliberately phrased as what the OWNER does. "AI analyses
+  your data" is a sentence about the software; "you do nothing" is a sentence
+  about them, and it is the one being bought.
+*/
+const HOW = [
+  {
+    n: "01",
+    t: "Send it the file you already have",
+    d: "Export from Tally, Vyapar, Busy or your spreadsheet and drop the CSV in. Cortex reads your column names itself — there is no mapping screen, nothing to configure, nothing to type in again.",
+    you: "Two minutes. Or load a sample and skip even that.",
+    /* UI chrome, not business data — the words this screen genuinely prints.
+       No rupee figures: an invented number in a mockup is still an invented
+       number, which is why three testimonials and a "₹8.4L" line are gone from
+       this file. */
+    chip: ["invoices.csv", "Tally export recognised", "Matched 6 of 7 columns"],
+  },
+  {
+    n: "02",
+    t: "Read the one thing that matters",
+    d: "Before you go anywhere else, the same screen names the worst thing in what you just sent — which customer, how much, how late — and links straight to it.",
+    you: "You read one sentence.",
+    chip: ["The first thing to look at", "→ Open it"],
+  },
+  {
+    n: "03",
+    t: "Say yes",
+    d: "Cortex writes the chasing email in your business's name and shows it to you. You approve it, it sends, and it stops the moment that invoice is marked paid.",
+    you: "One click per message — and it is off until you turn it on.",
+    chip: ["Draft", "Approve", "Sent"],
+  },
 ];
 
 // Problem-specific: the day-to-day reality of running an SME, and how Cortex changes it.
@@ -225,11 +298,61 @@ const COMPARE: [string, string, string, string, string][] = [
 */
 const TESTI: { q: string; n: string }[] = [];
 
-const MOATS = [
-  { n: "01", name: "A memory that compounds", claim: "Every workspace builds its own permanent brain — decisions, numbers, context, preferences — that gets sharper every single day. A rival starting today starts from zero for each customer; your Cortex only deepens. The data moat is private, per-customer, and grows on its own." },
-  { n: "02", name: "One brain, not 128 point tools", claim: "Finance, sales, ops and 438 agents draw on the same memory and your live data, so answers stay consistent across the company. You can bolt a chatbot onto a dashboard — you can't retrofit a unified operating brain." },
-  { n: "03", name: "It acts, not just answers", claim: "Cortex reads your real bank statements and GST returns, drafts the reminder, PO or plan, and — with one approval — sends it. Advice is a commodity. A system that closes the loop across every function is not." },
-  { n: "04", name: "Vertical depth × the AI-search era", claim: "Tuned to 27 Indian industries and built to get you recommended when buyers ask an AI assistant. Generic tools can't match the depth, and latecomers can't catch a head start that compounds." },
+/*
+  THE OBJECTIONS, ANSWERED IN THE OWNER'S WORDS — this replaced "The moat".
+
+  That section ran four cards headed "Anyone can wrap an AI. This can't be
+  copied", arguing compounding data advantage, unified architecture and
+  defensibility against latecomers. Every word of it is aimed at somebody
+  deciding whether to INVEST in this company. An owner deciding whether to
+  spend ₹799 does not care whether we can be copied; a competitive moat is, if
+  anything, a reason to worry about lock-in.
+
+  The argument itself is good and is not lost — it lives in full on /investors
+  and in docs/positioning.md §4, which is where the reader it was written for
+  actually is.
+
+  What belongs in this slot on a page selling to a buyer is the thing standing
+  between them and signing up, and it is never "is this defensible". It is "how
+  much of my time is this going to eat, and what happens if it goes wrong".
+  Each answer below is a fact about the code, noted where it is not obvious.
+*/
+const OBJECTIONS = [
+  {
+    q: "Do I have to move off Tally?",
+    a: "No, and you shouldn't. Keep invoicing and filing exactly where you do it now. Cortex reads the export — it never asks to become your books, and nothing you do here changes them.",
+  },
+  {
+    q: "Do I have to learn something?",
+    a: "There is nothing to learn. Ask it a question in English or Hinglish the way you'd ask your accountant, and it looks up your actual rows to answer. If you can read the answer, you can use the product.",
+  },
+  {
+    /* The honest version. DEFAULT_POLICY is enabled:false, auto_send:false —
+       so the guarantee is real, and it is a default rather than a law. Saying
+       "never without you" flatly is what the collections screen used to do,
+       and the setting that contradicts it is one checkbox away. */
+    q: "Will it email my customers behind my back?",
+    a: "It can't, until you switch chasing on — it ships off. Once on, it writes each message and waits for you to approve it. There is a setting to let it send unattended, and it is yours to turn on, not ours.",
+  },
+  {
+    q: "My data is a mess. Will it cope?",
+    a: "It matches your column headings however you've spelled them, recognises Tally, Vyapar and Busy exports on sight, and tells you plainly which columns it couldn't find rather than quietly importing blanks.",
+  },
+  {
+    /*
+      A real, checkable offer, and a better one than the "free trial" this page
+      used to advertise and does not have (TRIAL_DAYS = 0). PAYWALL_ALLOW lets
+      an unpaid workspace reach /onboarding, /import, /receivables and
+      /dashboard, so importing your own file and seeing your own overdue list
+      genuinely costs nothing.
+    */
+    q: "Do I have to pay to find out if it works?",
+    a: "No. The 60-second health check needs no account at all. And after you sign up you can import your own file and see your own dashboard and overdue list before you buy anything — it's your numbers that should convince you, not ours.",
+  },
+  {
+    q: "What if I want out?",
+    a: "Export everything and delete the workspace whenever you like. Your accounting system is untouched, because it was never involved. There is nothing to migrate back.",
+  },
 ];
 
 const mark = (v: string) =>
@@ -282,13 +405,26 @@ export default function Home() {
             className="font-display display-1 tracking-tightest mt-6"
           />
           <div className="mt-6 grid lg:grid-cols-[1.3fr_1fr] gap-8 items-end">
+            {/*
+              SHORTENED, AND REORDERED AROUND EFFORT.
+
+              This ran four sentences and buried the only thing a first-time
+              reader needs: that using it means sending one file. The industry
+              list and the "keep your accounting software" line both survive
+              further down the page — in the playbooks section and in the
+              objections — where there is room for them. Above the fold, every
+              extra clause is a reader lost.
+
+              "Excel" removed on a point of fact: the importer accepts CSV and
+              says so in-product (csv-import.tsx). Telling somebody to send an
+              .xlsx and having it refused is the worst possible first minute.
+            */}
             <p className="text-lg lg:text-xl text-muted-foreground max-w-2xl">
-              Cortex reads your Tally, Vyapar or Excel exports and watches them every day. It tells you{" "}
+              Send it one export from Tally, Vyapar or your spreadsheet. From then on it watches your numbers
+              every day and tells you{" "}
               <span className="text-foreground font-medium">who hasn&rsquo;t paid</span>,{" "}
               <span className="text-foreground font-medium">what&rsquo;s due</span> and{" "}
-              <span className="text-foreground font-medium">what&rsquo;s about to run out</span> — then drafts the reminder and sends it when you approve.
-              {" "}Manufacturing, retail, D2C, services, distribution, clinics, construction: {INDUSTRIES.length} industries, one workspace.
-              Keep your accounting software. This is the part it was never built to do.
+              <span className="text-foreground font-medium">what&rsquo;s about to run out</span> — then writes the reminder and sends it the moment you say yes.
             </p>
             <div className="flex flex-wrap items-center gap-3 lg:justify-end">
               <Magnetic>
@@ -352,6 +488,74 @@ export default function Home() {
         <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-5 items-stretch">
           <Reveal><AskCortexDemo /></Reveal>
           <Reveal delay={120}><ProductPreview /></Reveal>
+        </div>
+      </section>
+
+      {/* ---------- THREE STEPS ----------
+        PLACED HERE ON PURPOSE, before the problem section and long before the
+        feature list.
+
+        The reader has just seen the hero and a live demo, and the next thought
+        is not "what else does it do" — it is "what would this cost me in time".
+        Everything below this point is easier to read once that is settled, and
+        the feature inventory further down actively damages the page if it is
+        the first answer they get.
+
+        See the note on HOW above for what each claim rests on.
+      */}
+      <section id="how" className="px-5 lg:px-10 py-20 lg:py-24 border-t">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="◆">How it works</SectionLabel>
+          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
+            Three steps.<br /><span className="text-primary">Then you stop doing anything.</span>
+          </h2>
+          <p className="mt-4 text-muted-foreground max-w-2xl leading-7">
+            No setup project. No consultant. No columns to map, no rules to write, no dashboard to build.
+            If you can email a file, you can run this.
+          </p>
+
+          <div className="mt-12 grid md:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden">
+            {HOW.map((s) => (
+              <div key={s.n} className="bg-card p-7 lg:p-8 flex flex-col">
+                <div className="font-display text-4xl tracking-tightest text-primary">{s.n}</div>
+                <div className="mt-4 font-display text-2xl tracking-tightest">{s.t}</div>
+                <p className="mt-3 text-sm text-muted-foreground leading-6 flex-1">{s.d}</p>
+
+                {/* The shape of the screen, not a claim about anyone's numbers.
+                    aria-hidden because it is decorative: the sentence above
+                    already carries the whole meaning for a screen reader. */}
+                <div className="mt-6 rounded-lg border bg-background p-3 flex flex-wrap gap-1.5" aria-hidden="true">
+                  {s.chip.map((c) => (
+                    <span key={c} className="rounded-md bg-secondary px-2 py-1 text-[11px] text-muted-foreground">{c}</span>
+                  ))}
+                </div>
+
+                <div className="mt-4 text-sm font-medium text-foreground">{s.you}</div>
+              </div>
+            ))}
+          </div>
+
+          {/*
+            THE FOURTH BEAT, and the one that actually sells it.
+
+            Three steps is the onboarding. What an owner is buying is the day
+            after: that this keeps happening without them. The cron is real
+            (vercel.json, 04:30 UTC) and the cadence is deliberately stated as
+            the SCHEDULED volume — one planned email a week — because the
+            alternative phrasing, "one email a week", is disprovable by the
+            customer's own inbox the first time something actually breaks.
+          */}
+          <div className="mt-10 rounded-2xl border bg-secondary/30 p-7 lg:p-9">
+            <div className="font-display text-2xl lg:text-4xl tracking-tightest max-w-3xl leading-[1.15]">
+              After that, the honest answer to &ldquo;what do I do every day?&rdquo; is{" "}
+              <span className="text-primary">nothing.</span>
+            </div>
+            <p className="mt-4 text-muted-foreground max-w-2xl leading-7">
+              Cortex re-reads your numbers overnight. One planned email a week — the three things worth your
+              attention — and beyond that it only writes to you when something has actually gone wrong.
+              You don&rsquo;t log in to keep it running. You log in because it told you to.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -582,18 +786,26 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------- THE MOAT ---------- */}
+      {/* ---------- THE OBJECTIONS ----------
+        Was "The moat" — four cards of defensibility argument written for an
+        investor and shown to a buyer. See the note on OBJECTIONS above; the
+        moat argument now lives on /investors, where its reader is.
+      */}
       <section className="px-5 lg:px-10 py-24 lg:py-32 border-t">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="◆">The moat</SectionLabel>
-          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Anyone can wrap an AI. <span className="text-primary">This can&rsquo;t be copied.</span></h2>
-          <p className="mt-4 text-muted-foreground max-w-2xl">The advantage compounds with every day you use it — and can&rsquo;t be bolted on after the fact.</p>
+          <SectionLabel n="◆">The bit you&rsquo;re worried about</SectionLabel>
+          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
+            You&rsquo;ve been sold software before.<br /><span className="text-primary">This one asks almost nothing of you.</span>
+          </h2>
+          <p className="mt-4 text-muted-foreground max-w-2xl leading-7">
+            The last thing you bought needed a consultant, six weeks and someone to keep feeding it. Here is
+            what this actually asks — including the parts we&rsquo;d rather not mention.
+          </p>
           <div className="mt-12 grid md:grid-cols-2 gap-px bg-border border rounded-2xl overflow-hidden">
-            {MOATS.map((m) => (
-              <div key={m.n} className="bg-card p-7 lg:p-8 hover:bg-accent/30 transition-colors">
-                <div className="font-display text-4xl tracking-tightest text-primary">{m.n}</div>
-                <div className="mt-3 font-semibold text-lg">{m.name}</div>
-                <p className="mt-2 text-sm text-muted-foreground leading-6">{m.claim}</p>
+            {OBJECTIONS.map((o) => (
+              <div key={o.q} className="bg-card p-7 lg:p-8 hover:bg-accent/30 transition-colors">
+                <div className="font-display text-xl lg:text-2xl tracking-tightest">{o.q}</div>
+                <p className="mt-3 text-sm text-muted-foreground leading-6">{o.a}</p>
               </div>
             ))}
           </div>
@@ -636,8 +848,24 @@ export default function Home() {
       <section id="features" className="px-5 lg:px-10 py-24 border-t">
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="04">Everything you get</SectionLabel>
-          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Not one AI trick.<br />An operating system for your business.</h2>
-          <p className="mt-4 text-muted-foreground max-w-2xl">128 modules, 438 agents and a permanent memory — organised into the jobs you actually need done. Here&rsquo;s the whole thing.</p>
+          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">You&rsquo;ll use five of these.<br />The rest are there when you need them.</h2>
+          {/*
+            LEADING WITH THE INVENTORY WAS THE MISTAKE — "128 modules, 438
+            agents and a permanent memory" answers "how much is there?", and
+            nobody scrolling a landing page is asking that. To a buyer already
+            worried this will be a project, a list of 128 things is a threat
+            rather than a reassurance: it reads as 128 things to learn.
+
+            The counts are true and stay, because breadth is a genuine reason
+            to believe the product will still be useful in a year. They are
+            just no longer the opening line, and the sentence now tells the
+            reader they are not expected to care about most of it.
+          */}
+          <p className="mt-4 text-muted-foreground max-w-2xl leading-7">
+            Nothing here needs setting up and nothing needs learning — they read the same numbers you already
+            sent. Most owners live in three or four screens and never open the rest. It&rsquo;s 128 modules and
+            438 agents, and that is a promise you won&rsquo;t outgrow it, not a to-do list.
+          </p>
 
           <div className="mt-14 space-y-14">
             {FEATURES.map((g) => (
@@ -710,7 +938,12 @@ export default function Home() {
       {/* ---------- THE LOOP ---------- */}
       <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="06">How it works</SectionLabel>
+          {/* Renamed off "How it works": the three-step section near the top of
+              the page now owns that question, and two sections answering it
+              differently is how a reader concludes there is more to set up than
+              they were told. This one is about what runs while they are not
+              looking, which is a different promise. */}
+          <SectionLabel n="06">While you&rsquo;re not looking</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 mb-14 max-w-3xl">It doesn&rsquo;t just report. It runs the loop.</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-px bg-border rounded-2xl overflow-hidden border">
             {LOOP.map((x, i) => (
@@ -812,8 +1045,11 @@ export default function Home() {
       {/* ---------- FINAL CTA ---------- */}
       <section className="px-5 lg:px-10 py-28 border-t text-center">
         <div className="max-w-3xl mx-auto">
-          <h2 className="font-display display-2 tracking-tightest">Give your business a brain.</h2>
-          <p className="mt-5 text-muted-foreground text-lg">Create your workspace in under a minute — no card. Connect your numbers, then add ₹149 of credits (or a plan) and ask Cortex how your business is really doing.</p>
+          {/* "Give your business a brain" describes the software. The last
+              thing a reader needs at the bottom of a long page is the smallest
+              possible next action, with the effort restated. */}
+          <h2 className="font-display display-2 tracking-tightest">Start with one file.</h2>
+          <p className="mt-5 text-muted-foreground text-lg">Create your workspace in under a minute — no card. Import an export you already have and see your own overdue list and dashboard before you pay for anything.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Magnetic>
               <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>

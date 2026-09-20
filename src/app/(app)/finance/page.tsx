@@ -103,7 +103,11 @@ export default async function Finance() {
             <ActionForm action={sendReminderAI} label="Email me my overdue list" />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            To actually chase these customers, open <Link href="/collections" className="text-primary underline">Collections</Link> — Cortex drafts each message and waits for you to approve it.
+            {/* "waits for you to approve it" is the default and not a
+                guarantee: Collections has a "Send without asking me" setting
+                that removes the wait. Stated as the default it is true; stated
+                flatly it is a safety promise with a hidden condition. */}
+            To actually chase these customers, open <Link href="/collections" className="text-primary underline">Collections</Link> — Cortex drafts each message and, by default, waits for you to approve it.
           </p>
         </Section>
 

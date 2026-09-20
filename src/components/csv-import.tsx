@@ -258,6 +258,37 @@ export function CsvImport({ initialTable }: { initialTable?: string } = {}) {
                 </Link>
               )}
             </div>
+          ) : result.analysed === false ? (
+            /*
+              THE ANALYSIS DID NOT RUN, and this branch exists because saying so
+              is the only honest option.
+
+              `warning: null` used to mean two different things — a clean file,
+              and a recompute that failed — and both rendered the reassurance
+              below: "No overdue receivables, no supplier past the 45-day mark,
+              nothing below reorder level."
+
+              Those are assertions about the owner's business, and when the
+              recompute had failed not one of them had been checked. The rows
+              were saved, so there was no error banner either. A misconfigured
+              service role therefore handed somebody a clean bill of health over
+              whatever was actually in the file — and the more broken the
+              install, the more reassuring the screen.
+
+              actions.ts now carries `analysed` through from
+              recomputeAndReport's `ok`. Claiming nothing is wrong is the one
+              thing this screen must not do when it does not know.
+            */
+            <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
+              <div className="font-medium">Your rows are saved. Cortex could not analyse them just now.</div>
+              <p className="text-muted-foreground mt-1">
+                Nothing was lost — the import worked. The figures are recalculated again automatically, and the
+                dashboard will explain what went wrong if it is still failing.
+              </p>
+              <Link href="/dashboard" className={`${buttonVariants({ size: "sm", variant: "outline" })} mt-3`}>
+                Open Business Health <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+            </div>
           ) : (
             /*
               Nothing to warn about is a real outcome and is said as one. The
