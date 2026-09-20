@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PricingClient } from "@/components/pricing-client";
+import { RoiCalculator } from "@/components/roi-calculator";
 import { SmoothScroll, Cursor, Kinetic, SectionLabel } from "@/components/loco";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
 import { getUserAndOrg } from "@/lib/data";
@@ -42,6 +43,24 @@ export default async function Pricing() {
       </section>
 
       <section className="px-5 lg:px-10 pb-16"><PricingClient signedIn={Boolean(orgId)} /></section>
+
+      {/*
+        THE ROI CALCULATOR, MOVED OFF THE HOMEPAGE.
+
+        It sat at position seventeen of eighteen there, which is to say almost
+        nobody ever reached it. It belongs here instead: a reader on the pricing
+        page is already doing the sum in their head, and this is the tool that
+        finishes it. Same component, a far better place for it.
+      */}
+      <section className="px-5 lg:px-10 pb-20">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="02">The math</SectionLabel>
+          <h2 className="font-display display-3 tracking-tightest mt-5 mb-8 max-w-2xl">
+            Work out what it saves you before you pay for it.
+          </h2>
+          <RoiCalculator />
+        </div>
+      </section>
 
       <section className="px-5 lg:px-10 pb-24 text-center text-sm text-muted-foreground">
         MNB Cortex is a product of <span className="text-foreground font-medium">Abrobot Technologies</span> — payments and card

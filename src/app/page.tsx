@@ -1,12 +1,8 @@
 import Link from "next/link";
-import {
-  ArrowUpRight, ArrowRight, LayoutDashboard, Landmark, ReceiptText, CalendarClock, Database, Gauge,
-  MessageSquare, Telescope, LineChart, Brain, FileBarChart, Calculator,
-  Megaphone, Sparkles, Bot, Workflow, Radio, Cpu,
-  Radar, KanbanSquare, UserMinus, BadgeIndianRupee, Target, Gem,
-  BrainCircuit, Receipt, Banknote, ScrollText, Plug, ShieldCheck,
-} from "lucide-react";
-import { RoiCalculator } from "@/components/roi-calculator";
+/* Two icons, down from thirty-two. The other thirty went to /features with the
+   grid that used them — worth noticing as a proxy for how much of this page
+   was inventory rather than argument. */
+import { ArrowUpRight, ArrowRight } from "lucide-react";
 import { Reveal, CountUp, RotatingWord } from "@/components/landing-extras";
 import { SmoothScroll, Cursor, Kinetic, SectionLabel, Marquee, Magnetic, Faq } from "@/components/loco";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
@@ -134,7 +130,8 @@ const HOW = [
     n: "03",
     t: "Say yes",
     d: "Cortex writes the chasing email in your business's name and shows it to you. You approve it, it sends, and it stops the moment that invoice is marked paid.",
-    you: "One click per message — and it is off until you turn it on.",
+    /* Kept to one line at card width so the three chip rows sit level. */
+    you: "One click — and it ships switched off.",
     chip: ["Draft", "Approve", "Sent"],
   },
 ];
@@ -156,128 +153,11 @@ const OLD_NEW = [
   { old: "Every tool shows you a different version of the truth.", now: "One workspace reads all of it together — orders, invoices, stock, ledger — and answers from your own rows." },
 ];
 
-// The whole platform, grouped by the job it does for you.
-const FEATURES: { label: string; items: { icon: any; name: string; d: string }[] }[] = [
-  {
-    label: "Understand your business",
-    items: [
-      { icon: LayoutDashboard, name: "Business Health Dashboard", d: "Every KPI on one page, with a live Cortex Score." },
-      { icon: Landmark, name: "Bank Statement Intelligence", d: "Upload a statement → real cashflow, trends, recurring spend, runway." },
-      { icon: ReceiptText, name: "GST Return Reader", d: "Turnover, tax split, ITC utilisation & net payable in seconds." },
-      { icon: CalendarClock, name: "13-week Cash Flow", d: "Rolling runway you can model, seeded from your ledger." },
-      { icon: Database, name: "Import & Data Explorer", d: "CSV or a shared Google Sheet — then query it all." },
-      { icon: Gauge, name: "Benchmarks & Risk Radar", d: "See where you stand and what threatens you." },
-    ],
-  },
-  {
-    label: "Think & decide",
-    items: [
-      { icon: MessageSquare, name: "Ask Cortex", d: "Ask about your own rows — it looks them up, in English or Hinglish." },
-      { icon: Telescope, name: "Cortex Deep Dive", d: "Diagnose → decide → draft the first action, in three passes." },
-      { icon: LineChart, name: "Forecasting & Scenarios", d: "90-day forecast with interactive what-ifs." },
-      { icon: Brain, name: "Strategy Consultant", d: "SWOT, growth levers and a prioritised plan." },
-      { icon: FileBarChart, name: "Executive Reports", d: "Board-ready reviews you can print or save as PDF." },
-      { icon: Calculator, name: "28 Business Calculators", d: "Margins, GST, payroll, valuation, ratios & more." },
-    ],
-  },
-  {
-    label: "Act & automate",
-    items: [
-      { icon: Megaphone, name: "AI Outreach", d: "Drafts reminders & follow-ups; you approve, it sends." },
-      { icon: Sparkles, name: "Marketing Studio", d: "Full campaign kits — copy, posts and emails in one click." },
-      { icon: Bot, name: "438 AI Agents", d: "A 7-department AI workforce across 27 Indian industries." },
-      { icon: Workflow, name: "Workflows & Approvals", d: "Automate the busywork with a human in the loop." },
-      { icon: Radio, name: "WhatsApp Broadcast", d: "Personalised messages, ready for you to send." },
-      /*
-        "briefs you each morning" is true today and becomes false as this
-        succeeds: the nightly sweep analyses ANALYSIS_CAP = 20 workspaces,
-        rotated, so at 100 paying workspaces "daily" is every fifth day. The
-        cron already computes nights_for_full_cycle and nothing acts on it.
-        Worded so it stays true either way; the rotation is the honest
-        mechanism and is worth saying out loud.
-      */
-      { icon: Cpu, name: "AI Autopilot", d: "Runs a nightly sweep and writes up what changed." },
-    ],
-  },
-  {
-    label: "Grow & get found",
-    items: [
-      { icon: Radar, name: "AI Visibility (AEO)", d: "See whether Gemini recommends you — and fix it." },
-      { icon: KanbanSquare, name: "Pipeline + Lead Scoring", d: "A scored pipeline that tells you who to chase." },
-      { icon: UserMinus, name: "Churn Predictor", d: "Spot at-risk customers before they leave." },
-      { icon: BadgeIndianRupee, name: "Pricing Optimizer", d: "Find the price your market will bear." },
-      { icon: Target, name: "Sales Targets & Funnel", d: "Plan targets and fix the leaky funnel." },
-      { icon: Gem, name: "LTV & Segments", d: "Know your best customers and their lifetime value." },
-    ],
-  },
-  {
-    label: "Remember & run the back office",
-    items: [
-      { icon: BrainCircuit, name: "Cortex Memory", d: "A permanent second brain that sharpens every answer." },
-      { icon: Receipt, name: "GST & Compliance", d: "Filing calendar, ITC set-off and GST invoicing." },
-      { icon: Banknote, name: "Payroll & CTC", d: "Take-home, EPF/ESI, gratuity and appraisals." },
-      { icon: ScrollText, name: "Contract Review", d: "AI reads a contract and flags the real risks." },
-      { icon: Plug, name: "Public API + 4 live syncs", d: "Shopify, Razorpay, Stripe, Sheets — plus Tally & Vyapar file imports." },
-      { icon: ShieldCheck, name: "Security & RLS", d: "Row-level isolation, encryption, export anytime." },
-    ],
-  },
-];
 
-const CAPS = [
-  { n: "01", name: "Cortex Workforce", blurb: "A 7-department AI org chart — 326 runnable text agents." },
-  { n: "02", name: "Cortex Memory", blurb: "A permanent second brain that grounds every answer." },
-  { n: "03", name: "Finance & Money", blurb: "Dashboards, cash flow, GST, payroll, ratios." },
-  { n: "04", name: "Strategy & Advisory", blurb: "Ask Cortex, forecasts, board decks, playbooks." },
-  { n: "05", name: "Sales & Growth", blurb: "Pipeline, lead scoring, churn, pricing, LTV." },
-  { n: "06", name: "People & Operations", blurb: "Hiring, capacity, reorder, SOPs, approvals." },
-  { n: "07", name: "Legal & Compliance", blurb: "GST, contracts, compliance calendar, documents." },
-  { n: "08", name: "Communications", blurb: "Email, WhatsApp, daily brief, meeting notes." },
-  { n: "09", name: "Automation", blurb: "Autopilot, scheduled reports, API & webhooks." },
-  /* Four sync (lib/sync CONNECTORS). "Tally, Zoho, Razorpay, Shopify" named two
-     that do and two that do not, in one breath, which is the whole problem. */
-  { n: "10", name: "Integrations", blurb: "Shopify, Razorpay, Stripe & Sheets sync. Tally and Vyapar by file." },
-];
 
-const LOOP = [
-  /* Not "in real time": one daily cron (vercel.json), a 200-workspace sweep.
-     The product's own positioning says "watched daily" and is right. */
-  { k: "Monitors", d: "Reads sales, finance, inventory, production & HR, every day." },
-  { k: "Predicts", d: "Forecasts stockouts, churn and cash crunches before they hit." },
-  { k: "Recommends", d: "Boardroom-grade advice, grounded in your live numbers." },
-  { k: "Remembers", d: "A permanent memory that sharpens every answer over time." },
-  { k: "Executes", d: "Drafts POs, invoices, reminders, emails and reports for you." },
-];
 
-/*
-  EIGHT, NOT FOUR — and the last one is a channel, not a vertical.
 
-  The old list was four generic buckets ending in "Founders & CXOs", which is
-  not an industry and tells a distributor nothing. The playbooks above already
-  name which businesses feel each problem most; this section should agree with
-  them. A clinic has receivables and a statutory calendar and no reorder point;
-  a distributor has all three. Saying so is more convincing than saying
-  "any business".
-*/
-const AUDIENCE = [
-  { t: "Manufacturers", d: "Receivables, the MSME clock on supplier bills, stock cover and margin per line." },
-  { t: "D2C & retail", d: "Reorder before the shelf empties, who is drifting away, and what discounting is costing." },
-  { t: "Distribution & wholesale", d: "Ageing debtors across hundreds of accounts, ranked by who to call first." },
-  { t: "Services & agencies", d: "Project profitability, the invoices nobody chased, and the Monday plan." },
-  { t: "Clinics & healthcare", d: "Collections without awkward phone calls, and every statutory date that applies." },
-  { t: "Construction & contracting", d: "Retention and running bills that age quietly, plus the 45-day MSME exposure." },
-  { t: "SaaS & subscriptions", d: "Churn signals, renewals, and revenue that leaks a month before you notice." },
-  { t: "CA & consulting firms", d: "One console across every client workspace, ranked by who needs you this week. A firm is a channel to its clients, not a different product." },
-];
 
-const COMPARE: [string, string, string, string, string][] = [
-  ["Reads all your business data", "y", "~", "~", "n"],
-  ["Diagnoses problems", "y", "n", "n", "~"],
-  ["Predicts outcomes", "y", "n", "n", "n"],
-  ["Recommends actions", "y", "n", "n", "~"],
-  ["Executes tasks for you", "y", "n", "n", "n"],
-  ["Remembers your business", "y", "~", "~", "n"],
-  ["Plain-language answers", "y", "n", "n", "y"],
-];
 
 /*
   EMPTY, DELIBERATELY.
@@ -355,17 +235,6 @@ const OBJECTIONS = [
   },
 ];
 
-const mark = (v: string) =>
-  /*
-    A glyph with no text alternative is nothing to a screen reader — this table
-    is the competitive-positioning grid a procurement reviewer lands on, and it
-    read as rows of empty cells. The sr-only word carries the meaning; the glyph
-    stays for everyone else. The ○ also moves off /40 opacity, which measured
-    2.02:1. WCAG 1.1.1, 1.4.1.
-  */
-  v === "y" ? <span className="text-primary"><span className="sr-only">Yes</span><span aria-hidden="true">●</span></span>
-    : v === "~" ? <span className="text-warning"><span className="sr-only">Partly</span><span aria-hidden="true">◐</span></span>
-    : <span className="text-muted-foreground"><span className="sr-only">No</span><span aria-hidden="true">○</span></span>;
 
 export default function Home() {
   return (
@@ -374,120 +243,114 @@ export default function Home() {
       <Cursor />
       <PublicHeader />
 
-      {/* ---------- HERO ---------- */}
-      <section className="relative px-5 lg:px-10 pt-32 lg:pt-44 pb-20 overflow-hidden">
+      {/* ---------- HERO ----------
+        CENTRED, AND DOWN TO FOUR ELEMENTS.
+
+        The old hero had eight: an eyebrow, a two-line headline, a paragraph, two
+        buttons, a rotating phrase, a link and a three-item badge row, arranged
+        left-aligned in a two-column grid. Every one of them was defensible on
+        its own and together they gave the eye nowhere to land. A first screen
+        has one job — say what this is and offer one thing to do about it — and
+        eight competing elements is how a reader ends up doing none of them.
+
+        What is left: what it is, one sentence, one action. The rotating phrase
+        and the trust badges were not deleted, they moved below the fold where
+        they are read rather than skimmed past.
+
+        Centred because it is a stronger, simpler composition for a short
+        headline, and because the product screenshot underneath then sits
+        symmetrically beneath it instead of fighting a left-aligned column.
+      */}
+      <section className="relative px-5 lg:px-10 pt-32 lg:pt-40 pb-16 overflow-hidden noise">
         <div className="grid-bg absolute inset-0" aria-hidden />
         <div className="aurora opacity-60" aria-hidden />
-        <div className="relative z-10 max-w-7xl mx-auto">
-          {/*
-            REPOSITIONED.
+        {/* The horizon. A perspective floor behind the fold gives the page a
+            depth cue that a flat gradient cannot, and it is masked to nothing
+            long before it reaches any text. */}
+        <div className="deck absolute inset-x-0 bottom-0 h-72 opacity-70" aria-hidden />
 
-            The old hero said "the AI operating brain for your business" over
-            "Your business now has a brain of its own". Both describe what the
-            software IS, and neither says what it DOES for the reader — so a
-            jeweller or a printer reads it, understands nothing concrete, and
-            leaves. "Cortex" made it worse: it names a role the owner already
-            occupies, and it is a category nobody searches for.
-
-            The position now is the one thing the incumbents structurally do not
-            do. Tally, Zoho and Vyapar record what happened. None of them warn
-            you. That is a real gap, it is what this product actually does after
-            the alerting and 43B(h) work, and it lets Cortex sit ON TOP of the
-            books rather than asking anyone to switch.
-          */}
-          <div className="eyebrow flex items-center gap-3">
+        <div className="relative z-10 max-w-5xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2.5 rounded-full glass px-4 py-1.5 text-xs font-medium text-muted-foreground">
             <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-            The early-warning system for Indian businesses — by MNB Research
+            The early-warning system for Indian businesses
           </div>
+
           <Kinetic
             as="h1"
             text={"Your books tell you what happened.\nCortex tells you what's about to."}
-            className="font-display display-1 tracking-tightest mt-6"
+            className="font-display display-hero tracking-tightest mt-7 text-balance"
           />
-          <div className="mt-6 grid lg:grid-cols-[1.3fr_1fr] gap-8 items-end">
-            {/*
-              SHORTENED, AND REORDERED AROUND EFFORT.
 
-              This ran four sentences and buried the only thing a first-time
-              reader needs: that using it means sending one file. The industry
-              list and the "keep your accounting software" line both survive
-              further down the page — in the playbooks section and in the
-              objections — where there is room for them. Above the fold, every
-              extra clause is a reader lost.
+          <p className="mt-7 text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto leading-8">
+            Send it one export from Tally, Vyapar or your spreadsheet. It watches your numbers every day and
+            tells you <span className="text-foreground font-medium">who hasn&rsquo;t paid</span>,{" "}
+            <span className="text-foreground font-medium">what&rsquo;s due</span> and{" "}
+            <span className="text-foreground font-medium">what&rsquo;s about to run out</span>.
+          </p>
 
-              "Excel" removed on a point of fact: the importer accepts CSV and
-              says so in-product (csv-import.tsx). Telling somebody to send an
-              .xlsx and having it refused is the worst possible first minute.
-            */}
-            <p className="text-lg lg:text-xl text-muted-foreground max-w-2xl">
-              Send it one export from Tally, Vyapar or your spreadsheet. From then on it watches your numbers
-              every day and tells you{" "}
-              <span className="text-foreground font-medium">who hasn&rsquo;t paid</span>,{" "}
-              <span className="text-foreground font-medium">what&rsquo;s due</span> and{" "}
-              <span className="text-foreground font-medium">what&rsquo;s about to run out</span> — then writes the reminder and sends it the moment you say yes.
-            </p>
-            <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-              <Magnetic>
-                <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>
-                  Get started <ArrowUpRight className="h-4 w-4" />
-                </Link>
-              </Magnetic>
-              <Link href="/dashboard" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">
-                View live demo <ArrowRight className="h-4 w-4" />
+          {/* Full-bleed on a phone, side by side from sm up. A centred pill
+              button at 200px wide on a 390px screen is a small target floating
+              in a lot of nothing, and this is the only thing the hero asks for. */}
+          <div className="mt-9 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center sm:justify-center gap-3">
+            <Magnetic>
+              <Link href="/login" className="flex sm:inline-flex items-center justify-center gap-2 rounded-full btn-ink px-7 h-12 text-sm font-medium" data-cursor>
+                Start with one file <ArrowUpRight className="h-4 w-4" />
               </Link>
-            </div>
+            </Magnetic>
+            <Link href="/health-check" className="flex sm:inline-flex items-center justify-center gap-2 rounded-full border px-7 h-12 text-sm font-medium hover:bg-accent transition-colors">
+              Free 60-second check <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
 
-          <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            {/*
-              WAS: "This week it caught ₹8.4L of deductions at risk." — present
-              tense, above the fold, with a rupee figure, from a hardcoded array.
-
-              There is no data source behind it. No aggregation query, no
-              telemetry, nothing that could produce or substantiate that number.
-              It is a specific claim about results the product has delivered,
-              and it was invented.
-
-              That is the same category as the testimonials deleted forty lines
-              below, for the same reasons given there — an unsubstantiated
-              performance claim is an unfair trade practice under the Consumer
-              Protection Act 2019, and ASCI requires substantiation on demand.
-              It survived the pass that removed them because it reads like
-              copy rather than like a testimonial.
-
-              What replaces it says what Cortex LOOKS FOR, which is checkable
-              against the code: 43B(h) exposure (lib/msme.ts), overdue
-              receivables (lib/receivables), the statutory calendar
-              (lib/statutory.ts), and reorder cover (lib/reorder). Same four
-              items, same rotating device, no claim about outcomes we have not
-              measured.
-
-              If we ever want the original sentence back, it needs a real query
-              behind it over real workspaces, and the figure has to move.
-            */}
-            <span>It watches for <RotatingWord words={["deductions at risk under 43B(h).", "invoices past their due date.", "the next statutory deadline.", "stock about to run out."]} /></span>
-            <Link href="/health-check" className="inline-flex items-center gap-1.5 text-foreground font-medium link-sweep">Take the free 60-second health check <ArrowUpRight className="h-4 w-4" /></Link>
-          </div>
-
-          <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-2 text-xs text-muted-foreground">
-            <span>★ Shark Tank India featured</span>
-            <span>◆ DPIIT-recognised startup</span>
-            {/*
-              WAS "10,000+ businesses served", against MNB Research's own published
-              figure of 50+ in config.ts — a 200x overstatement shipping in the same
-              repo as the number it contradicts. Replaced with something true and
-              checkable, which is also the only kind of proof worth putting here.
-            */}
-            <span>◇ Built for Indian SMEs · GST, TDS and 43B(h) native</span>
-          </div>
+          <p className="mt-5 text-sm text-muted-foreground">No card. Keep your accounting software.</p>
         </div>
       </section>
 
-      {/* ---------- LIVE DEMO + PRODUCT PREVIEW ---------- */}
-      <section className="px-5 lg:px-10 pb-16 -mt-4">
+      {/* ---------- SEE IT WORK ----------
+        The one screen where the product itself is the argument, so it gets the
+        whole width and nothing next to it competing for attention. */}
+      <section className="relative px-5 lg:px-10 pb-20">
+        {/*
+          min-w-0 ON THE GRID CHILDREN, because without it this section was
+          431px wide inside a 390px phone.
+
+          A CSS grid item defaults to `min-width: auto`, which means it refuses
+          to shrink below the widest thing inside it — here the chat bubbles and
+          the fake input row of the demo card. The track therefore grew past the
+          viewport, `overflow-x-hidden` on <main> silently clipped the right
+          edge, and the first thing a phone visitor saw was a product screenshot
+          with its side cut off. Invisible on a laptop, which is why it survived.
+        */}
         <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-5 items-stretch">
-          <Reveal><AskCortexDemo /></Reveal>
-          <Reveal delay={120}><ProductPreview /></Reveal>
+          <Reveal className="min-w-0"><AskCortexDemo /></Reveal>
+          <Reveal delay={120} className="min-w-0"><ProductPreview /></Reveal>
+        </div>
+
+        {/*
+          The rotating watch-list and the credentials, moved down out of the
+          hero. Same content, read properly instead of skimmed.
+
+          The rotating phrase replaced "This week it caught ₹8.4L of deductions
+          at risk" — present tense, a rupee figure, above the fold, and entirely
+          invented: no query, no telemetry, nothing that could substantiate it.
+          An unsubstantiated performance claim is an unfair trade practice under
+          the Consumer Protection Act 2019 and ASCI requires substantiation on
+          demand. What is here instead says what Cortex LOOKS FOR, each item
+          checkable against code: lib/msme.ts, lib/receivables, lib/statutory.ts
+          and lib/reorder.
+        */}
+        <div className="max-w-6xl mx-auto mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-muted-foreground text-center">
+          <span>It watches for <RotatingWord words={["deductions at risk under 43B(h).", "invoices past their due date.", "the next statutory deadline.", "stock about to run out."]} /></span>
+        </div>
+        <div className="max-w-6xl mx-auto mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs text-muted-foreground">
+          <span>★ Shark Tank India featured</span>
+          <span>◆ DPIIT-recognised startup</span>
+          {/*
+            WAS "10,000+ businesses served", against MNB Research's own published
+            figure of 50+ in config.ts — a 200x overstatement shipping in the same
+            repo as the number it contradicts.
+          */}
+          <span>◇ Built for Indian SMEs · GST, TDS and 43B(h) native</span>
         </div>
       </section>
 
@@ -503,9 +366,10 @@ export default function Home() {
 
         See the note on HOW above for what each claim rests on.
       */}
-      <section id="how" className="px-5 lg:px-10 py-20 lg:py-24 border-t">
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      <section id="how" className="px-5 lg:px-10 py-20 lg:py-24">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="◆">How it works</SectionLabel>
+          <SectionLabel n="01">How it works</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             Three steps.<br /><span className="text-primary">Then you stop doing anything.</span>
           </h2>
@@ -514,7 +378,7 @@ export default function Home() {
             If you can email a file, you can run this.
           </p>
 
-          <div className="mt-12 grid md:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden">
+          <div className="mt-12 grid md:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden hairline">
             {HOW.map((s) => (
               <div key={s.n} className="bg-card p-7 lg:p-8 flex flex-col">
                 <div className="font-display text-4xl tracking-tightest text-primary">{s.n}</div>
@@ -580,10 +444,10 @@ export default function Home() {
       {/* ---------- THE PROBLEM ---------- */}
       <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="01">The problem</SectionLabel>
+          <SectionLabel n="02">The problem</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Running an SME shouldn&rsquo;t mean flying blind.</h2>
           <p className="mt-4 text-muted-foreground max-w-2xl">You&rsquo;re the CEO, CFO, head of sales and firefighter — all at once. Cortex takes the analysis and the busywork off your plate.</p>
-          <div className="mt-12 grid md:grid-cols-2 gap-px bg-border border rounded-2xl overflow-hidden">
+          <div className="mt-12 grid md:grid-cols-2 gap-px bg-border border rounded-2xl overflow-hidden hairline">
             {OLD_NEW.map((r, i) => (
               <div key={i} className="contents">
                 <div className="bg-card p-6 flex gap-3">
@@ -625,10 +489,11 @@ export default function Home() {
         specific weak areas attached, so the first call can open on their actual
         problem instead of a pitch.
       */}
-      <section id="health-check" className="px-5 lg:px-10 py-24 lg:py-28 border-t bg-secondary/20">
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      <section id="health-check" className="px-5 lg:px-10 py-24 lg:py-28 bg-secondary/20">
         <div className="max-w-7xl mx-auto grid lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-16 items-start">
           <div>
-            <SectionLabel n="02">Free · 60 seconds</SectionLabel>
+            <SectionLabel n="03">Free · 60 seconds</SectionLabel>
             <h2 className="font-display display-3 tracking-tightest mt-6 leading-[1.1]">
               How healthy is <span className="text-primary">your</span> business, really?
             </h2>
@@ -670,9 +535,13 @@ export default function Home() {
       </section>
 
       {/* ---------- STATEMENT ---------- */}
-      <section className="px-5 lg:px-10 pb-24 lg:pb-32 border-t pt-24 lg:pt-32">
-        <div className="max-w-7xl mx-auto">
-          <SectionLabel n="03">What it is</SectionLabel>
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      {/* The one section that is pure statement — so it gets the sheen, and it
+          is the only thing on the page that does. Ambient motion works by being
+          scarce; two of these and neither is special. */}
+      <section className="relative px-5 lg:px-10 pb-24 lg:pb-32 pt-24 lg:pt-32 sheen">
+        <div className="relative z-10 max-w-7xl mx-auto">
+          <SectionLabel n="04">What it is</SectionLabel>
           <Reveal>
             {/*
               THE POSITION, IN ONE PARAGRAPH. See docs/positioning.md §1.
@@ -710,9 +579,10 @@ export default function Home() {
         one points at a module that does not exist — because a "templates"
         section written by hand is exactly where invented features come back.
       */}
-      <section id="playbooks" className="px-5 lg:px-10 py-24 lg:py-32 border-t">
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      <section id="playbooks" className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="◆">Playbooks</SectionLabel>
+          <SectionLabel n="05">Playbooks</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             You don&rsquo;t configure it.<br />The playbooks are <span className="text-primary">already running.</span>
           </h2>
@@ -721,7 +591,7 @@ export default function Home() {
             Indian businesses money, with the action attached. No rules to write, no dashboard to build.
           </p>
 
-          <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden">
+          <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden hairline">
             {PLAYBOOKS.map((p) => (
               <div key={p.id} className="bg-card p-6 lg:p-7 hover:bg-accent/30 transition-colors flex flex-col">
                 <div className="font-display text-xl lg:text-2xl tracking-tightest">{p.name}</div>
@@ -755,7 +625,7 @@ export default function Home() {
             everything else depends on. So the rules decide, the model reads
             and writes, and the product acts. See lib/playbooks.ts.
           */}
-          <div className="mt-12 grid md:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden">
+          <div className="mt-12 grid md:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden hairline">
             {[
               { k: "Rules decide", d: "The 45-day MSME window, the statutory calendar, ageing, reorder points — arithmetic over your own rows, in tested code. Not a prompt, because a wrong tax date is worse than no product." },
               { k: "The model reads and writes", d: "It looks up your actual invoices and orders, explains what it found in plain English or Hinglish, and drafts the message you were going to have to write." },
@@ -791,9 +661,10 @@ export default function Home() {
         investor and shown to a buyer. See the note on OBJECTIONS above; the
         moat argument now lives on /investors, where its reader is.
       */}
-      <section className="px-5 lg:px-10 py-24 lg:py-32 border-t">
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="◆">The bit you&rsquo;re worried about</SectionLabel>
+          <SectionLabel n="06">The bit you&rsquo;re worried about</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             You&rsquo;ve been sold software before.<br /><span className="text-primary">This one asks almost nothing of you.</span>
           </h2>
@@ -801,7 +672,7 @@ export default function Home() {
             The last thing you bought needed a consultant, six weeks and someone to keep feeding it. Here is
             what this actually asks — including the parts we&rsquo;d rather not mention.
           </p>
-          <div className="mt-12 grid md:grid-cols-2 gap-px bg-border border rounded-2xl overflow-hidden">
+          <div className="mt-12 grid md:grid-cols-2 gap-px bg-border border rounded-2xl overflow-hidden hairline">
             {OBJECTIONS.map((o) => (
               <div key={o.q} className="bg-card p-7 lg:p-8 hover:bg-accent/30 transition-colors">
                 <div className="font-display text-xl lg:text-2xl tracking-tightest">{o.q}</div>
@@ -814,7 +685,7 @@ export default function Home() {
 
       {/* ---------- PROOF ---------- */}
       <section className="px-5 lg:px-10 pb-8">
-        <div className="max-w-7xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border border rounded-2xl overflow-hidden">
+        <div className="max-w-7xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border border rounded-2xl overflow-hidden hairline">
           {[
             { k: "Built by", v: "MNB Research", d: "India's business growth & consultancy specialists" },
             { k: "Featured on", v: "Shark Tank India", d: "and 160+ press outlets, 60M+ reach" },
@@ -844,181 +715,34 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------- EVERYTHING YOU GET (full feature showcase) ---------- */}
-      <section id="features" className="px-5 lg:px-10 py-24 border-t">
-        <div className="max-w-7xl mx-auto">
-          <SectionLabel n="04">Everything you get</SectionLabel>
-          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">You&rsquo;ll use five of these.<br />The rest are there when you need them.</h2>
-          {/*
-            LEADING WITH THE INVENTORY WAS THE MISTAKE — "128 modules, 438
-            agents and a permanent memory" answers "how much is there?", and
-            nobody scrolling a landing page is asking that. To a buyer already
-            worried this will be a project, a list of 128 things is a threat
-            rather than a reassurance: it reads as 128 things to learn.
+      {/* ---------- WHAT MOVED, AND WHY ----------
+        Six sections used to sit here: a thirty-card feature grid, a ten-row
+        capability list, the five-step loop, an eight-card audience grid, a
+        seven-row comparison table and the ROI calculator. Together they were
+        more than half the page, and they were positions twelve through
+        seventeen of eighteen — which is to say nobody read them.
 
-            The counts are true and stay, because breadth is a genuine reason
-            to believe the product will still be useful in a year. They are
-            just no longer the opening line, and the sentence now tells the
-            reader they are not expected to care about most of it.
-          */}
-          <p className="mt-4 text-muted-foreground max-w-2xl leading-7">
-            Nothing here needs setting up and nothing needs learning — they read the same numbers you already
-            sent. Most owners live in three or four screens and never open the rest. It&rsquo;s 128 modules and
-            438 agents, and that is a promise you won&rsquo;t outgrow it, not a to-do list.
-          </p>
+        They are not gone. The feature grid, the audience grid and the
+        comparison table are on /features. The loop and the ten domains were
+        ALREADY on /features, duplicated here. The ROI calculator moved to
+        /pricing, where a reader is actually weighing the money.
 
-          <div className="mt-14 space-y-14">
-            {FEATURES.map((g) => (
-              <div key={g.label}>
-                <h3 className="font-display text-xl lg:text-2xl tracking-tightest mb-5 flex items-center gap-3"><span className="h-px w-8 bg-primary" />{g.label}</h3>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden">
-                  {g.items.map((f) => {
-                    const Icon = f.icon;
-                    return (
-                      <div key={f.name} className="bg-card p-6 hover:bg-accent/40 transition-colors">
-                        <div className="h-10 w-10 rounded-xl bg-primary/10 grid place-items-center"><Icon className="h-5 w-5 text-primary" /></div>
-                        <div className="mt-3 font-semibold">{f.name}</div>
-                        <p className="text-sm text-muted-foreground mt-1.5">{f.d}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-10 flex flex-wrap gap-4">
-            <Link href="/features" className="inline-flex items-center gap-1.5 text-sm font-medium link-sweep">See the full feature list <ArrowUpRight className="h-4 w-4" /></Link>
-            {/*
-              "Try it free" was false. TRIAL_DAYS is 0 and TRIAL_CREDITS is 0 —
-              a new workspace is `expired` with nothing to spend from its first
-              second, so there is no free trial to try. The header carried the
-              same wording once and it was removed for exactly this reason; this
-              one and two others survived that pass.
-
-              Point at the thing that genuinely IS free instead. The health
-              check needs no card and no account, which is a better offer than
-              a trial we do not have.
-            */}
-            <Link href="/health-check" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary link-sweep">Start with the free health check <ArrowUpRight className="h-4 w-4" /></Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------- CAPABILITIES (hover-reveal list) ---------- */}
-      <section id="capabilities" className="px-5 lg:px-10 py-20 border-t">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-wrap items-end justify-between gap-6 mb-12">
-            <div>
-              <SectionLabel n="05">Ten domains, one login</SectionLabel>
-              <h2 className="font-display display-2 tracking-tightest mt-5 max-w-2xl">One login.<br />Your whole company.</h2>
-            </div>
-            <div className="max-w-sm">
-              <p className="text-muted-foreground">Every domain is grounded in a permanent memory of your business, and built for Indian SMEs.</p>
-              <Link href="/features" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium link-sweep">See the full feature list <ArrowUpRight className="h-4 w-4" /></Link>
-            </div>
-          </div>
-
-          <div>
-            {CAPS.map((c) => (
-              <Link key={c.n} href="/login" className="reveal-row block" data-cursor>
-                <span className="fill" aria-hidden />
-                <div className="row-inner flex items-baseline gap-4 lg:gap-8 py-6 lg:py-8">
-                  <span className="row-meta text-sm tabular-nums text-muted-foreground w-8 shrink-0">{c.n}</span>
-                  <span className="font-display text-3xl lg:text-6xl tracking-tightest flex-1 min-w-0">{c.name}</span>
-                  <span className="row-meta hidden md:block text-sm text-muted-foreground max-w-xs text-right">{c.blurb}</span>
-                  <ArrowUpRight className="row-arrow h-6 w-6 lg:h-8 lg:w-8 shrink-0" />
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ---------- THE LOOP ---------- */}
-      <section className="px-5 lg:px-10 py-24 lg:py-32">
-        <div className="max-w-7xl mx-auto">
-          {/* Renamed off "How it works": the three-step section near the top of
-              the page now owns that question, and two sections answering it
-              differently is how a reader concludes there is more to set up than
-              they were told. This one is about what runs while they are not
-              looking, which is a different promise. */}
-          <SectionLabel n="06">While you&rsquo;re not looking</SectionLabel>
-          <h2 className="font-display display-2 tracking-tightest mt-5 mb-14 max-w-3xl">It doesn&rsquo;t just report. It runs the loop.</h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-px bg-border rounded-2xl overflow-hidden border">
-            {LOOP.map((x, i) => (
-              <Reveal key={x.k} delay={i * 70} className="bg-card">
-                <div className="p-6 h-full hover:bg-accent/40 transition-colors">
-                  <div className="font-display text-4xl tracking-tightest text-primary">{String(i + 1).padStart(2, "0")}</div>
-                  <div className="mt-4 font-semibold text-lg">{x.k}</div>
-                  <p className="mt-2 text-sm text-muted-foreground">{x.d}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ---------- AUDIENCE ---------- */}
-      <section className="px-5 lg:px-10 pb-24">
-        <div className="max-w-7xl mx-auto">
-          <SectionLabel n="07">Who it&rsquo;s for</SectionLabel>
-          <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border border rounded-2xl overflow-hidden">
-            {AUDIENCE.map((a) => (
-              <div key={a.t} className="bg-card p-7 hover:bg-accent/40 transition-colors">
-                <div className="font-display text-2xl tracking-tightest">{a.t}</div>
-                <p className="text-sm text-muted-foreground mt-3">{a.d}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ---------- COMPARISON ---------- */}
-      <section className="px-5 lg:px-10 py-24 border-t">
-        <div className="max-w-5xl mx-auto">
-          <SectionLabel n="08">Why not an ERP, CRM or ChatGPT?</SectionLabel>
-          <h2 className="font-display display-3 tracking-tightest mt-5 mb-10 max-w-2xl">Those store or chat. Cortex acts on your data.</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left font-normal text-muted-foreground py-4"></th>
-                  <th className="py-4 px-3 font-semibold text-primary">Cortex</th>
-                  <th className="py-4 px-3 font-normal text-muted-foreground">ERP</th>
-                  <th className="py-4 px-3 font-normal text-muted-foreground">CRM</th>
-                  <th className="py-4 px-3 font-normal text-muted-foreground">ChatGPT</th>
-                </tr>
-              </thead>
-              <tbody>
-                {COMPARE.map((r) => (
-                  <tr key={r[0]} className="border-b border-border/60">
-                    <td className="py-4 pr-3 font-medium">{r[0]}</td>
-                    {r.slice(1).map((cell, j) => <td key={j} className="py-4 px-3 text-center text-lg">{mark(cell)}</td>)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------- ROI ---------- */}
-      <section className="px-5 lg:px-10 py-24">
-        <div className="max-w-7xl mx-auto">
-          <SectionLabel n="09">The math</SectionLabel>
-          <div className="mt-8"><Reveal><RoiCalculator /></Reveal></div>
-        </div>
-      </section>
-
+        The argument for cutting is not brevity for its own sake. A landing
+        page is read in one pass by somebody deciding whether to care, and
+        every section after the point they have decided is a section that can
+        only lose them. Depth belongs one click away, on the page whose job is
+        depth, read by someone who went looking for it.
+      */}
       {/* ---------- TESTIMONIALS ----------
            Hidden until there are real ones. Without this guard, emptying TESTI
            leaves a bare "In the field" heading over nothing, which looks more
            broken than having no section at all. */}
       {TESTI.length > 0 && (
-      <section className="px-5 lg:px-10 py-24 border-t">
+      <>
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      <section className="px-5 lg:px-10 py-24">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="10">In the field</SectionLabel>
+          <SectionLabel n="◆">In the field</SectionLabel>
           <div className="mt-12 grid md:grid-cols-3 gap-10">
             {TESTI.map((t, i) => (
               <Reveal key={i} delay={i * 90}>
@@ -1031,19 +755,22 @@ export default function Home() {
           </div>
         </div>
       </section>
+      </>
       )}
 
       {/* ---------- FAQ ---------- */}
-      <section className="px-5 lg:px-10 py-24 border-t">
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      <section className="px-5 lg:px-10 py-24">
         <div className="max-w-3xl mx-auto">
-          <SectionLabel n="11">Questions</SectionLabel>
+          <SectionLabel n="07">Questions</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">Good to know.</h2>
           <Faq items={FAQS} />
         </div>
       </section>
 
       {/* ---------- FINAL CTA ---------- */}
-      <section className="px-5 lg:px-10 py-28 border-t text-center">
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      <section className="px-5 lg:px-10 py-28 text-center">
         <div className="max-w-3xl mx-auto">
           {/* "Give your business a brain" describes the software. The last
               thing a reader needs at the bottom of a long page is the smallest

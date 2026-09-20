@@ -298,6 +298,13 @@ button:active:not(:disabled), [role="button"]:active { transform: scale(.985); }
    ============================================================ */
 .font-display { font-family: var(--font-sans); letter-spacing: -0.035em; font-weight: 800; line-height: 0.92; }
 .display-1 { font-size: clamp(2.9rem, 10vw, 9rem); }
+/* The centred landing hero, which needs a different size from display-1 for a
+   geometric reason rather than a stylistic one: display-1 tops out at 9rem and
+   was drawn left-aligned across a 1280px column, where a 34-character line has
+   room to run. Centred in a narrower column it breaks into four ragged lines
+   and the composition collapses. This caps lower so the headline sets in two
+   or three balanced lines at every width. */
+.display-hero { font-size: clamp(2.4rem, 5.6vw, 4.25rem); }
 .display-2 { font-size: clamp(2.2rem, 6.2vw, 5.25rem); }
 .display-3 { font-size: clamp(1.7rem, 4vw, 3.1rem); }
 .tracking-tightest { letter-spacing: -0.04em; }
@@ -345,10 +352,104 @@ button:active:not(:disabled), [role="button"]:active { transform: scale(.985); }
 /* Fine hairline divider */
 .rule { height: 1px; background: hsl(var(--border)); }
 
+/* ============================================================
+   DEPTH LAYER — what makes a flat dark page read as a surface
+   ============================================================
+
+   A dark UI cannot lean on drop shadows the way a light one can (the contrast
+   suite's own opening note), so everything below builds depth out of EDGES and
+   TEXTURE instead. Five primitives, each doing one job, all purely decorative:
+   no token is changed here, so the measured contrast of every piece of text on
+   the site is exactly what it was.
+
+   All of them are switched off under prefers-reduced-motion where they move,
+   and none of them carries meaning — a reader who gets none of this still gets
+   the whole page.
+*/
+
+/* 1. GRAIN. The single highest-value thing on this list.
+   Large soft gradients on a dark background band into visible stripes on an
+   8-bit panel, which is what makes a gradient look cheap. A little noise
+   dithers the steps away, and the same texture is why film looks expensive and
+   an untextured render does not. feTurbulence inline, so it costs one paint
+   and no network request. */
+.noise::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  opacity: .035; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.dark .noise::after { opacity: .05; }
+
+/* 2. HAIRLINE. A one-pixel top edge that is bright in the middle and gone at
+   the corners — a surface catching a light source above it. A flat 1px border
+   states "there is a box here"; this states "there is a plane here", which is
+   the whole difference between a card and a screen. */
+.hairline { position: relative; }
+.hairline::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary) / .55), transparent);
+}
+
+/* 3. GLASS. Translucent, blurred, with its own hairline. Used sparingly — on
+   the one element per screen that should feel like it is floating in front of
+   everything else, because if two things float, neither does. */
+.glass {
+  background: hsl(var(--card) / .55);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid hsl(var(--border) / .8);
+}
+.dark .glass { background: hsl(var(--card) / .45); }
+/* Safari on iOS and any engine without backdrop-filter gets an opaque card
+   rather than unreadable text over a gradient. Progressive, not decorative. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass { background: hsl(var(--card)); }
+}
+
+/* 4. SHEEN. One slow pass of light across a surface, on a long loop.
+   18 seconds is deliberate: fast enough to be caught out of the corner of the
+   eye once, slow enough that nobody reading a paragraph is ever distracted by
+   it. This is the entire "futuristic" motion budget for the page. */
+.sheen { position: relative; overflow: hidden; }
+.sheen::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 40%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, hsl(var(--primary) / .07), transparent);
+  animation: sheen-pass 18s cubic-bezier(.6,0,.4,1) infinite;
+}
+@keyframes sheen-pass {
+  0%, 62% { transform: translateX(-160%); }
+  100%    { transform: translateX(360%); }
+}
+
+/* 5. RULE-GLOW. Replaces `border-t` between sections. A hard full-bleed line
+   chops a page into unrelated slabs; a line that fades at both ends reads as
+   one continuous surface with structure on it. Sections stop looking stacked
+   and start looking composed. */
+.rule-glow {
+  height: 1px; border: 0; margin: 0;
+  background: linear-gradient(90deg, transparent, hsl(var(--border)) 18%, hsl(var(--primary) / .32) 50%, hsl(var(--border)) 82%, transparent);
+}
+
+/* Perspective floor — a horizon under the hero. Masked to nothing well before
+   it reaches the text, so it never competes with the headline. */
+.deck {
+  background-image:
+    linear-gradient(hsl(var(--primary) / .10) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--primary) / .10) 1px, transparent 1px);
+  background-size: 54px 54px;
+  transform: perspective(520px) rotateX(62deg);
+  transform-origin: bottom center;
+  -webkit-mask-image: linear-gradient(to top, #000, transparent 72%);
+  mask-image: linear-gradient(to top, #000, transparent 72%);
+}
+
 @media (hover: none) { .loco-cursor { display: none !important; } }
 
 @media (prefers-reduced-motion: reduce) {
   .gradient-text, .aurora::before, .aurora::after, .marquee, .marquee-rev, .animate-float { animation: none !important; }
+  /* The sheen is the one piece of ambient motion on the landing page. Somebody
+     who has asked the OS for less movement is asking for exactly this. */
+  .sheen::after { animation: none !important; opacity: 0; }
   .page-stagger > *, .rise-in { animation: none !important; }
   .skeleton::after { animation: none !important; }
   .hover-lift { transition: none; }
