@@ -85,7 +85,14 @@ const MOATS = [
 const WHY_NOW = [
   {
     k: "A statutory clock that did not exist two years ago",
-    d: "Since FY 2024-25, payment to an MSME-registered supplier beyond the statutory window is disallowed as a deduction until it is actually paid. Supplier-payment hygiene stopped being a cash-flow preference and became a tax event with a date — an inherently computational problem, and a recurring, government-created reason to look.",
+    /* FY 2023-24, not FY 2024-25. Section 43B(h) was inserted by the Finance
+       Act 2023 and applies from AY 2024-25 — and an assessment year is the year
+       AFTER the financial year it assesses. Writing the AY as though it were
+       the FY is the single most common way to be wrong about this section by
+       exactly twelve months, and it was wrong here on the investor page while
+       the engine (lib/msme.ts) had it right. The one reader guaranteed to check
+       a tax claim is the one this page is written for. */
+    d: "Since FY 2023-24, payment to an MSME-registered supplier beyond the statutory window is disallowed as a deduction until it is actually paid. Supplier-payment hygiene stopped being a cash-flow preference and became a tax event with a date — an inherently computational problem, and a recurring, government-created reason to look.",
   },
   {
     k: "SME data became machine-readable",

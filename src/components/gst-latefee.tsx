@@ -29,8 +29,22 @@ import { inr } from "@/lib/utils";
  * and the split is shown separately.
  */
 
-/** Rendered on screen. Every number here moves by notification, not by statute. */
-const RATES_AS_OF = "CBIC notification 20/2021, current to September 2026";
+/*
+  Rendered on screen. Every number here moves by notification, not by statute.
+
+  "current to September 2026" WAS AN EXPIRY DATE, and it was eight days out
+  when this was noticed. A stamp shaped like "current to <month>" promises
+  something nobody is scheduled to renew, so the day it lapses the screen
+  starts asserting its own staleness — and reads as neglected even while the
+  numbers are still right.
+
+  What replaces it says WHEN IT WAS LAST CHECKED, which is a fact that never
+  expires, plus the notification it came from so anyone can re-verify. A
+  verification date ageing is information; a validity claim lapsing is a
+  broken promise. scripts/test-statutory.mjs now fails if this stamp drifts
+  more than 18 months behind the clock.
+*/
+const RATES_AS_OF = "CBIC notification 20/2021 · last verified September 2026";
 
 const TURNOVER_BANDS = [
   { label: "Up to ₹1.5 crore", cap: 2_000 },

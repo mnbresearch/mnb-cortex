@@ -133,7 +133,7 @@ export default function Refund() {
         <li><strong>Response time:</strong> within 2 business days</li>
       </UL>
 
-      <P>© 2026 Abrobot Technologies Pvt Ltd. All rights reserved. Delhi, India.</P>
+      <P>© {new Date().getFullYear()} Abrobot Technologies Pvt Ltd. All rights reserved. Delhi, India.</P>
     </LegalShell>
   );
 }

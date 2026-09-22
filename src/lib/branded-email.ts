@@ -4,6 +4,16 @@ import { signDestination } from "@/lib/track-link";
 /* ============================================================
    BRANDING — edit this block only. Everything else is generic.
    ============================================================ */
+/*
+  THE COPYRIGHT YEAR IS DERIVED, not typed.
+
+  Six places said "© 2026" as a literal while the web footer
+  (components/public-chrome.tsx) correctly used `new Date().getFullYear()`.
+  Every one of them goes wrong on 1 January and nothing would have caught it —
+  a stale copyright line is the cheapest possible signal that a product is
+  unmaintained, and it is sent to the customer's inbox rather than sitting on a
+  page nobody visits.
+*/
 export const BRAND = {
   PRODUCT_NAME: "MNB Cortex",
   SENDER_DISPLAY: "MNB Cortex by MNB Research",
@@ -18,7 +28,7 @@ export const BRAND = {
   BADGES: ["Shark Tank India Featured", "DPIIT-Recognised Startup", "10,000+ Businesses Served"],
   COLOR_FROM: "#1f4a3b",
   COLOR_TO: "#2f6b54",
-  DISCLAIMER: "MNB Cortex is the AI operating brain for your business. © 2026 Abrobot Technologies Private Limited. All rights reserved.",
+  DISCLAIMER: `MNB Cortex is the AI operating brain for your business. © ${new Date().getFullYear()} Abrobot Technologies Private Limited. All rights reserved.`,
 };
 
 /** The RFC-5322 From value: "MNB Cortex by MNB Research <hello@updates.mnbresearch.com>". */

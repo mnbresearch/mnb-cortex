@@ -22,6 +22,9 @@ import { PLANS } from "@/lib/config";
 
 const UPI_AUTOPAY_MAX = 15_000;
 
+/** Outer expiry of the Cashfree mandate, not the billing period. See below. */
+const MANDATE_YEARS = 5;
+
 export function hasSubscriptions(): boolean {
   return Boolean(envKey("CASHFREE_APP_ID") && envKey("CASHFREE_SECRET_KEY"));
 }
@@ -110,7 +113,19 @@ export async function createSubscription(opts: {
       authorisation_amount_refund: true,
     },
     subscription_meta: { return_url: opts.returnUrl },
-    subscription_expiry_time: new Date(Date.now() + (opts.annual ? 5 : 5) * 365 * 86_400_000).toISOString(),
+    /*
+      `(opts.annual ? 5 : 5)` — both branches were 5, so the ternary decided
+      nothing. Left as-is it reads like an unfinished edit and invites the next
+      reader to "fix" it by guessing what the two numbers were meant to be.
+
+      Five years is right for BOTH cycles and that is the point: this is the
+      mandate's outer expiry, not the billing period. Cashfree stops charging
+      when the subscription is cancelled, not when this date arrives — it only
+      needs to be far enough out that an active subscriber is never cut off by
+      it. A monthly plan has no more reason to expire in one year than an
+      annual one.
+    */
+    subscription_expiry_time: new Date(Date.now() + MANDATE_YEARS * 365 * 86_400_000).toISOString(),
     subscription_note: `plan:${plan.id}:${opts.annual ? "annual" : "monthly"}:${opts.orgId}`,
   };
 

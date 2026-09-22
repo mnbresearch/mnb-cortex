@@ -4,6 +4,22 @@ import { envKey } from "@/lib/env";
 // Cashfree Payment Gateway (PG) — Orders API v2023-08-01.
 // Set CASHFREE_APP_ID, CASHFREE_SECRET_KEY, and optionally CASHFREE_ENV=sandbox.
 
+/**
+ * Cashfree Orders API version — exported so the health probe cannot drift.
+ *
+ * This was "2023-08-01" here and, separately, "2023-08-01" typed again in
+ * lib/health.ts. Two literals that must agree and nothing making them agree:
+ * the moment one is bumped, /api/health starts validating credentials against
+ * a version the money path does not use, and reports "operational" for a
+ * configuration that cannot take a payment.
+ *
+ * Note that lib/pay/subscription.ts deliberately uses a DIFFERENT, newer
+ * version (2025-01-01) — Cashfree versions its Subscriptions API separately
+ * and the older one does not expose the mandate fields that path needs. That
+ * divergence is intentional; this one was not.
+ */
+export const CASHFREE_ORDERS_API_VERSION = "2023-08-01";
+
 export function hasCashfree(): boolean {
   return Boolean(envKey("CASHFREE_APP_ID") && envKey("CASHFREE_SECRET_KEY"));
 }
@@ -16,7 +32,7 @@ function headers() {
     "Content-Type": "application/json",
     "x-client-id": process.env.CASHFREE_APP_ID || "",
     "x-client-secret": process.env.CASHFREE_SECRET_KEY || "",
-    "x-api-version": "2023-08-01",
+    "x-api-version": CASHFREE_ORDERS_API_VERSION,
   };
 }
 

@@ -52,8 +52,34 @@ function readPage(rel) {
 }
 
 /* ========================================================================= */
-console.log("\nTDS — rates and thresholds, FY 2025-26");
+/*
+  THE VINTAGE CHECK IS NOW DERIVED, because the hardcoded one became the bug.
+
+  This block used to assert /RATES_AS_OF = "...2025-26..."/ — a literal year.
+  On 1 April 2026 that stamp went stale, and the test did not notice. Worse: it
+  actively PINNED the staleness, because updating the calculator to FY 2026-27
+  would have failed the suite. The regression harness had become the thing
+  holding the defect in place, which is the most expensive way for a test to be
+  wrong — it converts a silent problem into a discouraged fix.
+
+  So the expected financial year is computed from the clock. Indian FY runs
+  April to March, so before April we are still in the FY that began last
+  calendar year. When the year rolls, this fails on its own and names the year
+  it wants. A tax tool that cannot tell you its own vintage is worse than one
+  with no vintage at all, because the stamp is what stops anyone checking.
+*/
 /* ========================================================================= */
+function currentIndianFY(now = new Date()) {
+  /* IST, because a deploy at 23:00 UTC on 31 March is already 1 April in
+     Delhi and this file is about Indian statute. */
+  const ist = new Date(now.getTime() + (5 * 60 + 30) * 60_000);
+  const y = ist.getUTCFullYear();
+  const startYear = ist.getUTCMonth() >= 3 ? y : y - 1; // month 3 === April
+  return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+const FY = currentIndianFY();
+
+console.log(`\nTDS — rates and thresholds, FY ${FY}`);
 {
   const src = read("tds-calc.tsx");
   const sections = Object.fromEntries(
@@ -88,11 +114,31 @@ console.log("\nTDS — rates and thresholds, FY 2025-26");
   check("the UI warns that crossing it applies TDS retrospectively",
     /once you have paid this vendor/.test(src) && /including the payments you did not deduct on/.test(src));
 
-  console.log("\n  The vintage must be on the screen");
-  check("an effective date is declared", /RATES_AS_OF\s*=\s*"[^"]*2025-26[^"]*"/.test(src));
+  console.log("\n  The vintage must be on the screen, and must be THIS year");
+  const stamp = src.match(/RATES_AS_OF\s*=\s*"([^"]*)"/);
+  check("an effective date is declared", Boolean(stamp));
+  check(`...and it is the current financial year (${FY})`,
+    Boolean(stamp) && stamp[1].includes(FY));
+  if (stamp && !stamp[1].includes(FY)) {
+    console.log(`        the calculator says "${stamp[1]}" — check whether the Finance Act`);
+    console.log(`        for FY ${FY} moved any rate or threshold, then re-stamp it`);
+  }
   check("...and rendered to the user, not just left in a comment",
     /Rates current for \{RATES_AS_OF\}/.test(src));
   check("the old 'FY-agnostic typical rates' claim is gone", !/FY-agnostic/.test(src));
+
+  /*
+    The 194-series labels are now section numbers from a REPEALED Act. Keeping
+    them is the right call — every CA and every vendor invoice in India still
+    says "194J" — but only if the screen says where they went, because a
+    deductor who quotes 194J on a FY 2026-27 return has quoted the wrong Act.
+  */
+  console.log("\n  The Income-tax Act 2025 renumbering is disclosed");
+  check("the s.393 consolidation is stated", /\b393\b/.test(src));
+  check("...and rendered, not just commented",
+    /\{ACT_NOTE\}/.test(src) && /export const ACT_NOTE/.test(src));
+  check("...and says the payment code changed, not the rate",
+    /payment\s*\n?\s*code|payment code/.test(src) && /unchanged/.test(src));
 
   console.log("\n  No-PAN handling");
   check("section 206AA floors the rate at 20%", /Math\.max\(s\.rate,\s*20\)/.test(src));
@@ -255,5 +301,61 @@ console.log("\nGST rate slabs — GST 2.0, effective 22 September 2025");
 }
 
 console.log("");
+/* ========================================================================= */
+/*  VERIFICATION STAMPS MUST NOT ROT SILENTLY                                */
+/* ========================================================================= */
+/*
+  Every statutory table in this product carries a date saying when a human last
+  checked it against the source. That is the right pattern — but a date nobody
+  re-reads is a date that ages into a lie, and the TDS table proved it by
+  sitting six months out with a confident "Rates current for FY 2025-26" on
+  screen.
+
+  So the stamps are now checked by the clock. Eighteen months is chosen
+  deliberately: long enough that a table untouched through one Finance Act does
+  not cry wolf, short enough that nothing survives two. When this fails the fix
+  is to RE-VERIFY against the source and move the date — not to move the date.
+
+  It also bans the "current to <month>" shape outright. That is a validity
+  claim with an expiry, and the day it passes the screen starts advertising its
+  own staleness. "Last verified <month>" is a fact that only ever ages.
+*/
+{
+  console.log("\n  Verification stamps are still fresh");
+  const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+  const files = [
+    "src/components/tds-calc.tsx", "src/components/gst-latefee.tsx",
+    "src/components/gst-calc.tsx", "src/lib/tax-slabs.ts", "src/lib/gst-rates.ts",
+  ];
+  const now = new Date();
+  let stamps = 0;
+  for (const rel of files) {
+    let src;
+    try { src = readFileSync(new URL(`../${rel}`, import.meta.url), "utf8"); } catch { continue; }
+
+    /*
+      Comments are stripped before this one. The first run of this guard failed
+      on gst-latefee.tsx because the comment ABOVE the fix quotes the phrase it
+      removed, which is exactly the note a future reader needs. A guard that
+      punishes you for explaining the defect you fixed teaches people to delete
+      the explanation.
+    */
+    const live = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    check(`${rel}: makes no "current to <month>" validity claim`,
+      !/current to\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(live),
+      "a claim that expires on a date nobody is scheduled to renew");
+
+    for (const m of src.matchAll(/(?:last verified|verified against[^\n]*?\bon)\s+(?:\d{1,2}\s+)?([A-Za-z]+)\s+(20\d\d)/gi)) {
+      const mi = MONTHS.indexOf(m[1].toLowerCase());
+      if (mi < 0) continue;
+      stamps++;
+      const age = (now.getFullYear() - Number(m[2])) * 12 + (now.getMonth() - mi);
+      check(`${rel}: "${m[1]} ${m[2]}" is under 18 months old (${age}m)`, age <= 18,
+        "re-verify against the source, then move the date — do not just move the date");
+    }
+  }
+  check(`several verification stamps were found and checked (${stamps})`, stamps >= 2);
+}
+
 if (fail) { console.log(`${fail} FAILED, ${pass} passed\n`); process.exit(1); }
 console.log(`all ${pass} passed\n`);

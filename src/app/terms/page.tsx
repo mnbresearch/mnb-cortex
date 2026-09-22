@@ -282,7 +282,7 @@ export default function Terms() {
         <li><strong>Email:</strong> <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a></li>
         <li><strong>WhatsApp &amp; Phone:</strong> <a href="https://wa.me/919711488480" className="text-primary underline">+91 97114 88480</a></li>
       </UL>
-      <P>© 2026 Abrobot Technologies Pvt Ltd. All rights reserved. Delhi, India. Last updated September 2026.</P>
+      <P>© {new Date().getFullYear()} Abrobot Technologies Pvt Ltd. All rights reserved. Delhi, India. Last updated September 2026.</P>
     </LegalShell>
   );
 }

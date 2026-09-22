@@ -112,7 +112,7 @@ export function renderWeeklyHtml(firstName: string, bullets: Bullet[], unsub: st
       WhatsApp/Phone: +91 97114 88481<br />
       You're receiving this because you have an account with ${APP_NAME}.
       <a href="${unsub}" style="color:#12315c">Unsubscribe</a> at any time.<br />
-      © 2026 Abrobot Technologies. All rights reserved.
+      © ${new Date().getFullYear()} Abrobot Technologies. All rights reserved.
     </p>
   </td></tr>
 </table></td></tr></table></body></html>`;
@@ -132,7 +132,7 @@ export function renderWeeklyText(firstName: string, bullets: Bullet[], unsub: st
     "Email: contact@mnbresearch.com · WhatsApp/Phone: +91 97114 88481",
     `You're receiving this because you have an account with ${APP_NAME}.`,
     `Unsubscribe: ${unsub}`,
-    "© 2026 Abrobot Technologies. All rights reserved.",
+    `© ${new Date().getFullYear()} Abrobot Technologies. All rights reserved.`,
   ].join("\n");
 }
 

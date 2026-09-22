@@ -43,7 +43,7 @@ SME feels them:
 
 1. **Receivables.** The money is earned, invoiced and not collected. The owner
    finds out when they need the cash.
-2. **Section 43B(h).** Since FY 2024-25, a payment to an MSME-registered
+2. **Section 43B(h).** Since FY 2023-24, a payment to an MSME-registered
    supplier that goes past the statutory window is disallowed as a deduction
    until it is actually paid. Slow payables stopped being a cash-flow
    preference and became a tax event.

@@ -55,7 +55,7 @@ function renderHtml(firstName: string, plan: Priority[], unsub: string): string 
       <strong>MNB Cortex</strong> is a product of <strong>MNB Research</strong>, operated by <strong>Abrobot Technologies</strong>, Delhi, India.<br/>
       Email: <a href="mailto:contact@mnbresearch.com" style="color:#12315c">contact@mnbresearch.com</a> · WhatsApp/Phone: +91 97114 88481<br/>
       You're receiving this because you have an MNB Cortex workspace. <a href="${unsub}" style="color:#12315c">Unsubscribe</a> at any time.<br/>
-      © 2026 Abrobot Technologies. All rights reserved.
+      © ${new Date().getFullYear()} Abrobot Technologies. All rights reserved.
     </p>
   </td></tr>
 </table></td></tr></table></body></html>`;

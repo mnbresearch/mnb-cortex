@@ -41,7 +41,43 @@ type Section = {
   current, and nothing prompted anyone to check. RATES_AS_OF is now shown to the
   user, so the vintage is a fact on the screen rather than an assumption.
 */
-export const RATES_AS_OF = "FY 2025-26 (Finance Act 2025)";
+/*
+  FY 2026-27, AND THE ACT UNDERNEATH THESE NUMBERS CHANGED.
+
+  From 1 April 2026 the Income-tax Act, 2025 replaces the 1961 Act. Every
+  non-salary TDS provision — the whole 194-series — is consolidated into a
+  single section 393 (salary is 392, TCS is 394). Verified against
+  cleartax.in/s/section-393-of-income-tax-act and taxguru.in on 22 Sep 2026.
+
+  WHAT DID NOT CHANGE: the rates and the thresholds. Every figure in the table
+  below is carried forward unaltered, which is why this is a re-stamp rather
+  than a repricing — and why it would have been easy to leave alone.
+
+  WHAT DID CHANGE, and why leaving the stamp at "FY 2025-26" was not cosmetic:
+  the section numbers and the challan/return payment codes. A deductor filing
+  in FY 2026-27 who quotes 194J because this screen told them to has quoted a
+  section of a repealed Act. The amount withheld is right; the return is wrong.
+
+  The familiar 194-series labels are KEPT, because that is what every CA,
+  vendor invoice and accounting package in India still says out loud, and
+  renaming them to bare "393" would make the tool unrecognisable. The mapping
+  is stated instead, once, on the screen — see the note rendered below.
+
+  The specific per-row sub-clause of s.393 is deliberately NOT invented here.
+  Table 1 of s.393 has its own row numbering and this repository does not
+  publish a statutory identifier it has not verified row by row. Telling
+  somebody "check your code before filing" is useful; telling them "393(2)(b)"
+  when it might be 393(2)(c) is the kind of confident wrongness a tax tool
+  cannot afford.
+*/
+export const RATES_AS_OF = "FY 2026-27 (Income-tax Act, 2025)";
+
+/** Where the 194-series went. Rendered to the user, not just documented. */
+export const ACT_NOTE =
+  "From 1 April 2026 these sit under section 393 of the Income-tax Act, 2025 — "
+  + "the rates and thresholds are unchanged, but the section number and the payment "
+  + "code you quote when depositing TDS or filing the return have changed. Confirm "
+  + "the new code before you file.";
 
 const SECTIONS: Section[] = [
   { code: "194C", label: "Contractor / sub-contractor (company)", rate: 2, threshold: 30000, annual: 100000 },
@@ -112,6 +148,11 @@ export function TdsCalc() {
           Indicative, for resident payees. Surcharge/cess, lower-deduction certificates and special cases change the effective rate,
           and these limits move with each Finance Act — confirm with your CA before filing.
         </p>
+        {/* The section renumbering is a filing-time fact, not a footnote: the
+            amount on this screen is right and the section code beside it is
+            from a repealed Act. Given its own block so it is not lost in the
+            general disclaimer above. */}
+        <p className="text-xs text-warning mt-2">{ACT_NOTE}</p>
       </Card>
     </div>
   );

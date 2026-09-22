@@ -4,6 +4,7 @@ import { encryptSecret, decryptSecret, maskSecret, encryptionAvailable } from "@
 import { integrationById, planAllows, limitForPlan } from "@/lib/integrations";
 import { safeFetch, BlockedUrlError } from "@/lib/net-guard";
 import { statusFor, statusForAttempt, lastTestOk, shouldPersistResult } from "@/lib/integration-status";
+import { SHOPIFY_API_VERSION } from "@/lib/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,7 +86,11 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
         a check, `shop = "169.254.169.254"` makes this a proxy to the cloud
         metadata endpoint, and the returned status is an oracle either way.
       */
-      case "shopify": return j(await safeFetch(`https://${c.shop}/admin/api/2024-01/shop.json`, { headers: { "X-Shopify-Access-Token": c.api_key } }), "Connected to Shopify");
+      /* Imported rather than re-typed: this probe and the sync MUST test the
+         same API version, or "Connected to Shopify" can pass against a version
+         the sync does not use. Both were independently pinned to 2024-01, which
+         Shopify stopped serving in early 2025. */
+      case "shopify": return j(await safeFetch(`https://${c.shop}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, { headers: { "X-Shopify-Access-Token": c.api_key } }), "Connected to Shopify");
       case "razorpay": {
         const auth = Buffer.from(`${c.key_id}:${c.key_secret}`).toString("base64");
         return j(await fetch("https://api.razorpay.com/v1/payments?count=1", { headers: { Authorization: `Basic ${auth}` } }), "Connected to Razorpay");

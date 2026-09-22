@@ -16,6 +16,7 @@ import { coverageVerdict, parseCoverage, COVERAGE_KEY } from "@/lib/cron-coverag
 import { encryptionAvailable } from "@/lib/crypto";
 import { geminiTextModels, geminiImageModels, geminiUrl } from "@/lib/ai/models";
 import { veoModels } from "@/lib/ai/video";
+import { CASHFREE_ORDERS_API_VERSION } from "@/lib/pay/cashfree";
 
 
 /**
@@ -489,7 +490,10 @@ async function checkPayments(): Promise<Check> {
   // Fetching a non-existent order proves auth without creating anything:
   // 404 means the credentials were accepted, 401 means they weren't.
   const r = await ping(`${base}/orders/healthcheck_probe_${Date.now()}`, {
-    headers: { "x-client-id": id, "x-client-secret": secret, "x-api-version": "2023-08-01" },
+    /* Imported, not re-typed: a health probe that tests a different API
+       version from the one the orders path uses is a probe that can pass
+       while payments are broken. */
+    headers: { "x-client-id": id, "x-client-secret": secret, "x-api-version": CASHFREE_ORDERS_API_VERSION },
   });
   if (r.status === 401 || r.status === 403) return { name: "Payments", status: "down", detail: "Cashfree rejected the credentials", critical: true };
   if (r.status === 0) return { name: "Payments", status: "degraded", detail: r.error, critical: true };

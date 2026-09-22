@@ -6,6 +6,31 @@ import type { Budget } from "@/lib/cron-budget";
 import { safeFetch } from "@/lib/net-guard";
 
 /**
+ * Shopify Admin API version — ONE constant, because it was two.
+ *
+ * It was pinned at `2024-01` in this file and again, separately, in
+ * api/integrations/route.ts. Shopify supports each version for a minimum of 12
+ * months and releases quarterly, so `2024-01` stopped being accessible in early
+ * 2025 — around 20 months before this was noticed. As of September 2026 the
+ * oldest version Shopify still serves is 2025-10.
+ *
+ * That is the worst kind of integration rot: not a loud failure, but a version
+ * the provider may silently coerce, deprecate fields on, or reject outright,
+ * with the "Connected to Shopify" health probe pinned to the same dead version
+ * and therefore agreeing with the broken sync.
+ *
+ * 2026-07 is the current stable release (accessible to 16 July 2027). Pinning
+ * rather than tracking `latest` is deliberate — an API version that changes
+ * under you without a deploy is how a working sync breaks overnight — but a
+ * pin needs a renewal date, so: REVIEW BEFORE JULY 2027.
+ *
+ * Note also that Shopify is steering integrations from the REST Admin API to
+ * GraphQL. This code still uses REST (`orders.json`), which works today and is
+ * a larger migration than a version bump.
+ */
+export const SHOPIFY_API_VERSION = "2026-07";
+
+/**
  * Integration data sync.
  *
  * The catalogue advertised "62 Integrations" and stored credentials for all of
@@ -67,7 +92,7 @@ const shopify: Connector = {
       A real Shopify domain is *.myshopify.com or a custom storefront domain;
       either way it is public, so assertPublicUrl costs nothing legitimate.
     */
-    const url = `https://${shop}/admin/api/2024-01/orders.json?status=any&limit=250&created_at_min=${encodeURIComponent(since)}`;
+    const url = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/orders.json?status=any&limit=250&created_at_min=${encodeURIComponent(since)}`;
     const r = await safeFetch(url, { headers: { "X-Shopify-Access-Token": c.api_key } });
     if (!r.ok) throw new Error(`Shopify returned ${r.status}`);
     const j = await r.json();

@@ -59,9 +59,24 @@ export function geminiTextModels(): string[] {
 /** Image generation/editing models, best first. */
 export function geminiImageModels(): string[] {
   const pinned = (process.env.GEMINI_IMAGE_MODEL || "").trim();
+  /*
+    NEWEST FIRST — the same ordering bug the text list above was rewritten to
+    fix, still live here.
+
+    This listed gemini-2.5-flash-image ahead of 3.1. Two problems, and they
+    compound: the 2.5 generation is documented forty lines up as returning 404
+    on this API key (which is why gemini-2.5-flash was removed from the text
+    list entirely), and 3.1 is the newer model regardless. So every image
+    request paid a wasted round-trip to a model likely to fail before reaching
+    the one that works — the exact cost the text list was reordered to stop
+    paying, in the function nobody re-read.
+
+    2.5 is kept as the trailing fallback rather than deleted: if 3.1 is ever
+    retired, an attempt at a possibly-dead model beats no attempt at all.
+  */
   const fallbacks = [
-    "gemini-2.5-flash-image",   // "Nano Banana", stable
-    "gemini-3.1-flash-image",   // "Nano Banana 2", stable
+    "gemini-3.1-flash-image",   // "Nano Banana 2", stable, newest
+    "gemini-2.5-flash-image",   // "Nano Banana" — 2.5 has 404'd on this key; last resort
   ];
   return pinned ? [pinned, ...fallbacks.filter((m) => m !== pinned)] : fallbacks;
 }
