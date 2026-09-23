@@ -106,6 +106,15 @@ export async function runScheduledReports(budget?: Budget): Promise<ReportRun> {
     let body = "";
     /* Per-workspace AI key — see lib/ai/byo.ts. A scheduled report is exactly
        the case a BYO customer expects to run on their own provider. */
+    /*
+      Metered, like every other AI path — see the note in lib/credits.ts on
+      chargeOrgForMode(). A scheduled report is an unattended model call on a
+      timer, which makes it the easiest thing in the product to leave running
+      for a workspace that stopped paying months ago.
+    */
+    const { chargeOrgForMode } = await import("@/lib/credits");
+    const gate = await chargeOrgForMode(String(r.org_id), String(r.mode || "brief"));
+    if (!gate.ok) { out.skipped++; continue; }
     try { body = await withOrgAiKeys(r.org_id, () => generateFor(String(r.mode || "brief"), "", context)); }
     catch { /* handled below */ }
     if (!body || /^I couldn't reach the AI engine/.test(body)) { out.errors++; continue; }

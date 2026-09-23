@@ -71,5 +71,50 @@ console.log("\nCatalogue:");
 t("four providers offered", m.PROVIDERS.length, 4);
 t("each names where to get a key", m.PROVIDERS.every((p) => p.where.startsWith("https://")), true);
 
+/* ========================================================================= */
+/*  NO AI MODULE MAY READ A PROVIDER KEY OUT OF process.env DIRECTLY          */
+/* ========================================================================= */
+/*
+  The resolver above was correct and four modules did not use it.
+  bankstatement, gst, act and priorities each read process.env.GEMINI_API_KEY
+  and process.env.GROQ_API_KEY straight, which walks past the
+  AsyncLocalStorage store that withOrgAiKeys() populates — so the wrapper at
+  the call site did nothing and the workspace's own key was never used.
+
+  Two things broke at once, and it is worth being precise about which is worse.
+  lib/ai/byo.ts tells the customer their prompts go to their own provider; for
+  bank statements that was untrue, and a bank statement is the most sensitive
+  text this product handles. Separately, chargeForMode() waives credits when a
+  workspace is on its own key, so for those paths we paid the model bill and
+  invoiced nothing.
+
+  A unit test of aiKey() cannot catch this — the resolver was never wrong. The
+  only thing that catches "the right function exists and nobody calls it" is a
+  source assertion over the whole directory, so that is what this is.
+*/
+{
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "lib", "ai");
+
+  const KEYS = ["GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"];
+  /* byo.ts IS the resolver — it is the one file allowed to reach for the
+     platform key, via envKey(). */
+  const ALLOWED = new Set(["byo.ts"]);
+
+  console.log("\nEvery AI module resolves keys through aiKey():");
+  let offenders = 0;
+  for (const f of readdirSync(dir).filter((n) => n.endsWith(".ts"))) {
+    if (ALLOWED.has(f)) continue;
+    const live = readFileSync(join(dir, f), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    const hits = KEYS.filter((k) => new RegExp(`process\\.env\\.${k}\\b`).test(live));
+    if (hits.length) { offenders++; t(`${f} does not read ${hits.join(", ")} directly`, hits.join(","), ""); }
+  }
+  t("no AI module bypasses the BYO resolver", offenders, 0);
+}
+
 console.log(bad ? `\n>>> ${bad} WRONG` : "\n>>> resolver behaves correctly");
 process.exit(bad ? 1 : 0);

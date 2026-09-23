@@ -538,6 +538,21 @@ export async function addWorkflow(fd: FormData) {
 
 export async function runWorkflow(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg();
+  /*
+    CREATING a workflow was plan-gated (addWorkflow, above) and RUNNING one was
+    not. So a workspace that built workflows on Growth and then downgraded — or
+    one that never had the capability and was handed an id — could press Run as
+    often as it liked. The step that costs money is now metered separately in
+    lib/workflows.ts, but metering is not the same as entitlement: this is a
+    feature somebody is or is not paying for, and both verbs have to agree.
+
+    Deliberately NOT applied to the scheduled runner. Existing automation that a
+    customer set up while entitled keeps working after a downgrade — the message
+    in requireCapability promises exactly that ("anything you have already set
+    up keeps working"), and silently stopping a nightly job is how a billing
+    conversation becomes a churn event.
+  */
+  await requireCapability(orgId, "workflows", "Workflow automation");
   const id = str(fd.get("id")); const name = str(fd.get("name"));
   const sb = createClient();
 
@@ -1286,6 +1301,22 @@ export async function deleteApiKey(fd: FormData) {
 // ---- AI Autopilot ----
 export async function runAutopilot() {
   const orgId = await requireWriteOrg();
+  /*
+    "Run autopilot now" is a button, and it was a free model call.
+
+    The NIGHTLY pulse is different and stays uncharged: the cron filters on
+    entitled(), so only a workspace with a live plan gets it, and a daily sweep
+    is what the plan is for. This one is on demand and repeatable, which makes
+    it the same shape as every other metered AI action in the product — and it
+    had neither a charge nor a paywall, so a lapsed workspace could sit on it.
+  */
+  const { chargeForMode } = await import("@/lib/credits");
+  const gate = await chargeForMode("pulse");
+  if (!gate.ok) {
+    return fail(gate.reason === "lapsed"
+      ? "Add credits or choose a plan to run an analysis."
+      : `Not enough credits — an analysis costs ${gate.cost}.`);
+  }
   const ctx = await getBusinessContext();
   const text = await generateFor("pulse", "", ctx);
   const sb = createClient();

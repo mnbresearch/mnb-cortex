@@ -21,6 +21,15 @@ export type BillingStatus = {
   locked: boolean;         // must upgrade to continue
   /** Credits the workspace can still spend. Bought credits ARE an entitlement. */
   credits: number;
+  /**
+   * The CA firm paying for this workspace under Practice pooling, if any.
+   *
+   * Surfaced rather than kept internal because "you are covered by your firm"
+   * is the sentence that stops a client owner ringing us about a plan they were
+   * never asked to buy — and because an unexplained unlock is as confusing as
+   * an unexplained lock.
+   */
+  pooledBy: string | null;
 };
 
 /**
@@ -31,7 +40,7 @@ export type BillingStatus = {
 export async function getBillingStatus(): Promise<BillingStatus> {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) {
-    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, plan: "starter", locked: false, credits: 0 };
+    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, plan: "starter", locked: false, credits: 0, pooledBy: null };
   }
   const sb = createClient();
 
@@ -44,6 +53,8 @@ export async function getBillingStatus(): Promise<BillingStatus> {
   let subEnd: number | null = null;
   let credits = 0;
   let unlimited = false;
+  /** Set when this workspace is claimed by a CA firm under Practice pooling. */
+  let practiceOrgId: string | null = null;
 
   try {
     // select("*") deliberately: naming subscription_ends_at explicitly would make
@@ -59,6 +70,7 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     subEnd = (data as any).subscription_ends_at ? new Date((data as any).subscription_ends_at).getTime() : null;
     credits = Number((data as any).credits ?? 0);
     unlimited = (data as any).credits_allowance === -1;
+    practiceOrgId = (data as any).practice_org_id || null;
   } catch {
     enforceable = false;
     try {
@@ -68,6 +80,79 @@ export async function getBillingStatus(): Promise<BillingStatus> {
       trialEnd = created ? created + TRIAL_DAYS * DAY : null;
     } catch { /* leave defaults */ }
   }
+
+  /*
+    ============================================================================
+    PRACTICE POOLING — the paywall did not know about it, and the meter did.
+    ============================================================================
+
+    lib/credits.ts getCreditState() resolves practice_org_id and reports the
+    FIRM's balance for a claimed client. Its comment says, in as many words:
+
+        "The paywall reads this same state (lib/paywall isLocked), so reporting
+         the client's own empty balance would also lock a workspace the firm is
+         paying for."
+
+    The paywall does not read that state. It read this org's row and nothing
+    else. And cortex_practice_claim only writes the link — a claimed client
+    keeps its own plan and its own subscription_status, which for a
+    firm-provisioned workspace is typically `starter`, expired, 0 credits.
+
+    So: isLocked() true, and layout.tsx puts a full-screen TrialGuard over every
+    page except the eight allow-listed ones. The firm is paying ₹29,999 a month
+    for up to 25 client workspaces, the pooled-credit banner inside shows a
+    healthy balance, and the client cannot open a single screen. That is the
+    Practice plan failing at its own front door, and the only reason it has not
+    been reported is that nobody has sold one yet.
+
+    resolvePayer() is reused rather than reimplemented — it already refuses to
+    pool for a firm that is not on a pooling plan or is itself lapsed, so this
+    can only ever unlock a workspace somebody is genuinely paying for.
+
+    ON A FAILED FIRM READ we keep the client's own state, which means locked.
+    That matches getCreditState's own catch, and the asymmetry is deliberate: a
+    transient error briefly locking a paying customer is a support ticket, while
+    the same error unlocking a non-paying one is revenue. Consistency between
+    the two functions is the thing that was missing in the first place.
+  */
+  let payerStatus = subStatus;
+  let payerPlan = plan;
+  let payerCredits = credits;
+  let payerUnlimited = unlimited;
+  let pooledBy: string | null = null;
+
+  if (enforceable && practiceOrgId && practiceOrgId !== orgId) {
+    try {
+      const { serviceClient } = await import("@/lib/supabase/server");
+      const { resolvePayer } = await import("@/lib/credit-pool");
+      const svc = serviceClient();
+      if (svc) {
+        const { data: firmRow } = await svc.from("organizations").select("*").eq("id", practiceOrgId).single();
+        if (firmRow) {
+          const decision = resolvePayer(
+            { id: orgId, plan, status: subStatus },
+            { id: String((firmRow as any).id), plan: String((firmRow as any).plan || ""), status: String((firmRow as any).subscription_status || "") },
+          );
+          if (decision.pooled) {
+            payerStatus = String((firmRow as any).subscription_status || "trialing");
+            payerPlan = String((firmRow as any).plan || plan);
+            payerCredits = Number((firmRow as any).credits ?? 0);
+            payerUnlimited = (firmRow as any).credits_allowance === -1;
+            pooledBy = String((firmRow as any).id);
+            /* The dates that decide `status` below belong to the payer too —
+               otherwise a covered client still reads as an expired trial. */
+            subEnd = (firmRow as any).subscription_ends_at ? new Date((firmRow as any).subscription_ends_at).getTime() : null;
+            trialEnd = (firmRow as any).trial_ends_at ? new Date((firmRow as any).trial_ends_at).getTime() : trialEnd;
+          }
+        }
+      }
+    } catch { /* keep this workspace's own state — see the note above */ }
+  }
+
+  subStatus = payerStatus;
+  plan = payerPlan;
+  credits = payerCredits;
+  unlimited = payerUnlimited;
 
   const now = Date.now();
 
@@ -134,6 +219,6 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     trialEndsAt: trialEnd ? new Date(trialEnd).toISOString() : null,
     subscriptionEndsAt: subEnd ? new Date(subEnd).toISOString() : null,
     lapsedSubscription,
-    plan, locked, credits,
+    plan, locked, credits, pooledBy,
   };
 }

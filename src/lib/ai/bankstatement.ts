@@ -4,6 +4,7 @@
 // so the numbers are trustworthy, not hallucinated.
 import "server-only";
 import { geminiTextModels } from "@/lib/ai/models";
+import { aiKey } from "@/lib/ai/byo";
 import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
 
 export type Txn = { date: string; desc: string; amount: number; direction: "in" | "out"; category: string };
@@ -62,20 +63,43 @@ ${text.slice(0, 18000)}`;
 
 async function callJson(prompt: string): Promise<any | null> {
   // Gemini first
-  if (process.env.GEMINI_API_KEY) {
+  /*
+  BYO: THIS MODULE READ process.env DIRECTLY, SO "YOUR KEY" WAS NOT USED.
+
+  withOrgAiKeys() puts the workspace's own keys into an AsyncLocalStorage
+  store; aiKey() is the accessor that reads it and falls back to the platform
+  key. Reading process.env.GEMINI_API_KEY skips the store entirely, so the
+  wrapper around the call site did nothing at all.
+
+  Two consequences, and the first is the serious one:
+
+  1. lib/ai/byo.ts tells the customer their prompts go to their own provider.
+     For this module that was false — and bank statements, GST returns and the
+     priorities that quote real customer names are the most sensitive text the
+     product ever sends anywhere.
+
+  2. chargeForMode() waives credits entirely when a workspace is on its own key
+     (credits.ts returns cost 0 for byo.own). So for these paths we paid the
+     COGS and billed nothing, which is the revenue mirror of the same bug.
+*/
+  const gkey = aiKey("GEMINI_API_KEY");
+  if (gkey) {
     const model = geminiTextModels()[0];
     try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(gkey)}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ system_instruction: { parts: [{ text: SYS }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: generationConfig(EXTRACT, { temperature: 0.1, responseMimeType: "application/json" }) }),
       });
       if (r.ok) { const j = await r.json(); const t = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(""); const parsed = safeJson(t); if (parsed) return parsed; }
     } catch { /* fall through */ }
   }
-  if (process.env.GROQ_API_KEY) {
+  /* Same bug, same file: the Groq fallback also bypassed the BYO store, so a
+     workspace on its own key still fell through to the platform account. */
+  const qkey = aiKey("GROQ_API_KEY");
+  if (qkey) {
     try {
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${qkey}` },
         body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", messages: [{ role: "system", content: SYS }, { role: "user", content: prompt }], temperature: 0.1, response_format: { type: "json_object" } }),
       });
       if (r.ok) { const j = await r.json(); const t = j?.choices?.[0]?.message?.content || ""; const parsed = safeJson(t); if (parsed) return parsed; }

@@ -152,6 +152,38 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
   const cost = creditCost(mode);
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) return { ok: false, enforced: true, cost, balance: 0, reason: "anonymous" };
+  return chargeOrgForMode(orgId, mode, { userId: user.id, superAdmin: await isSuperAdmin() });
+}
+
+/**
+ * The same charge, for work that runs WITHOUT a signed-in user.
+ *
+ * WHY THIS EXISTS. chargeForMode() is documented as "the single choke point"
+ * and "every AI path goes through this function". Two did not, because they
+ * could not: it reads the session, and the nightly cron has no session. So
+ * lib/workflows.ts and lib/scheduled-reports.ts called generateFor() straight,
+ * and with it went the credit debit, the ledger entry, the plan capability
+ * check and the paywall.
+ *
+ * What that bought an expired — or deliberately SUSPENDED — workspace: press
+ * Run on a workflow with a dozen `ai` steps, as often as you like, on our
+ * model bill, with nothing recorded anywhere. The nightly cron did the same on
+ * their behalf, because entitled() was only ever applied to the daily analysis
+ * and not to the scheduled-report or scheduled-workflow sweeps beside it.
+ *
+ * Splitting the body rather than duplicating it is the point: pooling, the
+ * hard-stop, the pay-as-you-go rule and the BYO waiver are subtle and have all
+ * been wrong at least once. A second implementation of them would be wrong
+ * again, differently, and only on the path nobody watches.
+ */
+export async function chargeOrgForMode(
+  orgId: string,
+  mode: string,
+  opts?: { userId?: string | null; superAdmin?: boolean },
+): Promise<ChargeResult> {
+  const cost = creditCost(mode);
+  if (!orgId) return { ok: false, enforced: true, cost, balance: 0, reason: "anonymous" };
+  const actingUserId = opts?.userId ?? null;
 
   /*
     BRING-YOUR-OWN-KEY, resolved here and nowhere else.
@@ -173,7 +205,7 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
   if (!svc) return { ok: true, enforced: false, cost, balance: 0 };
 
   try {
-    const superAdmin = await isSuperAdmin();
+    const superAdmin = opts?.superAdmin === true;
     const { data: org, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
     if (error) return { ok: true, enforced: false, cost, balance: 0 };
     const plan = String((org as any)?.plan || "starter").toLowerCase();
@@ -314,7 +346,9 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
     const { data: nb, error: rpcErr } = await svc.rpc("charge_credits", {
       p_org: payerOrgId,
       p_amount: cost,
-      p_user: user.id,
+      /* null on the unattended path — the ledger row still records the org,
+         the cost and the reason, which is what reconciliation needs. */
+      p_user: actingUserId,
       /* The client's id rides along in the reason so a firm reading its ledger
          can tell which of twenty-five workspaces spent what. */
       p_reason: pooledFor ? pooledReason(mode, pooledFor) : "ai:" + String(mode || "").toLowerCase(),

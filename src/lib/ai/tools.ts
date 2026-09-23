@@ -211,12 +211,34 @@ export async function runTool(name: string, args: any, orgId: string): Promise<T
         rows = rows.slice(0, limit);
         const shownTotal = rows.reduce((n, r) => n + r.amount, 0);
 
+        /*
+          `capped` IS CHECKED FIRST, and that ordering is the whole fix.
+
+          The condition was `matched === rows.length ? complete : truncated`,
+          and `capped` was only ever read inside the else branch. But the model
+          is allowed to ask for limit 25, clampLimit caps at 25, and MAX_ROWS is
+          25 — so for any book with 25 or more open invoices, `matched` equals
+          `rows.length` equals the cap, the FIRST branch fires, and the
+          assistant is handed
+
+              "25 unpaid invoice(s), ₹6,20,000 in total."
+
+          with no "+" and no caveat, for a business owed ₹94,00,000 across two
+          hundred invoices. That is the exact defect the note above describes
+          fixing — it was fixed for the slice and reintroduced by the cap.
+
+          Hitting the row ceiling means we do not know the total. The only
+          honest thing to report is a floor, and to say so.
+        */
         const what = args?.only_overdue ? "past-due invoice" : "unpaid invoice";
-        const summary = matched === rows.length
-          ? `${matched} ${what}(s), ₹${total.toLocaleString("en-IN")} in total.`
-          : `${matched}${capped ? "+" : ""} ${what}(s) totalling ₹${total.toLocaleString("en-IN")}` +
-            `${capped ? ` (counted up to the first ${MAX_ROWS})` : ""}. ` +
-            `Showing the largest ${rows.length}, worth ₹${shownTotal.toLocaleString("en-IN")}.`;
+        const summary = capped
+          ? `At least ${matched} ${what}(s), worth at least ₹${total.toLocaleString("en-IN")} — `
+            + `this is only the largest ${MAX_ROWS} and the real total is higher. `
+            + `Open /receivables for the complete figure.`
+          : matched === rows.length
+            ? `${matched} ${what}(s), ₹${total.toLocaleString("en-IN")} in total.`
+            : `${matched} ${what}(s) totalling ₹${total.toLocaleString("en-IN")}. `
+              + `Showing the largest ${rows.length}, worth ₹${shownTotal.toLocaleString("en-IN")}.`;
 
         return { ok: true, rows, summary };
       }
@@ -324,7 +346,23 @@ export async function runTool(name: string, args: any, orgId: string): Promise<T
         ]);
         const o = (orders.data as any[]) || [];
         const i = (invs.data as any[]) || [];
-        const outstanding = i.filter((x) => x.status !== "paid").reduce((n, x) => n + (Number(x.amount) || 0), 0);
+        /*
+          CASE-INSENSITIVE, like every other unpaid test in this file.
+
+          This was `x.status !== "paid"` — and the note 170 lines above records
+          fixing exactly this: every Tally and Vyapar export writes "Paid", so a
+          case-sensitive comparison counts settled invoices as outstanding and
+          the assistant tells the owner to chase money already in the bank.
+          top_receivables and top_payables were corrected to
+          `status.not.ilike.paid`; find_party was missed, which is the tool an
+          owner reaches for by name ("what does Apex Traders owe me?").
+
+          Done in JS rather than the query because these rows are already
+          fetched for display — the filter only has to agree with PostgREST's
+          ILIKE, not replace it. A null status is unpaid, same rule as above.
+        */
+        const isSettled = (s: unknown) => String(s ?? "").trim().toLowerCase() === "paid";
+        const outstanding = i.filter((x) => !isSettled(x.status)).reduce((n, x) => n + (Number(x.amount) || 0), 0);
         return {
           ok: true,
           rows: [{

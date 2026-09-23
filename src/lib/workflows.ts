@@ -121,7 +121,33 @@ export async function executeWorkflow(
           const [mode, ...tail] = rest.split(/\s+/);
           if (!mode) { results.push({ step: raw, ok: false, detail: "ai needs a mode, e.g. `ai brief`" }); break; }
           const context = facts.length ? `WORKFLOW FINDINGS:\n${facts.map((f) => `- ${f}`).join("\n")}` : "";
-          /* Per-workspace AI key — see lib/ai/byo.ts. */
+          /*
+            METERED AND GATED, like every other AI path.
+
+            This step called generateFor() directly. credits.ts calls itself
+            "the single choke point" through which "every AI path" goes; this
+            one went around it, and took the paywall and the ledger with it. A
+            workspace that is expired — or that an operator has SUSPENDED — could
+            press Run on a workflow of repeated `ai` steps and burn our model
+            budget indefinitely, unrecorded.
+
+            chargeOrgForMode() is the session-free half of that choke point. It
+            also loads the workspace's own AI key, so withOrgAiKeys is no longer
+            needed here: the charge and the key resolution are the same decision
+            and must not be made in two places.
+          */
+          const { chargeOrgForMode } = await import("@/lib/credits");
+          const gate = await chargeOrgForMode(orgId, mode.toLowerCase());
+          if (!gate.ok) {
+            results.push({
+              step: raw,
+              ok: false,
+              detail: gate.reason === "lapsed"
+                ? "Skipped: this workspace has no active plan or credits."
+                : `Skipped: not enough credits (needs ${gate.cost}).`,
+            });
+            break;
+          }
           const text = await withOrgAiKeys(orgId, () => generateFor(mode.toLowerCase(), tail.join(" "), context));
           const okAi = Boolean(text) && !/^I couldn't reach the AI engine/.test(text);
           let saved = false;
