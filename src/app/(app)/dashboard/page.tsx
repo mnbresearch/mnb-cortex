@@ -3,7 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { KpiCard } from "@/components/kpi-card";
 import { InsightCard } from "@/components/insight-card";
 import { Section } from "@/components/section";
-import { TrendChart } from "@/components/charts/trend-chart";
+import { TrendChart } from "@/components/charts/trend-chart-lazy";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, statusBg } from "@/lib/utils";

@@ -57,6 +57,12 @@ export type CronCoverage = {
   metrics_sweep: CoverageLane;
   /** The LLM narrative. Commentary on top of the above, not the product. */
   daily_analysis: CoverageLane;
+  /*
+    Chasing debtors. Optional because records written before this lane existed
+    must still parse — an absent lane reports nothing rather than reporting
+    zero, which would look like an outage on every historical row.
+  */
+  collections?: CoverageLane;
   /** Milliseconds of the run's budget still unspent when it finished. */
   budget_left_ms: number;
 };
@@ -155,6 +161,27 @@ export function coverageVerdict(c: CronCoverage | null | undefined): CoverageVer
   }
 
   /*
+    COLLECTIONS IS A PAID FEATURE, so it degrades the verdict like the sweep.
+
+    This lane was not measured at all, and it is the one that runs out of time
+    first: a 40s share against ~17s per workspace reaches two a night. A
+    customer who switched chasing on and is not being reached has bought
+    something that is not happening, and the two lanes that WERE instrumented
+    are the two that degrade most gracefully.
+
+    Absent (an old record, or the count query failed) is not degraded — same
+    rule as `null` coverage above. Silence is not evidence of failure.
+  */
+  const collectionsNights = c.collections ? nightsForFullCycle(c.collections) : undefined;
+  if (c.collections && c.collections.total > 0) {
+    if (collectionsNights === null) {
+      reasons.push(`collections reached 0 of ${c.collections.total} workspaces that have it switched on`);
+    } else if (collectionsNights !== undefined && collectionsNights > 1) {
+      reasons.push(`collections reaches each workspace every ${collectionsNights} nights (${c.collections.total} enabled at ${c.collections.done}/night)`);
+    }
+  }
+
+  /*
     Budget exhaustion is upstream of both lanes: a run that finishes with
     nothing to spare truncates the sweep first, so this usually fires alongside
     the sweep reason. It is stated separately because the FIX is different —
@@ -192,6 +219,10 @@ export function parseCoverage(raw: unknown): CronCoverage | null {
       at: typeof o.at === "string" ? o.at : "",
       metrics_sweep: lane(o.metrics_sweep),
       daily_analysis: lane(o.daily_analysis),
+      /* Absent on records written before this lane existed — left undefined
+         rather than zeroed, so coverageVerdict can tell "not measured" from
+         "measured and reached nobody". */
+      collections: o.collections ? lane(o.collections) : undefined,
       budget_left_ms: Number(o.budget_left_ms) || 0,
     };
   } catch {

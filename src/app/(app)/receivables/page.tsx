@@ -71,7 +71,16 @@ export default async function Receivables() {
     This reads only the four columns the page needs, with a ceiling high enough
     that the truncation notice below is honest about it when reached.
   */
-  const { rows, live } = await allOpenReceivables();
+  /*
+    Fetched TOGETHER with the sales orders below.
+
+    These two reads are independent — receivables come from `invoices`, the
+    monthly-revenue hint from `sales_orders` — and they were awaited one after
+    the other about fifty lines apart, so the page paid for both round trips in
+    series on every render. Nothing between them uses the first result.
+  */
+  const [{ rows, live }, { rows: soRows, live: soLive }] =
+    await Promise.all([allOpenReceivables(), getSalesOrders()]);
   const open = (live ? rows : [])
     .map((i) => ({
       id: String(i.id),
@@ -119,7 +128,6 @@ export default async function Receivables() {
     Where there is not enough history, the hint stays undefined and the
     component prints "—" and asks for the number, rather than guessing.
   */
-  const { rows: soRows, live: soLive } = await getSalesOrders();
   const NINETY = 90 * 86_400_000;
   const recentWon = (soLive ? soRows : []).filter((o) => {
     if (String(o.status || "").toLowerCase() !== "won") return false;

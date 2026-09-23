@@ -6,7 +6,7 @@ import { withOrgAiKeys } from "@/lib/ai/byo";
 import { recomputeMetrics } from "@/lib/metrics";
 import { statusOf, isLapsed } from "@/lib/entitlement";
 import { rotate } from "@/lib/cron-rotation";
-import { createBudget, SHARE } from "@/lib/cron-budget";
+import { capFor, createBudget, SHARE } from "@/lib/cron-budget";
 import { nightsForFullCycle, COVERAGE_KEY } from "@/lib/cron-coverage";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,10 +24,24 @@ function entitled(o: any): boolean {
   return !isLapsed(statusOf(o));
 }
 
+/*
+  Collections: ~17s worst case per workspace (drafting plus sends), so the
+  40s share reaches TWO workspaces a night. The query used to ask for 200,
+  which is what the coverage record then reported as the cap — telling the
+  operator this lane was a hundred times wider than it is.
+
+  Asking for exactly what we can process also stops us reading 198 rows we
+  will never touch, and keeps the rotation's head short enough to reason about.
+*/
+const COLLECTIONS_PER_MS = 17_000;
+const COLLECTIONS_CAP = capFor(SHARE.collections, COLLECTIONS_PER_MS);
+
 export async function GET(req: Request) {
   let scheduledWorkflows = 0;
   let alertsEmailed = 0;
   let collectionsSent = 0;
+  let collectionsSwept = 0;
+  let collectionsEnabled = 0;
   if (!cronAuthorised(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
   /*
@@ -146,10 +160,10 @@ export async function GET(req: Request) {
           const ordered = await svcC.from("collection_policies")
             .select("org_id").eq("enabled", true)
             .order("last_swept_at", { ascending: true, nullsFirst: true })
-            .limit(200);
+            .limit(COLLECTIONS_CAP);
           if (ordered.error) {
             const plain = await svcC.from("collection_policies")
-              .select("org_id").eq("enabled", true).limit(200);
+              .select("org_id").eq("enabled", true).limit(COLLECTIONS_CAP);
             on = (plain.data as any[]) || [];
             console.warn("[cron] last_swept_at missing — run 2026_collections_whatsapp.sql; sweeping without rotation");
           } else {
@@ -157,17 +171,25 @@ export async function GET(req: Request) {
           }
         }
         const cBudget = budget.slice(SHARE.collections);
+        /* The TOTAL, not the page we asked for — nights_for_full_cycle is
+           meaningless without it, and the page size is now the cap. */
+        try {
+          const { count } = await svcC.from("collection_policies")
+            .select("org_id", { count: "exact", head: true }).eq("enabled", true);
+          collectionsEnabled = Number(count ?? 0);
+        } catch { /* leave at 0; the lane simply reports nothing */ }
         for (const row of (on || [])) {
           // ~17s worst case per workspace (drafting plus sends). Stopping
           // before starting one we cannot finish is what keeps the rotation
           // honest: an unswept workspace stays at the head of the queue.
-          if (!cBudget.ok(17_000)) break;
+          if (!cBudget.ok(COLLECTIONS_PER_MS)) break;
           const oid = String(row.org_id);
           try {
             const { data: o } = await svcC.from("organizations").select("name").eq("id", oid).single();
             await prepareDrafts(oid, String((o as any)?.name || "our company"));
             const r = await sendApproved(oid, new URL(req.url).origin);
             collectionsSent += r.sent;
+            collectionsSwept++;
           } catch { /* one workspace must not stop the rest */ }
           /*
             Stamp OUTSIDE the try, so a workspace that throws still moves to the
@@ -315,7 +337,10 @@ export async function GET(req: Request) {
     console.error("[cron] organizations hit the 20,000 read cap — the sweep is no longer covering every workspace; paginate this query.");
   }
 
-  const SWEEP_CAP = 200, BATCH = 5;
+  const BATCH = 5;
+  /* Derived, not asserted — see capFor(). 3,000ms is the per-batch guard
+     used by the loop below, and a batch is BATCH workspaces. */
+  const SWEEP_CAP = capFor(SHARE.sweep, 3_000, BATCH);
   const sweep = await rotate("metrics_sweep", (orgs as any[]) || [], SWEEP_CAP);
   const sBudget = budget.slice(SHARE.sweep);
   let recomputed = 0;
@@ -355,7 +380,8 @@ export async function GET(req: Request) {
     to twenty workspaces that can actually use them, instead of being consumed
     by position in a list mostly made of lapsed accounts.
   */
-  const ANALYSIS_CAP = 20;
+  /* Derived from the share and the 9,000ms guard the loop enforces. */
+  const ANALYSIS_CAP = capFor(SHARE.analysis, 9_000);
   const entitledOrgs = ((orgs as any[]) || []).filter(entitled);
   const skipped = (((orgs as any[]) || []).length) - entitledOrgs.length;
   const analysis = await rotate("daily_analysis", entitledOrgs, ANALYSIS_CAP);
@@ -477,6 +503,7 @@ export async function GET(req: Request) {
   */
   const sweepRecord = { total: sweep.total, done: swept, cap: SWEEP_CAP };
   const analysisRecord = { total: analysis.total, done: ran, cap: ANALYSIS_CAP };
+  const collectionsRecord = { total: collectionsEnabled, done: collectionsSwept, cap: COLLECTIONS_CAP };
   const coverage = {
     metrics_sweep: {
       workspaces: sweep.total,
@@ -490,6 +517,20 @@ export async function GET(req: Request) {
       this_run: ran,
       wrapped: analysis.wrapped,
       nights_for_full_cycle: nightsForFullCycle(analysisRecord),
+    },
+    /*
+      COLLECTIONS WAS NOT MEASURED AT ALL, and it is the lane that degrades
+      first — a 40s share against ~17s per workspace reaches two a night.
+
+      It is also the only lane here that a customer PAYS for by name: chasing
+      debtors is the feature, and it was quietly reaching 1% of the workspaces
+      that had switched it on, with no record anywhere that it had not. The two
+      lanes that were instrumented are the two that degrade most gracefully.
+    */
+    collections: {
+      workspaces: collectionsEnabled,
+      this_run: collectionsSwept,
+      nights_for_full_cycle: nightsForFullCycle(collectionsRecord),
     },
   };
 
@@ -516,6 +557,7 @@ export async function GET(req: Request) {
         at: now,
         metrics_sweep: sweepRecord,
         daily_analysis: analysisRecord,
+        collections: collectionsRecord,
         budget_left_ms: budget.remaining(),
       }),
       updated_at: now,
@@ -523,6 +565,50 @@ export async function GET(req: Request) {
     if (covErr) console.error("[cron] coverage write —", covErr.message);
   } catch (e: any) {
     console.error("[cron] coverage write threw —", e?.message);
+  }
+
+  /*
+    A DEGRADED RUN NOW TELLS SOMEBODY.
+
+    coverageVerdict() was computed in lib/health.ts, deliberately NOT marked
+    critical, and rendered as a sentence on the public /status page. So
+    /api/health kept returning HTTP 200, operatorAlert() was called only from
+    the payment and email-webhook paths, and the one signal saying "the thing
+    customers pay for is reaching 1% of them" had no reader.
+
+    Raised here rather than in the health check because the cron is the thing
+    that knows — health reads a persisted snapshot and runs on request, so
+    alerting from there would fire once per visitor rather than once per night.
+
+    ONE ALERT PER NIGHT AT MOST, by construction: this runs once a day. No
+    cooldown logic is needed and none is added, because a cooldown that is
+    wrong is how an alert stops arriving on the night it matters.
+  */
+  try {
+    const { coverageVerdict } = await import("@/lib/cron-coverage");
+    const verdict = coverageVerdict({
+      at: new Date().toISOString(),
+      metrics_sweep: sweepRecord,
+      daily_analysis: analysisRecord,
+      collections: collectionsRecord,
+      budget_left_ms: budget.remaining(),
+    });
+    if (verdict.status === "degraded") {
+      const { operatorAlert } = await import("@/lib/operator-alert");
+      await operatorAlert({
+        kind: "cron_coverage_degraded",
+        severity: "amber",
+        title: "Nightly run did not cover every workspace",
+        body: `${verdict.detail}. Budget left ${Math.round(budget.remaining() / 1000)}s of `
+          + `${Math.round(budget.spentMs() / 1000) + Math.round(budget.remaining() / 1000)}s. `
+          + `Caps are derived from the time shares in lib/cron-budget.ts, so raising them alone `
+          + `will not help — this needs the run split across more than one scheduled function, `
+          + `which needs a Vercel plan allowing more than two crons.`,
+        email: true,
+      });
+    }
+  } catch (e: any) {
+    console.error("[cron] coverage alert —", e?.message);
   }
 
   return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, collectionsSent, coverage,

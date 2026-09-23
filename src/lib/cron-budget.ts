@@ -148,6 +148,33 @@ export const SHARE = {
   scripts/test-cron-budget.mjs is the real gate: it asserts the same sum and
   runs in `npm test`. The throw is the belt.
 */
+
+/**
+ * How many items a share can ACTUALLY process — which is not what the caps said.
+ *
+ * The row caps in the autopilot route and the time shares here were set
+ * independently and never compared. Divide one by the other:
+ *
+ *   collections   40,000ms share ÷ 17,000ms per workspace  =  2   (cap said 200)
+ *   metrics sweep 15,000ms share ÷  3,000ms per batch of 5 = 25   (cap said 200)
+ *   daily analysis 30,000ms share ÷ 9,000ms per workspace  =  3   (cap said 20)
+ *
+ * The caps were fiction, and the damage was not the throughput — it was the
+ * REPORTING. nights_for_full_cycle divides the workspace count by the recorded
+ * `cap`, so the coverage record told the operator collections reached 200
+ * workspaces a night when it reached two. The one number whose job is to say
+ * how far behind we are was computed from a number nobody had checked.
+ *
+ * Deriving the cap from the budget makes the promise and the capacity the same
+ * object. It does not make the cron faster — that needs more wall-clock time
+ * than one 300s function has, i.e. splitting it across several scheduled
+ * functions, which needs a Vercel plan that allows more than two crons.
+ */
+export function capFor(shareMs: number, perItemMs: number, itemsPerUnit = 1): number {
+  if (perItemMs <= 0) return 0;
+  return Math.max(1, Math.floor(shareMs / perItemMs) * itemsPerUnit);
+}
+
 export const SHARE_TOTAL_MS = Object.values(SHARE).reduce((a, b) => a + b, 0);
 
 /** The cron's own maxDuration, in ms. Kept next to the shares it constrains. */

@@ -74,25 +74,55 @@ function renderText(firstName: string, plan: Priority[], unsub: string): string 
   PERMANENTLY skipped those customers' plan email. A truncated directory has to
   abort the run, not quietly shrink the audience.
 */
-async function listUsers(sb: any): Promise<{ map: Map<string, { email: string; firstName: string }>; partial: boolean }> {
+/*
+  THE PAGE CAP WAS A CLIFF, AND IT WAS SILENT.
+
+  This paged auth.admin.listUsers() up to 40 pages of 200 — 8,000 confirmed
+  users. Past that it set `partial`, and the caller then returns
+  `{ skipped: true }` for THE WHOLE RUN. Not a shrunken audience: zero weekly
+  plan emails, for every customer, permanently, with the reason in a JSON field
+  nobody reads. The product's most visible habit-forming feature would simply
+  stop one week and never resume.
+
+  Two states were wrapped in one flag, and they need opposite handling:
+
+    errored    a transient GoTrue failure. Skipping is right — an unresolved
+               member makes a workspace look empty, and the claim is written
+               regardless, so it would be marked "sent" having sent nothing.
+
+    truncated  the directory is genuinely bigger than the cap. Also unsafe to
+               mail from (same reason), but it is PERMANENT and self-inflicted,
+               so the answer is not "skip forever" — it is a much higher
+               ceiling and somebody being told before it is reached.
+
+  The ceiling is now 50,000 users. The loop still exits on the first short
+  page, so a 500-user directory costs three calls, not 250.
+*/
+const USER_PAGE_SIZE = 200;
+const USER_PAGE_CAP = 250; // 50,000 confirmed users
+
+async function listUsers(sb: any): Promise<{
+  map: Map<string, { email: string; firstName: string }>;
+  partial: boolean;
+  truncated: boolean;
+  seen: number;
+}> {
   const map = new Map<string, { email: string; firstName: string }>();
-  let partial = false;
+  let errored = false;
   let page = 1;
-  for (; page <= 40; page++) {
-    const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) { partial = true; break; }
+  for (; page <= USER_PAGE_CAP; page++) {
+    const { data, error } = await sb.auth.admin.listUsers({ page, perPage: USER_PAGE_SIZE });
+    if (error) { errored = true; break; }
     const users: any[] = data?.users || [];
     for (const u of users) {
       const email = String(u?.email || "").toLowerCase().trim();
       if (!email || (!u?.email_confirmed_at && !u?.confirmed_at)) continue;
       map.set(u.id, { email, firstName: firstNameOf(email, u?.user_metadata) });
     }
-    if (users.length < 200) return { map, partial };
+    if (users.length < USER_PAGE_SIZE) return { map, partial: false, truncated: false, seen: map.size };
   }
-  // Fell out of the loop still on full pages: there are more users than the
-  // page cap can reach, so this list is incomplete too.
-  if (page > 40) partial = true;
-  return { map, partial };
+  const truncated = !errored && page > USER_PAGE_CAP;
+  return { map, partial: errored || truncated, truncated, seen: map.size };
 }
 async function optedOut(sb: any): Promise<Set<string>> {
   try { const { data } = await sb.from("email_optouts").select("email").limit(100_000); return new Set((data as any[] || []).map((r) => String(r.email || "").toLowerCase())); }
@@ -182,7 +212,7 @@ export async function sendWeeklyPlans(opts?: { test?: boolean; now?: Date; budge
     return { skipped: true, reason: "weekly_plan_sends missing — run the migration; falling back to Monday-only", week, ledger: false };
   }
 
-  const [{ map: users, partial }, outs] = await Promise.all([listUsers(sb), optedOut(sb)]);
+  const [{ map: users, partial, truncated }, outs] = await Promise.all([listUsers(sb), optedOut(sb)]);
 
   /*
     A truncated user directory must abort, not shrink the audience.
@@ -193,6 +223,30 @@ export async function sendWeeklyPlans(opts?: { test?: boolean; now?: Date; budge
     nothing. A transient error would permanently skip real customers.
   */
   if (!test && partial) {
+    /*
+      Tell somebody. This return value goes to the cron's JSON response and
+      nowhere else, so a run that mails nobody looked exactly like a run with
+      nobody to mail. Truncation in particular will not fix itself.
+    */
+    try {
+      const { operatorAlert } = await import("@/lib/operator-alert");
+      await operatorAlert({
+        kind: truncated ? "weekly_plan_directory_full" : "weekly_plan_directory_unreadable",
+        severity: truncated ? "red" : "amber",
+        title: truncated
+          ? "Weekly plan email stopped: the user directory is larger than the page cap"
+          : "Weekly plan email skipped: could not read the user directory",
+        body: truncated
+          ? `listUsers() reached its ${USER_PAGE_CAP}-page ceiling (${USER_PAGE_CAP * USER_PAGE_SIZE} users) and stopped. `
+            + `NO weekly plan emails were sent to ANY workspace, and none will be until the cap is raised — `
+            + `see USER_PAGE_CAP in lib/plan-email.ts. Better still, resolve members per workspace instead of `
+            + `enumerating the whole auth directory.`
+          : `auth.admin.listUsers() failed partway through. The run was skipped rather than mailing a partial `
+            + `audience, which is correct — a workspace with unresolved members looks empty and would be marked `
+            + `sent having sent nothing. If this repeats, it is not transient.`,
+        email: true,
+      });
+    } catch { /* an alert must never be why the run reports failure */ }
     return { skipped: true, reason: "could not read the full user directory — skipping rather than mailing a partial audience", week, ledger };
   }
 
