@@ -1,9 +1,10 @@
 "use client";
-import { useMemo, useState } from "react";
-import { saveQuote } from "@/lib/actions";
+import { useMemo, useState, useTransition } from "react";
+import { saveQuote, setQuoteStatus, convertQuoteToInvoice } from "@/lib/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Printer, Save, Check, Loader2, AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Trash2, Printer, Save, Check, Loader2, AlertCircle, FileOutput } from "lucide-react";
 import { gstRateWarning } from "@/lib/gst-rates";
 
 type Item = { id: string; desc: string; qty: number; rate: number };
@@ -21,6 +22,76 @@ const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumF
  * pipeline number ends up inside a cash forecast.
  */
 export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
+  const [quoteMsg, setQuoteMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busyId, setBusyId] = useState("");
+  const [, startTransition] = useTransition();
+
+  function act(id: string, run: () => Promise<any>) {
+    setBusyId(id); setQuoteMsg(null);
+    startTransition(async () => {
+      try {
+        const r = await run();
+        /* Server actions here RETURN their recoverable failures rather than
+           throwing (lib/action-result.ts), so `r` is the message either way. */
+        if (r && r.ok === false) setQuoteMsg({ ok: false, text: r.error });
+        else setQuoteMsg({ ok: true, text: r?.message || "Updated." });
+      } catch {
+        setQuoteMsg({ ok: false, text: "That didn't go through. Check your connection and try again." });
+      } finally { setBusyId(""); }
+    });
+  }
+
+  function QuoteStatus({ status, converted }: { status?: string; converted?: boolean }) {
+    const s = String(status || "open");
+    const tone = s === "accepted" ? "bg-success/10 text-success border-success/20"
+      : s === "declined" ? "bg-danger/10 text-danger border-danger/20"
+      : s === "expired" ? "bg-muted text-muted-foreground border-border"
+      : "bg-warning/10 text-warning border-warning/20";
+    return (
+      <span className="ml-2 inline-flex items-center gap-1.5 align-middle">
+        <Badge className={tone}>{s}</Badge>
+        {converted && <span className="text-xs text-muted-foreground">· invoiced</span>}
+      </span>
+    );
+  }
+
+  function QuoteActions({ quote }: { quote: any }) {
+    const converted = Boolean(quote.meta?.converted_invoice_id);
+    const busy = busyId === quote.id;
+    const mark = (status: string) => () => {
+      const fd = new FormData(); fd.set("id", quote.id); fd.set("status", status);
+      act(quote.id, () => setQuoteStatus(fd));
+    };
+    return (
+      <div className="flex items-center gap-1.5">
+        {busy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Working" />}
+        {String(quote.status || "open") !== "accepted" && (
+          <Button variant="outline" size="sm" onClick={mark("accepted")} disabled={busy}>Won</Button>
+        )}
+        {String(quote.status || "open") !== "declined" && (
+          <Button variant="outline" size="sm" onClick={mark("declined")} disabled={busy}>Lost</Button>
+        )}
+        {/*
+          Conversion is its own button and is offered once. Doing it twice puts
+          the amount into receivables twice, which inflates the cash forecast,
+          the MSME exposure and every KPI built on invoices — so the server
+          refuses as well, and this only hides a button the owner would
+          otherwise press and be told off for.
+        */}
+        {!converted ? (
+          <Button size="sm" onClick={() => {
+            const fd = new FormData(); fd.set("id", quote.id);
+            act(quote.id, () => convertQuoteToInvoice(fd));
+          }} disabled={busy}>
+            <FileOutput className="h-4 w-4" /> Invoice it
+          </Button>
+        ) : (
+          <span className="text-xs text-success inline-flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Invoiced</span>
+        )}
+      </div>
+    );
+  }
+
   const [from, setFrom] = useState({ name: "Your Company Pvt Ltd", detail: "GSTIN · Mumbai · contact@company.com" });
   const [to, setTo] = useState({ name: "Client Name", detail: "" });
   const [meta, setMeta] = useState({ no: "QT-0001", date: new Date().toISOString().slice(0, 10), validity: 15 });
@@ -131,17 +202,38 @@ export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
       {saved.length > 0 && (
         <div className="border-t pt-4">
           <div className="text-sm font-medium mb-2">Saved quotes</div>
+          {/*
+            EVERY QUOTE USED TO BE "OPEN" FOREVER.
+
+            `quotes.status` is a CHECK-constrained column that listQuotes
+            selected and nothing ever wrote, so it only ever held its default.
+            A quote list that cannot close is a list nobody maintains.
+
+            Converting is deliberately a separate button from "accepted",
+            because a quote is not money owed — saveQuote's own note explains
+            why one must never be counted as a receivable automatically.
+            Winning the work is the moment that changes, and it is the owner
+            who knows when that happened.
+          */}
           <div className="divide-y">
             {saved.slice(0, 8).map((q: any) => (
-              <div key={q.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <div className="min-w-0"><span className="font-medium">{q.quote_no || "—"}</span><span className="text-muted-foreground"> · {q.party || "—"}</span></div>
-                <div className="flex items-center gap-3 shrink-0">
+              <div key={q.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 text-sm">
+                <div className="min-w-0">
+                  <span className="font-medium">{q.quote_no || "—"}</span>
+                  <span className="text-muted-foreground"> · {q.party || "—"}</span>
+                  <QuoteStatus status={q.status} converted={Boolean(q.meta?.converted_invoice_id)} />
+                </div>
+                <div className="flex flex-wrap items-center gap-3 shrink-0">
                   <span className="tabular-nums">{rupee(Number(q.amount) || 0)}</span>
                   <span className="text-xs text-muted-foreground">{q.valid_until ? `valid to ${q.valid_until}` : ""}</span>
+                  <QuoteActions quote={q} />
                 </div>
               </div>
             ))}
           </div>
+          {quoteMsg && (
+            <p className={`mt-3 text-sm ${quoteMsg.ok ? "text-success" : "text-danger"}`} role="status">{quoteMsg.text}</p>
+          )}
         </div>
       )}
     </Card>

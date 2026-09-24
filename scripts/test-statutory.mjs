@@ -250,10 +250,35 @@ console.log("\nEPF / ESI — contribution rates");
 console.log("\nADVANCE TAX — instalment schedule");
 /* ========================================================================= */
 {
-  const src = read("advance-tax.tsx");
-  for (const [by, cum] of [["15 Jun", "0.15"], ["15 Sep", "0.45"], ["15 Dec", "0.75"], ["15 Mar", "1"]])
-    check(`${by} → ${Math.round(Number(cum) * 100)}% cumulative`,
-      new RegExp(`"${by}",\\s*cum:\\s*${cum.replace(".", "\\.")}`).test(src));
+  /*
+    REBASED ONTO THE MODULE, NOT THE COMPONENT.
+
+    This used to regex components/advance-tax.tsx for `"15 Jun", cum: 0.15`.
+    The schedule has since moved into lib/advance-tax.ts — one place for the
+    law, shared with the 234C engine — and the regex went red on a change that
+    made the product more correct, not less.
+
+    That is the third time in this codebase a test asserting the
+    IMPLEMENTATION has made the right fix look like a regression (the TDS year
+    and the EPF block were the others). Asserting the exported VALUES is both
+    stricter and immune to where they live: this now fails if a percentage is
+    wrong, and keeps passing if the file is reorganised.
+  */
+  const at = await import("../src/lib/advance-tax.ts");
+  const want = [["15 Jun", 0.15], ["15 Sep", 0.45], ["15 Dec", 0.75], ["15 Mar", 1]];
+  for (const [by, cum] of want) {
+    const row = at.SCHEDULE.find((s) => s.by === by);
+    check(`${by} → ${Math.round(Number(cum) * 100)}% cumulative`, Boolean(row) && row.cum === cum);
+  }
+  check("the schedule has exactly four instalments", at.SCHEDULE.length === 4);
+  /* The tolerances are the part a summary gets wrong; scripts/test-advance-tax
+     pins the arithmetic, this pins the constants alongside the other statute. */
+  check("15 Jun tolerance is 12%, not 15%", at.SCHEDULE[0].relief === 0.12);
+  check("15 Sep tolerance is 36%, not 45%", at.SCHEDULE[1].relief === 0.36);
+  check("the last two instalments have no tolerance",
+    at.SCHEDULE[2].relief === 0.75 && at.SCHEDULE[3].relief === 1);
+  check("presumptive taxpayers have one instalment, on 15 Mar",
+    at.PRESUMPTIVE_SCHEDULE.length === 1 && at.PRESUMPTIVE_SCHEDULE[0].by === "15 Mar");
 }
 
 /* ========================================================================= */

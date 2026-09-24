@@ -2110,11 +2110,157 @@ export async function listQuotes(): Promise<any[]> {
   if (!orgId) return [];
   const sb = await createClient();
   try {
+    /* `meta` is selected because it carries converted_invoice_id — without it
+       the list cannot tell an accepted quote from an invoiced one, and would
+       keep offering "Invoice it" on a quote already in Receivables. */
     const { data } = await sb.from("quotes")
-      .select("id,quote_no,party,amount,valid_until,status,created_at")
+      .select("id,quote_no,party,amount,valid_until,status,meta,created_at")
       .eq("org_id", orgId).order("created_at", { ascending: false }).limit(50);
     return (data as any[]) || [];
   } catch { return []; }
+}
+
+/* ==========================================================================
+   QUOTES COULD NEVER CLOSE
+   ==========================================================================
+
+   `quotes.status` is a CHECK-constrained column — open | accepted | declined |
+   expired — that `listQuotes` selects and nothing has ever written. Every
+   quote in every workspace is permanently "open", because the column only
+   ever holds its default. A quote list you cannot close is a list nobody
+   maintains, and after a month it is noise.
+
+   The harder half is what happens when one IS accepted. saveQuote already
+   carries a note explaining why a quote is not written to `invoices`:
+
+       "A quote is not money owed. Counting one as a receivable is how a
+        pipeline number ends up inside a cash forecast."
+
+   That reasoning is right and it is not an argument against conversion — it
+   is an argument for conversion being an explicit, deliberate act. Winning
+   the work is exactly the moment the amount becomes money owed, and until
+   now the owner had to re-key it into /invoices by hand.
+
+   IDEMPOTENCE IS THE WHOLE RISK HERE. Converting twice puts the amount into
+   receivables twice, which inflates the cash forecast, the MSME exposure and
+   every KPI built on invoices. So conversion records the invoice it created
+   in `quotes.meta.converted_invoice_id` and refuses to run again — checked
+   before the insert, and the invoice number is derived from the quote number
+   so the unique index is a second line of defence.
+*/
+
+/** The states a quote may be in. Mirrors the CHECK constraint on the column. */
+const QUOTE_STATUSES = ["open", "accepted", "declined", "expired"] as const;
+
+export async function setQuoteStatus(fd: FormData): Promise<ActionResult | void> {
+  const id = str(fd.get("id"));
+  const status = str(fd.get("status"));
+  if (!id) return fail("Nothing selected.");
+  if (!(QUOTE_STATUSES as readonly string[]).includes(status)) {
+    /* Not customer-facing: only a miswired form can produce this, and the
+       database CHECK would reject it anyway with a far worse message. */
+    throw new Error(`Unknown quote status: ${status}`);
+  }
+
+  const orgId = await requireWriteOrg();
+  const sb = await createClient();
+  const { error, count } = await sb
+    .from("quotes").update({ status }, { count: "exact" })
+    .eq("id", id).eq("org_id", orgId);
+
+  if (error) throw new Error(error.message);
+  if (count === 0) return fail("That quote is no longer in this workspace.");
+
+  await logActivity(orgId, "crud", `Quote marked ${status}`);
+  revalidatePath("/quote");
+  return { ok: true, message: `Marked ${status}.` };
+}
+
+/**
+ * Turn an accepted quote into a receivable invoice.
+ *
+ * Refuses to run twice. Returns rather than throws on everything the owner
+ * can act on, because the alternative is a support reference number in place
+ * of "you already converted this one".
+ */
+export async function convertQuoteToInvoice(fd: FormData): Promise<ActionResult | void> {
+  const id = str(fd.get("id"));
+  if (!id) return fail("Nothing selected.");
+
+  const orgId = await requireWriteOrg();
+  const sb = await createClient();
+
+  const { data: rows, error: readErr } = await sb
+    .from("quotes").select("id, quote_no, party, amount, valid_until, status, meta")
+    .eq("id", id).eq("org_id", orgId).limit(1);
+  if (readErr) throw new Error(readErr.message);
+  if (!rows?.length) return fail("That quote is no longer in this workspace.");
+
+  const q = rows[0] as any;
+  const meta = (q.meta && typeof q.meta === "object") ? q.meta : {};
+  if (meta.converted_invoice_id) {
+    return fail("This quote has already been converted — the invoice is in Receivables.");
+  }
+  if (!(Number(q.amount) > 0)) {
+    return fail("This quote has no amount, so there is nothing to invoice.");
+  }
+
+  /* Derived from the quote number, so the invoices unique index catches a
+     double conversion even if the meta check somehow did not. */
+  const invoiceNo = `INV-${String(q.quote_no || "Q").replace(/^Q-?/i, "")}`;
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { data: created, error: insErr } = await sb
+    .from("invoices")
+    .insert({
+      org_id: orgId,
+      invoice_no: invoiceNo,
+      party: q.party,
+      amount: Number(q.amount),
+      type: "receivable",
+      status: "pending",
+      /*
+        The bill is raised TODAY, not on the quote's date. MSME 43B(h)
+        exposure ages from issue_date, and backdating it to when the quote was
+        written would report a brand-new invoice as already overdue — a
+        statutory warning about a payment that is not late.
+      */
+      issue_date: today,
+      due_date: q.valid_until || null,
+    })
+    .select("id")
+    .limit(1);
+
+  if (insErr) {
+    /* A unique-violation here means somebody converted this quote a moment
+       ago — recoverable, and worth saying plainly. */
+    if (/duplicate key|unique/i.test(insErr.message)) {
+      return fail("An invoice with that number already exists. This quote may already have been converted.");
+    }
+    throw new Error(insErr.message);
+  }
+  if (!created?.length) {
+    return fail("The invoice did not save — your role may not allow writing to this workspace.");
+  }
+
+  const invoiceId = (created[0] as any).id;
+
+  /* Mark the quote accepted and record the link. If THIS fails the invoice
+     already exists, so the owner is told exactly that rather than being left
+     to guess whether anything happened. */
+  const { error: updErr, count } = await sb
+    .from("quotes")
+    .update({ status: "accepted", meta: { ...meta, converted_invoice_id: invoiceId, converted_at: today } }, { count: "exact" })
+    .eq("id", id).eq("org_id", orgId);
+
+  if (updErr || count === 0) {
+    return fail(`Invoice ${invoiceNo} was created, but the quote could not be marked converted. ` +
+      "Check Receivables before converting it again.");
+  }
+
+  await logActivity(orgId, "crud", `Converted quote ${q.quote_no} to invoice ${invoiceNo} · ${q.party}`);
+  ["/quote", "/invoices", "/receivables", "/finance"].forEach((p) => revalidatePath(p));
+  return { ok: true, message: `Invoice ${invoiceNo} created in Receivables.` };
 }
 
 // ---- Action board -----------------------------------------------------------
