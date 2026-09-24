@@ -25,7 +25,7 @@ export const ROLE_RANK: Record<string, number> = { viewer: 1, analyst: 2, manage
 export const currentRole = cache(async function currentRole(): Promise<{ orgId: string | null; role: string }> {
   const { orgId, user } = await getUserAndOrg();
   if (!orgId || !user) return { orgId: null, role: "viewer" };
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("memberships").select("role").eq("org_id", orgId).eq("user_id", user.id).maybeSingle();
   return { orgId, role: (data as any)?.role || "viewer" };
 });

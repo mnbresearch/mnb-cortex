@@ -7,7 +7,7 @@ import { SUPER_ADMINS } from "@/lib/operators";
 export async function isSuperAdmin(): Promise<boolean> {
   if (!hasSupabase()) return false;
   try {
-    const { data: { user } } = await createClient().auth.getUser();
+    const { data: { user } } = await (await createClient()).auth.getUser();
     const email = (user?.email || "").toLowerCase();
     return Boolean(email) && SUPER_ADMINS.includes(email);
   } catch { return false; }
@@ -15,7 +15,7 @@ export async function isSuperAdmin(): Promise<boolean> {
 
 export async function currentEmail(): Promise<string | null> {
   if (!hasSupabase()) return null;
-  try { const { data: { user } } = await createClient().auth.getUser(); return user?.email ?? null; } catch { return null; }
+  try { const { data: { user } } = await (await createClient()).auth.getUser(); return user?.email ?? null; } catch { return null; }
 }
 
 export type OrgRow = {

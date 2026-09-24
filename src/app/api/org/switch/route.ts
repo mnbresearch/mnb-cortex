@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   try {
     if (!hasSupabase()) return NextResponse.json({ ok: false, error: "Not configured" }, { status: 200 });
     const { org_id } = await req.json().catch(() => ({ org_id: "" }));
-    const sb = createClient();
+    const sb = await createClient();
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return NextResponse.json({ ok: false, error: "Not signed in" }, { status: 401 });
 

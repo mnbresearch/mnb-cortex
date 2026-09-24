@@ -62,7 +62,7 @@ export async function getCustomerHistory(): Promise<CustomerHistory> {
   const empty: CustomerHistory = { rows: [], matched: 0, unmatched: 0, capped: false, ambiguousNames: [], orphanOrders: 0 };
   if (!orgId) return empty;
 
-  const sb = createClient();
+  const sb = await createClient();
   const CAP = 20000;
 
   /*

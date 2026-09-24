@@ -107,7 +107,7 @@ export async function eraseWorkspace(confirmation: string): Promise<ErasureResul
     admin here would mean anyone who can invite can also destroy — a chain that
     ends with a compromised admin account deleting the business's records.
   */
-  const sb = createClient();
+  const sb = await createClient();
   const { data: mem } = await sb.from("memberships")
     .select("role").eq("org_id", orgId).eq("user_id", user.id).maybeSingle();
   if (String((mem as any)?.role || "") !== "owner") {

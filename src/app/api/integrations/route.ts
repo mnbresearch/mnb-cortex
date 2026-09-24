@@ -25,7 +25,7 @@ const RANK: Record<string, number> = { viewer: 1, analyst: 2, manager: 3, admin:
 /** Only admins/owners of the active workspace may touch credentials. */
 async function guard() {
   if (!hasSupabase()) throw new Error("Not configured");
-  const sb = createClient();
+  const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) throw new Error("Sign in to manage integrations");
   /*

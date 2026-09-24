@@ -11,7 +11,7 @@ export type CampaignRow = {
 export async function getEmailStudio() {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) return { live: false, templates: [] as TemplateRow[], campaigns: [] as CampaignRow[] };
-  const sb = createClient();
+  const sb = await createClient();
   const [{ data: templates }, { data: campaigns }] = await Promise.all([
     sb.from("email_templates").select("id,name,subject,body,updated_at").eq("org_id", orgId).order("updated_at", { ascending: false }),
     sb.from("email_campaigns").select("id,name,subject,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(50),
@@ -35,7 +35,7 @@ export async function getEmailStudio() {
 export async function getCampaignDetail(id: string) {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return null;
-  const sb = createClient();
+  const sb = await createClient();
   const { data: campaign } = await sb.from("email_campaigns").select("*").eq("id", id).eq("org_id", orgId).single();
   if (!campaign) return null;
   const { data: recipients } = await sb.from("campaign_recipients").select("*").eq("campaign_id", id).order("created_at", { ascending: true });

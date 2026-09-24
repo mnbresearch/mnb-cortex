@@ -48,7 +48,7 @@ export async function POST(req: Request) {
 
     // Capture the lead (best-effort).
     if (hasSupabase()) {
-      try { await createClient().from("leads").insert({ name, email, phone: null, plan: `AI Visibility · ${brand}`, source: "ai-visibility" }); } catch {}
+      try { await (await createClient()).from("leads").insert({ name, email, phone: null, plan: `AI Visibility · ${brand}`, source: "ai-visibility" }); } catch {}
     }
 
     // Teaser: 3 prompts only (keeps the public endpoint cheap).

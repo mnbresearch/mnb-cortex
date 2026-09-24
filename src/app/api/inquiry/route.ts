@@ -78,7 +78,7 @@ export async function POST(req: Request) {
           note: note || null,
           score,
         };
-        const { error } = await createClient().from("leads").insert(row);
+        const { error } = await (await createClient()).from("leads").insert(row);
         if (!error) {
           stored = true;
         } else {
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
             entirely — a lead with less detail beats no lead at all.
           */
           const { company: _c, note: _n, score: _s, ...core } = row;
-          const { error: e2 } = await createClient().from("leads").insert(core);
+          const { error: e2 } = await (await createClient()).from("leads").insert(core);
           stored = !e2;
           if (e2) console.error("[inquiry] lead not stored —", e2.message, "(first attempt:", error.message, ")");
         }

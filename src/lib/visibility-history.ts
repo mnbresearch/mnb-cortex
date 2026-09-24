@@ -56,7 +56,7 @@ export async function previousRun(brand: string, category: string, location: str
   const { orgId } = await getUserAndOrg();
   if (!orgId) return null;
   const norm = (s: string) => s.trim().toLowerCase();
-  const sb = createClient();
+  const sb = await createClient();
   try {
     const { data, error } = await sb.from("visibility_runs")
       .select("id, brand, category, location, presence, prominence, avg_position, share_of_voice, prompts_count, mentions_count, engine, created_at")
@@ -76,7 +76,7 @@ export async function previousRun(brand: string, category: string, location: str
 export async function listRuns(limit = 20): Promise<RunSummary[]> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return [];
-  const sb = createClient();
+  const sb = await createClient();
   try {
     const { data, error } = await sb.from("visibility_runs")
       .select("id, brand, category, location, presence, prominence, avg_position, share_of_voice, prompts_count, mentions_count, engine, created_at")
@@ -102,7 +102,7 @@ export async function saveRun(
 ): Promise<boolean> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return false;
-  const sb = createClient();
+  const sb = await createClient();
   try {
     const mentions = report.results.filter((r) => r.mentioned).length;
     const { data, error } = await sb.from("visibility_runs").insert({

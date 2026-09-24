@@ -42,7 +42,7 @@ export async function getBillingStatus(): Promise<BillingStatus> {
   if (!user || !orgId) {
     return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, plan: "starter", locked: false, credits: 0, pooledBy: null };
   }
-  const sb = createClient();
+  const sb = await createClient();
 
   // Try the full read (needs the migration). Fall back to created_at only.
   let enforceable = true;

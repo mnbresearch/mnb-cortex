@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   */
   const key = req.headers.get("x-api-key") || "";
   if (!key) return NextResponse.json({ ok: false, error: "missing x-api-key" }, { status: 401 });
-  const sb = createClient();
+  const sb = await createClient();
   const { data, error } = await sb.rpc("api_metrics", { p_key: key });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 200 });
   return NextResponse.json(data);

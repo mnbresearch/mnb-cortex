@@ -48,7 +48,7 @@ const DEMO_PATHS = [
 
 export async function seedDemoData() {
   const orgId = await requireWriteOrg();
-  const sb = createClient();
+  const sb = await createClient();
   const { error } = await sb.rpc("seed_demo_data", { p_org: orgId });
   if (error) throw new Error(error.message);
 
@@ -94,7 +94,7 @@ export async function clearDemoData() {
   // returned SUCCESS — the page reloaded, the warning was still there, and
   // nothing said why.
   const { orgId } = await requireRole("manager");
-  const sb = createClient();
+  const sb = await createClient();
   for (const t of DEMO_TABLES) {
     const { error } = await sb.from(t).delete().eq("org_id", orgId).eq("is_demo", true);
     // Keep going: one table failing must not strand the rest as demo data.
@@ -110,7 +110,7 @@ export async function clearDemoData() {
 export async function hasDemoData(): Promise<boolean> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return false;
-  const sb = createClient();
+  const sb = await createClient();
   /*
     health_metrics was missing from this list, and it is the table whose demo
     rows are most visible.
@@ -171,7 +171,7 @@ export async function hasDemoData(): Promise<boolean> {
  */
 export async function updateStatutoryProfile(fd: FormData): Promise<ActionResult | void> {
   const { orgId } = await requireRole("manager");
-  const sb = createClient();
+  const sb = await createClient();
 
   const { PROFILE_QUESTIONS, parseProfile } = await import("@/lib/statutory-profile");
   const next: Record<string, string> = {};
@@ -209,7 +209,7 @@ export async function updateStatutoryProfile(fd: FormData): Promise<ActionResult
 
 export async function updateOrgProfile(fd: FormData): Promise<ActionResult | void> {
   const { orgId } = await requireRole("admin");
-  const sb = createClient();
+  const sb = await createClient();
   /*
     `str(null)` is "", never undefined — so this line used to blank the company
     name on any submission that did not carry the field. Latent while the input
@@ -328,7 +328,7 @@ function seqSuffix(): string {
 }
 
 export async function addSalesOrder(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const { error } = await sb.from("sales_orders").insert({
     org_id: orgId, order_no: "SO-" + seqSuffix(),
     customer_name: str(fd.get("customer_name")), region: str(fd.get("region")) || "West",
@@ -340,7 +340,7 @@ export async function addSalesOrder(fd: FormData) {
 }
 
 export async function addInvoice(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const { error } = await sb.from("invoices").insert({
     org_id: orgId, invoice_no: "INV-" + seqSuffix(),
     party: str(fd.get("party")), amount: num(fd.get("amount")),
@@ -357,7 +357,7 @@ export async function addInvoice(fd: FormData) {
 }
 
 export async function addInventoryItem(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const { error } = await sb.from("inventory_items").insert({
     org_id: orgId, sku: str(fd.get("sku")), name: str(fd.get("name")),
     category: str(fd.get("category")) || "raw", on_hand: num(fd.get("on_hand")),
@@ -369,7 +369,7 @@ export async function addInventoryItem(fd: FormData) {
 }
 
 export async function addEmployee(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const { error } = await sb.from("employees").insert({
     org_id: orgId, name: str(fd.get("name")), department: str(fd.get("department")),
     role: str(fd.get("role")), monthly_ctc: num(fd.get("monthly_ctc")),
@@ -384,7 +384,7 @@ export async function deleteRecord(fd: FormData) {
   const table = str(fd.get("table")); const id = str(fd.get("id")); const path = str(fd.get("path")) || "/dashboard";
   const allowed = ["sales_orders","invoices","inventory_items","employees","purchase_orders","documents","meetings","market_reports","strategy_docs","workflows","production_runs","customers","activity","invites","sales_pipeline"];
   if (!allowed.includes(table)) throw new Error("Invalid table");
-  const sb = createClient();
+  const sb = await createClient();
   const { error } = await sb.from(table).delete().eq("id", id).eq("org_id", orgId);
   if (error) throw new Error(error.message);
   // Deleting rows changes the KPIs too — a workspace that clears its data must
@@ -397,7 +397,7 @@ export async function deleteRecord(fd: FormData) {
 }
 
 export async function generatePO(): Promise<ActionResult | void> {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   // Was hardcoded to "PetroChem Ltd / RM-204 Polymer Resin / ₹14.5 L" and written
   // straight into the customer's purchase_orders table. Now it drafts a PO for
   // the item that is genuinely most below its reorder level, or does nothing.
@@ -438,7 +438,7 @@ export async function createInvoiceAI() {
 export async function sendReminderAI(): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg();
   const { user } = await getUserAndOrg();
-  const sb = createClient();
+  const sb = await createClient();
 
   // Was hardcoded to "Apex Traders ₹18 L (48 days)" — a real email, to the real
   // customer, about a company that does not exist. Read their actual ledger.
@@ -502,7 +502,7 @@ export async function sendReminderAI(): Promise<ActionResult | void> {
 }
 
 export async function signOut() {
-  const sb = createClient();
+  const sb = await createClient();
   await sb.auth.signOut();
   redirect("/login");
 }
@@ -513,7 +513,7 @@ export async function saveArtifact(fd: FormData) {
   const mode = str(fd.get("mode"));
   const title = str(fd.get("title")) || "Untitled";
   const content = str(fd.get("content"));
-  const sb = createClient();
+  const sb = await createClient();
   let error: any = null;
   if (mode === "document") ({ error } = await sb.from("documents").insert({ org_id: orgId, name: title, type: "ai", summary: content }));
   else if (mode === "meeting") ({ error } = await sb.from("meetings").insert({ org_id: orgId, title, platform: "notes", summary: content }));
@@ -527,7 +527,7 @@ export async function saveArtifact(fd: FormData) {
 export async function addWorkflow(fd: FormData) {
   const orgId = await requireWriteOrg();
   await requireCapability(orgId, "workflows", "Workflow automation");
-  const sb = createClient();
+  const sb = await createClient();
   const steps = str(fd.get("steps")).split(",").map((s) => s.trim()).filter(Boolean);
   const { error } = await sb.from("workflows").insert({
     org_id: orgId, name: str(fd.get("name")), trigger: str(fd.get("trigger")) || "manual",
@@ -554,7 +554,7 @@ export async function runWorkflow(fd: FormData): Promise<ActionResult | void> {
   */
   await requireCapability(orgId, "workflows", "Workflow automation");
   const id = str(fd.get("id")); const name = str(fd.get("name"));
-  const sb = createClient();
+  const sb = await createClient();
 
   // This used to insert a row reading "steps executed successfully." and
   // execute nothing whatsoever. It now runs the steps and logs what each one
@@ -595,7 +595,7 @@ export async function updateStatus(fd: FormData): Promise<ActionResult | void> {
     sales_orders: ["open", "won", "lost"],
   };
   if (!allowed[table] || !allowed[table].includes(status)) throw new Error("Invalid update");
-  const sb = createClient();
+  const sb = await createClient();
   /*
     `id` AND `table` COME FROM THE FORM, SO ZERO ROWS IS REACHABLE.
 
@@ -792,7 +792,7 @@ export async function importRows(fd: FormData): Promise<ImportOutcome> {
 
     const capped = capRows(rows);
     const mapped = capped.rows.map((r) => mapImportedRow(table, spec, orgId, applyMapping(r, match)));
-    const sb = createClient();
+    const sb = await createClient();
     const wrote = await writeImported(sb, table, mapped);
     if (wrote.error) {
       return {
@@ -901,7 +901,7 @@ export async function importFromUrl(fd: FormData): Promise<ImportOutcome> {
     const capped = capRows(rows);
     const mapped = capped.rows.map((r) => mapImportedRow(table, spec, orgId, applyMapping(r, match)));
 
-    const sb = createClient();
+    const sb = await createClient();
     const wrote = await writeImported(sb, table, mapped);
     if (wrote.error) {
       return {
@@ -971,7 +971,7 @@ export async function deleteLead(fd: FormData) {
     const svc = serviceClient();
     if (svc) { const { error } = await svc.from("leads").delete().eq("id", id); if (error) throw new Error(error.message); revalidatePath("/leads"); return; }
   }
-  const sb = createClient();
+  const sb = await createClient();
   const { error } = await sb.from("leads").delete().eq("id", id).eq("org_id", orgId);
   if (error) throw new Error(error.message);
   revalidatePath("/leads");
@@ -979,7 +979,7 @@ export async function deleteLead(fd: FormData) {
 
 // ---- Activity log helper ----
 async function logActivity(orgId: string, type: string, message: string) {
-  try { await createClient().from("activity").insert({ org_id: orgId, type, message }); } catch {}
+  try { await (await createClient()).from("activity").insert({ org_id: orgId, type, message }); } catch {}
 }
 
 // ---- Production ----
@@ -992,7 +992,7 @@ async function logActivity(orgId: string, type: string, message: string) {
  * calculate by hand is an OEE that will be left empty.
  */
 export async function addProductionRun(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
 
   const planned = num(fd.get("planned_qty"));
   const actual = num(fd.get("actual_qty"));
@@ -1030,7 +1030,7 @@ export async function addProductionRun(fd: FormData) {
 
 // ---- CRM: customers ----
 export async function addCustomer(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const { error } = await sb.from("customers").insert({
     org_id: orgId, name: str(fd.get("name")), company: str(fd.get("company")),
     email: str(fd.get("email")), phone: str(fd.get("phone")),
@@ -1048,7 +1048,7 @@ export async function inviteMember(fd: FormData): Promise<ActionResult | void> {
   const { user } = await getUserAndOrg();
   const email = str(fd.get("email")); const role = str(fd.get("role")) || "analyst";
   if (!email) return fail("Enter the email address you want to invite.");
-  const sb = createClient();
+  const sb = await createClient();
   const org = await sb.from("organizations").select("name, plan").eq("id", orgId).single();
   const orgName = (org.data as any)?.name || "our company";
 
@@ -1107,7 +1107,7 @@ export async function cancelInvite(fd: FormData) {
     appeared to work while the invite stayed. A silent no-op is worse than a
     refusal; at least a refusal can be read.
   */
-  const { orgId } = await requireRole("admin"); const sb = createClient();
+  const { orgId } = await requireRole("admin"); const sb = await createClient();
   await sb.from("invites").delete().eq("org_id", orgId).eq("id", str(fd.get("id")));
   revalidatePath("/admin");
 }
@@ -1117,7 +1117,7 @@ const ROLE_RANK: Record<string, number> = { viewer: 1, analyst: 2, manager: 3, a
 async function requireRole(min: string) {
   const { orgId, user } = await getUserAndOrg();
   if (!orgId || !user) throw new Error("Sign in to use this feature.");
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("memberships").select("role").eq("org_id", orgId).eq("user_id", user.id).single();
   const role = (data as any)?.role || "viewer";
   /*
@@ -1136,7 +1136,7 @@ async function requireRole(min: string) {
 
 // ---- Deals / pipeline ----
 export async function addDeal(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const { error } = await sb.from("sales_pipeline").insert({
     org_id: orgId, stage: str(fd.get("stage")) || "lead", deal_name: str(fd.get("deal_name")),
     customer_name: str(fd.get("customer_name")), value: num(fd.get("value")),
@@ -1146,7 +1146,7 @@ export async function addDeal(fd: FormData) {
   revalidatePath("/pipeline");
 }
 export async function moveDeal(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const id = str(fd.get("id"));
   const stage = str(fd.get("stage"));
 
@@ -1223,7 +1223,7 @@ export async function moveDeal(fd: FormData) {
  * turn a billing conversation into a churn event.
  */
 async function requireCapability(orgId: string, cap: Parameters<typeof planIncludes>[1], what: string) {
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("organizations").select("plan").eq("id", orgId).maybeSingle();
   if (!planIncludes(String((data as any)?.plan || ""), cap)) {
     throw new Error(
@@ -1233,7 +1233,7 @@ async function requireCapability(orgId: string, cap: Parameters<typeof planInclu
 }
 
 export async function generateApiKey(fd: FormData) {
-  const { orgId } = await requireRole("admin"); const sb = createClient();
+  const { orgId } = await requireRole("admin"); const sb = await createClient();
 
   /*
     ENTITLEMENT. "Public API + outbound webhooks" is a Watch Pro bullet at
@@ -1292,7 +1292,7 @@ export async function generateApiKey(fd: FormData) {
   return { key };
 }
 export async function deleteApiKey(fd: FormData) {
-  const { orgId } = await requireRole("admin"); const sb = createClient();
+  const { orgId } = await requireRole("admin"); const sb = await createClient();
   await sb.from("api_keys").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   revalidatePath("/developers");
 }
@@ -1319,7 +1319,7 @@ export async function runAutopilot() {
   }
   const ctx = await getBusinessContext();
   const text = await generateFor("pulse", "", ctx);
-  const sb = createClient();
+  const sb = await createClient();
   await sb.from("alerts").insert({ org_id: orgId, severity: "yellow", module: "autopilot", title: "Autopilot analysis", body: text.slice(0, 400) });
   await logActivity(orgId, "ai", "Autopilot ran a business analysis and posted findings");
   ["/autopilot", "/dashboard", "/activity", "/alerts"].forEach((p) => revalidatePath(p));
@@ -1345,7 +1345,7 @@ export async function createReportLink() {
     safer than leaving it up, and an analyst who created one before this change
     must still be able to kill it without waiting for an admin.
   */
-  const { orgId } = await requireRole("admin"); const sb = createClient();
+  const { orgId } = await requireRole("admin"); const sb = await createClient();
   /*
     This token is the ONLY thing protecting the link.
 
@@ -1368,7 +1368,7 @@ export async function createReportLink() {
   revalidatePath("/reports");
 }
 export async function revokeReportLink(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   await sb.from("report_links").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   revalidatePath("/reports");
 }
@@ -1451,7 +1451,7 @@ export async function deleteScheduledReport(fd: FormData): Promise<ActionResult 
  * cannot. That left customers with a Leads module nothing could ever fill.
  */
 export async function addLead(fd: FormData): Promise<ActionResult | void> {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const name = str(fd.get("name"));
   const email = str(fd.get("email"));
   if (!name && !email) return fail("A lead needs at least a name or an email address.");
@@ -1474,7 +1474,7 @@ export async function addLead(fd: FormData): Promise<ActionResult | void> {
  * even has a "lead" status that had no relationship to the `leads` table.
  */
 export async function convertLead(fd: FormData): Promise<ActionResult | void> {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const id = str(fd.get("id"));
 
   const { data: lead, error: readErr } = await sb.from("leads")
@@ -1501,7 +1501,7 @@ export async function convertLead(fd: FormData): Promise<ActionResult | void> {
 
 // ---- Goals / OKRs ----
 export async function saveGoal(fd: FormData): Promise<ActionResult | void> {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const name = str(fd.get("name"));
   if (!name) return fail("Give the goal a name.");
   const metricKey = str(fd.get("metric_key"));
@@ -1524,7 +1524,7 @@ export async function saveGoal(fd: FormData): Promise<ActionResult | void> {
 export async function deleteGoal(fd: FormData) {
   // Deletes need manager+ at the database layer; gating lower would silently
   // remove zero rows and report success.
-  const { orgId } = await requireRole("manager"); const sb = createClient();
+  const { orgId } = await requireRole("manager"); const sb = await createClient();
   const { error } = await sb.from("goals").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   if (error) throw new Error(error.message);
   revalidatePath("/goals");
@@ -1632,7 +1632,7 @@ export async function saveCollectionPolicy(fd: FormData): Promise<{ ok: boolean;
     updated_at: new Date().toISOString(),
   };
 
-  const sb = createClient();
+  const sb = await createClient();
   let { error } = await sb.from("collection_policies").upsert(patch, { onConflict: "org_id" });
 
   /*
@@ -1681,7 +1681,7 @@ export async function approveMessage(fd: FormData): Promise<{ ok: boolean; error
   try { orgId = await requireWriteOrg(); }
   catch { return { ok: false, error: "Sign in to approve." }; }
   const id = str(fd.get("id"));
-  const sb = createClient();
+  const sb = await createClient();
   /*
     Only a DRAFT may be approved. Without the status filter, re-submitting this
     form would reset a message that had already been sent back to approved, and
@@ -1717,7 +1717,7 @@ export async function cancelMessage(fd: FormData): Promise<{ ok: boolean; error?
   let orgId: string;
   try { orgId = await requireWriteOrg(); }
   catch { return { ok: false, error: "Sign in." }; }
-  const sb = createClient();
+  const sb = await createClient();
   /*
     THE WORST ONE OF THIS SHAPE IN THE CODEBASE.
 
@@ -1767,7 +1767,7 @@ export async function excludeFromCollections(fd: FormData): Promise<{ ok: boolea
   try { orgId = await requireWriteOrg(); }
   catch { return { ok: false, error: "Sign in." }; }
   const invoiceId = str(fd.get("invoice_id"));
-  const sb = createClient();
+  const sb = await createClient();
 
   /*
     Verify the invoice belongs to THIS workspace before writing a row about it.
@@ -1828,7 +1828,7 @@ export async function setVendorUdyam(fd: FormData): Promise<{ ok: boolean; error
   if (!id) return { ok: false, error: "No supplier." };
   if (!UDYAM.has(category)) return { ok: false, error: "Unknown category." };
 
-  const sb = createClient();
+  const sb = await createClient();
   const { error } = await sb.from("vendors")
     .update({ udyam_category: category })
     .eq("id", id).eq("org_id", orgId);
@@ -1887,7 +1887,7 @@ export async function saveInvoice(doc: InvoiceDoc): Promise<{ ok: boolean; error
   if (!party) return { ok: false, error: "Add the customer's name before saving." };
   if (!(amount > 0)) return { ok: false, error: "The invoice total must be more than zero." };
 
-  const sb = createClient();
+  const sb = await createClient();
   const { error } = await sb.from("invoices").upsert({
     org_id: orgId,
     invoice_no,
@@ -1930,7 +1930,7 @@ export async function saveInvoice(doc: InvoiceDoc): Promise<{ ok: boolean; error
 export async function listInvoices(): Promise<SavedInvoice[]> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return [];
-  const sb = createClient();
+  const sb = await createClient();
   try {
     const { data } = await sb.from("invoices")
       .select("id,invoice_no,party,amount,issue_date,due_date,status,meta")
@@ -1961,7 +1961,7 @@ export async function saveQuote(doc: {
   if (!quote_no) return { ok: false, error: "Give the quote a number before saving." };
   if (!party) return { ok: false, error: "Add the customer's name before saving." };
 
-  const sb = createClient();
+  const sb = await createClient();
   const { error } = await sb.from("quotes").upsert({
     org_id: orgId, quote_no, party, amount,
     valid_until: doc.valid_until || null,
@@ -1983,7 +1983,7 @@ export async function saveQuote(doc: {
 export async function listQuotes(): Promise<any[]> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return [];
-  const sb = createClient();
+  const sb = await createClient();
   try {
     const { data } = await sb.from("quotes")
       .select("id,quote_no,party,amount,valid_until,status,created_at")
@@ -2011,7 +2011,7 @@ export type ActionTask = {
 export async function listTasks(): Promise<ActionTask[]> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return [];
-  const sb = createClient();
+  const sb = await createClient();
   try {
     const { data } = await sb.from("action_tasks")
       .select("id,title,col,priority,source")
@@ -2021,7 +2021,7 @@ export async function listTasks(): Promise<ActionTask[]> {
 }
 
 export async function addTask(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const title = str(fd.get("title")).slice(0, 200);
   if (!title) return;
   const priority = str(fd.get("priority"));
@@ -2037,7 +2037,7 @@ export async function addTask(fd: FormData) {
 }
 
 export async function moveTask(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const id = str(fd.get("id"));
   // Clamped here as well as by the CHECK constraint: a bad value should be a
   // no-op, not a 500 in the user's face.
@@ -2050,7 +2050,7 @@ export async function moveTask(fd: FormData) {
 }
 
 export async function deleteTask(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   const { error } = await sb.from("action_tasks")
     .delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   if (error) throw new Error(error.message);
@@ -2077,7 +2077,7 @@ export async function saveAlertRule(fd: FormData): Promise<ActionResult | void> 
     would have enforced the price list by breaking the cheaper plan's own bullet.
   */
   await requireCapability(orgId, "alert_rules", "Custom alert rules");
-  const sb = createClient();
+  const sb = await createClient();
   const metric_key = str(fd.get("metric_key"));
   const op = str(fd.get("op")) === ">" ? ">" : "<";
   const threshold = num(fd.get("threshold"));
@@ -2107,7 +2107,7 @@ export async function deleteAlertRule(fd: FormData) {
     something they are entitled to and cannot get back without support.
   */
   await requireCapability(orgId, "alert_rules", "Changing alert rules");
-  const sb = createClient();
+  const sb = await createClient();
   const id = str(fd.get("id"));
   const { error } = await sb.from("alert_rules").delete().eq("id", id).eq("org_id", orgId);
   if (error) throw new Error(error.message);
@@ -2119,7 +2119,7 @@ export async function deleteAlertRule(fd: FormData) {
 }
 
 export async function dismissAlert(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = createClient();
+  const orgId = await requireWriteOrg(); const sb = await createClient();
   // dismissed_at, not just is_read. recomputeMetrics uses is_read to mean "the
   // rule recovered"; if a dismissal looked the same, the next save would raise
   // the alert again and the button would appear broken.
@@ -2208,7 +2208,7 @@ export async function setClientPooling(fd: FormData): Promise<{ ok: boolean; err
     const on = str(fd.get("on")) === "1";
     if (!client) return { ok: false, error: "Which client?" };
 
-    const sb = createClient();
+    const sb = await createClient();
     const { practiceClientLimit } = await import("@/lib/config");
     const svc = serviceClient();
     let limit = 25;

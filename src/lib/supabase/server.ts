@@ -27,8 +27,29 @@ import { envKey } from "@/lib/env";
 const noStore: typeof fetch = (input, init) =>
   fetch(input, { ...init, cache: "no-store" });
 
-export function createClient() {
-  const cookieStore = cookies();
+/*
+  ASYNC, AND DELIBERATELY SO WHILE WE ARE STILL ON NEXT 14.
+
+  Next 15 makes cookies() return a Promise. That is the single change with real
+  reach in this codebase: this function is called at 123 sites across 34 files,
+  and every one of them has to await it. Doing that in the same commit as the
+  framework bump would mean a wide mechanical diff landing at the same moment
+  as a major upgrade, with no way to tell which of the two broke anything.
+
+  So it is done FIRST, on Next 14, where it is a no-op at runtime: `await` on a
+  non-Promise resolves to the value immediately. The behaviour today is
+  identical; the difference is that when `next@15` is installed this file needs
+  no further change, and neither do the 123 call sites.
+
+  The compiler is what makes this safe. Once this returns a Promise, every call
+  site that uses the result synchronously is a type error — so `tsc --noEmit`
+  enumerates the work exhaustively rather than a grep guessing at it.
+
+  NOTE for the upgrade: the ONLY edit needed here afterwards is nothing at all.
+  `await cookies()` is correct on both versions.
+*/
+export async function createClient() {
+  const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

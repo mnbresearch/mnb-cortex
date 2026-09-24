@@ -19,7 +19,7 @@ import { recordQuietly } from "@/lib/funnel";
  * - Starts a 3-day trial and grants the one-time trial credits.
  */
 export async function ensureWorkspace(opts?: { name?: string; industry?: string }): Promise<{ ok: boolean; orgId?: string; created?: boolean; joined?: number; error?: string }> {
-  const anon = createClient();
+  const anon = await createClient();
   const { data: { user } } = await anon.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
 

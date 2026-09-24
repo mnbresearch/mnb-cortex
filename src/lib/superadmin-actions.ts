@@ -45,7 +45,7 @@ export async function provisionBusinesses() {
   await assertSuper();
   const sb = serviceClient();
   if (!sb) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set.");
-  const { data: { user } } = await createClient().auth.getUser();
+  const { data: { user } } = await (await createClient()).auth.getUser();
   if (!user) throw new Error("Sign in first.");
 
   const created: string[] = [];
@@ -207,7 +207,7 @@ export async function manageOrg(org_id: string, patch: {
   // Who is doing this. Resolved from the verified session, not passed in.
   let actor = "unknown";
   try {
-    const { data: { user } } = await createClient().auth.getUser();
+    const { data: { user } } = await (await createClient()).auth.getUser();
     actor = user?.email || user?.id || "unknown";
   } catch { /* assertSuper already passed; a missing email is not worth failing on */ }
 
@@ -221,7 +221,7 @@ export async function manageOrg(org_id: string, patch: {
         who moved them — which is exactly the question asked when a customer
         says their balance is wrong.
       */
-      const { data: { user } } = await createClient().auth.getUser();
+      const { data: { user } } = await (await createClient()).auth.getUser();
       const { error: ledErr } = await sb.from("credit_ledger").insert({
         org_id, delta: newCredits - prevCredits, balance_after: newCredits, reason,
         user_id: user?.id ?? null,
@@ -301,7 +301,7 @@ export async function joinOrg(org_id: string) {
   await assertSuper();
   const sb = serviceClient();
   if (!sb) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set.");
-  const { data: { user } } = await createClient().auth.getUser();
+  const { data: { user } } = await (await createClient()).auth.getUser();
   if (!user || !org_id) throw new Error("Missing user or organization.");
   const { data: mem } = await sb.from("memberships").select("id").eq("org_id", org_id).eq("user_id", user.id).maybeSingle();
   if (!mem) await sb.from("memberships").insert({ org_id, user_id: user.id, role: "owner" });

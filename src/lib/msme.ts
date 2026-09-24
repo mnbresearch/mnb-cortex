@@ -66,7 +66,7 @@ export const COVERED = new Set(["micro", "small"]);
 export async function getMsmeExposure(): Promise<Exposure> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return EMPTY;
-  const sb = createClient();
+  const sb = await createClient();
 
   let rows: ExposureRow[] = [];
   try {
@@ -175,7 +175,7 @@ export async function getMsmeExposure(): Promise<Exposure> {
 export async function syncVendorsFromPayables(): Promise<number> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return 0;
-  const sb = createClient();
+  const sb = await createClient();
   try {
     const { data: bills, error } = await sb.from("invoices")
       .select("party").eq("org_id", orgId).eq("type", "payable").limit(5000);
@@ -222,7 +222,7 @@ function normName(raw: string | null | undefined): string {
 export async function listVendors(): Promise<any[]> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return [];
-  const sb = createClient();
+  const sb = await createClient();
   try {
     const { data } = await sb.from("vendors")
       .select("id, name, udyam_category, udyam_number, has_written_agreement, category")

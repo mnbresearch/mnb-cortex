@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "invalid JSON" }, { status: 400 }); }
   const table = body.table; const rows = Array.isArray(body.rows) ? body.rows : (body.row ? [body.row] : []);
   if (!table || !rows.length) return NextResponse.json({ ok: false, error: "provide { table, rows: [...] }" }, { status: 400 });
-  const sb = createClient();
+  const sb = await createClient();
   const { data, error } = await sb.rpc("api_ingest", { p_key: key, p_table: table, p_rows: rows });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
 

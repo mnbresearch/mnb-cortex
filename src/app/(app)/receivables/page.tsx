@@ -24,7 +24,7 @@ async function allOpenReceivables(): Promise<{ rows: any[]; live: boolean; cappe
   const { orgId } = await getUserAndOrg();
   if (!orgId) return { rows: [], live: false, capped: false };
   try {
-    const sb = createClient();
+    const sb = await createClient();
     const { data } = await sb.from("invoices")
       .select("id, party, amount, due_date")
       .eq("org_id", orgId).eq("type", "receivable")

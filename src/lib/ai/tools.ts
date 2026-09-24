@@ -162,7 +162,7 @@ function likeLiteral(s: string): string {
  */
 export async function runTool(name: string, args: any, orgId: string): Promise<ToolResult> {
   if (!orgId) return { ok: false, error: "No workspace in context." };
-  const sb = createClient();
+  const sb = await createClient();
 
   try {
     switch (name) {

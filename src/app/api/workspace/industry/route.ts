@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   // update matches zero rows, PostgREST returns 204 with NO error, and this
   // route used to answer `{ ok: true }` while nothing had been written.
   // Asking for the changed row back makes the failure visible.
-  const sb = createClient();
+  const sb = await createClient();
   const { data, error } = await sb
     .from("organizations").update({ industry: id }).eq("id", orgId).select("id");
   if (error) return NextResponse.json({ ok: false, error: error.message });

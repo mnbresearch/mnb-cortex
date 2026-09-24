@@ -16,7 +16,7 @@ async function ctx() {
   if (!(await isSuperAdmin())) throw new Error("Not authorised");
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) throw new Error("No workspace found");
-  return { sb: createClient(), svc: serviceClient(), userId: user.id, orgId };
+  return { sb: await createClient(), svc: serviceClient(), userId: user.id, orgId };
 }
 
 export async function POST(req: Request) {

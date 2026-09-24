@@ -36,7 +36,7 @@ import type { HealthMetric, AIInsight, Alert } from "@/types";
 export const getUserAndOrg = cache(async function getUserAndOrg() {
   if (!hasSupabase()) return { user: null, orgId: null as string | null };
   try {
-    const sb = createClient();
+    const sb = await createClient();
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return { user: null, orgId: null };
     const { data } = await sb.from("memberships").select("org_id").eq("user_id", user.id);
@@ -72,7 +72,7 @@ export async function getIntegrationState() {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) return { connections: [] as any[], plan: "starter", canManage: false, live: false, encryption };
   try {
-    const sb = createClient();
+    const sb = await createClient();
     const [{ data: rows }, { data: org }, { data: mem }] = await Promise.all([
       sb.from("integrations").select("provider,status,config").eq("org_id", orgId),
       sb.from("organizations").select("plan").eq("id", orgId).single(),
@@ -95,7 +95,7 @@ export async function getMyOrgs(): Promise<{ id: string; name: string }[]> {
   const { user } = await getUserAndOrg();
   if (!user) return [];
   try {
-    const sb = createClient();
+    const sb = await createClient();
     const { data } = await sb.from("memberships").select("org_id").eq("user_id", user.id);
     const ids = ((data as any[]) || []).map((m) => m.org_id);
     if (!ids.length) return [];
@@ -112,7 +112,7 @@ async function currentOrg(): Promise<string | null> {
 export async function getOrgProfile() {
   const { user, orgId } = await getUserAndOrg();
   if (!orgId) return null;
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("organizations").select("*").eq("id", orgId).single();
   return data ? { ...data, userEmail: user?.email } : null;
 }
@@ -133,7 +133,7 @@ export async function getStatutoryProfile(): Promise<StatutoryProfile> {
   try {
     const org = await currentOrg();
     if (!org) return UNKNOWN_PROFILE;
-    const sb = createClient();
+    const sb = await createClient();
     const { data, error } = await sb
       .from("organizations").select("statutory_profile").eq("id", org).maybeSingle();
     // A deployment that has not run 2026_zzzf_statutory_profile.sql yet must
@@ -151,7 +151,7 @@ export async function getStatutoryProfile(): Promise<StatutoryProfile> {
 export async function getMetrics(): Promise<HealthMetric[]> {
   const org = await currentOrg();
   if (!org) return demoMetrics;
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("health_metrics").select("*").eq("org_id", org);
   return (data as any) || [];
 }
@@ -159,7 +159,7 @@ export async function getMetrics(): Promise<HealthMetric[]> {
 export async function getInsights(module?: string): Promise<AIInsight[]> {
   const org = await currentOrg();
   if (!org) return module ? demoInsights.filter((i) => i.module === module) : demoInsights;
-  const sb = createClient();
+  const sb = await createClient();
   let q = sb.from("ai_insights").select("*").eq("org_id", org);
   if (module) q = q.eq("module", module);
   const { data } = await q;
@@ -169,7 +169,7 @@ export async function getInsights(module?: string): Promise<AIInsight[]> {
 export async function getAlerts(): Promise<Alert[]> {
   const org = await currentOrg();
   if (!org) return demoAlerts;
-  const sb = createClient();
+  const sb = await createClient();
   // Unread only. The dashboard bell should say what is wrong NOW; a resolved
   // problem staying on the list for ever is how people learn to ignore it.
   const { data } = await sb.from("alerts").select("*").eq("org_id", org).eq("is_read", false)
@@ -188,7 +188,7 @@ export async function getAlerts(): Promise<Alert[]> {
 export async function getGoals() {
   const org = await currentOrg();
   if (!org) return { rows: [] as any[], live: false };
-  const sb = createClient();
+  const sb = await createClient();
   const [{ data: goals }, metrics] = await Promise.all([
     sb.from("goals").select("*").eq("org_id", org).order("created_at", { ascending: true }),
     getMetrics(),
@@ -231,7 +231,7 @@ export async function getGoals() {
 export async function getAlertRules() {
   const org = await currentOrg();
   if (!org) return { rows: [] as any[], live: false };
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("alert_rules").select("*").eq("org_id", org).order("created_at", { ascending: true });
   return { rows: (data as any[]) || [], live: true };
 }
@@ -240,7 +240,7 @@ export async function getAlertRules() {
 async function fetchRows(table: string, order = "created_at") {
   const org = await currentOrg();
   if (!org) return { rows: [] as any[], live: false };
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from(table).select("*").eq("org_id", org).order(order, { ascending: false }).limit(200);
   return { rows: (data as any[]) || [], live: true };
 }
@@ -364,7 +364,7 @@ export const getWorkflowRuns = () => fetchRows("workflow_runs", "ran_at");
 export async function getFinanceSeries() {
   const org = await currentOrg();
   if (!org) return { series: null as any[] | null, live: false, keys: [] as string[] };
-  const sb = createClient();
+  const sb = await createClient();
   // Newest 12 months, then reversed for the chart. An ascending limit would
   // eventually stop including the current month as the ledger grows.
   const { data: recent } = await sb.from("finance_ledger").select("*").eq("org_id", org).order("period", { ascending: false }).limit(12);
@@ -387,7 +387,7 @@ export async function getFinanceSeries() {
 export async function getApprovals() {
   const org = await currentOrg();
   if (!org) return { pos: [] as any[], invoices: [] as any[], live: false };
-  const sb = createClient();
+  const sb = await createClient();
   const [po, inv] = await Promise.all([
     sb.from("purchase_orders").select("*").eq("org_id", org).eq("status", "draft"),
     sb.from("invoices").select("*").eq("org_id", org).eq("status", "pending"),
@@ -398,7 +398,7 @@ export async function getApprovals() {
 export async function getMembers() {
   const { user, orgId } = await getUserAndOrg();
   if (!orgId) return { rows: [] as any[], live: false };
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("memberships").select("role, user_id, created_at").eq("org_id", orgId).order("created_at", { ascending: true });
   const rows = (data as any[] || []).map((m) => ({
     id: m.user_id,
@@ -422,7 +422,7 @@ export async function getLeads() {
       return { rows: (data as any[]) || [], live: true };
     }
   }
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("leads").select("*").eq("org_id", orgId).order("created_at", { ascending: false }).limit(200);
   return { rows: (data as any[]) || [], live: true };
 }
@@ -430,7 +430,7 @@ export async function getLeads() {
 export async function getIntegrations() {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return { map: {} as Record<string, any>, live: false };
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("integrations").select("*").eq("org_id", orgId);
   const map: Record<string, any> = {};
   for (const r of (data as any[] || [])) map[r.provider] = r;
@@ -442,7 +442,7 @@ export async function getTableRows(table: string, search: string, page: number) 
   const { orgId } = await getUserAndOrg();
   if (!EXPLORE_TABLES.includes(table)) return { rows: [], cols: [], live: false, total: 0 };
   if (!orgId) return { rows: [], cols: [], live: false, total: 0 };
-  const sb = createClient();
+  const sb = await createClient();
   const per = 15; const from = page * per;
   let q = sb.from(table).select("*", { count: "exact" }).eq("org_id", orgId).order("created_at", { ascending: false }).range(from, from + per - 1);
   const { data, count } = await q;
@@ -458,7 +458,7 @@ export const getCustomers = () => fetchRows("customers", "created_at");
 export async function getActivity() {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return { rows: [] as any[], live: false };
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("activity").select("*").eq("org_id", orgId).order("created_at", { ascending: false }).limit(100);
   return { rows: (data as any[]) || [], live: true };
 }
@@ -466,7 +466,7 @@ export async function getActivity() {
 export async function getInvites() {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return { rows: [] as any[], live: false };
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("invites").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
   return { rows: (data as any[]) || [], live: true };
 }
@@ -474,7 +474,7 @@ export async function getInvites() {
 export async function searchAll(q: string) {
   const { orgId } = await getUserAndOrg();
   if (!orgId || !q || q.length < 2) return [] as any[];
-  const sb = createClient();
+  const sb = await createClient();
   /*
     THE SEARCH BOX WROTE POSTGREST FILTER SYNTAX, NOT JUST A PATTERN.
 
@@ -537,7 +537,7 @@ export const getPipeline = () => fetchRows("sales_pipeline", "created_at");
 export async function getApiKeys() {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return { rows: [] as any[], live: false };
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("api_keys").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
   return { rows: (data as any[]) || [], live: true };
 }
@@ -545,7 +545,7 @@ export async function getApiKeys() {
 export async function getUsage() {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return { live: false, counts: {} as Record<string, number> };
-  const sb = createClient();
+  const sb = await createClient();
   const tables = ["sales_orders", "invoices", "inventory_items", "employees", "customers", "documents"];
   const counts: Record<string, number> = {};
   await Promise.all(tables.map(async (t) => {
@@ -558,7 +558,7 @@ export async function getUsage() {
 export async function getReportLinks() {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return { rows: [] as any[], live: false };
-  const sb = createClient();
+  const sb = await createClient();
   const { data } = await sb.from("report_links").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
   return { rows: (data as any[]) || [], live: true };
 }

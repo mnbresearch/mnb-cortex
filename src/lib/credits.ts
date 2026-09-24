@@ -61,7 +61,7 @@ export async function getCreditState(): Promise<CreditState> {
     return { known: false, enforceable: false, unlimited: true, balance: 0, allowance: 0, plan: "starter", resetAt: null };
   }
   const superAdmin = await isSuperAdmin();
-  const sb = createClient();
+  const sb = await createClient();
   try {
     // select("*") rather than a column list: the period columns may not exist on
     // a database that hasn't run 2026_hardening.sql yet, and a missing-column

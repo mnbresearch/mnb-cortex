@@ -14,7 +14,7 @@ async function ctx() {
   if (!user || !orgId) throw new Error("No workspace found");
   const svc = serviceClient();
   if (!svc) throw new Error("SUPABASE_SERVICE_ROLE_KEY not set");
-  return { sb: createClient(), svc, orgId };
+  return { sb: await createClient(), svc, orgId };
 }
 
 export async function POST(req: Request) {

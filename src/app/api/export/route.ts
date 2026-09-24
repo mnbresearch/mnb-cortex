@@ -7,7 +7,7 @@ const TABLES = ["health_metrics","ai_insights","alerts","sales_orders","sales_pi
 export async function GET() {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return NextResponse.json({ error: "sign in" }, { status: 401 });
-  const sb = createClient();
+  const sb = await createClient();
   const out: Record<string, any[]> = {};
   await Promise.all(TABLES.map(async (t) => { const { data } = await sb.from(t).select("*").eq("org_id", orgId); out[t] = data || []; }));
   return new NextResponse(JSON.stringify({ exported: new Date().toISOString(), org: orgId, data: out }, null, 2), {

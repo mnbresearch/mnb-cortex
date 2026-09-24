@@ -9,7 +9,7 @@ function fmt(v: number, unit: string) {
 }
 export default async function PublicReport({ params }: { params: { token: string } }) {
   let data: any = { ok: false };
-  if (hasSupabase()) { try { const sb = createClient(); const { data: d } = await sb.rpc("public_report", { p_token: params.token }); data = d || { ok: false }; } catch {} }
+  if (hasSupabase()) { try { const sb = await createClient(); const { data: d } = await sb.rpc("public_report", { p_token: params.token }); data = d || { ok: false }; } catch {} }
   const dot: Record<string, string> = { green: "bg-success", yellow: "bg-warning", red: "bg-danger" };
   return (
     <main className="min-h-screen">

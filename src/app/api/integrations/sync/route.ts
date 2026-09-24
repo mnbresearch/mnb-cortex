@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) return NextResponse.json({ ok: false, error: "Sign in to sync." }, { status: 401 });
 
-  const sb = createClient();
+  const sb = await createClient();
   const { data: mem } = await sb.from("memberships").select("role").eq("org_id", orgId).eq("user_id", user.id).maybeSingle();
   const rank: Record<string, number> = { viewer: 1, analyst: 2, manager: 3, admin: 4, owner: 5 };
   if ((rank[(mem as any)?.role] || 0) < rank.admin) {

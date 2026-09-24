@@ -64,12 +64,12 @@ export async function POST(req: Request) {
         note: message || null,
       };
       try {
-        const { error } = await createClient().from("leads").insert(row);
+        const { error } = await (await createClient()).from("leads").insert(row);
         if (!error) {
           stored = true;
         } else {
           const { company: _c, note: _n, ...core } = row;
-          const { error: e2 } = await createClient().from("leads").insert(core);
+          const { error: e2 } = await (await createClient()).from("leads").insert(core);
           stored = !e2;
           if (e2) console.error("[access-request] lead not stored —", e2.message, "(first attempt:", error.message, ")");
         }
