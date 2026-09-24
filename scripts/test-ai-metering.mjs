@@ -93,5 +93,111 @@ for (const rel of callers) {
     "two implementations of pooling, hard-stop and the BYO waiver will diverge");
 }
 
+/* ========================================================================= */
+/*  EVERY CHARGED MODE MUST BE PRICED EXPLICITLY                            */
+/* ========================================================================= */
+/*
+  creditCost() falls back to DEFAULT_CREDIT_COST for a mode it does not know,
+  so an unpriced mode bills a plausible number and nobody notices. Three did:
+  `benchmark`, `pricing` and `risk` were passed to AIPanel, reached
+  chargeForMode, and charged 19 credits each without ever appearing in
+  CREDIT_COSTS.
+
+  The charge was right. The COVERAGE was not — scripts/test-margins.mjs reads
+  that table to prove every price clears its cost of goods, and a row that does
+  not exist cannot be checked. Three priced, customer-facing actions had never
+  had their margin verified, and the config file's instruction to "run
+  test:margins" could not have caught it.
+
+  So: every `mode="..."` that appears in the app must be a key in CREDIT_COSTS.
+  A new AI surface is now priced deliberately or it fails here.
+*/
+{
+  const { readFileSync, readdirSync, statSync } = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+  const cfg = readFileSync(join(root, "src/lib/config.ts"), "utf8");
+  const block = (cfg.match(/export const CREDIT_COSTS[^{]*\{([\s\S]*?)\n\};/) || ["", ""])[1];
+  const priced = new Set([...block.matchAll(/(\w+)\s*:\s*\d+/g)].map((m) => m[1]));
+
+  const walk = (d, out = []) => {
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) walk(p, out);
+      else if (/\.tsx?$/.test(p)) out.push(p);
+    }
+    return out;
+  };
+
+  const used = new Set();
+  for (const f of walk(join(root, "src"))) {
+    const src = readFileSync(f, "utf8");
+    for (const m of src.matchAll(/\bmode=["']([a-z_]+)["']/g)) used.add(m[1]);
+  }
+
+  console.log("\nEvery AI mode the app uses is priced in CREDIT_COSTS:");
+  check(`modes found in the UI (${used.size})`, used.size >= 15);
+  const unpriced = [...used].filter((m) => !priced.has(m)).sort();
+  check("no mode falls through to DEFAULT_CREDIT_COST", unpriced.length === 0,
+    `${unpriced.join(", ")} — add each to CREDIT_COSTS with a deliberate price, `
+    + `then run npm run test:margins so the margin is actually verified`);
+}
+
+/* ========================================================================= */
+/*  NO PRICE IS TYPED BY HAND IN THE UI                                      */
+/* ========================================================================= */
+/*
+  Four labels quoted a credit price that was not the price charged:
+
+    deep-dive.tsx          said 12   charged 24
+    deepdive/page.tsx      said 12   charged 24
+    gst-return.tsx         said  8   charged 45
+    bank-statement.tsx     said  8   charged 45
+
+  visibility.tsx had the identical defect (said 10, charged 89), was fixed, and
+  carries a comment saying "quoting a price and charging another is not a copy
+  problem". It recurred in four more places anyway, because the fix was to
+  correct the literal rather than to remove it.
+
+  A number typed beside a button drifts the moment the number it describes
+  moves, and CREDIT_COSTS has been repriced twice. lib/config.ts is
+  deliberately client-safe so `creditCost(mode)` can be called from a client
+  component — there is no reason for a literal to exist.
+*/
+{
+  const { readFileSync, readdirSync, statSync } = await import("node:fs");
+  const { join, dirname, relative } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+  const walk = (d, out = []) => {
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) walk(p, out);
+      else if (p.endsWith(".tsx")) out.push(p);
+    }
+    return out;
+  };
+
+  console.log("\nNo credit price is hardcoded in the UI:");
+  const offenders = [];
+  for (const f of [...walk(join(root, "src/app")), ...walk(join(root, "src/components"))]) {
+    const live = readFileSync(f, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    /* A currency-prefixed number is a PRICE IN RUPEES, not a credit count —
+       "₹149 credit pack" is the ₹149 pack, and matching it was a false
+       positive on the first run of this guard. */
+    for (const m of live.matchAll(/(?<![₹$\d])\b(\d+)\s+credits?\b/g)) {
+      offenders.push(`${relative(root, f)}: "${m[0]}"`);
+    }
+  }
+  check("every price in the UI comes from creditCost()", offenders.length === 0,
+    offenders.join("; ") + " — call creditCost(mode) instead; lib/config.ts is client-safe");
+}
+
 console.log(`\nai metering: ${pass} passed, ${fails.length} failed`);
 if (fails.length) { fails.forEach((f) => console.log("  FAIL " + f)); process.exit(1); }

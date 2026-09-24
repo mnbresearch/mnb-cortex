@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
 import { computeTax, RATES_AS_OF } from "@/lib/tax-slabs";
+import { annualPf } from "@/lib/epf";
 
 /**
  * India CTC → take-home.
@@ -45,10 +46,20 @@ export function PayrollCalc() {
     const basic = ctc * (basicPct / 100);
     const hra = basic * (metro ? 0.5 : 0.4);
 
-    /* PF on the ₹15,000/mo statutory wage ceiling, which is what most SMEs use. */
-    const pfBaseAnnual = Math.min(basic, 15_000 * 12);
-    const employerPf = pfBaseAnnual * 0.12;
-    const employeePf = pfBaseAnnual * 0.12;
+    /*
+      PF FROM THE SHARED LADDER (lib/epf.ts), not from an inline formula here.
+
+      This computed `Math.min(basic, 15_000 * 12) * 0.12` while
+      components/epf-calc.tsx computed 12% of the FULL basic — two pages of the
+      same product, same input, different statutory answer. The ceiling logic
+      now lives in one place and both read it; see the note at the top of
+      lib/epf.ts for why both answers were defensible and how the policy is now
+      made explicit rather than assumed.
+    */
+    const pf = annualPf(basic);
+    const pfBaseAnnual = pf.base;
+    const employerPf = pf.employer;
+    const employeePf = pf.employee;
     const gratuity = basic * 0.0481;
 
     const beforeSpecial = basic + hra + employerPf + gratuity;

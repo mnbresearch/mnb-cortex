@@ -24,12 +24,23 @@ export default async function Documents() {
     <>
       <Topbar title="Document Intelligence" subtitle="Upload anything — AI reads, extracts & flags risk" />
       <PageShell>
-        {signedIn && (
-          <Card className="p-4 text-sm text-muted-foreground">
-            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
-            built from your own numbers.
-          </Card>
-        )}
+        {/*
+          THE GATE WAS INVERTED, AND THIS IS THE SIXTH PAGE WITH IT.
+
+          `{signedIn && (...)}` showed the "these are examples, not your data"
+          card ONLY to a signed-in customer — so the logged-out visitor, the one
+          person with no way to tell an invented figure from a real one, saw the
+          worked example with no warning at all. marketing/page.tsx documents the
+          fix and names the pages it was applied to; these were missed.
+
+          Unconditional is correct. A signed-in owner also benefits from being
+          told which numbers on the page are illustrative, and the cost of
+          saying so twice is a sentence.
+        */}
+        <Card className="p-4 text-sm text-muted-foreground">
+          The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+          built from your own numbers.
+        </Card>
         <AIPanel mode="document" saveMode="document" multiline allowFile
           placeholder="Paste a contract, invoice, GST return or report — or upload a PDF above. The AI summarizes and flags risks."
           cta="Analyze document" />

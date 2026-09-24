@@ -19,12 +19,23 @@ export default async function Market() {
     <>
       <Topbar title="Market Intelligence" subtitle="AI researches markets, competitors & trends" />
       <PageShell>
-        {signedIn && (
-          <Card className="p-4 text-sm text-muted-foreground">
-            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
-            built from your own numbers.
-          </Card>
-        )}
+        {/*
+          THE GATE WAS INVERTED, AND THIS IS THE SIXTH PAGE WITH IT.
+
+          `{signedIn && (...)}` showed the "these are examples, not your data"
+          card ONLY to a signed-in customer — so the logged-out visitor, the one
+          person with no way to tell an invented figure from a real one, saw the
+          worked example with no warning at all. marketing/page.tsx documents the
+          fix and names the pages it was applied to; these were missed.
+
+          Unconditional is correct. A signed-in owner also benefits from being
+          told which numbers on the page are illustrative, and the cost of
+          saying so twice is a sentence.
+        */}
+        <Card className="p-4 text-sm text-muted-foreground">
+          The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+          built from your own numbers.
+        </Card>
         <AIPanel mode="market" placeholder="Should I enter Saudi Arabia? Which city should I expand into? Which product to launch?" cta="Research this market" saveMode="market" />
         <SavedAnalyses title="Saved market briefs" rows={rows} live={live} table="market_reports" path="/market"
           titleKey="title" metaKey="query" textKey="recommendation"

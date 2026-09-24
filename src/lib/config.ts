@@ -133,6 +133,26 @@ export const CREDIT_COSTS: Record<string, number> = {
   hiring: 19, contract: 19, playbook: 19, proposal: 19,
   broadcast: 19, sop: 19, costs: 19, loan: 19,
   vendor: 19,
+  /*
+    THREE MODES THE APP CHARGES FOR AND THIS TABLE HAD NEVER HEARD OF.
+
+    `benchmark` (/benchmarks), `pricing` (/pricing-optimizer) and `risk` (a
+    /playbooks card) are all passed to AIPanel as `mode=` and all reach
+    chargeForMode. creditCost() falls back to DEFAULT_CREDIT_COST for an
+    unknown mode, so they were billing 19 — the right number, by accident.
+
+    The price was never the problem. Being ABSENT was: scripts/test-margins.mjs
+    parses this block and verifies every entry earns its cost of goods, so a
+    mode that is not listed here is a mode whose margin has never once been
+    checked. The file's own header says "do not edit a number here by hand, run
+    npm run test:margins" — that instruction cannot protect a row that does not
+    exist.
+
+    Listed explicitly at 19 so the value is unchanged and the coverage is real.
+    scripts/test-ai-metering.mjs now fails if any mode= in the app is missing
+    from this table, which is what stops the next one being added silently.
+  */
+  benchmark: 19, pricing: 19, risk: 19,
 
   // DEEP — multi-step reasoning, where the thinking is the value.
   scenario: 24, forecast: 24, strategy: 24, investor: 24,

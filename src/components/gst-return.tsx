@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Receipt, Upload, Loader2, BrainCircuit, Check, AlertTriangle, CheckCircle2, Circle, ListChecks } from "lucide-react";
+import { creditCost } from "@/lib/config";
 
 type GstCheck = { label: string; ok: boolean };
 type GstSignal = { label: string; tone: "good" | "warn" | "bad" | "info"; detail: string };
@@ -123,7 +124,18 @@ export function GstReturnPanel() {
           <Button onClick={run} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />} {loading ? "Reading your return…" : "Analyse GST return"}
           </Button>
-          <span className="text-xs text-muted-foreground">Read on your device + AI · 8 credits</span>
+          {/*
+            THE PRICE IS READ FROM THE PRICE LIST, NOT TYPED BESIDE THE BUTTON.
+
+            This label was a hardcoded literal and it was wrong — the same
+            defect, and the same 1-in-N understatement, that visibility.tsx
+            documents having already been caught once. Quoting a customer one
+            price on the button that spends their credits and charging another
+            is not a copy problem, and a number typed by hand next to a number
+            computed by creditCost() will drift again the next time either
+            moves. lib/config.ts is deliberately client-safe for exactly this.
+          */}
+          <span className="text-xs text-muted-foreground">Read on your device + AI · {creditCost("gst")} credits</span>
         </div>
         {err && <div className="flex items-start gap-2 text-sm text-danger" role="alert"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
       </Card>

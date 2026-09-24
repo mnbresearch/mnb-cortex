@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Radar, Loader2, Check, X, AlertTriangle, ChevronDown, BrainCircuit, Copy } from "lucide-react";
 import { mdToHtml } from "@/lib/utils";
+import { creditCost } from "@/lib/config";
 
 type Citation = { domain: string; url: string; title: string };
 type Result = {
@@ -121,7 +122,7 @@ export function VisibilityPanel() {
             that spends it. Quoting a price and charging another is not a copy
             problem.
           */}
-          <span className="text-xs text-muted-foreground">Runs your buyer questions through live AI · 89 credits</span>
+          <span className="text-xs text-muted-foreground">Runs your buyer questions through live AI · {creditCost("visibility")} credits</span>
         </div>
         {err && <div className="flex items-start gap-2 text-sm text-danger" role="alert"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
       </Card>

@@ -2,24 +2,33 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { computeEpf, EPF_RATES_AS_OF, PF_WAGE_CEILING_MONTHLY } from "@/lib/epf";
 
+/*
+  THIS FILE AND payroll-calc.tsx GAVE DIFFERENT ANSWERS to the same statutory
+  question. It computed PF on the full basic; payroll capped it at the ₹15,000
+  wage ceiling. On a ₹25,000 basic that is ₹3,000 a month against ₹1,800, and
+  an owner preparing an offer sees both screens.
+
+  Both were defensible — contributing above the ceiling is a real and common
+  employer choice — so the fix is not to pick one. lib/epf.ts holds the single
+  ladder and makes the choice explicit, and this page now exposes it as the
+  policy toggle it always secretly was. Nothing it used to show is gone.
+*/
 export function EpfCalc() {
   const [basic, setBasic] = useState(25000);  // Basic + DA (PF wage)
   const [gross, setGross] = useState(45000);  // gross for ESI eligibility
+  const [aboveCeiling, setAboveCeiling] = useState(false);
 
   const m = useMemo(() => {
-    const pfWage = basic;
-    const epsWage = Math.min(pfWage, 15000);
-    const empPF = Math.round(pfWage * 0.12);
-    const eps = Math.round(epsWage * 0.0833);
-    const erEPF = Math.round(pfWage * 0.12) - eps; // employer 12% split: EPS + EPF
-    const esiApplies = gross <= 21000;
-    const empESI = esiApplies ? Math.round(gross * 0.0075) : 0;
-    const erESI = esiApplies ? Math.round(gross * 0.0325) : 0;
-    const employee = empPF + empESI;
-    const employer = eps + erEPF + erESI;
-    return { empPF, eps, erEPF, empESI, erESI, esiApplies, employee, employer, ctc: employer };
-  }, [basic, gross]);
+    const r = computeEpf({ basic, gross, aboveCeiling });
+    return {
+      empPF: r.employeePF, eps: r.employerEPS, erEPF: r.employerEPF,
+      empESI: r.employeeESI, erESI: r.employerESI, esiApplies: r.esiApplies,
+      employee: r.employeeTotal, employer: r.employerTotal,
+      pfWage: r.pfWage, ceilingBinds: r.ceilingBinds,
+    };
+  }, [basic, gross, aboveCeiling]);
 
   const F = (label: string, value: number, set: (n: number) => void) => (
     <label className="block"><span className="text-sm text-muted-foreground">{label}</span>
@@ -35,6 +44,31 @@ export function EpfCalc() {
           {F("Basic + DA (PF wage) /mo", basic, setBasic)}
           {F("Gross salary /mo (for ESI)", gross, setGross)}
         </div>
+        {/*
+          THE POLICY, ASKED RATHER THAN ASSUMED.
+
+          Only offered when it changes the answer — below the ceiling the two
+          policies are identical, and a toggle that does nothing is a question
+          the user has to think about for no reason.
+        */}
+        {m.ceilingBinds && (
+          <label className="flex items-start gap-2.5 rounded-lg border bg-secondary/30 p-3 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={aboveCeiling}
+              onChange={(e) => setAboveCeiling(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+            />
+            <span>
+              <span className="font-medium">We contribute PF on the full basic, not the ₹{PF_WAGE_CEILING_MONTHLY.toLocaleString("en-IN")} ceiling.</span>{" "}
+              <span className="text-muted-foreground">
+                Leave this off for the statutory minimum, which is what most SMEs do. Either way the
+                pension (EPS) slice stays capped at ₹{PF_WAGE_CEILING_MONTHLY.toLocaleString("en-IN")} — that cap is law, not policy.
+                PF is currently computed on ₹{m.pfWage.toLocaleString("en-IN")}.
+              </span>
+            </span>
+          </label>
+        )}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <Stat label="Employee deduction" value={inr(m.employee)} />
           <Stat label="Employer contribution" value={inr(m.employer)} />
@@ -52,7 +86,7 @@ export function EpfCalc() {
           <Row k={`ESI (3.25%)${m.esiApplies ? "" : " — N/A"}`} v={inr(m.erESI)} />
         </Card>
       </div>
-      <p className="text-xs text-muted-foreground">ESI applies only when gross ≤ ₹21,000/month. EPS (pension) is 8.33% of PF wage capped at ₹15,000. Employer EPF is the remainder of the 12%. Admin charges are not included.</p>
+      <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground/80">{EPF_RATES_AS_OF}.</span> ESI applies only when gross ≤ ₹21,000/month. EPS (pension) is 8.33% of PF wage capped at ₹15,000. Employer EPF is the remainder of the 12%. Admin charges are not included.</p>
     </div>
   );
 }

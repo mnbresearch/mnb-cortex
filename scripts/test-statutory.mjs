@@ -145,6 +145,65 @@ console.log(`\nTDS — rates and thresholds, FY ${FY}`);
 }
 
 /* ========================================================================= */
+console.log("\nEPF / EPS / ESI — one ladder, two pages");
+/* ========================================================================= */
+/*
+  /epf and /payroll gave DIFFERENT ANSWERS to the same statutory question.
+  epf-calc computed PF on the full basic; payroll-calc capped it at the
+  ₹15,000 wage ceiling. On a ₹25,000 basic that is ₹3,000 a month against
+  ₹1,800 — and an owner preparing an offer sees both screens.
+
+  Neither was wrong, which is why it survived: contributing above the ceiling
+  is a real employer choice. What was wrong was that the product picked
+  silently, differently, in two places. lib/epf.ts is the single ladder;
+  these assertions are what keep it single.
+*/
+{
+  const epf = await import("../src/lib/epf.ts");
+
+  console.log("\n  The ceiling");
+  const below = epf.computeEpf({ basic: 12_000, gross: 20_000 });
+  check("below the ceiling, PF is on the full basic", below.pfWage === 12_000);
+  check("...and the ceiling is reported as not binding", below.ceilingBinds === false);
+
+  const above = epf.computeEpf({ basic: 25_000, gross: 45_000 });
+  check("above the ceiling, the statutory minimum caps PF at ₹15,000", above.pfWage === 15_000);
+  check("...and the page is told the choice now matters", above.ceilingBinds === true);
+  check("employee PF at the ceiling is ₹1,800", above.employeePF === 1_800);
+
+  console.log("\n  The policy is a choice, and EPS is not");
+  const policy = epf.computeEpf({ basic: 25_000, gross: 45_000, aboveCeiling: true });
+  check("opting above the ceiling raises PF to 12% of the full basic", policy.employeePF === 3_000);
+  check("...but EPS stays capped — that cap is law, not policy",
+    policy.employerEPS === above.employerEPS && policy.epsWage === 15_000);
+  check("employer EPS + EPF always equals 12% of the PF wage",
+    policy.employerEPS + policy.employerEPF === Math.round(policy.pfWage * 0.12));
+
+  console.log("\n  The two pages agree");
+  for (const basic of [8_000, 12_000, 15_000, 25_000, 60_000]) {
+    const monthly = epf.computeEpf({ basic, gross: basic * 1.8 });
+    const annual = epf.annualPf(basic * 12);
+    check(`₹${basic.toLocaleString("en-IN")} basic: /epf and /payroll compute the same PF`,
+      Math.abs(monthly.employeePF * 12 - annual.employee) <= 12);
+  }
+
+  console.log("\n  ESI");
+  check("ESI applies at exactly the ₹21,000 ceiling", epf.computeEpf({ basic: 10_000, gross: 21_000 }).esiApplies === true);
+  check("...and not one rupee above it", epf.computeEpf({ basic: 10_000, gross: 21_001 }).esiApplies === false);
+  check("employee ESI is 0.75%", epf.computeEpf({ basic: 10_000, gross: 20_000 }).employeeESI === 150);
+  check("employer ESI is 3.25%", epf.computeEpf({ basic: 10_000, gross: 20_000 }).employerESI === 650);
+
+  console.log("\n  Neither page may keep a private copy");
+  const epfSrc = read("epf-calc.tsx"), payrollSrc = read("payroll-calc.tsx");
+  check("epf-calc computes through lib/epf", /computeEpf\(/.test(epfSrc));
+  check("payroll-calc computes through lib/epf", /annualPf\(/.test(payrollSrc));
+  check("no inline PF ceiling survives in either page",
+    !/15_?000\s*\*\s*12/.test(payrollSrc.replace(/\/\*[\s\S]*?\*\//g, "")) &&
+    !/Math\.min\(\s*pfWage/.test(epfSrc.replace(/\/\*[\s\S]*?\*\//g, "")));
+  check("the vintage is on screen", /EPF_RATES_AS_OF/.test(epfSrc));
+}
+
+/* ========================================================================= */
 console.log("\nGRATUITY — Payment of Gratuity Act");
 /* ========================================================================= */
 {
@@ -160,15 +219,31 @@ console.log("\nGRATUITY — Payment of Gratuity Act");
 /* ========================================================================= */
 console.log("\nEPF / ESI — contribution rates");
 /* ========================================================================= */
+/*
+  THESE WERE REGEXES AGAINST epf-calc.tsx, and they broke the moment the
+  formulas moved into lib/epf.ts — the same shape of problem as the TDS block
+  above, where a test asserting the IMPLEMENTATION rather than the BEHAVIOUR
+  made the correct fix look like a regression.
+
+  The rates are now asserted against the exported constants, which is what a
+  future reader actually needs pinned: `EPF_RATE` being 0.12 is a fact about
+  Indian statute, whereas `/pfWage \* 0\.12/` appearing in a particular .tsx
+  was a fact about where the code happened to live that week.
+
+  The behavioural coverage — the ceiling, the policy, EPS being capped
+  regardless of it, and the two pages agreeing — is in the block above.
+*/
 {
-  const src = read("epf-calc.tsx");
-  check("employee PF is 12% of the PF wage", /pfWage \* 0\.12/.test(src));
-  check("EPS is 8.33%", /0\.0833/.test(src));
-  check("EPS wage is capped at ₹15,000", /Math\.min\(pfWage,\s*15000\)/.test(src));
-  check("employer EPF is 12% less EPS", /0\.12\) - eps/.test(src));
-  check("ESI applies at or below ₹21,000 gross", /gross <= 21000/.test(src));
-  check("employee ESI is 0.75%", /0\.0075/.test(src));
-  check("employer ESI is 3.25%", /0\.0325/.test(src));
+  const epf = await import("../src/lib/epf.ts");
+  check("employee PF is 12% of the PF wage", epf.EPF_RATE === 0.12);
+  check("EPS is 8.33%", epf.EPS_RATE === 0.0833);
+  check("EPS wage is capped at ₹15,000", epf.PF_WAGE_CEILING_MONTHLY === 15_000);
+  check("employer EPF is 12% less EPS",
+    (() => { const r = epf.computeEpf({ basic: 10_000, gross: 18_000 });
+             return r.employerEPF === Math.round(10_000 * 0.12) - r.employerEPS; })());
+  check("ESI applies at or below ₹21,000 gross", epf.ESI_GROSS_CEILING_MONTHLY === 21_000);
+  check("employee ESI is 0.75%", epf.ESI_EMPLOYEE_RATE === 0.0075);
+  check("employer ESI is 3.25%", epf.ESI_EMPLOYER_RATE === 0.0325);
 }
 
 /* ========================================================================= */

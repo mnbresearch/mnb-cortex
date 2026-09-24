@@ -59,11 +59,22 @@ export default async function Reorder() {
               : <>No inventory recorded yet — <Link href="/inventory" className="text-primary">add items</Link> or <Link href="/import" className="text-primary">import them</Link> and this page will watch your real cover levels.</>}
           </Card>
         )}
-        {signedIn && (
-          <Card className="p-4 text-sm text-muted-foreground">
-            The optimizer below is a calculator — change the inputs to model any item. The alert above is your live data.
-          </Card>
-        )}
+        {/*
+          THE GATE WAS INVERTED, AND THIS IS THE SIXTH PAGE WITH IT.
+
+          `{signedIn && (...)}` showed the "these are examples, not your data"
+          card ONLY to a signed-in customer — so the logged-out visitor, the one
+          person with no way to tell an invented figure from a real one, saw the
+          worked example with no warning at all. marketing/page.tsx documents the
+          fix and names the pages it was applied to; these were missed.
+
+          Unconditional is correct. A signed-in owner also benefits from being
+          told which numbers on the page are illustrative, and the cost of
+          saying so twice is a sentence.
+        */}
+        <Card className="p-4 text-sm text-muted-foreground">
+          The optimizer below is a calculator — change the inputs to model any item. The alert above is your live data.
+        </Card>
         <ReorderOptimizer />
         <Section title="How to read this" desc="The two numbers that matter">
           <div className="text-sm text-muted-foreground space-y-2">

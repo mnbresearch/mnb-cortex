@@ -234,8 +234,38 @@ export function AIPanel({
           dangerouslySetInnerHTML={{ __html: mdToHtml(out) }}
         />
       )}
+      {/*
+        A SAVE THAT SAID NOTHING.
+
+        SafeForm only renders a confirmation when it is given `successMessage`
+        (safe-form.tsx:96), and this form passed none — so pressing "Save to
+        workspace" produced no visible change whatsoever. A successful save and
+        a silently swallowed one were pixel-identical, on a button whose entire
+        purpose is to reassure.
+
+        It is worse than a missing toast, because saveArtifact files the
+        artifact somewhere the user is not: everything except `market`,
+        `meeting` and `document` lands in strategy_docs and surfaces on
+        /strategy (actions.ts:511-524). Several pages instruct the reader to
+        "save it to your workspace" and then show them nothing, on a page that
+        lists nothing. The message therefore says WHERE it went, not just that
+        it went — that is the part the user actually needs.
+
+        `repeatable` so a second save after an edit is possible; without it the
+        form disables itself after the first success.
+      */}
       {out && saveMode && (
-        <SafeForm action={saveArtifact} className="flex flex-wrap items-center gap-2">
+        <SafeForm
+          action={saveArtifact}
+          repeatable
+          successMessage={
+            saveMode === "market" ? "Saved. It is listed under Saved research below."
+            : saveMode === "meeting" ? "Saved. It is listed under your meeting notes below."
+            : saveMode === "document" ? "Saved. It is listed under your documents below."
+            : "Saved to your workspace — find it under Strategy."
+          }
+          className="flex flex-wrap items-center gap-2"
+        >
           <input type="hidden" name="mode" value={saveMode} />
           <input type="hidden" name="content" value={out} />
           <input name="title" placeholder="Title to save as…" defaultValue={input.slice(0, 60)} className="rounded-lg border bg-background px-3 h-9 text-sm flex-1 min-w-[200px] outline-none focus:ring-2 focus:ring-ring"  aria-label="Title to save as"/>

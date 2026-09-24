@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Telescope, Loader2, Copy, Check, AlertTriangle, Search, Download, BrainCircuit } from "lucide-react";
 import { mdToHtml } from "@/lib/utils";
+import { creditCost } from "@/lib/config";
 
 type Section = { key: string; title: string; body: string };
 
@@ -109,7 +110,18 @@ export function DeepDivePanel() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Telescope className="h-4 w-4" />}
             {loading ? "Running Deep Dive…" : "Run Deep Dive"}
           </Button>
-          <span className="text-xs text-muted-foreground">3-pass analysis · 12 credits</span>
+          {/*
+            THE PRICE IS READ FROM THE PRICE LIST, NOT TYPED BESIDE THE BUTTON.
+
+            This label was a hardcoded literal and it was wrong — the same
+            defect, and the same 1-in-N understatement, that visibility.tsx
+            documents having already been caught once. Quoting a customer one
+            price on the button that spends their credits and charging another
+            is not a copy problem, and a number typed by hand next to a number
+            computed by creditCost() will drift again the next time either
+            moves. lib/config.ts is deliberately client-safe for exactly this.
+          */}
+          <span className="text-xs text-muted-foreground">3-pass analysis · {creditCost("deepdive")} credits</span>
         </div>
         {loading && (
           <div className="pt-1 space-y-1.5">

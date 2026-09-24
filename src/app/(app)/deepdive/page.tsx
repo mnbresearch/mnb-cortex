@@ -3,6 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { Card } from "@/components/ui/card";
 import { Telescope, Sparkles } from "lucide-react";
 import { DeepDivePanel } from "@/components/deep-dive";
+import { creditCost } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default function DeepDive() {
         <Card className="p-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Telescope className="h-4 w-4 text-primary" />
-            Tip: pick a focus area for a broad review, or type a sharp question for a targeted one. Each run costs 12 credits.
+            Tip: pick a focus area for a broad review, or type a sharp question for a targeted one. Each run costs {creditCost("deepdive")} credits.
           </div>
         </Card>
       </PageShell>

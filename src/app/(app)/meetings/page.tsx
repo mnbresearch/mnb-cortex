@@ -25,12 +25,23 @@ export default async function Meetings() {
     <>
       <Topbar title="Meeting Assistant" subtitle="Google Meet · Zoom · Microsoft Teams" />
       <PageShell>
-        {signedIn && (
-          <Card className="p-4 text-sm text-muted-foreground">
-            The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
-            built from your own numbers.
-          </Card>
-        )}
+        {/*
+          THE GATE WAS INVERTED, AND THIS IS THE SIXTH PAGE WITH IT.
+
+          `{signedIn && (...)}` showed the "these are examples, not your data"
+          card ONLY to a signed-in customer — so the logged-out visitor, the one
+          person with no way to tell an invented figure from a real one, saw the
+          worked example with no warning at all. marketing/page.tsx documents the
+          fix and names the pages it was applied to; these were missed.
+
+          Unconditional is correct. A signed-in owner also benefits from being
+          told which numbers on the page are illustrative, and the cost of
+          saying so twice is a sentence.
+        */}
+        <Card className="p-4 text-sm text-muted-foreground">
+          The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
+          built from your own numbers.
+        </Card>
         <Card className="p-4 text-sm flex items-start gap-2.5">
           <Video className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
           <div className="text-muted-foreground leading-6">
