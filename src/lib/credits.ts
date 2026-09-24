@@ -479,8 +479,58 @@ async function generationGate(kind: "image" | "video"): Promise<ImageGate> {
   try {
     const { data: org, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
     if (error) throw error;
-    const plan = String((org as any)?.plan || "starter").toLowerCase();
-    const status = statusOf(org);
+    let plan = String((org as any)?.plan || "starter").toLowerCase();
+    let status = statusOf(org);
+
+    /*
+      PRACTICE POOLING, RESOLVED HERE TOO — it was missing, and it failed in
+      both directions at once.
+
+      chargeOrgForMode() pools, getBillingStatus() now pools, and this did not.
+      Two consequences, and the second is the expensive one:
+
+      1. REFUSED WHEN IT SHOULD ALLOW. A firm-provisioned client is typically
+         `starter`, expired, 0 credits, so isLapsed() fired and the owner was
+         told "Your plan is inactive. Add credits or choose a plan" — for a
+         workspace the firm is paying ₹29,999 a month to cover, and for which
+         chargeOrgForMode would have pooled the charge without complaint.
+
+      2. UNLIMITED WHEN IT SHOULD CAP. If the client's own org happened to be
+         active, the weekly counter below still could not see pooled usage: a
+         pooled charge is written with org_id = FIRM and reason
+         `ai:agent_video:client:<uuid>` (credit-pool.ts pooledReason). Counting
+         `org_id = client` AND `reason = "ai:agent_video"` exactly matches
+         neither, so `used` was always 0 and the ceiling never bound.
+
+      That second one matters because of what this gate is for. The docblock
+      above calls it "the blast radius" and says it must "fail CLOSED": a Veo
+      clip is ~₹77 of real billing, and the ceiling is the thing standing
+      between a pricing mistake and an unbounded bill. For every pooled
+      workspace it was failing fully open.
+
+      THE POOL SHARES ONE WEEKLY CEILING, at the firm's plan level. The
+      alternative — a separate allowance per client — multiplies the blast
+      radius by twenty-five, which is the opposite of what this function is
+      for. A firm that hits the ceiling can upgrade; that is a conversation,
+      not an outage.
+    */
+    let counterOrgId = orgId;
+    const linkedFirmId = (org as any)?.practice_org_id;
+    if (linkedFirmId) {
+      try {
+        const { data: firmRow } = await svc.from("organizations").select("*").eq("id", linkedFirmId).single();
+        const decision = resolvePayer(
+          { id: orgId, plan, status },
+          firmRow ? { id: String((firmRow as any).id), plan: String((firmRow as any).plan || ""), status: statusOf(firmRow) } : null,
+        );
+        if (decision.pooled && firmRow) {
+          plan = String((firmRow as any).plan || plan).toLowerCase();
+          status = statusOf(firmRow);
+          counterOrgId = decision.payerOrgId;
+          (org as any).credits = (firmRow as any).credits;
+        }
+      } catch { /* unreadable firm → this workspace stands on its own, as before */ }
+    }
     // Same reasoning as chargeForMode: enterprise is metered, not exempt. Its
     // weekly ceiling is set in IMAGE_WEEKLY/VIDEO_WEEKLY like any other plan.
     if (superAdmin) return { allowed: true, used: 0, limit: -1, plan, active: true };
@@ -507,9 +557,22 @@ async function generationGate(kind: "image" | "video"): Promise<ImageGate> {
     }
 
     const since = new Date(Date.now() - WEEK_MS).toISOString();
+    /*
+      PREFIX MATCH, AND THE PAYER'S LEDGER.
+
+      `.eq("reason", "ai:agent_video")` could never see a pooled charge, which
+      is written as `ai:agent_video:client:<uuid>`. Combined with counting the
+      client's own org_id rather than the firm's, a pooled workspace's usage
+      was invisible to its own ceiling.
+
+      `like` with a trailing % catches both the plain and the pooled form, and
+      counterOrgId is the firm when pooling applies — so the whole pool is
+      measured against one limit. The escape is not needed here: `kind` is a
+      literal union of "image" | "video", never user input.
+    */
     const { count, error: cErr } = await svc.from("credit_ledger")
       .select("id", { count: "exact", head: true })
-      .eq("org_id", orgId).eq("reason", `ai:agent_${kind}`).gte("created_at", since);
+      .eq("org_id", counterOrgId).like("reason", `ai:agent_${kind}%`).gte("created_at", since);
     if (cErr) throw cErr;
     const used = count || 0;
     if (used >= limit) {

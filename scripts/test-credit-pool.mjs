@@ -183,6 +183,60 @@ const FIRM = { id: "22222222-2222-2222-2222-222222222222", plan: "practice", sta
   }
 }
 
+/* ========================================================================= */
+/*  EVERY GATE THAT READS AN ORG MUST RESOLVE THE PAYER                      */
+/* ========================================================================= */
+/*
+  Pooling was implemented once, in chargeForMode, and then quietly omitted from
+  every other function that asks "is this workspace entitled?". Each omission
+  broke the Practice plan in a different place:
+
+    getBillingStatus()   the client was paywall-locked while the firm paid —
+                         a full-screen lock over a workspace on a ₹29,999 plan
+    generationGate()     refused image/video for the same reason, AND could
+                         never see pooled usage in its weekly counter, so the
+                         ceiling that exists to bound Veo spend never bound
+
+  The second is the instructive one: it failed CLOSED for the customer and OPEN
+  for our costs, simultaneously, which is the worst pair of directions.
+
+  This is a source assertion rather than a behavioural one on purpose. The
+  failure mode is not "the pooling logic is wrong" — resolvePayer is tested
+  above and is correct. It is "a function that should have called it doesn't",
+  which no test of resolvePayer can ever catch. I missed generationGate myself
+  while fixing getBillingStatus in the same sitting, which is the argument for
+  having this at all.
+*/
+{
+  const { readFileSync } = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const read = (r) => readFileSync(join(root, r), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  console.log("\nEvery entitlement gate resolves the payer:");
+
+  const credits = read("src/lib/credits.ts");
+  const billing = read("src/lib/billing.ts");
+
+  check(/practice_org_id/.test(credits) && /resolvePayer\(/.test(credits), "chargeOrgForMode resolves the payer");
+  check(/practice_org_id/.test(billing) && /resolvePayer\(/.test(billing), "getBillingStatus resolves the payer");
+
+  /* generationGate is inside credits.ts, so check its own body rather than the
+     file — chargeOrgForMode's call would otherwise satisfy the assertion. */
+  const gate = credits.slice(credits.indexOf("async function generationGate"));
+  check(/practice_org_id/.test(gate) && /resolvePayer\(/.test(gate), "generationGate resolves the payer");
+
+  /*
+    And the counter has to be able to SEE a pooled charge. A pooled row is
+    written with the firm's org_id and a reason suffixed `:client:<uuid>`, so an
+    exact-match reason filter counts zero of them for ever.
+  */
+  check(/\.like\("reason", `ai:agent_\$\{kind\}%`\)/.test(gate), "the weekly counter matches pooled reasons by prefix");
+  check(/\.eq\("org_id", counterOrgId\)/.test(gate), "...and counts against the payer, not the acting workspace");
+}
+
 console.log(`\ncredit pooling: ${pass} passed, ${fails.length} failed`);
 if (fails.length) {
   for (const f of fails) console.log("  FAIL " + f);
