@@ -14,7 +14,7 @@ export default async function DataExplorer({ searchParams }: { searchParams: { t
   const table = EXPLORE_TABLES.includes(searchParams.table || "") ? searchParams.table! : "sales_orders";
   const q = searchParams.q || "";
   const page = Math.max(0, parseInt(searchParams.page || "0") || 0);
-  const { rows, cols, live, total } = await getTableRows(table, q, page);
+  const { rows, cols, live, total, searchScanned, searchTruncated } = await getTableRows(table, q, page);
   const per = 15;
 
   return (
@@ -38,7 +38,20 @@ export default async function DataExplorer({ searchParams }: { searchParams: { t
                 <input name="q" defaultValue={q} placeholder={`Search ${LABEL[table]}…`} className="flex-1 bg-transparent text-sm outline-none"  aria-label="Search"/>
               </form>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><Database className="h-3.5 w-3.5" /> {total} total</span>
+                {/* Says which number this is. While searching, `total` is the
+                    count of MATCHES — it used to be the unfiltered table count
+                    printed above a list of two rows. */}
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Database className="h-3.5 w-3.5" />
+                  {q ? `${total} match${total === 1 ? "" : "es"}` : `${total} total`}
+                </span>
+                {q && searchTruncated && (
+                  /* The bound is stated rather than silent: an undisclosed
+                     ceiling on a search is a claim that nothing else matched. */
+                  <span className="text-xs text-warning">
+                    searched the most recent {searchScanned.toLocaleString("en-IN")} rows
+                  </span>
+                )}
                 <ExportButton rows={rows} filename={`${table}.csv`} columns={cols} />
                 <ExcelButton rows={rows} filename={`${table}.csv`} columns={cols} />
               </div>

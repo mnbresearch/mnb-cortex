@@ -438,18 +438,95 @@ export async function getIntegrations() {
 }
 
 const EXPLORE_TABLES = ["sales_orders", "invoices", "inventory_items", "employees", "purchase_orders", "production_runs"];
+/**
+ * A page of one table, optionally filtered by a search term.
+ *
+ * ============================================================================
+ * THE SEARCH BOX USED TO SEARCH ONLY WHAT WAS ALREADY ON SCREEN
+ * ============================================================================
+ *
+ * The old implementation asked Postgres for `range(from, from + 14)` — the
+ * fifteen rows of the current page — and THEN filtered those fifteen in
+ * JavaScript. Three things followed, and all three were invisible:
+ *
+ *   1. A record that matched but sat on page 4 could not be found from page 1.
+ *      Searching an empty-looking table told an owner the record did not
+ *      exist, when it did.
+ *   2. `total` was the UNFILTERED count, so the footer said "312 rows" over a
+ *      list showing two.
+ *   3. Paging through a search was incoherent: page 2 meant "matches among
+ *      rows 16–30 of the unfiltered table", which is not a page of anything.
+ *
+ * ============================================================================
+ * WHY A BOUNDED SUPERSET RATHER THAN A SQL FILTER
+ * ============================================================================
+ *
+ * The honest fix is `WHERE col ILIKE '%term%'` in Postgres. PostgREST needs to
+ * be told WHICH columns, and `ilike` on a numeric or date column errors — so a
+ * real SQL search needs a per-table list of text columns, maintained by hand
+ * across fifteen tables, drifting quietly every time a column is added. That
+ * is the same shape as the defect the capability register exists to stop.
+ *
+ * So: when searching, read a bounded superset for the workspace, filter it
+ * here where every column is a string either way, and page the RESULT. Search
+ * is then correct over that window, the count matches what is shown, and
+ * paging means what it says.
+ *
+ * The bound is disclosed rather than silent. `searchScanned` and
+ * `searchTruncated` let /data say "searched the most recent 5,000 rows"
+ * instead of implying it searched everything — this repo has already had to
+ * remove silent 1000-row ceilings once, and an undisclosed limit on a search
+ * is the same lie in a different place.
+ *
+ * Unsearched paging is untouched: it still asks Postgres for exactly the
+ * fifteen rows it needs.
+ */
+const SEARCH_SCAN_CAP = 5000;
+
 export async function getTableRows(table: string, search: string, page: number) {
   const { orgId } = await getUserAndOrg();
-  if (!EXPLORE_TABLES.includes(table)) return { rows: [], cols: [], live: false, total: 0 };
-  if (!orgId) return { rows: [], cols: [], live: false, total: 0 };
+  const empty = { rows: [] as any[], cols: [] as string[], live: false, total: 0, searchScanned: 0, searchTruncated: false };
+  if (!EXPLORE_TABLES.includes(table)) return empty;
+  if (!orgId) return empty;
   const sb = await createClient();
-  const per = 15; const from = page * per;
-  let q = sb.from(table).select("*", { count: "exact" }).eq("org_id", orgId).order("created_at", { ascending: false }).range(from, from + per - 1);
-  const { data, count } = await q;
-  let rows = (data as any[]) || [];
-  if (search) { const s = search.toLowerCase(); rows = rows.filter((r) => JSON.stringify(r).toLowerCase().includes(s)); }
-  const cols = rows.length ? Object.keys(rows[0]).filter((c) => c !== "org_id" && c !== "id") : [];
-  return { rows, cols, live: true, total: count || 0 };
+  const per = 15;
+  const from = page * per;
+  const term = String(search || "").trim().toLowerCase();
+
+  if (!term) {
+    const { data, count } = await sb.from(table)
+      .select("*", { count: "exact" }).eq("org_id", orgId)
+      .order("created_at", { ascending: false })
+      .range(from, from + per - 1);
+    const rows = (data as any[]) || [];
+    const cols = rows.length ? Object.keys(rows[0]).filter((c) => c !== "org_id" && c !== "id") : [];
+    return { rows, cols, live: true, total: count || 0, searchScanned: 0, searchTruncated: false };
+  }
+
+  const { data } = await sb.from(table)
+    .select("*").eq("org_id", orgId)
+    .order("created_at", { ascending: false })
+    .limit(SEARCH_SCAN_CAP);
+  const scanned = (data as any[]) || [];
+  const matches = scanned.filter((r) => JSON.stringify(r).toLowerCase().includes(term));
+
+  /* Page the MATCHES, so "page 2" is the second page of results rather than
+     whatever survived filtering the second page of the table. */
+  const rows = matches.slice(from, from + per);
+  /* Columns come from the scanned set, not the current page: a search whose
+     matches all land on page 3 would otherwise render a headerless table. */
+  const sample = rows[0] || matches[0] || scanned[0];
+  const cols = sample ? Object.keys(sample).filter((c) => c !== "org_id" && c !== "id") : [];
+
+  return {
+    rows,
+    cols,
+    live: true,
+    /* The count of MATCHES, which is what the list is now showing. */
+    total: matches.length,
+    searchScanned: scanned.length,
+    searchTruncated: scanned.length >= SEARCH_SCAN_CAP,
+  };
 }
 export { EXPLORE_TABLES };
 

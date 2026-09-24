@@ -4,7 +4,7 @@ import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { UsagePanel } from "@/components/usage-panel";
-import { getCreditState, getLedger } from "@/lib/credits";
+import { getCreditState, getLedger, getLedgerSince } from "@/lib/credits";
 import { getUserAndOrg } from "@/lib/data";
 // creditCost() applies DEFAULT_CREDIT_COST for anything unlisted. This page
 // hardcoded `?? 2`, which was the OLD default and would have shown a price the
@@ -25,21 +25,40 @@ function fmt(n: number) { return n.toLocaleString("en-IN"); }
 
 export default async function Usage() {
   const [state, { orgId }] = await Promise.all([getCreditState(), getUserAndOrg()]);
+  /*
+    TWO READS, FOR TWO DIFFERENT QUESTIONS.
+
+    The chart and the spend total are about a PERIOD, so they are read by
+    period. They used to come from `getLedger(orgId, 60)` — the sixty most
+    recent rows, covering whatever span those happened to be. On a workspace
+    that spends briskly that is two or three days, and the chart then drew
+    days 4 to 14 as bars of height zero: not a gap in the data, an assertion
+    that the business spent nothing on those days. The variable was called
+    `spent30` and the card above it said "Spent (recent)".
+
+    The transaction list below is a different question — "what happened
+    lately" — and a row count is the right bound for that one, so it keeps
+    getLedger.
+  */
+  const WINDOW_DAYS = 14;
+  const window_ = orgId
+    ? await getLedgerSince(orgId, WINDOW_DAYS)
+    : { rows: [] as any[], truncated: false, since: "" };
   const ledger = orgId ? await getLedger(orgId, 60) : [];
 
   // Daily spend for the last 14 days (from negative ledger deltas).
   const days: { key: string; label: string; spent: number }[] = [];
   const now = new Date();
-  for (let i = 13; i >= 0; i--) {
+  for (let i = WINDOW_DAYS - 1; i >= 0; i--) {
     const d = new Date(now); d.setDate(now.getDate() - i);
     days.push({ key: d.toISOString().slice(0, 10), label: d.toLocaleDateString("en-IN", { day: "numeric" }), spent: 0 });
   }
   const byDay = new Map(days.map((d) => [d.key, d]));
-  for (const e of ledger) {
+  for (const e of window_.rows) {
     if (e.delta < 0) { const k = String(e.created_at).slice(0, 10); const d = byDay.get(k); if (d) d.spent += -e.delta; }
   }
   const maxSpend = Math.max(...days.map((d) => d.spent), 1);
-  const spent30 = ledger.filter((e) => e.delta < 0).reduce((s, e) => s + -e.delta, 0);
+  const spentWindow = window_.rows.filter((e) => e.delta < 0).reduce((s, e) => s + -e.delta, 0);
 
   const resetLabel = state.resetAt ? new Date(state.resetAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
@@ -69,8 +88,17 @@ export default async function Usage() {
             <div className="text-lg font-semibold mt-1">{state.unlimited ? "—" : resetLabel}</div>
           </Card>
           <Card className="p-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Coins className="h-4 w-4 text-primary" /> Spent (recent)</div>
-            <div className="text-2xl font-bold mt-1 tabular-nums">{fmt(spent30)}</div>
+            {/* "recent" meant "however long the last 60 ledger rows covered".
+                Now it names the window it actually measured. */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Coins className="h-4 w-4 text-primary" /> Spent ({WINDOW_DAYS} days)</div>
+            <div className="text-2xl font-bold mt-1 tabular-nums">
+              {window_.truncated ? "≥ " : ""}{fmt(spentWindow)}
+            </div>
+            {window_.truncated && (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                More events than we read in one go — this is a floor.
+              </div>
+            )}
           </Card>
         </div>
 

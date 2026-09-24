@@ -97,7 +97,8 @@
     "test:workbench": "node scripts/test-workbench.mjs",
     "test:advance-tax": "node scripts/test-advance-tax.mjs",
     "capability:snapshot": "node scripts/capability-snapshot.mjs",
-    "test:register": "node scripts/test-capability-register.mjs"
+    "test:register": "node scripts/test-capability-register.mjs",
+    "test:windowed-reads": "node scripts/test-windowed-reads.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

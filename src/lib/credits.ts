@@ -599,3 +599,51 @@ export async function getLedger(orgId: string, limit = 60) {
     return (data as any[]) || [];
   } catch { return []; }
 }
+
+/**
+ * Credit events over a WINDOW OF TIME, rather than a count of rows.
+ *
+ * ============================================================================
+ * WHY THIS EXISTS ALONGSIDE getLedger
+ * ============================================================================
+ *
+ * /usage drew a bar chart headed "Usage — last 14 days" and a stat card
+ * headed "Spent (recent)", both built from `getLedger(orgId, 60)` — the sixty
+ * most recent rows, covering whatever period those happen to span.
+ *
+ * On a workspace that spends briskly, sixty rows is two or three days. The
+ * chart then renders days 4 through 14 as bars of height zero, which is not a
+ * gap in the data on screen: it is an assertion that the business spent
+ * nothing on those days. The variable feeding the stat card was even called
+ * `spent30`. On a BILLING page, understating a customer's own consumption is
+ * the worst direction to be wrong in — they budget against it.
+ *
+ * A window is the right bound for a question about a period. The row cap stays
+ * as a safety valve, and when it binds the caller is told so it can say the
+ * figure is a floor rather than quietly presenting a truncated total as
+ * complete. lib/import-outcome.ts makes the same distinction for imports, and
+ * removing silent 1000-row ceilings is a fix this repo has already made once.
+ */
+export async function getLedgerSince(
+  orgId: string,
+  days: number,
+  cap = 5000,
+): Promise<{ rows: any[]; truncated: boolean; since: string }> {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const svc = serviceClient();
+  if (!svc) return { rows: [], truncated: false, since };
+  try {
+    const { data } = await svc.from("credit_ledger")
+      .select("*")
+      .eq("org_id", orgId)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(cap);
+    const rows = (data as any[]) || [];
+    /* Exactly `cap` rows means there may be more. Reporting that is the
+       difference between "you spent X" and "you spent at least X". */
+    return { rows, truncated: rows.length >= cap, since };
+  } catch {
+    return { rows: [], truncated: false, since };
+  }
+}
