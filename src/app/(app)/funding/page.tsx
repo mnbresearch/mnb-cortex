@@ -3,6 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { FundingCalculator } from "@/components/funding-calculator";
+import { getWorkspaceSeed } from "@/lib/workspace-seed";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +14,13 @@ const sources = [
   { name: "MSME / MUDRA schemes", note: "Government-backed, lower rates for eligible SMEs" },
 ];
 
-export default function Funding() {
+export default async function Funding() {
+  const seed = await getWorkspaceSeed();
   return (
     <>
       <Topbar title="Funding & Loans" subtitle="Model the cost of capital before you borrow" />
       <PageShell>
-        <FundingCalculator />
+        <FundingCalculator seed={seed} />
         <Section title="Funding options for Indian SMEs" desc="Match the instrument to the need">
           <div className="grid sm:grid-cols-2 gap-3">
             {sources.map((s) => (

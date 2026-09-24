@@ -6,13 +6,53 @@ import { Sparkles } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
 import { ExampleFigures } from "@/components/example-figures";
 import { computeRatios, ratioRows, type Grade, type RatioRow } from "@/lib/ratios";
+import { orDefault, seededFrom, type WorkspaceSeed } from "@/lib/seed-types";
 
-export function FinancialRatios() {
+/*
+  THE CALCULATOR WHERE PARTIAL SEEDING NEEDED THE MOST CARE.
+
+  Ten inputs. Cortex genuinely holds three of them:
+
+    revenue     the finance ledger's trailing twelve months
+    inventory   on-hand x unit cost across the item list
+    netProfit   the ledger's bottom line over the same window
+
+  The other seven describe a balance sheet, and Cortex has no balance sheet.
+  There is no table anywhere in this product that knows the business's equity,
+  its total assets, its long-term debt or its interest bill. Those four are not
+  "not yet imported" — they have no home in the schema at all. Current assets
+  and current liabilities could be *approximated* from cash, receivables,
+  stock and payables, but the approximation omits prepaid expenses, advances
+  and statutory dues, and the current ratio it produces is then GRADED green,
+  amber or red on screen and fed to an AI that writes a paragraph about the
+  company's solvency. A confidently wrong current ratio is worse than an
+  obviously invented one.
+
+  So: seed the three, leave the seven, and put their names in the banner. The
+  reader learns precisely which numbers to replace, which is the one thing the
+  old grey "everything here is an example" banner could not tell them.
+*/
+export function FinancialRatios({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const seeded = seededFrom(seed, "revenue", "inventoryValue", "netProfitAnnual");
+
   const [v, setV] = useState({
-    currentAssets: 18900000, currentLiabilities: 9000000, inventory: 5200000,
+    currentAssets: 18900000, currentLiabilities: 9000000,
+    inventory: orDefault(seed?.inventoryValue, 5200000),
     debt: 12000000, equity: 26000000, ebit: 6600000, interest: 1400000,
-    revenue: 51000000, totalAssets: 42000000, netProfit: 5100000,
+    revenue: orDefault(seed?.revenue, 51000000),
+    totalAssets: 42000000,
+    netProfit: orDefault(seed?.netProfitAnnual, 5100000),
   });
+
+  /* Named only when they were NOT seeded, so a workspace that later grows a
+     balance sheet shortens this list rather than contradicting it. */
+  const stillExample = [
+    seed?.revenue == null ? "revenue" : "",
+    seed?.inventoryValue == null ? "stock" : "",
+    seed?.netProfitAnnual == null ? "net profit" : "",
+    "current assets", "current liabilities", "debt", "equity", "EBIT",
+    "interest", "total assets",
+  ].filter(Boolean);
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
 
   /*
@@ -73,7 +113,11 @@ export function FinancialRatios() {
 
   return (
     <div className="grid lg:grid-cols-2 gap-4">
-      <ExampleFigures what="balance-sheet figures" />
+      <ExampleFigures
+        source={seeded ? "yours" : "example"}
+        what="balance-sheet figures"
+        stillExample={stillExample}
+      />
       <Card className="p-5 space-y-3">
         <div className="font-semibold">Inputs (₹)</div>
         <div className="grid grid-cols-2 gap-2">

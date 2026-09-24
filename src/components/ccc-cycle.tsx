@@ -2,13 +2,37 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
-export function CccCycle() {
-  const [revenue, setRevenue] = useState(60_000_000);   // annual
-  const [cogs, setCogs] = useState(42_000_000);         // annual
-  const [inventory, setInventory] = useState(4_000_000);
-  const [receivables, setReceivables] = useState(6_500_000);
-  const [payables, setPayables] = useState(3_800_000);
+/*
+  THE FIVE FIELDS ON THIS PAGE ALL EXIST IN THE WORKSPACE ALREADY.
+
+  This calculator used to open on an invented ₹6 crore business and conclude
+  "Roughly ₹52,05,479 is tied up in the cycle" — in the second person, with no
+  label anywhere saying the figures were not the reader's. Meanwhile `invoices`
+  held their real open receivables and payables and `inventory_items` held
+  their real stock, one query away.
+
+  The defaults are unchanged and still apply when nothing can be read. What is
+  new is the fuel line, and a banner that says which of the two the reader is
+  looking at.
+
+  ONE APPROXIMATION, STATED ON SCREEN: the three balance fields are labelled
+  "Avg" because a cash conversion cycle is properly computed on period
+  averages. The workspace stores current open balances. For a business whose
+  receivables are not wildly seasonal these are close, and they are enormously
+  closer than a number invented in a text editor — but the banner says so
+  rather than letting the reader assume an average was computed.
+*/
+export function CccCycle({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const [revenue, setRevenue] = useState(orDefault(seed?.revenue, 60_000_000));   // annual
+  const [cogs, setCogs] = useState(orDefault(seed?.cogs, 42_000_000));            // annual
+  const [inventory, setInventory] = useState(orDefault(seed?.inventoryValue, 4_000_000));
+  const [receivables, setReceivables] = useState(orDefault(seed?.receivables, 6_500_000));
+  const [payables, setPayables] = useState(orDefault(seed?.payables, 3_800_000));
+
+  const source = seedSource(seed, "revenue", "cogs", "inventoryValue", "receivables", "payables");
 
   const m = useMemo(() => {
     const dio = cogs > 0 ? (inventory / cogs) * 365 : 0;         // days inventory outstanding
@@ -29,6 +53,11 @@ export function CccCycle() {
   const max = Math.max(m.dio, m.dso, m.dpo, 1);
   return (
     <div className="space-y-4">
+      <ExampleFigures
+        source={source}
+        what="cycle figures"
+        note="Stock, receivables and payables are your current open balances — a textbook cycle uses period averages, so treat these as a close starting point rather than an audited figure."
+      />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {F("Annual revenue", revenue, setRevenue)}

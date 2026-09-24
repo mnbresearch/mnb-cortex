@@ -2,6 +2,8 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
 function Slider({ label, value, min, max, step, unit, onChange }: { label: string; value: number; min: number; max: number; step: number; unit: string; onChange: (n: number) => void }) {
   return (
@@ -12,11 +14,17 @@ function Slider({ label, value, min, max, step, unit, onChange }: { label: strin
   );
 }
 
-export function FunnelCalc() {
+export function FunnelCalc({ seed }: { seed?: WorkspaceSeed } = {}) {
+  /*
+    Order value is the one figure here Cortex can answer: the mean of every
+    won sales order. Traffic and conversion rates live in an analytics tool,
+    and marketing spend in a bank statement line the product does not
+    categorise — so those four are named as examples rather than guessed at.
+  */
   const [visitors, setVisitors] = useState(10000);
   const [leadRate, setLeadRate] = useState(6);       // % visitor→lead
   const [closeRate, setCloseRate] = useState(18);    // % lead→customer
-  const [aov, setAov] = useState(4500);              // avg order value ₹
+  const [aov, setAov] = useState(orDefault(seed?.avgOrderValue, 4500));  // avg order value ₹
   const [spend, setSpend] = useState(120000);        // marketing spend ₹
 
   const m = useMemo(() => {
@@ -36,6 +44,13 @@ export function FunnelCalc() {
   ];
 
   return (
+    <div className="space-y-4">
+    <ExampleFigures
+      source={seedSource(seed, "avgOrderValue")}
+      what="funnel figures"
+      stillExample={["visitors", "visitor → lead", "lead → customer", "marketing spend"]}
+      note="Average order value is the mean of your won sales orders."
+    />
     <Card className="p-5 space-y-5">
       <div><div className="font-semibold">Funnel economics</div><div className="text-sm text-muted-foreground">Tune each stage and watch CAC and ROAS move.</div></div>
       <div className="grid sm:grid-cols-2 gap-x-8 gap-y-4">
@@ -63,6 +78,7 @@ export function FunnelCalc() {
       </div>
       <p className="text-xs text-muted-foreground">If CAC is above your order value (or ROAS below 1x), you lose money on every sale — fix conversion or spend before scaling traffic.</p>
     </Card>
+    </div>
   );
 }
 

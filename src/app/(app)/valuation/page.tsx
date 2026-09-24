@@ -2,15 +2,17 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { ValuationCalculator } from "@/components/valuation-calculator";
+import { getWorkspaceSeed } from "@/lib/workspace-seed";
 
 export const dynamic = "force-dynamic";
 
-export default function Valuation() {
+export default async function Valuation() {
+  const seed = await getWorkspaceSeed();
   return (
     <>
       <Topbar title="Business Valuation" subtitle="What the business is plausibly worth — and how to raise it" />
       <PageShell>
-        <ValuationCalculator />
+        <ValuationCalculator seed={seed} />
         <Section title="What actually moves an SME valuation" desc="Beyond the multiple">
           <div className="text-sm text-muted-foreground space-y-2">
             <p><b>Owner dependence</b> is the biggest discount in Indian SME deals. If the business can't run for a month without you, buyers price that risk in heavily.</p>

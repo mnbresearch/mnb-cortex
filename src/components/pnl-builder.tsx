@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, Plus, Trash2 } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
 import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seededFrom, type WorkspaceSeed } from "@/lib/seed-types";
 
 type Line = { id: string; label: string; amount: number };
 
@@ -25,10 +26,40 @@ function Row({ label, value, cls = "", strong }: { label: string; value: string;
   );
 }
 
-export function PnlBuilder() {
-  const [revenue, setRevenue] = useState(4_250_000);
-  const [cogs, setCogs] = useState(2_932_500);
-  const [opex, setOpex] = useState<Line[]>(OPEX0);
+/*
+  SEEDING A P&L IS ALL-OR-NOTHING, AND THAT IS THE INTERESTING PART.
+
+  The five OPEX0 lines above — salaries, rent, marketing, logistics, other —
+  are invented. So were the revenue and COGS figures until now.
+
+  The tempting change is to seed revenue and COGS from the ledger and leave the
+  five opex lines in place, because they make the page look furnished. That
+  would produce the worst possible statement: a real top line, a real gross
+  margin, and ₹24.2 lakh of fictional overheads underneath it driving an EBITDA
+  and a net margin that describe nobody. The banner would say "from your
+  workspace" over a document that is two-thirds invented.
+
+  So when the ledger can supply the month, it supplies the whole month: revenue,
+  COGS, and opex as the one line the ledger actually holds. A single
+  "Operating expenses" row is less pretty than five, and it is the only opex
+  breakdown that exists. The owner can split it with the Add line button, which
+  is what that button is for.
+
+  When the ledger cannot supply it, nothing changes: the example business
+  renders exactly as before, under the grey banner that says so.
+*/
+export function PnlBuilder({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const seeded = seededFrom(seed, "monthlyRevenue", "monthlyCogs", "monthlyOpex");
+
+  const [revenue, setRevenue] = useState(orDefault(seed?.monthlyRevenue, 4_250_000));
+  const [cogs, setCogs] = useState(orDefault(seed?.monthlyCogs, 2_932_500));
+  const [opex, setOpex] = useState<Line[]>(
+    seeded && seed?.monthlyOpex != null
+      ? [{ id: "ledger", label: "Operating expenses (from your ledger)", amount: seed.monthlyOpex }]
+      : seeded
+        ? []   /* Revenue landed but no opex column — an empty list is honest; five invented rows are not. */
+        : OPEX0
+  );
   const [tax, setTax] = useState(25); // % on profit before tax
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
 
@@ -58,7 +89,11 @@ export function PnlBuilder() {
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring text-right";
   return (
     <div className="grid lg:grid-cols-2 gap-4">
-      <ExampleFigures what="P&L lines" />
+      <ExampleFigures
+        source={seeded ? "yours" : "example"}
+        what="P&L lines"
+        note="One month from your finance ledger. Overheads arrive as the single total the ledger holds — use Add line to split them."
+      />
       <Card className="p-5 space-y-3">
         <div className="font-semibold">Inputs (monthly)</div>
         <label className="flex items-center justify-between gap-2 text-sm"><span className="text-muted-foreground">Revenue</span>

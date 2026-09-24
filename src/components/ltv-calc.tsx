@@ -3,12 +3,24 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
 import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
-export function LtvCalc() {
-  const [arpu, setArpu] = useState(2500);
+export function LtvCalc({ seed }: { seed?: WorkspaceSeed } = {}) {
+  /*
+    ARPU is the only one of these four the workspace can answer.
+
+    Margin is a gross-margin assumption, churn needs a cohort the product does
+    not track on this page, and CAC needs marketing spend Cortex never sees.
+    Three of the four stay examples, and the banner names them — seeding one
+    field and claiming the page is "yours" would be the failure this whole
+    layer exists to prevent.
+  */
+  const [arpu, setArpu] = useState(orDefault(seed?.arpuMonthly, 2500));
   const [margin, setMargin] = useState(70);
   const [churn, setChurn] = useState(4);
   const [cac, setCac] = useState(9000);
+
+  const source = seedSource(seed, "arpuMonthly");
 
   const m = useMemo(() => {
     const grossPerMonth = arpu * (margin / 100);
@@ -28,7 +40,12 @@ export function LtvCalc() {
 
   return (
     <div className="space-y-4">
-      <ExampleFigures what="customer value figures" />
+      <ExampleFigures
+        source={source}
+        what="customer value figures"
+        stillExample={["gross margin", "churn", "acquisition cost"]}
+        note="Revenue per customer is your trailing-twelve revenue divided by the customers who have placed a won order."
+      />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {F("Avg revenue / customer / mo", arpu, setArpu)}

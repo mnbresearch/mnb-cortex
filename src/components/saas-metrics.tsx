@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
 function Field({ label, value, onChange, suffix }: { label: string; value: number; onChange: (n: number) => void; suffix?: string }) {
   return (
@@ -17,9 +19,16 @@ function Field({ label, value, onChange, suffix }: { label: string; value: numbe
   );
 }
 
-export function SaasMetrics() {
-  const [customers, setCustomers] = useState(1200);
-  const [arpu, setArpu] = useState(1500);          // ₹ per customer per month
+export function SaasMetrics({ seed }: { seed?: WorkspaceSeed } = {}) {
+  /*
+    Customer count and ARPU come from the workspace's own won orders and
+    revenue. Churn, new-per-month, CAC and gross margin describe a
+    subscription motion Cortex does not observe — they stay examples and the
+    banner names them, because MRR, LTV and payback are all built on top and
+    a reader needs to know which halves of that are real.
+  */
+  const [customers, setCustomers] = useState(orDefault(seed?.customerCount, 1200));
+  const [arpu, setArpu] = useState(orDefault(seed?.arpuMonthly, 1500));  // ₹ per customer per month
   const [churn, setChurn] = useState(4);           // % monthly logo churn
   const [newPerMonth, setNewPerMonth] = useState(180);
   const [cac, setCac] = useState(2200);            // ₹ to acquire one customer
@@ -58,6 +67,13 @@ export function SaasMetrics() {
   const payTone = m.paybackMonths <= 12 ? "text-success" : m.paybackMonths <= 18 ? "text-warning" : "text-danger";
 
   return (
+    <div className="space-y-4">
+    <ExampleFigures
+      source={seedSource(seed, "customerCount", "arpuMonthly")}
+      what="subscription figures"
+      stillExample={["churn", "new customers per month", "acquisition cost", "gross margin"]}
+      note="Customers are the distinct buyers on your won orders; ARPU is your trailing-twelve revenue spread across them."
+    />
     <Card className="p-5 space-y-5">
       <div>
         <div className="font-semibold">Subscription metrics</div>
@@ -100,6 +116,7 @@ export function SaasMetrics() {
       <Button onClick={analyse} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "What should I fix first? (ask Cortex)"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
     </Card>
+    </div>
   );
 }
 

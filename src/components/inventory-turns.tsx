@@ -3,11 +3,16 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
 import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
-export function InventoryTurns() {
-  const [cogs, setCogs] = useState(24_000_000);
-  const [avgInventory, setAvgInventory] = useState(4_000_000);
+export function InventoryTurns({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const [cogs, setCogs] = useState(orDefault(seed?.cogs, 24_000_000));
+  const [avgInventory, setAvgInventory] = useState(orDefault(seed?.inventoryValue, 4_000_000));
+  /* Carrying cost is a business assumption — warehousing, insurance, capital,
+     obsolescence — not a figure Cortex holds anywhere. It stays an input. */
   const [carryPct, setCarryPct] = useState(22);
+
+  const source = seedSource(seed, "cogs", "inventoryValue");
 
   const m = useMemo(() => {
     const turns = avgInventory > 0 ? cogs / avgInventory : 0;
@@ -25,7 +30,11 @@ export function InventoryTurns() {
 
   return (
     <div className="space-y-4">
-      <ExampleFigures what="stock figures" />
+      <ExampleFigures
+        source={source}
+        what="stock figures"
+        note="Stock is valued at on-hand × unit cost for everything in your item list; items with no unit cost entered count as nil, so this is a floor."
+      />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-3 gap-3">
           {F("Annual COGS", cogs, setCogs)}

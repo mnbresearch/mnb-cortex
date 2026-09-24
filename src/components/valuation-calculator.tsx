@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
 function Field({ label, value, onChange, suffix }: { label: string; value: number; onChange: (n: number) => void; suffix?: string }) {
   return (
@@ -17,9 +19,16 @@ function Field({ label, value, onChange, suffix }: { label: string; value: numbe
   );
 }
 
-export function ValuationCalculator() {
-  const [revenue, setRevenue] = useState(51_000_000);   // annual ₹
-  const [ebitda, setEbitda] = useState(9_000_000);
+export function ValuationCalculator({ seed }: { seed?: WorkspaceSeed } = {}) {
+  /*
+    A valuation is the page where an invented input does the most damage,
+    because the output is a rupee figure an owner may repeat to a buyer or a
+    banker. Revenue and EBITDA are both on the finance ledger; the multiples,
+    the discount rate and the growth assumption are market judgements that no
+    database holds, so they stay as starting points and the banner says so.
+  */
+  const [revenue, setRevenue] = useState(orDefault(seed?.revenue, 51_000_000));   // annual ₹
+  const [ebitda, setEbitda] = useState(orDefault(seed?.ebitdaAnnual, 9_000_000));
   const [growth, setGrowth] = useState(18);             // % YoY
   const [revMultiple, setRevMultiple] = useState(1.5);
   const [ebitdaMultiple, setEbitdaMultiple] = useState(7);
@@ -54,6 +63,13 @@ export function ValuationCalculator() {
   }
 
   return (
+    <div className="space-y-4">
+    <ExampleFigures
+      source={seedSource(seed, "revenue", "ebitdaAnnual")}
+      what="valuation inputs"
+      stillExample={["growth", "the revenue multiple", "the EBITDA multiple", "the discount rate", "the terminal multiple"]}
+      note="Revenue and EBITDA are your trailing twelve months from the finance ledger."
+    />
     <Card className="p-5 space-y-5">
       <div>
         <div className="font-semibold">Indicative business valuation</div>
@@ -91,6 +107,7 @@ export function ValuationCalculator() {
       <Button onClick={analyse} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "Interpret this valuation (ask the AI analyst)"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
     </Card>
+    </div>
   );
 }
 

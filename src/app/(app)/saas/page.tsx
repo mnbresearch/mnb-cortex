@@ -2,15 +2,17 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { SaasMetrics } from "@/components/saas-metrics";
+import { getWorkspaceSeed } from "@/lib/workspace-seed";
 
 export const dynamic = "force-dynamic";
 
-export default function Saas() {
+export default async function Saas() {
+  const seed = await getWorkspaceSeed();
   return (
     <>
       <Topbar title="SaaS & Subscription Metrics" subtitle="MRR, retention, LTV:CAC — the numbers investors ask for" />
       <PageShell>
-        <SaasMetrics />
+        <SaasMetrics seed={seed} />
         <Section title="Which metric actually matters?" desc="A quick guide">
           <div className="text-sm text-muted-foreground space-y-2">
             <p><b>Churn is the silent killer.</b> At 5% monthly churn your average customer lasts 20 months; at 2% they last 50. Cutting churn compounds harder than adding acquisition.</p>

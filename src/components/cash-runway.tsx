@@ -3,12 +3,49 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
 import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
-export function CashRunway() {
-  const [cash, setCash] = useState(8_000_000);
-  const [burn, setBurn] = useState(2_200_000);
-  const [revenue, setRevenue] = useState(1_400_000);
+/*
+  SEEDED FROM THE BANK STATEMENT CORTEX ALREADY READ.
+
+  This page asked an owner for a cash balance that the product had already
+  extracted from their statement and posted to the finance ledger, and then
+  stated a runway in months off whatever they typed.
+
+  TWO THINGS THE SEED MUST NOT DO HERE, both of which would be worse than the
+  invented defaults:
+
+  1. Seed 0 cash. `null` means the workspace has no analysed statement — a
+     genuine unknown. Seeding 0 would print "Out of cash: this month" and a
+     runway of zero at an owner who is perfectly solvent. `orDefault` treats
+     null as absent, so an unseeded field keeps its example value and the
+     banner stays grey.
+
+  2. Present a stale balance as today's. A cash balance belongs to the month of
+     the statement it came from. lib/metrics.ts documents the same bug on the
+     dashboard — a March statement printed as the September position — and the
+     seed carries `cashAsOf` precisely so this page can name the month rather
+     than quietly implying "now". The projection genuinely starts from that
+     balance, so the caveat is not a disclaimer on a good number; it is the
+     number's definition.
+*/
+export function CashRunway({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const [cash, setCash] = useState(orDefault(seed?.cash, 8_000_000));
+  const [burn, setBurn] = useState(orDefault(seed?.monthlyCost, 2_200_000));
+  const [revenue, setRevenue] = useState(orDefault(seed?.monthlyRevenue, 1_400_000));
+  /* Growth is a forecast assumption, not a recorded fact — there is nothing in
+     the workspace that means "what I expect next month", so this one field
+     stays an assumption the owner sets. */
   const [growth, setGrowth] = useState(6);
+
+  const source = seedSource(seed, "cash", "monthlyCost", "monthlyRevenue");
+  const note = [
+    seed?.cashAsOf ? `Cash is your closing balance as at ${seed.cashAsOf}, not today` : "",
+    seed?.cashAgeMonths && seed.cashAgeMonths >= 2
+      ? `— about ${seed.cashAgeMonths} months old, so upload a newer statement before acting on the runway`
+      : "",
+    seed?.cashAsOf ? "." : "",
+  ].filter(Boolean).join(" ") || undefined;
 
   const m = useMemo(() => {
     let bal = cash, rev = revenue, month = 0;
@@ -41,7 +78,7 @@ export function CashRunway() {
 
   return (
     <div className="space-y-4">
-      <ExampleFigures what="cash and burn figures" />
+      <ExampleFigures source={source} what="cash and burn figures" note={note} />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {F("Cash in bank", cash, setCash)}

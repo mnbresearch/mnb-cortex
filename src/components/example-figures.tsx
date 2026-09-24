@@ -28,15 +28,75 @@ export function ExampleFigures({
   source = "example",
   what = "figures",
   hint,
+  note,
+  stillExample,
 }: {
   source?: "example" | "yours";
   what?: string;
   hint?: string;
+  /*
+    A caveat on the SEEDED figures — shown only in the "yours" branch.
+
+    "Comes from your workspace" is a strong claim and several calculators can
+    only honour it approximately. /ccc asks for AVERAGE receivables over a
+    period and the workspace stores the CURRENT open balance; /runway seeds a
+    cash figure that belongs to the month of the last bank statement, not to
+    today. Both are the right number to start from and neither is exactly the
+    quantity the field is labelled with.
+
+    Without somewhere to say that, the choice was between seeding nothing —
+    leaving the page inventing a business, which is worse — and a green banner
+    that slightly overstates what was read. This is the third option.
+  */
+  note?: string;
+  /*
+    THE FIELDS ON THIS PAGE THAT ARE *STILL* INVENTED.
+
+    Some calculators sit halfway. /ratios takes ten inputs and Cortex can
+    honestly supply three of them — revenue, stock and net profit come from
+    the ledger, while equity, total assets, long-term debt and interest have
+    no home in the product at all, because there is no balance sheet.
+
+    That leaves three bad options and one good one:
+
+      seed nothing         the page keeps inventing a whole company (status quo)
+      seed three, say
+        "from your
+         workspace"        a green banner over a report that is 70% fiction,
+                           and this page GRADES its output good/warn/bad and
+                           offers to have an AI analyse it. The worst of the
+                           four by some distance.
+      seed all ten         impossible; four of them do not exist anywhere.
+      seed three and
+        name the other
+        seven              <- this
+
+    So when `stillExample` is non-empty the banner is amber rather than green
+    and lists, by name, every field the reader must not trust. A reader who
+    knows which four numbers are made up can fix those four and have a real
+    report. A reader told "these come from your workspace" cannot.
+  */
+  stillExample?: string[];
 }) {
   if (source === "yours") {
+    const partial = (stillExample?.length ?? 0) > 0;
     return (
-      <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-sm">
-        These {what} come from <b>your workspace</b>. Editing them here changes only this calculation.
+      <div className={
+        partial
+          ? "rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm"
+          : "rounded-lg border border-success/30 bg-success/10 p-3 text-sm"
+      }>
+        {partial ? (
+          <>
+            <b>Partly yours.</b> Cortex filled in what it holds; <b>{stillExample!.join(", ")}</b>{" "}
+            {stillExample!.length === 1 ? "is" : "are"} still an example, because your workspace has no
+            record of {stillExample!.length === 1 ? "it" : "them"}. Replace{" "}
+            {stillExample!.length === 1 ? "it" : "those"} with your own before relying on anything below.
+          </>
+        ) : (
+          <>These {what} come from <b>your workspace</b>. Editing them here changes only this calculation.</>
+        )}
+        {note ? <span className="text-muted-foreground"> {note}</span> : null}
       </div>
     );
   }

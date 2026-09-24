@@ -4,14 +4,30 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
+import { type WorkspaceSeed } from "@/lib/seed-types";
 
-export function FundingCalculator() {
+export function FundingCalculator({ seed }: { seed?: WorkspaceSeed } = {}) {
   const [amount, setAmount] = useState(5_000_000);
   const [rate, setRate] = useState(14);
   const [years, setYears] = useState(3);
-  // Was hardcoded to ₹51 L for every user, so "EMI coverage" was computed
-  // against an invented profit and that fake figure was then sent to the AI.
-  const [monthlyProfit, setMonthlyProfit] = useState(0);
+  /*
+    THE FIX THAT WAS HALF-DONE, NOW FINISHED.
+
+    This was hardcoded to ₹51 L for every user, so "EMI coverage" was computed
+    against an invented profit and that fake figure was then sent to the AI.
+    The correction was to default it to 0 and let the owner type their own —
+    which stopped the lie, but left `coverage` null for anyone who did not, so
+    the headline stat read "—" permanently. A page that has stopped being
+    wrong is not the same as a page that works.
+
+    Cortex knows this number. It is the finance ledger's latest monthly bottom
+    line. Seeded here, EMI coverage computes on the first render for any
+    workspace with a P&L, and 0 still means "we do not know" rather than "you
+    earn nothing" — `coverage` guards on `> 0`, so the "—" behaviour is
+    untouched for a workspace that has no ledger.
+  */
+  const [monthlyProfit, setMonthlyProfit] = useState(
+    seed?.monthlyProfit != null && seed.monthlyProfit > 0 ? seed.monthlyProfit : 0);
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
 
   const m = useMemo(() => {
@@ -56,6 +72,14 @@ export function FundingCalculator() {
       </div>
       {m.coverage === null && (
         <p className="text-xs text-muted-foreground -mt-2">Set your monthly profit above to see whether you can service this EMI.</p>
+      )}
+      {/* Say where the profit came from. An owner who sees a figure they did
+          not type needs to know whether to trust it, and "your latest ledger
+          month" is checkable in a way that an unattributed number is not. */}
+      {m.coverage !== null && seed?.monthlyProfit != null && monthlyProfit === seed.monthlyProfit && (
+        <p className="text-xs text-muted-foreground -mt-2">
+          Monthly profit is your latest month in the finance ledger. Drag the slider to model a different figure.
+        </p>
       )}
       <Button onClick={advise} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "Should I take this loan? (ask the AI CFO)"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
