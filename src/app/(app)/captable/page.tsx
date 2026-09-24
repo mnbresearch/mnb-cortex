@@ -2,15 +2,21 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { CapTable } from "@/components/cap-table";
+import { listWorkbench, canSaveWorkbench } from "@/lib/workbench";
+import type { CapTableData } from "@/lib/workbench-types";
 
 export const dynamic = "force-dynamic";
 
-export default function CapTablePage() {
+export default async function CapTablePage() {
+  const [scenarios, canSave] = await Promise.all([
+    listWorkbench<CapTableData>("captable", 20),
+    canSaveWorkbench(),
+  ]);
   return (
     <>
       <Topbar title="Cap Table & Dilution" subtitle="See exactly what each round costs your ownership" />
       <PageShell>
-        <CapTable />
+        <CapTable scenarios={scenarios} canSave={canSave} />
         <Section title="The founder's dilution math" desc="What to watch">
           <div className="text-sm text-muted-foreground space-y-2">
             <p>Every priced round dilutes you by roughly raise ÷ post-money. Raising ₹2 Cr at ₹8 Cr pre-money (₹10 Cr post) sells ~20% — plus any ESOP top-up, which usually comes out of your slice, not the new investor's.</p>

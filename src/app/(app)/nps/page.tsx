@@ -3,15 +3,21 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { NpsTracker } from "@/components/nps-tracker";
+import { listWorkbench, canSaveWorkbench } from "@/lib/workbench";
+import type { NpsData } from "@/lib/workbench-types";
 
 export const dynamic = "force-dynamic";
 
-export default function Nps() {
+export default async function Nps() {
+  const [history, canSave] = await Promise.all([
+    listWorkbench<NpsData>("nps", 24),
+    canSaveWorkbench(),
+  ]);
   return (
     <>
       <Topbar title="NPS & Customer Sentiment" subtitle="The number that predicts churn before revenue shows it" />
       <PageShell>
-        <NpsTracker />
+        <NpsTracker history={history} canSave={canSave} />
         <Section title="Why NPS is worth tracking" desc="It moves before your revenue does">
           <div className="text-sm text-muted-foreground space-y-2">
             <p>Sentiment turns before the numbers do. Customers usually go quiet, then stop renewing — by the time revenue dips, the decision was made months ago. NPS gives you that early warning.</p>

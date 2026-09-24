@@ -523,6 +523,131 @@ export async function saveArtifact(fd: FormData) {
   ["/documents", "/meetings", "/market", "/strategy"].forEach((p) => revalidatePath(p));
 }
 
+/* ==========================================================================
+   THE WORKBENCH: /decisions, /captable and /nps can now remember things
+   ==========================================================================
+
+   All three stored their work in React state or localStorage and lost it. See
+   lib/workbench.ts for why they share `strategy_docs` rather than getting a
+   table each — briefly: three new tables means three migrations somebody has
+   to run against a live database before any of this works, and strategy_docs
+   already carries the RLS, the write-rank grants and the delete whitelist.
+
+   These RETURN rather than throw on anything the person can fix, per
+   lib/action-result.ts: a decision journal that replaces the page with a
+   support reference number, losing the paragraph of reasoning just typed, is
+   worse than not saving at all.
+*/
+
+const WORKBENCH_PATHS: Record<string, string> = {
+  decision: "/decisions", captable: "/captable", nps: "/nps",
+};
+
+export async function saveWorkbenchEntry(fd: FormData): Promise<ActionResult | void> {
+  const { WORKBENCH_KINDS } = await import("@/lib/workbench-types");
+  const kind = str(fd.get("kind"));
+  if (!(WORKBENCH_KINDS as readonly string[]).includes(kind)) {
+    /* Not customer-facing wording, because a customer cannot produce this —
+       it means a form was built with a kind nobody implemented. */
+    throw new Error(`Unknown workbench kind: ${kind}`);
+  }
+
+  const title = str(fd.get("title"));
+  if (!title) return fail("Give this a title so you can find it again.");
+
+  let data: any = {};
+  const raw = str(fd.get("data"));
+  if (raw) {
+    try { data = JSON.parse(raw); }
+    catch { throw new Error("Workbench payload was not valid JSON."); }
+  }
+
+  const orgId = await requireWriteOrg();
+  const sb = await createClient();
+  const { error, count } = await sb
+    .from("strategy_docs")
+    .insert({ org_id: orgId, framework: kind, question: title, content: data }, { count: "exact" });
+
+  if (error) throw new Error(error.message);
+  /*
+    A zero-row insert with no error is the silent-write pattern this repo spent
+    a week removing everywhere else: RLS accepts the statement and writes
+    nothing, the UI says "Saved", and the work is gone. Checked here for the
+    same reason it is checked on every other write path.
+  */
+  if (count === 0) {
+    return fail("That did not save — your role may not allow writing to this workspace. Ask an admin to check.");
+  }
+
+  const path = WORKBENCH_PATHS[kind];
+  if (path) revalidatePath(path);
+  return { ok: true, message: "Saved to your workspace." };
+}
+
+export async function deleteWorkbenchEntry(fd: FormData): Promise<ActionResult | void> {
+  const id = str(fd.get("id"));
+  const kind = str(fd.get("kind"));
+  if (!id) return fail("Nothing selected to remove.");
+
+  const orgId = await requireWriteOrg();
+  const sb = await createClient();
+  /*
+    Scoped to org_id as well as id. RLS should make the extra predicate
+    redundant; writing it anyway means a policy regression downgrades this from
+    "delete another workspace's row" to "delete nothing".
+  */
+  const { error, count } = await sb
+    .from("strategy_docs").delete({ count: "exact" })
+    .eq("id", id).eq("org_id", orgId);
+
+  if (error) throw new Error(error.message);
+  if (count === 0) return fail("That entry was already gone.");
+
+  const path = WORKBENCH_PATHS[kind];
+  if (path) revalidatePath(path);
+  return { ok: true };
+}
+
+/**
+ * Merge a patch into an entry's stored payload.
+ *
+ * Used for the two things that arrive AFTER the entry exists: a decision's
+ * status moving from considering to decided, and the 14-credit AI critique
+ * landing. Read-modify-write rather than a jsonb path update, because the
+ * payloads are small and one round trip of clarity beats a clever one.
+ */
+export async function patchWorkbenchEntry(fd: FormData): Promise<ActionResult | void> {
+  const id = str(fd.get("id"));
+  const kind = str(fd.get("kind"));
+  if (!id) return fail("Nothing selected to update.");
+
+  let patch: any = {};
+  try { patch = JSON.parse(str(fd.get("patch")) || "{}"); }
+  catch { throw new Error("Workbench patch was not valid JSON."); }
+
+  const orgId = await requireWriteOrg();
+  const sb = await createClient();
+
+  const { data: rows, error: readErr } = await sb
+    .from("strategy_docs").select("content").eq("id", id).eq("org_id", orgId).limit(1);
+  if (readErr) throw new Error(readErr.message);
+  if (!rows?.length) return fail("That entry no longer exists.");
+
+  const current = (rows[0] as any).content;
+  const merged = { ...(typeof current === "object" && current ? current : {}), ...patch };
+
+  const { error, count } = await sb
+    .from("strategy_docs").update({ content: merged }, { count: "exact" })
+    .eq("id", id).eq("org_id", orgId);
+
+  if (error) throw new Error(error.message);
+  if (count === 0) return fail("That did not save — your role may not allow writing to this workspace.");
+
+  const path = WORKBENCH_PATHS[kind];
+  if (path) revalidatePath(path);
+  return { ok: true };
+}
+
 // ---- Workflows ----
 export async function addWorkflow(fd: FormData) {
   const orgId = await requireWriteOrg();

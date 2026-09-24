@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getActivity } from "@/lib/data";
 import { runAutopilot } from "@/lib/actions";
+import { AUTOPILOT_TIME_IST } from "@/lib/cron-schedule";
 import { Bot, Sparkles, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,15 @@ export default async function Autopilot() {
               <div className="rounded-lg bg-primary/15 p-2.5"><Bot className="h-6 w-6 text-primary" /></div>
               <div>
                 <p className="font-medium">Autopilot analyses your business and posts findings automatically.</p>
-                <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5"><Clock className="h-3.5 w-3.5" /> Scheduled: daily 8:00 AM · findings appear in Activity & Notifications</p>
+                {/*
+                  This said "daily 8:00 AM" while the cron in vercel.json is
+                  `30 4 * * *`, which Vercel evaluates in UTC — 10:00 IST.
+                  An owner who checked at 8:15 and saw nothing would conclude
+                  either that the feature was broken or, worse, that there was
+                  nothing to warn them about. Now derived from the cron, and
+                  scripts/test-cron-schedule.mjs fails if the two drift apart.
+                */}
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5"><Clock className="h-3.5 w-3.5" /> Scheduled: daily at {AUTOPILOT_TIME_IST} · findings appear in Activity &amp; Notifications</p>
               </div>
             </div>
             {live ? (

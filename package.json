@@ -93,7 +93,8 @@
     "test:reconcile": "node scripts/test-reconcile.mjs",
     "test:email-delivery": "node scripts/test-email-delivery.mjs",
     "test:ai-metering": "node scripts/test-ai-metering.mjs",
-    "test:workspace-seed": "node scripts/test-workspace-seed.mjs"
+    "test:workspace-seed": "node scripts/test-workspace-seed.mjs",
+    "test:workbench": "node scripts/test-workbench.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

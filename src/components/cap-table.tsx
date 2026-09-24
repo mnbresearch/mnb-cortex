@@ -1,9 +1,11 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Save, Loader2, History } from "lucide-react";
 import { inr } from "@/lib/utils";
+import { saveWorkbenchEntry } from "@/lib/actions";
+import type { CapTableData, WorkbenchEntry } from "@/lib/workbench-types";
 
 type Round = { id: string; name: string; raise: number; preMoney: number; esop: number };
 
@@ -11,9 +13,65 @@ const R0: Round[] = [
   { id: "r1", name: "Seed", raise: 20_000_000, preMoney: 80_000_000, esop: 10 },
 ];
 
-export function CapTable() {
+/**
+ * A DILUTION MODEL THAT SURVIVES CLOSING THE TAB.
+ *
+ * This page builds a full waterfall across rounds — the kind of thing a
+ * founder puts twenty minutes into before a board conversation — and could
+ * not save a single figure. Every visit restarted from the same invented
+ * Seed round.
+ *
+ * Saved scenarios live in the workspace (lib/workbench.ts). The point is
+ * comparison as much as recall: "Seed only", "Seed + Series A at 4x", "what
+ * if we take the bridge" are three models a founder wants side by side, and
+ * a named scenario list is how you get there.
+ *
+ * Everything below the save bar is untouched. A signed-out visitor, or one
+ * whose role cannot write, gets exactly the calculator that shipped before.
+ */
+export function CapTable({
+  scenarios = [],
+  canSave = false,
+}: {
+  scenarios?: WorkbenchEntry<CapTableData>[];
+  canSave?: boolean;
+}) {
   const [founderShares] = useState(10_000_000); // starting founder shares (100%)
   const [rounds, setRounds] = useState<Round[]>(R0);
+  const [scenarioName, setScenarioName] = useState("");
+  const [note, setNote] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  function saveScenario() {
+    const name = scenarioName.trim();
+    if (!name) { setNote("Name this scenario so you can tell it apart from the others."); return; }
+    const fd = new FormData();
+    fd.set("kind", "captable");
+    fd.set("title", name);
+    fd.set("data", JSON.stringify({ founderShares, rounds } satisfies CapTableData));
+    startTransition(async () => {
+      const r = await saveWorkbenchEntry(fd);
+      if (r && !r.ok) { setNote(r.error); return; }
+      setScenarioName("");
+      setNote(`Saved "${name}".`);
+    });
+  }
+
+  function load(s: WorkbenchEntry<CapTableData>) {
+    const rs = s.data?.rounds;
+    if (!Array.isArray(rs) || !rs.length) { setNote("That scenario has no rounds in it."); return; }
+    /* Coerced field by field rather than trusted wholesale: a row could have
+       been written by an older shape, and a NaN in `preMoney` turns every
+       percentage on this page into "NaN%" with no clue where it came from. */
+    setRounds(rs.map((r, i) => ({
+      id: String(r?.id ?? `r${i}`),
+      name: String(r?.name ?? `Round ${i + 1}`),
+      raise: Number(r?.raise) || 0,
+      preMoney: Number(r?.preMoney) || 0,
+      esop: Number(r?.esop) || 0,
+    })));
+    setNote(`Loaded "${s.title}". Editing here does not change the saved copy — save again under a new name to keep both.`);
+  }
 
   const model = useMemo(() => {
     let totalShares = founderShares;
@@ -60,6 +118,41 @@ export function CapTable() {
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
     <div className="space-y-4">
+      {canSave && (
+        <Card className="p-4 space-y-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex-1 min-w-[12rem]">
+              <span className="text-sm text-muted-foreground">Save this scenario as</span>
+              <input
+                value={scenarioName}
+                onChange={(e) => setScenarioName(e.target.value)}
+                placeholder="e.g. Seed + Series A at 4x"
+                aria-label="Scenario name"
+                className="mt-1 w-full rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+            <Button onClick={saveScenario} disabled={pending}>
+              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
+            </Button>
+          </div>
+          {scenarios.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t">
+              <span className="text-xs text-muted-foreground flex items-center gap-1 pt-2"><History className="h-3.5 w-3.5" /> Saved:</span>
+              {scenarios.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => load(s)}
+                  className="mt-2 rounded-full border px-3 h-8 text-xs hover:bg-secondary"
+                >
+                  {s.title}
+                </button>
+              ))}
+            </div>
+          )}
+          {note && <p className="text-sm text-muted-foreground" role="status">{note}</p>}
+        </Card>
+      )}
+
       <Card className="p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="font-semibold">Funding rounds</div>
