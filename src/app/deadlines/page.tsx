@@ -96,7 +96,7 @@ export default function DeadlinesHub() {
             <Link href="/health-check" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">
               Free health check
             </Link>
-            <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>
+            <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>
               Get warned before each one <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </div>
@@ -163,7 +163,7 @@ export default function DeadlinesHub() {
             the MSME 45-day mark, the cash that has to be there on the day — and emails you before it costs you.
           </p>
           <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>
+            <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>
               Get started <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
             </Link>
             <Link href="/pricing" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">

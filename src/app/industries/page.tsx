@@ -26,7 +26,7 @@ export default function Industries() {
             grounded in a permanent memory of your business.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>
             <Link href="/features" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">See all features <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
         </div>
@@ -108,7 +108,7 @@ export default function Industries() {
           <h2 className="font-display display-3 tracking-tightest">Don&rsquo;t see yours?</h2>
           <p className="mt-4 text-muted-foreground">Cortex adapts to any business — and even builds custom AI agents for your exact workflow. If you run it, Cortex can run the numbers.</p>
           <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>
             <Link href="/contact" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">Talk to us <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
         </div>

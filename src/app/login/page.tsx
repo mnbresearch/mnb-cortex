@@ -48,6 +48,29 @@ export default function Login() {
     } catch { /* ignore */ }
   }, []);
 
+  /**
+   * ?mode=signup lands a NEW visitor on "Create account" instead of a sign-in
+   * form they have no credentials for.
+   *
+   * This page has had a signin/signup toggle since it was written, and the
+   * toggle was reachable only by clicking it — nothing could link to it. So
+   * every "Get started" on the marketing site, in the header, in the hero and
+   * in the footer, sent a first-time visitor to a form asking for a password
+   * they had never set. The way to an account was to notice a small pill at
+   * the top of a page that looked like it was asking you to log in.
+   *
+   * Read once on mount and the parameter is left in the URL, so the choice
+   * survives a refresh and a shared link keeps working. Anything other than
+   * "signup" is ignored rather than trusted — this decides which form renders,
+   * so an unexpected value must fall back to the safe default, not throw.
+   */
+  useEffect(() => {
+    try {
+      const m = new URL(window.location.href).searchParams.get("mode");
+      if (m === "signup") setMode("signup");
+    } catch { /* ignore */ }
+  }, []);
+
   const [googleOn, setGoogleOn] = useState(false);
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

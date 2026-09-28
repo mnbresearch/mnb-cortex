@@ -293,7 +293,12 @@ export default function Home() {
               in a lot of nothing, and this is the only thing the hero asks for. */}
           <div className="mt-9 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center sm:justify-center gap-3">
             <Magnetic>
-              <Link href="/login" className="flex sm:inline-flex items-center justify-center gap-2 rounded-full btn-ink px-7 h-12 text-sm font-medium" data-cursor>
+              {/* "Start with one file" asks someone to create a workspace, so
+                  it opens the signup form. It pointed at /login, which opens
+                  on the SIGN IN tab — a first-time visitor clicking the
+                  hero's main action was asked for a password they had never
+                  set. */}
+              <Link href="/login?mode=signup" className="flex sm:inline-flex items-center justify-center gap-2 rounded-full btn-ink px-7 h-12 text-sm font-medium" data-cursor>
                 Start with one file <ArrowUpRight className="h-4 w-4" />
               </Link>
             </Magnetic>
@@ -301,6 +306,13 @@ export default function Home() {
               Free 60-second check <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
+          {/* The header has a Sign in button, but it sits in a bar with no
+              background until you scroll, and a returning customer looking at
+              the hero should not have to hunt for the way back in. */}
+          <p className="mt-4 text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link href="/login" className="text-foreground font-medium underline underline-offset-4 hover:text-primary transition-colors">Sign in</Link>
+          </p>
 
           <p className="mt-5 text-sm text-muted-foreground">No card. Keep your accounting software.</p>
         </div>
@@ -779,14 +791,21 @@ export default function Home() {
           <p className="mt-5 text-muted-foreground text-lg">Create your workspace in under a minute — no card. Import an export you already have and see your own overdue list and dashboard before you pay for anything.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Magnetic>
-              <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>
-                Get started <ArrowUpRight className="h-4 w-4" />
+              {/* The paragraph above this literally says "Create your
+                  workspace in under a minute", so the button under it opens
+                  the form that creates one. */}
+              <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>
+                Create your workspace <ArrowUpRight className="h-4 w-4" />
               </Link>
             </Magnetic>
             <Link href="/pricing" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">
               See pricing <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
+          <p className="mt-5 text-sm text-muted-foreground">
+            Already a customer?{" "}
+            <Link href="/login" className="text-foreground font-medium underline underline-offset-4 hover:text-primary transition-colors">Sign in to your workspace</Link>
+          </p>
         </div>
       </section>
 

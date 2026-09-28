@@ -180,7 +180,7 @@ export default function DeadlinePage({ params }: { params: { slug: string } }) {
                   <Link href="/health-check" className="inline-flex items-center gap-2 rounded-full border px-5 h-11 text-sm font-medium hover:bg-accent transition-colors">
                     Free health check
                   </Link>
-                  <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-5 h-11 text-sm font-medium" data-cursor>
+                  <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full btn-ink px-5 h-11 text-sm font-medium" data-cursor>
                     Get started <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
                   </Link>
                 </div>

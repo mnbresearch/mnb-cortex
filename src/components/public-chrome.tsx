@@ -57,14 +57,57 @@ export function PublicHeader() {
               <Link key={n.href} href={n.href} className="link-sweep text-muted-foreground hover:text-foreground transition-colors">{n.label}</Link>
             ))}
           </nav>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="hidden sm:inline text-sm link-sweep text-muted-foreground hover:text-foreground">Sign in</Link>
+          {/*
+            BOTH DOORS, AND BOTH VISIBLE.
+
+            Three things were wrong here and they compounded:
+
+            1. "Get started" pointed at /login, which opens on the SIGN IN
+               tab. A first-time visitor clicked the main call to action and
+               landed on a form asking for a password they had never set. The
+               signup toggle existed but nothing could link to it, so the only
+               route to an account was noticing a small pill on a page that
+               looked like it was asking you to log in.
+
+            2. "Sign in" was `hidden sm:inline` — gone below 640px — and the
+               mobile menu offered only "Get started". An existing customer on
+               a phone had no sign-in link anywhere on the site.
+
+            3. The header is fixed with no background until you scroll 24px,
+               so at rest both controls sat as muted text over the hero.
+
+            Now: a bordered "Sign in" and a filled "Create account", visible
+            from the smallest breakpoint, each pointing at the form it names.
+
+            The wording stays away from "free" deliberately — see the note at
+            the top of this file. Creating the account genuinely costs
+            nothing, which is what "Create account" says; running anything
+            costs credits, which is what "Start free" would have denied.
+          */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              href="/login"
+              className="inline-flex items-center rounded-full border px-3.5 sm:px-5 h-9 sm:h-10 text-sm font-medium hover:bg-accent transition-colors"
+            >
+              Sign in
+            </Link>
             <Magnetic>
-              <Link href="/login" className="hidden sm:inline-flex items-center gap-1.5 rounded-full btn-ink px-5 h-10 text-sm font-medium">
-                Get started <ArrowUpRight className="h-4 w-4" />
+              <Link
+                href="/login?mode=signup"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-full btn-ink px-5 h-10 text-sm font-medium"
+              >
+                Create account <ArrowUpRight className="h-4 w-4" />
               </Link>
             </Magnetic>
-            <button onClick={() => setOpen(true)} className="md:hidden h-10 w-10 grid place-items-center rounded-full border" aria-label="Open menu"><Menu className="h-5 w-5" /></button>
+            {/* Below sm the filled button would crowd the logo, so the phone
+                gets a shorter label rather than losing the control. */}
+            <Link
+              href="/login?mode=signup"
+              className="sm:hidden inline-flex items-center rounded-full btn-ink px-3.5 h-9 text-sm font-medium"
+            >
+              Sign up
+            </Link>
+            <button onClick={() => setOpen(true)} className="md:hidden h-9 w-9 sm:h-10 sm:w-10 grid place-items-center rounded-full border" aria-label="Open menu"><Menu className="h-5 w-5" /></button>
           </div>
         </div>
       </header>
@@ -99,7 +142,12 @@ export function PublicHeader() {
             {NAV.map((n) => (
               <Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="font-display display-3 py-1 tracking-tightest hover:opacity-60 transition-opacity">{n.label}</Link>
             ))}
-            <Link href="/login" onClick={() => setOpen(false)} className="font-display display-3 py-1 tracking-tightest text-primary">Get started →</Link>
+            {/* Both doors here too. This menu offered only "Get started",
+                pointing at the sign-in form — so on a phone an existing
+                customer had nowhere to sign in and a new one was sent to the
+                wrong tab. */}
+            <Link href="/login?mode=signup" onClick={() => setOpen(false)} className="font-display display-3 py-1 tracking-tightest text-primary">Create account →</Link>
+            <Link href="/login" onClick={() => setOpen(false)} className="font-display display-3 py-1 tracking-tightest opacity-70 hover:opacity-100 transition-opacity">Sign in</Link>
           </nav>
           <div className="px-6 pb-8 text-sm text-background/60">contact@mnbresearch.com · +91 97114 88480</div>
         </div>
@@ -139,8 +187,10 @@ export function PublicFooter() {
               <h2 className="font-display display-2 tracking-tightest mt-4">Put your <span className="text-primary">operating brain</span> to work.</h2>
             </div>
             <div className="lg:justify-self-end">
-              <Link href="/login" className="inline-flex items-center gap-2 rounded-full bg-background text-foreground px-7 h-14 text-base font-medium hover:opacity-90 transition-opacity" data-cursor>
-                Get started <ArrowUpRight className="h-5 w-5" />
+              {/* The footer CTA is aimed at someone who has read the page and
+                  does not have an account yet, so it opens the signup form. */}
+              <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full bg-background text-foreground px-7 h-14 text-base font-medium hover:opacity-90 transition-opacity" data-cursor>
+                Create your account <ArrowUpRight className="h-5 w-5" />
               </Link>
             </div>
           </div>

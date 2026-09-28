@@ -98,7 +98,8 @@
     "test:advance-tax": "node scripts/test-advance-tax.mjs",
     "capability:snapshot": "node scripts/capability-snapshot.mjs",
     "test:register": "node scripts/test-capability-register.mjs",
-    "test:windowed-reads": "node scripts/test-windowed-reads.mjs"
+    "test:windowed-reads": "node scripts/test-windowed-reads.mjs",
+    "test:auth-entry": "node scripts/test-auth-entry.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

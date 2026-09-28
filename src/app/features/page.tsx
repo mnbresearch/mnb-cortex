@@ -210,7 +210,7 @@ export default function Features() {
               a runnable workforce, a permanent memory, and 100+ tools that monitor, predict, recommend and act — together.
             </p>
             <div className="flex gap-3 lg:justify-end">
-              <Link href="/login" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>
+              <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>
               <Link href="/pricing" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">See pricing</Link>
             </div>
           </div>
