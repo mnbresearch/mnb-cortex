@@ -106,6 +106,19 @@ check(/mode=signup/.test(menuCode), "the mobile menu offers a signup link");
   Scanned across the whole public surface, because this defect was never in
   one file: eight marketing pages each had their own "Get started" pointing at
   the sign-in tab.
+
+  AND ACROSS src/components, WHICH THE FIRST VERSION OF THIS TEST MISSED.
+
+  It scanned page.tsx files plus public-chrome.tsx, so it passed — and the
+  live site still had two CTAs going to the wrong form: "Get started for
+  Manufacturing" in the industry picker, and "Fix my AI visibility" in the
+  visibility check. Both are components rendered BY those pages, so a scan of
+  the pages alone could never see them. Found by reading the deployed HTML,
+  not by the suite that was supposed to make reading it unnecessary.
+
+  The whole components directory is scanned now. In-app components are safe to
+  include because the rule is about label-vs-destination, and an in-app
+  "Sign in" prompt pointing at /login is exactly right.
 */
 function walk(dir) {
   const out = [];
@@ -120,11 +133,16 @@ function walk(dir) {
 const publicPages = walk("src/app").filter((p) => !p.includes("/(app)/"));
 check(publicPages.length > 10, "found the public pages", `${publicPages.length}`);
 
-const SIGNUP_LABEL = /(get started|create (your )?(account|workspace)|start with one file|get warned before each one)/i;
+const componentFiles = readdirSync(new URL("../src/components/", import.meta.url), { withFileTypes: true })
+  .filter((e) => e.isFile() && e.name.endsWith(".tsx"))
+  .map((e) => `src/components/${e.name}`);
+check(componentFiles.length > 50, "found the components", `${componentFiles.length}`);
+
+const SIGNUP_LABEL = /(get started|create (your )?(account|workspace)|start with one file|get warned before each one|fix my ai visibility)/i;
 const SIGNIN_LABEL = /^\s*sign in/i;
 
 const mismatched = [];
-for (const p of [...publicPages, "src/components/public-chrome.tsx"]) {
+for (const p of [...publicPages, ...componentFiles]) {
   const body = strip(src(p));
   for (const m of body.matchAll(/href="(\/login[^"]*)"/g)) {
     const after = body.slice(m.index + m[0].length, m.index + m[0].length + 400);
