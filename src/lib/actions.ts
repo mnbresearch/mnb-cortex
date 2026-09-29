@@ -2092,7 +2092,40 @@ export async function saveQuote(doc: {
     valid_until: doc.valid_until || null,
     meta: doc.meta ?? null,
   }, { onConflict: "org_id,quote_no" });
-  if (error) return { ok: false, error: error.message };
+
+  /*
+    DO NOT HAND THE CUSTOMER A POSTGRES STRING.
+
+    This returned `error.message` verbatim, so when the upsert's arbiter did
+    not resolve, an SME owner pressing "Save to workspace" was shown:
+
+        there is no unique or exclusion constraint matching the ON CONFLICT
+        specification
+
+    That sentence is for whoever wrote the migration, not for the person
+    trying to save a quotation — and it is indistinguishable, to them, from
+    the product being broken. Which in this case it was: the index was
+    partial, ON CONFLICT could not use it, and the feature had never saved a
+    row. See 2026_quotes_upsert_index.sql.
+
+    Two classes, kept apart the way lib/action-result.ts asks. A duplicate
+    quote number is something the owner can act on, so it is named plainly.
+    Anything else is our problem, not theirs: they get a short sentence that
+    tells them their work is not lost, and the real message goes to the log
+    where it belongs.
+  */
+  if (error) {
+    const raw = String(error.message || "");
+    if (/duplicate key|unique constraint/i.test(raw)) {
+      return { ok: false, error: `Quote ${quote_no} already exists. Change the number, or edit the saved one.` };
+    }
+    console.error("[saveQuote] upsert failed:", raw);
+    return {
+      ok: false,
+      error: "That didn't save — something went wrong at our end, not yours. " +
+             "Your quote is still on screen; download the PDF if you need it now.",
+    };
+  }
 
   /*
     Note what is NOT done here: no recompute, and nothing written to `invoices`.

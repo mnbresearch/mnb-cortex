@@ -99,7 +99,8 @@
     "capability:snapshot": "node scripts/capability-snapshot.mjs",
     "test:register": "node scripts/test-capability-register.mjs",
     "test:windowed-reads": "node scripts/test-windowed-reads.mjs",
-    "test:auth-entry": "node scripts/test-auth-entry.mjs"
+    "test:auth-entry": "node scripts/test-auth-entry.mjs",
+    "test:upsert-arbiters": "node scripts/test-upsert-arbiters.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
