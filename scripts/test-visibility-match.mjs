@@ -223,13 +223,42 @@ const check = (c, n, d = "") => (c ? pass++ : failures.push(`${n}${d ? "\n      
   check(/opts\.crossCheck \?\? CROSS_CHECK/.test(lib),
     "the paid route gets the cross-check engine by default");
 
-  /* The price on the button must be the price that is charged. */
+  /* ---- The price on the button must be the price that is charged --------
+     REBASED FROM A LITERAL TO THE DERIVATION, AND THAT DISTINCTION IS THE
+     WHOLE POINT.
+
+     This used to assert that the string "89 credits" appeared in the
+     component — the literal that config happened to hold. The fix for the
+     original defect (the button said 10 while the charge was 89) was to
+     render `{creditCost("visibility")}`, so the label now reads its price
+     from the same constant that bills for it and CANNOT drift.
+
+     The literal assertion then failed on that — punishing the implementation
+     that made the bug impossible, and passing only if someone typed the
+     number back in by hand. That is the fifth time in this codebase a test
+     asserting the IMPLEMENTATION has made the correct fix look like a
+     regression; the TDS year, the EPF block and the advance-tax schedule were
+     the others, and each was rebased onto the exported value for the same
+     reason.
+
+     So: require the derivation, and reject a hardcoded number next to
+     "credits" — because a literal that is right today is a literal that
+     drifts the next time pricing moves. */
   const charged = (cfg.match(/visibility:\s*(\d+)/) || [])[1];
   check(!!charged, "the credit cost is findable in config", "cannot verify the label without it");
-  check(ui.includes(`${charged} credits`),
-    `the button quotes ${charged} credits, matching what config charges`,
-    "it said 10 while config charged 89 — a price quoted nine times under the real one");
-  check(!/·\s*10 credits/.test(ui), "the old 10-credit label is gone");
+
+  check(/creditCost\(\s*["']visibility["']\s*\)\s*\}?\s*credits/.test(ui),
+    "the button DERIVES its price from config rather than quoting a literal",
+    "A hardcoded number is a price that can drift away from what is billed. " +
+    "It once read 10 while config charged 89 — nine times under the real one.");
+  check(/import\s*\{[^}]*\bcreditCost\b/.test(ui),
+    "…and the component really imports creditCost");
+
+  /* A bare number before "credits" means somebody re-hardcoded it. */
+  const hardcoded = ui.match(/(?<!creditCost\([^)]*\)[\s}]*)\b(\d+)\s+credits/);
+  check(!hardcoded,
+    "no hardcoded credit figure on the visibility button",
+    hardcoded ? `found "${hardcoded[0]}" — use creditCost("visibility") instead` : "");
 
   check(/citations:\s*report\.citations/.test(strip(readFileSync("src/app/api/visibility/route.ts", "utf8"))),
     "the drafted fix is given the cited sources to work from");
