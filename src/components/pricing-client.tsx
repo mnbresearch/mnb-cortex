@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Sparkles, X, MessageCircle } from "lucide-react";
 import { PLANS, PUBLIC_CREDIT_PACKS, WHATSAPP_NUMBER, CURRENCIES, formatMoney, planPrice, type CurrencyCode, ANNUAL_SAVING_PCT } from "@/lib/config";
 import { payCashfree } from "@/lib/pay/checkout-client";
+import Link from "next/link";
 
 /**
  * `signedIn` decides what a plan button does. A Cashfree order needs a workspace
@@ -214,7 +215,8 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
                 </select>
                 <label className="flex items-start gap-2 text-xs text-muted-foreground">
                   <input type="checkbox" required className="mt-0.5" />
-                  <span>I agree to be contacted about MNB Cortex and consent to my details being processed for this request.</span>
+                  <span>I agree to be contacted about MNB Cortex and consent to my details being processed for this
+                    request. See the <Link href="/privacy" className="text-primary link-sweep">privacy policy</Link>.</span>
                 </label>
                 {status === "error" && <p role="alert" className="text-xs text-danger">Something went wrong sending the email — please use WhatsApp below.</p>}
                 <button disabled={status === "sending"} className="w-full rounded-full btn-ink h-11 text-sm font-medium">{status === "sending" ? "Sending…" : "Request access"}</button>

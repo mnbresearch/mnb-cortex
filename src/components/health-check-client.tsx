@@ -210,10 +210,30 @@ export function HealthCheckClient() {
               <input required type="email" placeholder="Work email" aria-label="Work email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={FIELD} />
               <input required type="tel" inputMode="tel" autoComplete="tel" placeholder="Phone / WhatsApp" aria-label="Phone / WhatsApp" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={FIELD} />
               <input placeholder="Business name (optional)" aria-label="Business name (optional)" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} className={FIELD} />
+              {/*
+                CONSENT, because this form stores what it collects.
+
+                /api/inquiry inserts name, email, phone, business name and the
+                score into `leads` and emails the operator. The page used to
+                say "we keep nothing" a few hundred pixels above this — and
+                there was no checkbox and no link to the policy, while
+                /pricing (a strictly less sensitive form, since it does not
+                carry a score derived from answers about the business) had
+                both. Same control, same wording, here.
+              */}
+              <label className="flex items-start gap-2 text-xs text-muted-foreground sm:col-span-2">
+                <input type="checkbox" required className="mt-0.5" />
+                <span>
+                  I agree to be contacted about MNB Cortex and consent to my details being processed for this
+                  request. See the <Link href="/privacy" className="text-primary link-sweep">privacy policy</Link>.
+                </span>
+              </label>
               {status === "error" && <p className="text-xs text-danger sm:col-span-2">Something went wrong — please try again.</p>}
               <button disabled={status === "sending"} className="sm:col-span-2 rounded-full btn-ink h-11 text-sm font-medium">{status === "sending" ? "Sending…" : "Email me the report"}</button>
               <p className="text-[11px] text-muted-foreground sm:col-span-2">
-                We use your number to walk you through the report. No spam, and you can ask us to delete it at any time.
+                We store these details so we can send the report and follow up, and we use your number to walk
+                you through it. No spam, and you can ask us to delete it at any time. Your uploaded receivables
+                file is a separate thing and is never stored.
               </p>
             </form>
           </>

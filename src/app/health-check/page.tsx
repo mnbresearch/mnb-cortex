@@ -9,10 +9,32 @@ import { LedgerCheck } from "@/components/ledger-check";
   in and get real numbers, with no account. That is the searchable, honest
   claim — and it is the half that was missing.
 */
+/*
+  "NOTHING IS STORED" WAS TRUE OF ONE HALF OF THIS PAGE AND FALSE OF THE OTHER.
+
+  The ledger analyser genuinely stores nothing: /api/free-check parses the
+  upload in the request and writes no row. That is the claim this sentence was
+  written for, and it is worth making.
+
+  The quiz half is a different thing. Its form POSTs name, email, phone,
+  business name and the score to /api/inquiry, which does
+  `.from("leads").insert(row)` and emails the operator. So the page told a
+  visitor "we keep nothing" on the same screen where it asked for their phone
+  number and then kept it.
+
+  Under the DPDP Act that is a notice failure, not a wording preference: the
+  visitor has to be told what is collected and why, before they hand it over.
+  /pricing already does this properly with a consent checkbox and a link to
+  the policy; this page had neither, and the claim above made it worse by
+  actively telling them the opposite.
+
+  Both halves are now stated separately, and the form carries the same
+  consent control /pricing uses.
+*/
 export const metadata = {
   title: "Free Business Health Check + Overdue Receivables Analyser — MNB Cortex",
   description:
-    "Free, no signup: score how your business runs, then upload your Tally, Busy, Vyapar or Excel receivables and see your real overdue total, your oldest unpaid invoice, and your MSME 45-day (43B(h)) exposure. Nothing is stored.",
+    "Free, no signup: score how your business runs, then upload your Tally, Busy, Vyapar or Excel receivables and see your real overdue total, your oldest unpaid invoice, and your MSME 45-day (43B(h)) exposure. Your file is read in the request and never stored.",
 };
 
 export default function HealthCheck() {
@@ -28,8 +50,9 @@ export default function HealthCheck() {
           <Kinetic as="h1" text={"Business Health Check."} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
             Six quick questions for a score, then put your actual receivables in and see the real numbers —
-            what is overdue, by how many days, and who is holding it. About two minutes. No signup, no card,
-            and we keep nothing.
+            what is overdue, by how many days, and who is holding it. About two minutes. No signup and no card.
+            Your receivables file is read in the request and never written down; if you ask us to email the
+            report, we keep the contact details you give us for that.
           </p>
         </div>
       </section>

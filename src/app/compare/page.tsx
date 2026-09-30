@@ -9,7 +9,37 @@ export const metadata = {
   description: "How an AI operating system compares to an ERP, a CRM, a general chatbot, and hiring a consultant — for an Indian SME.",
 };
 
-const COLS = ["Cortex", "ERP", "CRM", "ChatGPT", "Consultant"];
+/*
+  ==========================================================================
+  WHAT WAS WRONG WITH THIS TABLE
+  ==========================================================================
+
+  Three rows made claims nothing in this repo can support:
+
+    "Monthly cost   Cortex ₹ | CRM ₹₹ | ERP ₹₹₹"
+        Plans run ₹4,999–₹39,999/month. Positioning Cortex as the cheapest
+        tier against a CRM is not defensible, and the row was the only one
+        in the table making a claim about someone else's PRICE.
+
+    "Available 24/7   Cortex ●"
+        The app is reachable 24/7, like any website. The WATCHING — the
+        thing this row implies — is a single 04:30 UTC cron, rotated and
+        capped. Ticking it against a consultant's ○ sells a difference that
+        is not the one being measured.
+
+    "Cortex reads everything and acts"
+        It reads CSV/Tally/Vyapar/Busy exports plus four live syncs.
+
+  The column header also named a specific competitor product. The narrative
+  below still does, because what it says about it is accurate and specific;
+  a tick-box grid asserting nine capabilities about someone else's product
+  is a different thing, and the generic category is both fairer and more
+  useful to a reader comparing categories.
+
+  The rows that remain are about what CORTEX does, which this repo can
+  answer for.
+*/
+const COLS = ["Cortex", "ERP", "CRM", "General chatbot", "Consultant"];
 const ROWS: { f: string; v: string[] }[] = [
   { f: "Reads all your business data", v: ["y", "p", "p", "n", "p"] },
   { f: "Diagnoses problems for you", v: ["y", "n", "n", "p", "y"] },
@@ -18,16 +48,15 @@ const ROWS: { f: string; v: string[] }[] = [
   { f: "Executes the busywork", v: ["y", "n", "n", "n", "n"] },
   { f: "Plain-language answers", v: ["y", "n", "n", "y", "y"] },
   { f: "Remembers your business", v: ["y", "p", "p", "n", "p"] },
-  { f: "Available 24/7", v: ["y", "y", "y", "y", "n"] },
+  { f: "Re-reads your numbers without being asked", v: ["y", "n", "n", "n", "n"] },
   { f: "Built for Indian SMEs", v: ["y", "p", "p", "n", "p"] },
-  { f: "Monthly cost", v: ["₹", "₹₹₹", "₹₹", "₹", "₹₹₹₹"] },
 ];
 
 const NARR = [
   { t: "vs an ERP", d: "An ERP is a system of record — it stores transactions beautifully but waits for you to ask questions and draw conclusions. Cortex sits on top of your data (including your ERP) and does the thinking: it tells you what changed, why it matters, and what to do." },
   { t: "vs a CRM", d: "A CRM tracks your pipeline; it doesn't tell you which deals to prioritise, which customers are about to churn, or how pricing is hurting margin. Cortex reads sales alongside finance and operations, so advice reflects the whole business, not one slice." },
   { t: "vs ChatGPT", d: "A general chatbot is brilliant and blank — it knows nothing about your numbers unless you paste them every time, and it forgets. Cortex is grounded in a permanent memory of your business and connected to your data, so answers are specific to you." },
-  { t: "vs a consultant", d: "A great consultant is expensive, occasional, and gone when the engagement ends. Cortex gives you boardroom-grade analysis every day for a fraction of the cost — and it remembers every decision you've made." },
+  { t: "vs a consultant", d: "A consultant arrives, forms a view, and leaves — and the context goes with them. Cortex keeps reading the same numbers after the engagement would have ended, and it remembers every decision you've made. What it is not is a person who can sit in the room and argue with your co-founder; the two are not substitutes." },
 ];
 
 const mark = (v: string) => {
@@ -49,7 +78,7 @@ export default function Compare() {
           <SectionLabel n="00">Compare</SectionLabel>
           <Kinetic as="h1" text={"Store, chat, or act?"} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            ERPs and CRMs store your data. Chatbots make conversation. Consultants cost a fortune. MNB Cortex reads everything and acts.
+            ERPs and CRMs store your data. Chatbots make conversation, then forget. MNB Cortex reads your Tally, Busy, Vyapar or Excel exports — plus Shopify, Razorpay, Stripe and Google Sheets — and tells you what changed.
           </p>
         </div>
       </section>
@@ -79,6 +108,22 @@ export default function Compare() {
             <span><span className="text-warning">◐</span> Partial</span>
             <span><span className="text-muted-foreground/40">○</span> No</span>
           </div>
+          {/*
+            Says out loud what the table is and is not.
+
+            Every remaining row describes a CATEGORY of tool, not any named
+            product, and the Cortex column is the only one this repo can be
+            held to. Without that stated, a grid of ticks reads as measured
+            fact about five things when it is a considered opinion about
+            four of them.
+          */}
+          <p className="mt-3 text-xs text-muted-foreground max-w-3xl">
+            The Cortex column describes what this product does today and is what we will be held to.
+            The other four describe categories of tool, not any particular vendor, and are our
+            characterisation — worth checking against whatever you are actually comparing us with.
+            No price comparison is made: pricing for the other four varies far too widely for a
+            row of rupee symbols to mean anything. <Link href="/pricing" className="text-primary link-sweep">Ours is here</Link>.
+          </p>
         </div>
       </section>
 
