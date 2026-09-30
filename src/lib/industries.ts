@@ -8,7 +8,23 @@ import {
   Cpu, Sofa, ShoppingCart, PartyPopper, Camera, PawPrint, LampDesk, Printer, Footprints,
 } from "lucide-react";
 
-export type IndustryFix = { tool: string; href: string };
+/**
+ * One thing Cortex does about one of this industry's pains.
+ *
+ * `calc` MARKS THE ONES THAT DO NOT WATCH.
+ *
+ * These are rendered on /industries/[slug] under the heading "What Cortex
+ * does about it", beside a tick. Most point at modules that read the
+ * customer's imported rows and raise warnings. A few point at calculators:
+ * they take numbers you type and compute an answer, and they store and
+ * watch nothing.
+ *
+ * Both are useful and both belong on the page. Presenting them
+ * identically is what was wrong — a tick beside "Buy vs Lease for fleet"
+ * reads as "Cortex is handling this", when what is on offer is a tool the
+ * owner drives. `calc: true` makes the page say which is which.
+ */
+export type IndustryFix = { tool: string; href: string; calc?: true };
 export type Industry = {
   slug: string;
   name: string;
@@ -62,7 +78,7 @@ export const INDUSTRIES: Industry[] = [
     pains: ["Costing every design by hand", "Metal & stone prices swing constantly", "Turning a sketch into a maker's spec is slow"],
     fixes: [
       { tool: "Sketch → merchandising spec agent", href: "/agents" },
-      { tool: "Live costing with metal/stone rates", href: "/agents" },
+      { tool: "Costing from the metal and stone rates you enter", href: "/agents" },
       { tool: "Making-charge & margin calculators", href: "/markup" },
       { tool: "Collection planner & stone-plot", href: "/agents" },
     ],
@@ -76,7 +92,8 @@ export const INDUSTRIES: Industry[] = [
       { tool: "Payables & DPO with early-pay discounts", href: "/payables" },
       { tool: "DSCR & credit exposure by account", href: "/dscr" },
       { tool: "Cash conversion cycle simulator", href: "/ccc" },
-      { tool: "Vendor scorecards & GST ITC set-off", href: "/itc" },
+      { tool: "Vendor scorecards", href: "/vendors" },
+      { tool: "GST ITC set-off", href: "/itc", calc: true },
     ],
     outcome: "Extend payables smartly, watch dealer risk, and unlock cash from the cycle.",
   },
@@ -184,7 +201,7 @@ export const INDUSTRIES: Industry[] = [
       { tool: "Unit economics per route", href: "/unit-economics" },
       { tool: "Cost Optimizer", href: "/costs" },
       { tool: "Receivables & DSO tracker", href: "/receivables" },
-      { tool: "Buy vs Lease for fleet", href: "/buyvslease" },
+      { tool: "Buy vs Lease for fleet", href: "/buyvslease", calc: true },
     ],
     outcome: "See which routes make money, cut cost leaks, and collect faster.",
   },
@@ -218,7 +235,8 @@ export const INDUSTRIES: Industry[] = [
     pains: ["Expiry and dead stock eat cash", "Thin margins across thousands of SKUs", "GST & compliance is relentless"],
     fixes: [
       { tool: "Inventory turnover & holding cost", href: "/inventory-turns" },
-      { tool: "GST ITC set-off & compliance", href: "/itc" },
+      { tool: "GST ITC set-off", href: "/itc", calc: true },
+      { tool: "GST filing status & compliance", href: "/gst" },
       { tool: "Reorder Optimizer", href: "/reorder" },
       { tool: "Inventory ABC analysis", href: "/abc" },
     ],

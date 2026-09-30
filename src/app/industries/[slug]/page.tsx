@@ -136,8 +136,22 @@ export default function IndustryPage({ params }: { params: { slug: string } }) {
                       <span className="h-5 w-5 rounded-full bg-primary/15 grid place-items-center shrink-0 mt-0.5">
                         <Check className="h-3 w-3 text-primary" aria-hidden="true" />
                       </span>
-                      {/* Real hrefs from the record — each points at a module that exists. */}
-                      <Link href={f.href} className="text-[15px] leading-7 link-sweep">{f.tool}</Link>
+                      {/*
+                        Real hrefs from the record — each points at a module that
+                        exists. The `calc` chip separates the ones that WATCH your
+                        imported rows from the ones that COMPUTE from numbers you
+                        type. Both belong here; rendering them identically under
+                        "What Cortex does about it" was the problem, because a tick
+                        beside a calculator reads as "this is being handled".
+                      */}
+                      <span className="text-[15px] leading-7">
+                        <Link href={f.href} className="link-sweep">{f.tool}</Link>
+                        {f.calc && (
+                          <span className="ml-2 align-middle text-[11px] rounded-full border px-2 py-0.5 text-muted-foreground">
+                            calculator — you enter the numbers
+                          </span>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>

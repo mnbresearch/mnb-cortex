@@ -93,6 +93,25 @@ export const PAYWALL_ALLOW = [
   "/import",       // 2,3 — the wizard's primary button
   "/receivables",  // 2,3 — the wizard's finish button
   "/dashboard",    // 2,3 — the wizard's secondary button
+  /*
+    THE FREE TOOLS, BECAUSE THE FOOTER OF EVERY PUBLIC PAGE CALLS THEM FREE.
+
+    public-chrome.tsx has a "Free tools" column linking /calculators,
+    /deadlines and /health-check#ledger, and /calculators' own copy says
+    "free and need no account". All three are reachable by an anonymous
+    visitor — TrialGuard only renders once billing is known.
+
+    So the claim held right up until someone did the thing the site is
+    asking them to do. The moment they signed up, /calculators and
+    /deadlines went behind the paywall and "free" became false for them
+    specifically. A funnel that punishes the conversion it wants is its own
+    argument for this entry, before the honesty one.
+
+    Serving them costs nothing: both are static or read-only, and neither
+    spends a credit.
+  */
+  "/calculators",  // advertised as free in the public footer
+  "/deadlines",    // same list, same promise
 ] as const;
 
 /*

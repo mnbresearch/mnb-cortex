@@ -117,6 +117,31 @@ export async function getWorkspaceSeed(): Promise<WorkspaceSeed> {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) return EMPTY_SEED;
 
+  /*
+    A LOCKED WORKSPACE GETS THE CALCULATOR, NOT ITS OWN NUMBERS.
+
+    /calculators and /deadlines are in PAYWALL_ALLOW because the public
+    footer calls them free and they must stay free after signup. But "free
+    calculators" promises the CALCULATOR — a tool that works out an answer
+    from numbers you type. It does not promise that an unpaid workspace gets
+    its own receivables, payroll and cash position read back to it, which is
+    the paid product.
+
+    Both promises are kept exactly by letting the page render and returning
+    the empty seed: the tool works, the banner honestly says "example", and
+    nothing about their business is shown to a workspace that has not paid
+    for it.
+
+    Failure is open in the paying direction on purpose — if the billing read
+    throws, the seed is returned rather than withheld, because breaking a
+    paying customer's page is worse than being generous to a locked one.
+  */
+  try {
+    const { getBillingStatus } = await import("@/lib/billing");
+    const billing = await getBillingStatus();
+    if (billing?.locked) return EMPTY_SEED;
+  } catch { /* see above: do not withhold on an error */ }
+
   try {
     const sb = await createClient();
 

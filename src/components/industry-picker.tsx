@@ -60,7 +60,10 @@ export function IndustryPicker() {
               {ind.fixes.map((f) => (
                 <li key={f.tool} className="flex items-start gap-3 text-sm lg:text-base">
                   <span className="h-5 w-5 rounded-full bg-primary/15 grid place-items-center shrink-0 mt-0.5"><Check className="h-3 w-3 text-primary" /></span>
-                  <span>{f.tool}</span>
+                  <span>
+                    {f.tool}
+                    {f.calc && <span className="ml-2 align-middle text-[11px] rounded-full border px-2 py-0.5 text-muted-foreground">calculator</span>}
+                  </span>
                 </li>
               ))}
             </ul>

@@ -232,7 +232,19 @@ export default function Features() {
       <section className="px-5 lg:px-10 py-20 border-t">
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="01">The loop</SectionLabel>
-          <h2 className="font-display display-3 tracking-tightest mt-5 mb-12 max-w-3xl">It runs the loop, continuously.</h2>
+          {/*
+            "continuously" was never true. The loop is one cron at 04:30 UTC
+            — `30 4 * * *` in vercel.json — which is daily, not continuous.
+            Two cards below this heading, the file's own comment already
+            admitted the cadence degrades with scale; the heading above it
+            was claiming something stronger than the thing being qualified.
+
+            "Every day" is what the schedule actually is, and /autopilot now
+            prints the date a workspace was last read so the claim is
+            checkable by the person it is made to rather than taken on
+            trust.
+          */}
+          <h2 className="font-display display-3 tracking-tightest mt-5 mb-12 max-w-3xl">It runs the loop, every day.</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-px bg-border border rounded-2xl overflow-hidden">
             {LOOP.map((x, i) => (
               <div key={x.k} className="bg-card p-6 hover:bg-accent/40 transition-colors">

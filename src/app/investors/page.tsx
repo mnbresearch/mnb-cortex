@@ -349,8 +349,8 @@ export default function Investors() {
               <li>
                 <span className="text-foreground font-medium">Underwrite</span> — a business whose receivables, payables
                 and statutory position are verified daily is a business a lender can price.{" "}
-                <span className="text-foreground">Stated as a thesis with a prerequisite — thousands of workspaces with
-                continuous data — not as a roadmap item with a date.</span>
+                <span className="text-foreground">Stated as a thesis with a prerequisite — thousands of workspaces
+                reporting daily — not as a roadmap item with a date.</span>
               </li>
             </ol>
           </div>
