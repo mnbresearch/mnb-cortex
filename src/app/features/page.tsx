@@ -11,6 +11,12 @@ import { SmoothScroll, Cursor, Kinetic, SectionLabel } from "@/components/loco";
 import { Reveal } from "@/components/landing-extras";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
 import { ProductPreview } from "@/components/product-preview";
+/* Derived, not hand-written: this line said "60+" when the real figure is
+   63 integrations minus the four live syncs = 59 — rounding past the true
+   number in the one direction that flatters. vaultOnlyCount lives in
+   lib/integrations rather than lib/sync because lib/sync is server-only and
+   this is a public marketing page. */
+import { vaultOnlyCount } from "@/lib/integrations";
 
 /*
   THE DEPTH MOVED HERE FROM THE HOMEPAGE, and this is the right home for it.
@@ -76,7 +82,7 @@ const DOMAINS: { n: string; name: string; blurb: string; tools: string[] }[] = [
     working Tally bridge over the API, and a credential vault for the rest.
   */
   { n: "10", name: "Integrations", blurb: "Four live syncs, plus the files your accountant already sends you.",
-    tools: ["Syncs: Shopify, Razorpay, Stripe, Google Sheets", "File import: Tally, Vyapar, Busy, any CSV", "Tally bridge via the public API", "Your own WhatsApp Business account", "Credential vault for 60+ other tools"] },
+    tools: ["Syncs: Shopify, Razorpay, Stripe, Google Sheets", "File import: Tally, Vyapar, Busy, any CSV", "Tally bridge via the public API", "Your own WhatsApp Business account", `Credential vault for the other ${vaultOnlyCount()} tools`] },
 ];
 
 // The whole platform, grouped by the job it does for you. Moved from page.tsx.

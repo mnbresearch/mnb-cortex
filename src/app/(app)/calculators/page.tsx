@@ -7,14 +7,29 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 /*
-  This page has its own metadata for the same reason the 29 calculators now do:
+  This page has its own metadata for the same reason every calculator now does:
   it served the root layout's generic title, so the one page that could rank for
   "free business calculators india" was indistinguishable from the home page.
+
+  THE COUNT IS DERIVED, AND IT USED TO BE WRONG.
+
+  The title and description were written by hand and said "29" and "25 more".
+  There are 28. The page BODY has always rendered {CALCULATORS.length}, so the
+  heading said 28 while the <title> Google indexes said 29 — the product
+  disagreeing with itself in the one place a stranger sees first.
+
+  It survived a claims suite of 147 assertions because that suite's SURFACES
+  list did not include this file. Deriving both from CALCULATORS is the fix;
+  adding the file to SURFACES is what stops the next one.
 */
+const N = CALCULATORS.length;
+/* "and N more" counts the four named ahead of it, not all of them. */
+const NAMED_IN_TITLE = 4;
+
 export const metadata = {
-  title: "Free Business Calculators for Indian SMEs — GST, TDS, EPF, gratuity and 25 more",
+  title: `Free Business Calculators for Indian SMEs — GST, TDS, EPF, gratuity and ${N - NAMED_IN_TITLE} more`,
   description:
-    "29 free calculators, no signup: GST and reverse GST, TDS by section, EPF and ESI, gratuity, advance tax, depreciation, break-even, EMI and amortisation, cash runway, DSCR and more. Built on current Indian rates.",
+    `${N} free calculators, no signup: GST and reverse GST, TDS by section, EPF and ESI, gratuity, advance tax, depreciation, break-even, EMI and amortisation, cash runway, DSCR and more. Built on current Indian rates.`,
   alternates: { canonical: "/calculators" },
 };
 

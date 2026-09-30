@@ -64,7 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar superAdmin={superAdmin} orgs={orgs} activeOrgId={orgId} logoUrl={logoUrl} brandName={brandable ? (profile?.name || null) : null} setupIncomplete={firstRun.known && !firstRun.complete} />
       <div className="flex-1 min-w-0 app-canvas">
         {/*
-          Search traffic lands on the calculators — all 29 are public — inside
+          Search traffic lands on the calculators — all 28 are public — inside
           the logged-in application chrome, with no explanation and no way
           onward. This says what the surrounding software is and offers a next
           step, for logged-out visitors only, on the tool pages only. It never

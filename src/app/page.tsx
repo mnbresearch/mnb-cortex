@@ -11,6 +11,7 @@ import { AskCortexDemo } from "@/components/demo";
 import { IndustryPicker } from "@/components/industry-picker";
 import { PLAYBOOKS } from "@/lib/playbooks";
 import { INDUSTRIES } from "@/lib/industries";
+import { STATUTORY_CATALOGUE } from "@/lib/statutory";
 import { HealthCheckClient } from "@/components/health-check-client";
 
 /*
@@ -73,7 +74,7 @@ const FAQS = [
 */
 const STATS = [
   { to: 45, suffix: "-day", label: "MSME clock, watched" },
-  { to: 19, suffix: "", label: "statutory deadlines tracked" },
+  { to: STATUTORY_CATALOGUE.length, suffix: "", label: "statutory deadlines tracked" },
   { to: 1, suffix: "", label: "planned email a week — the rest only when something breaks" },
   { to: 3, suffix: " min", label: "from your first import to your first warning" },
 ];

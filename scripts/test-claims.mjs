@@ -69,6 +69,25 @@ const SURFACES = [
   "src/app/features/page.tsx",
   "src/app/investors/page.tsx",
   "src/app/pricing/page.tsx",
+  /*
+    ADDED AFTER FOUR WRONG NUMBERS SHIPPED THROUGH THE GAP BELOW THIS LIST.
+
+    This suite had 147 passing assertions while the site published "29 free
+    calculators" (28), "19 statutory deadlines tracked" (20), "save ~20%"
+    (16%) and "60+ other tools" (59). None was caught, because a claim on a
+    page this array does not name is a claim nobody reads.
+
+    /calculators is the worst of them: its <title> — the string Google
+    indexes — said 29 while the page body three lines down rendered
+    CALCULATORS.length and printed 28.
+
+    /compare makes comparative price and capability claims about named
+    competitors and was only ever scanned for banned phrases.
+  */
+  "src/app/(app)/calculators/page.tsx",
+  "src/app/compare/page.tsx",
+  "src/app/health-check/page.tsx",
+  "src/components/pricing-client.tsx",
   "README.md",
   "SETUP.md",
 ];

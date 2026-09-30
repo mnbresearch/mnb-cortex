@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getUsage, getReportLinks, getOrgProfile } from "@/lib/data";
 import { getBillingStatus } from "@/lib/billing";
-import { PLANS } from "@/lib/config";
+import { PLANS, ANNUAL_SAVING_PCT } from "@/lib/config";
 import { Check, Zap, Clock, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { UpgradeButton } from "@/components/upgrade-button";
@@ -115,7 +115,7 @@ export default async function Billing() {
         </Section>
 
         <div id="plans" className="scroll-mt-24" />
-        <Section title="Available plans" desc="Change anytime — annual saves ~20%">
+        <Section title="Available plans" desc={`Change anytime — annual saves ~${ANNUAL_SAVING_PCT}%`}>
           <PlanPicker currentPlan={billing.status === "active" ? planName : ""} savedPhone={(profile as any)?.billing_phone || ""} />
         </Section>
 

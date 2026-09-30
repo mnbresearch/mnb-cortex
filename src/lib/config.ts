@@ -662,3 +662,28 @@ export const LEGACY_PLANS: Plan[] = [
 
 /** Every plan the system must be able to resolve, live or retired. */
 export const ALL_PLANS: Plan[] = [...PLANS, ...LEGACY_PLANS];
+
+/**
+ * What paying annually actually saves, as a whole percent.
+ *
+ * DERIVED, because the hardcoded version was wrong. Both the pricing toggle
+ * and the billing page advertised "save ~20%". Every plan is
+ * ten-months-for-twelve — this file's own comment says so — and two months
+ * off twelve is 2/12 = 16.7%, not 20%. The number had presumably been right
+ * for some earlier price and nothing recomputed it when the prices moved.
+ *
+ * Rounded DOWN, so the advertised saving is never larger than the real one:
+ * 16.666… becomes 16, and a customer who checks the arithmetic finds they did
+ * slightly better than promised rather than slightly worse.
+ *
+ * Asserted against every live plan rather than read off the first one, so a
+ * future tier priced on a different ratio makes this return the smallest
+ * saving any customer would get instead of quietly over-promising to some.
+ */
+export const ANNUAL_SAVING_PCT: number = (() => {
+  const ratios = PLANS
+    .filter((p) => p.monthly > 0 && p.annual > 0)
+    .map((p) => 1 - p.annual / 12 / p.monthly);
+  if (!ratios.length) return 0;
+  return Math.floor(Math.min(...ratios) * 100);
+})();

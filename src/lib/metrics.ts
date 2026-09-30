@@ -1,6 +1,7 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { deriveInsights, type DerivedInsight } from "@/lib/insights";
+import { worstOverdue } from "@/lib/worst-invoice";
 import { evaluateRules } from "@/lib/alert-rules";
 import { emitQuietly } from "@/lib/webhooks";
 
@@ -163,8 +164,25 @@ export async function recomputeMetrics(orgId: string): Promise<{
   const agg = await tryAggregate(svc, orgId);
 
   let orders: Row[] = [], invoices: Row[] = [], items: Row[] = [], staff: Row[] = [], pos: Row[] = [], ledger: Row[] = [];
+  /*
+    Open receivables WITH A PARTY, read unconditionally — including on the
+    fast path.
+
+    The aggregate RPC returns sums, which is all the KPIs need and is why it
+    exists. But the landing page promises the warning names the customer, and
+    a sum cannot. So this is its own small read rather than a change to
+    cortex_aggregate(): the SQL function is deployed separately from this
+    file, and a metrics build that depended on a migration having run would
+    lose the customer's name on every database that had not caught up — the
+    exact failure mode the slow path was kept to avoid.
+
+    Narrow by construction: unpaid receivables only, five columns, and the
+    `party is not null` filter does in Postgres what worstOverdue() would
+    otherwise do in JS over rows it must transfer first.
+  */
+  let overdueRows: Row[] = [];
   try {
-    const [so, iv, it, em, po, fl] = await Promise.all([
+    const [so, iv, it, em, po, fl, ov] = await Promise.all([
       agg ? Promise.resolve({ data: [] as Row[] }) : svc.from("sales_orders").select("amount,status,order_date,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
       agg ? Promise.resolve({ data: [] as Row[] }) : svc.from("invoices").select("amount,status,type,due_date,created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
       agg ? Promise.resolve({ data: [] as Row[] }) : svc.from("inventory_items").select("on_hand,unit_cost,daily_consumption,reorder_level").eq("org_id", orgId).order("created_at", { ascending: false }).limit(20000),
@@ -178,10 +196,14 @@ export async function recomputeMetrics(orgId: string): Promise<{
       // Newest first, then reversed: the ledger grows a row per month forever,
       // so an ascending limit would eventually stop containing the current month.
       svc.from("finance_ledger").select("*").eq("org_id", orgId).order("period", { ascending: false }).limit(24),
+      svc.from("invoices").select("party,amount,due_date,status,type")
+        .eq("org_id", orgId).eq("type", "receivable").neq("status", "paid")
+        .not("party", "is", null).limit(5000),
     ]);
     orders = (so.data as Row[]) || []; invoices = (iv.data as Row[]) || [];
     items = (it.data as Row[]) || []; staff = (em.data as Row[]) || []; pos = (po.data as Row[]) || [];
     ledger = (((fl.data as Row[]) || []).slice().reverse());
+    overdueRows = (ov.data as Row[]) || [];
   } catch (e: any) {
     return { ok: false, metrics: 0, months: 0, reason: e?.message };
   }
@@ -727,6 +749,9 @@ export async function recomputeMetrics(orgId: string): Promise<{
       itemCount, belowReorder, coverDays, stockValue,
       avgAttrition, avgAttend, payroll,
       cashClosing: cashLatest, avgNet,
+      /* `today` is the IST calendar date computed above — see the comment
+         there. worstOverdue() needs the business's own date, not UTC's. */
+      worstOverdue: worstOverdue(overdueRows, today),
     });
 
     const istamp = new Date().toISOString();

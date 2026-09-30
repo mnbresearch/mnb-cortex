@@ -94,6 +94,28 @@ export function integrationLimit(plan: string | null | undefined): number {
 
 const KEY = (label = "API key", ph = "sk_live_…"): Field => ({ key: "api_key", label, type: "password", placeholder: ph, required: true });
 
+/**
+ * The integrations that genuinely pull data in, by id.
+ *
+ * Declared HERE rather than imported from lib/sync, because lib/sync carries
+ * `import "server-only"` and the marketing pages that need this number are
+ * public pages. Importing the sync barrel into /features to count four
+ * connectors would drag the Supabase client and every provider adapter into
+ * a static marketing page's module graph, and the repo's transitive
+ * client/server boundary test exists precisely to stop that kind of reach.
+ *
+ * scripts/test-integration-sync-ids.mjs asserts this list and lib/sync's own
+ * CONNECTORS stay identical, so there is one source of truth even though the
+ * constant is written twice.
+ */
+export const SYNCED_INTEGRATION_IDS = ["shopify", "razorpay", "stripe", "google_sheets"] as const;
+
+/** Everything else: credentials we store and hand back, but do not sync. */
+export function vaultOnlyCount(): number {
+  const synced = new Set<string>(SYNCED_INTEGRATION_IDS);
+  return INTEGRATIONS.filter((i) => !synced.has(i.id)).length;
+}
+
 export const INTEGRATIONS: Integration[] = [
   /*
     ---- AI Providers: bring your own key ----

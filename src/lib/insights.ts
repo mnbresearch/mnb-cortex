@@ -19,7 +19,22 @@
  * facts.
  *
  * No file/network imports on purpose, so this is unit-testable in isolation.
+ * (lib/worst-invoice.ts is pure and importless for the same reason.)
  */
+
+/*
+  RELATIVE, and `import type`, both deliberately.
+
+  scripts/test-insights.mjs compiles this one file on its own, without the
+  tsconfig `@/*` path alias — which is the whole reason the header above says
+  "no file/network imports on purpose, so this is unit-testable in isolation".
+  An `@/lib/worst-invoice` import type-checks under Next and fails that
+  harness with "Cannot find module".
+
+  `import type` also means this vanishes at compile time, so the promise of
+  isolation survives: nothing is pulled in at runtime.
+*/
+import type { WorstOverdue } from "./worst-invoice";
 
 export type Severity = "green" | "yellow" | "red";
 
@@ -83,6 +98,16 @@ export type InsightSignals = {
   cashClosing: number;
   /** Mean net profit over the last few months; negative means burning. */
   avgNet: number;
+
+  /**
+   * The single worst overdue invoice — customer, amount, days late.
+   *
+   * Null when nothing is overdue, or when nothing overdue has a party name on
+   * it. Both cases fall back to the aggregate wording below; see
+   * lib/worst-invoice.ts for why an unnamed invoice is never invented into
+   * "Unknown".
+   */
+  worstOverdue?: WorstOverdue | null;
 };
 
 /** Indian-format money, short enough to sit in a card. */
@@ -108,16 +133,36 @@ export function deriveInsights(s: InsightSignals, limit = 8): DerivedInsight[] {
   /* ---- Receivables ------------------------------------------------------- */
   if (s.hasInvoices && s.overdueRecv > 0) {
     const share = pct(s.overdueRecv, s.openRecv);
+    /*
+      NAME THE CUSTOMER WHEN WE KNOW IT.
+
+      The landing page promises "which customer, how much, how late", and for
+      a long time this title was an aggregate — "₹4.2 L of receivables is past
+      its due date" — which is true, useful, and not what was sold. An owner
+      reading it still has to go and find out who.
+
+      `worstOverdue` is optional rather than required so that every existing
+      caller and every test that builds signals by hand keeps compiling and
+      keeps getting the aggregate. The named version is strictly an upgrade
+      applied when the information is actually there.
+    */
+    const w = s.worstOverdue;
+    const title = w
+      ? `${w.party} owes you ${inrShort(w.amount)}, ${w.daysLate} days past due`
+      : `${inrShort(s.overdueRecv)} of receivables is past its due date`;
+    const detail = w
+      ? `It is the worst single invoice you have: biggest amount for the longest time. Across every customer, ${inrShort(s.overdueRecv)} is past due — ${share.toFixed(0)}% of the ${inrShort(s.openRecv)} you are owed. Overdue money is the cheapest cash you will ever raise: it is already yours, and collecting it costs no interest and no equity.`
+      : `That is ${share.toFixed(0)}% of the ${inrShort(s.openRecv)} you are owed. Overdue money is the cheapest cash you will ever raise — it is already yours, and collecting it costs no interest and no equity.`;
     out.push({
       module: "finance",
       severity: share >= 30 ? "red" : share >= 10 ? "yellow" : "green",
-      title: `${inrShort(s.overdueRecv)} of receivables is past its due date`,
-      detail: `That is ${share.toFixed(0)}% of the ${inrShort(s.openRecv)} you are owed. Overdue money is the cheapest cash you will ever raise — it is already yours, and collecting it costs no interest and no equity.`,
+      title,
+      detail,
       confidence: 0.99,
       recommended_actions: [
+        w ? `Call ${w.party} today` : "Call the largest single overdue account today",
         "Open Receivables and sort by days overdue",
         "Send reminders on anything past 45 days",
-        "Call the largest single overdue account today",
       ],
       route: "/receivables",
     });

@@ -2,7 +2,7 @@
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { useState } from "react";
 import { Check, Sparkles, X, MessageCircle } from "lucide-react";
-import { PLANS, PUBLIC_CREDIT_PACKS, WHATSAPP_NUMBER, CURRENCIES, formatMoney, planPrice, type CurrencyCode } from "@/lib/config";
+import { PLANS, PUBLIC_CREDIT_PACKS, WHATSAPP_NUMBER, CURRENCIES, formatMoney, planPrice, type CurrencyCode, ANNUAL_SAVING_PCT } from "@/lib/config";
 import { payCashfree } from "@/lib/pay/checkout-client";
 
 /**
@@ -79,7 +79,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
           <button onClick={() => setAnnual((a) => !a)} className="relative h-6 w-11 rounded-full bg-secondary border" aria-label="Toggle annual billing">
             <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-primary transition-all ${annual ? "left-[22px]" : "left-0.5"}`} />
           </button>
-          <span className={annual ? "font-medium" : "text-muted-foreground"}>Annual <span className="text-success text-xs">(save ~20%)</span></span>
+          <span className={annual ? "font-medium" : "text-muted-foreground"}>Annual <span className="text-success text-xs">(save ~{ANNUAL_SAVING_PCT}%)</span></span>
         </div>
         <div className="inline-flex rounded-full border p-1 text-sm">
           {(Object.keys(CURRENCIES) as CurrencyCode[]).map((c) => (

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 
 /*
-  THE 29 CALCULATORS ARE THE LARGEST UNUSED ACQUISITION ASSET IN THIS PRODUCT.
+  THE 28 CALCULATORS ARE THE LARGEST UNUSED ACQUISITION ASSET IN THIS PRODUCT.
 
   WHAT WAS TRUE BEFORE THIS FILE
 
-  All 29 are already public — middleware gates nothing and the data layer falls
+  All 28 are already public — middleware gates nothing and the data layer falls
   back to demo mode, so https://cortex.mnbresearch.com/gst-calc returns 200 to
   anybody. They are real, working tools for queries Indian business owners
   search constantly: GST, TDS, EPF, gratuity, advance tax, depreciation.
@@ -17,14 +17,14 @@ import type { Metadata } from "next";
   crawlable; they were simply indistinguishable from each other and from the
   home page.
 
-  To a search engine that is not "29 pages of useful tools". It is one site
-  saying the same thing 29 times, which is worse than not having them.
+  To a search engine that is not "28 pages of useful tools". It is one site
+  saying the same thing 28 times, which is worse than not having them.
 
   WHY A CENTRAL MAP RATHER THAN COPY IN EACH FILE
 
   Titles and descriptions are marketing copy that wants reviewing as a set —
   you can only see whether they cannibalise each other by reading them
-  together. Scattered across 29 page files nobody ever reads them together,
+  together. Scattered across 28 page files nobody ever reads them together,
   and the seventh person to add a calculator copies whatever the sixth wrote.
 
   Each page then carries one line:

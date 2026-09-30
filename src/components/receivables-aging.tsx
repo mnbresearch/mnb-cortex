@@ -4,6 +4,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { inr } from "@/lib/utils";
+/* The same comparator the dashboard's named warning uses, so "Chase these
+   first" and "X owes you Y" can never point at different customers. */
+import { byWorst } from "@/lib/worst-invoice";
 
 type Inv = { id: string; client: string; amount: number; days: number };
 
@@ -106,8 +109,7 @@ export function ReceivablesAging({
 
     /* Only genuinely late invoices are worth chasing, and only the visible
        rows can be ranked — which is why the caption says "of the rows below". */
-    const priority = invs.filter((i) => i.days > 0)
-      .sort((a, b) => b.amount * b.days - a.amount * a.days).slice(0, 4);
+    const priority = invs.filter((i) => i.days > 0).sort(byWorst).slice(0, 4);
 
     return { total, overdue, buckets, dso, priority, truncated, shown: invs.length, count: totals?.count ?? invs.length };
   }, [invs, creditSales, totals, edited]);
