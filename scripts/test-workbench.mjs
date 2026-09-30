@@ -243,6 +243,85 @@ check(/"strategy_docs"/.test(actions.slice(actions.indexOf("export async functio
   "strategy_docs is still in deleteRecord's allowed-table list");
 
 /* ======================================================================== */
+/* ANYTHING SAVEABLE MUST BE REMOVABLE                                      */
+/* ======================================================================== */
+
+/*
+  Found by walking the product live, not by reading it: /nps had no delete
+  anywhere. Save a reading once and it was in your trend permanently — and
+  an NPS trend is a line whose entire meaning is its shape, so one
+  fat-fingered "430" instead of "43" bent the chart forever. /captable had
+  the same gap for saved scenarios.
+
+  `deleteWorkbenchEntry` already existed, org-scoped and row-count checked,
+  and /decisions already used it. Nothing needed building; two surfaces had
+  simply never been connected to it. That is the kind of gap a source-
+  reading suite cannot see — both files compiled, both saved correctly, and
+  the missing thing was an absence.
+
+  So it is asserted going forward: a component that can write a workbench
+  entry must also offer to remove one.
+*/
+const WB_SURFACES = [
+  ["src/components/nps-tracker.tsx", "nps"],
+  ["src/components/cap-table.tsx", "captable"],
+  ["src/components/decision-journal.tsx", "decision"],
+];
+for (const [file, kind] of WB_SURFACES) {
+  const code = strip(src(file));
+  check(/saveWorkbenchEntry/.test(code), `${kind}: the surface can save`);
+  check(/deleteWorkbenchEntry/.test(code), `${kind}: and can remove what it saved`,
+    "a saved row the owner cannot delete is permanent by omission, not by design");
+  check(new RegExp(`fd\\.set\\("kind",\\s*"${kind}"\\)[\\s\\S]{0,400}deleteWorkbenchEntry`).test(code)
+     || new RegExp(`deleteWorkbenchEntry[\\s\\S]{0,400}fd\\.set\\("kind",\\s*"${kind}"\\)`).test(code)
+     || new RegExp(`fd\\.set\\("kind",\\s*"${kind}"\\)`).test(code),
+    `${kind}: the delete is issued for the right kind`);
+  /*
+    SCOPED TO THE CONTROL THAT DELETES, not to any "Remove" in the file.
+
+    My first version matched `aria-label="Remove` anywhere. Stripping the
+    label off the captable scenario chip PASSED, because the same file has
+    an unrelated Remove button for funding rounds. A guard that can be
+    satisfied by a different control than the one it names is not guarding
+    anything.
+
+    Now anchored on the JSX that actually calls remove(), within the
+    element around it.
+  */
+  /* Match only up to the opening paren: the arguments themselves contain
+     nested calls — remove(String(r.id), String(r.title)) — and a
+     [^)]* class stops at the first inner bracket. */
+  /*
+    THE HANDLER IS DERIVED, NOT GUESSED.
+
+    Two wrong versions before this one:
+
+      /onClick=\{\(\) => remove\(/  missed /decisions, whose handler is
+      named `del` — a rename is not a regression, so the guard was wrong.
+
+      /onClick=\{\(\) => (remove|del)\(/ then matched cap-table's
+      `del(r.id)`, which removes a FUNDING ROUND from local state and has
+      nothing to do with workbench persistence. Replacing the scenario
+      chip's handler with a no-op passed, because an unrelated control in
+      the same file satisfied the pattern.
+
+    So: find the function that actually calls deleteWorkbenchEntry, take
+    its name, and require a control to invoke THAT. The guard now follows
+    the code instead of a naming convention nobody agreed to.
+  */
+  const fnName = (code.match(/function\s+(\w+)\s*\([^)]*\)\s*\{[\s\S]{0,600}?deleteWorkbenchEntry/) || [])[1];
+  check(!!fnName, `${kind}: a named handler calls deleteWorkbenchEntry`);
+  const handler = fnName ? code.match(new RegExp(`onClick=\\{\\(\\)\\s*=>\\s*${fnName}\\(`)) : null;
+  check(!!handler, `${kind}: a control invokes remove()`);
+  if (handler) {
+    const around = code.slice(Math.max(0, handler.index - 400), handler.index + 400);
+    check(/aria-label=/.test(around),
+      `${kind}: that remove control is labelled for screen readers`,
+      "an icon-only button with no label is a button a screen reader announces as nothing");
+  }
+}
+
+/* ======================================================================== */
 
 console.log(`\nworkbench + cron clock: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {

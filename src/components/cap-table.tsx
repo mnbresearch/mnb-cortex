@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Save, Loader2, History } from "lucide-react";
 import { inr } from "@/lib/utils";
-import { saveWorkbenchEntry } from "@/lib/actions";
+import { saveWorkbenchEntry, deleteWorkbenchEntry } from "@/lib/actions";
 import type { CapTableData, WorkbenchEntry } from "@/lib/workbench-types";
 
 type Round = { id: string; name: string; raise: number; preMoney: number; esop: number };
@@ -54,6 +54,22 @@ export function CapTable({
       if (r && !r.ok) { setNote(r.error); return; }
       setScenarioName("");
       setNote(`Saved "${name}".`);
+    });
+  }
+
+  /*
+    Saved scenarios were also permanent — same gap as /nps, same existing
+    server action, never wired up. A cap table is a page people iterate on;
+    accumulating "Seed v2 FINAL (2)" with no way to clear it is how a useful
+    list becomes one nobody reads.
+  */
+  function remove(s: WorkbenchEntry<CapTableData>) {
+    const fd = new FormData();
+    fd.set("kind", "captable"); fd.set("id", String(s.id));
+    startTransition(async () => {
+      const r = await deleteWorkbenchEntry(fd);
+      if (r && !r.ok) { setNote(r.error); return; }
+      setNote(`Removed "${s.title}".`);
     });
   }
 
@@ -139,13 +155,24 @@ export function CapTable({
             <div className="flex flex-wrap items-center gap-2 pt-1 border-t">
               <span className="text-xs text-muted-foreground flex items-center gap-1 pt-2"><History className="h-3.5 w-3.5" /> Saved:</span>
               {scenarios.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => load(s)}
-                  className="mt-2 rounded-full border px-3 h-8 text-xs hover:bg-secondary"
-                >
-                  {s.title}
-                </button>
+                <span key={s.id} className="mt-2 inline-flex items-center rounded-full border text-xs overflow-hidden">
+                  <button
+                    onClick={() => load(s)}
+                    className="px-3 min-h-11 hover:bg-secondary"
+                  >
+                    {s.title}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(s)}
+                    disabled={pending}
+                    aria-label={`Remove the scenario "${s.title}"`}
+                    title="Remove this scenario"
+                    className="px-3 min-h-11 min-w-11 grid place-items-center border-l text-muted-foreground hover:text-danger hover:bg-danger/10 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </span>
               ))}
             </div>
           )}

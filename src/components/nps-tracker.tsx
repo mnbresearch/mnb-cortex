@@ -2,10 +2,10 @@
 import { useMemo, useState, useTransition } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Save, Loader2 } from "lucide-react";
+import { Sparkles, Save, Loader2, Trash2 } from "lucide-react";
 import { mdToHtml } from "@/lib/utils";
 import { ExampleFigures } from "@/components/example-figures";
-import { saveWorkbenchEntry } from "@/lib/actions";
+import { saveWorkbenchEntry, deleteWorkbenchEntry } from "@/lib/actions";
 import type { NpsData, WorkbenchEntry } from "@/lib/workbench-types";
 
 /**
@@ -86,6 +86,29 @@ export function NpsTracker({
 
   /* Newest last, so the sparkline reads left-to-right like a timeline. The
      server hands them back newest-first. */
+  /*
+    REMOVING A READING, BECAUSE A MISTYPED ONE WAS PERMANENT.
+
+    Found by walking this page live: there was no delete anywhere on /nps.
+    Save it once and the number is in your trend forever — and an NPS trend
+    is a line whose whole meaning comes from its shape, so one fat-fingered
+    "430" instead of "43" bends the chart permanently and there was no way
+    back short of asking support.
+
+    The server action already existed (deleteWorkbenchEntry, org-scoped,
+    row-count checked) and /decisions already used it. Only this page never
+    wired it up. Nothing new to build; something missing to connect.
+  */
+  function remove(id: string, title: string) {
+    const fd = new FormData();
+    fd.set("kind", "nps"); fd.set("id", id);
+    startTransition(async () => {
+      const r = await deleteWorkbenchEntry(fd);
+      if (r && !r.ok) { setNote(r.error); return; }
+      setNote(`Removed "${title}".`);
+    });
+  }
+
   const series = [...history].reverse();
 
   const F = (label: string, value: number, set: (n: number) => void, color: string) => (
@@ -192,6 +215,18 @@ export function NpsTracker({
                     </div>
                   </div>
                   <span className="w-10 text-right tabular-nums font-medium">{Number.isFinite(score) ? score : "—"}</span>
+                  <button
+                    type="button"
+                    onClick={() => remove(String(r.id), String(r.title))}
+                    disabled={pending}
+                    aria-label={`Remove the reading "${r.title}"`}
+                    title="Remove this reading"
+                    /* min-h-11/min-w-11 = the 44px touch target test:a11y enforces on every
+                       icon-only control. Caught by that suite, not by me. */
+                    className="shrink-0 rounded min-h-11 min-w-11 p-2 grid place-items-center text-muted-foreground hover:text-danger hover:bg-danger/10 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
                 </div>
               );
             })}
