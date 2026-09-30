@@ -2,6 +2,8 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
 function Slider({ label, value, min, max, step, unit, onChange }: { label: string; value: number; min: number; max: number; step: number; unit: string; onChange: (n: number) => void }) {
   return (
@@ -12,9 +14,21 @@ function Slider({ label, value, min, max, step, unit, onChange }: { label: strin
   );
 }
 
-export function DiscountImpact() {
-  const [price, setPrice] = useState(1000);
-  const [cost, setCost] = useState(620);
+/*
+  Price and cost seeded exactly as in markup-margin, and for the same reason
+  — one definition of "what does an order cost us" rather than two that
+  drift. Units are NOT seeded: this tool asks how many you would sell at the
+  discounted price, which is a forecast, and the workspace only knows what
+  you sold at the old one.
+*/
+export function DiscountImpact({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const cogsRatio = seed?.cogs != null && seed?.revenue != null && seed.revenue > 0
+    ? seed.cogs / seed.revenue : null;
+  const seededPrice = seed?.avgOrderValue ?? null;
+  const seededCost = seededPrice != null && cogsRatio != null ? seededPrice * cogsRatio : null;
+
+  const [price, setPrice] = useState(Math.round(orDefault(seededPrice, 1000)));
+  const [cost, setCost] = useState(Math.round(orDefault(seededCost, 620)));
   const [discount, setDiscount] = useState(10);
   const [units, setUnits] = useState(1000);
 
@@ -33,6 +47,12 @@ export function DiscountImpact() {
   }, [price, cost, discount, units]);
 
   return (
+    <div className="space-y-4">
+      <ExampleFigures
+        source={seededPrice != null ? "yours" : "example"}
+        what="price and cost"
+        note="Price is your average order value; cost applies your overall COGS-to-revenue ratio to it. Units stay an example — how many you would sell at the lower price is a forecast, and the workspace only knows what you sold at the old one."
+      />
     <Card className="p-5 space-y-5">
       <div>
         <div className="font-semibold">Discount impact</div>
@@ -61,6 +81,7 @@ export function DiscountImpact() {
         )}
       </div>
     </Card>
+    </div>
   );
 }
 

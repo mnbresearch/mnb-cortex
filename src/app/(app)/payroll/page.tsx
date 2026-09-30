@@ -2,15 +2,17 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { PayrollCalc } from "@/components/payroll-calc";
+import { getWorkspaceSeed } from "@/lib/workspace-seed";
 
 export const dynamic = "force-dynamic";
 
-export default function Payroll() {
+export default async function Payroll() {
+  const seed = await getWorkspaceSeed();
   return (
     <>
       <Topbar title="Payroll & CTC" subtitle="Turn a CTC into real take-home before you make an offer" />
       <PageShell>
-        <PayrollCalc />
+        <PayrollCalc seed={seed} />
         <Section title="Why CTC ≠ take-home" desc="The gap that surprises new hires">
           <div className="text-sm text-muted-foreground space-y-2">
             <p>CTC includes employer PF, gratuity provisions and allowances the employee never sees in their bank. A ₹12 L CTC often lands around ₹80–90k/month in hand, not ₹1 L — set expectations at offer time to avoid awkward first paydays.</p>

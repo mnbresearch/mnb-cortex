@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
 import { computeTax, RATES_AS_OF } from "@/lib/tax-slabs";
 import { annualPf } from "@/lib/epf";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
 /**
  * India CTC → take-home.
@@ -32,8 +34,24 @@ import { annualPf } from "@/lib/epf";
  * one is a bold "Monthly take-home" that an owner reads out when making an
  * offer, and a candidate hears as a number they can bank.
  */
-export function PayrollCalc() {
-  const [ctc, setCtc] = useState(1_200_000);
+/*
+  CTC seeded as your AVERAGE, and labelled as an average.
+
+  The workspace stores total monthly payroll and a headcount, not any one
+  person's package. Their quotient is a real figure about this business and
+  a far better starting point than ₹12,00,000 typed into a text editor — but
+  it is the mean, so a firm with two directors and eight juniors will see a
+  number matching nobody. The banner says "average", because a salary figure
+  presented as an individual's when it is a mean is the kind of small lie
+  this codebase keeps finding.
+*/
+export function PayrollCalc({ seed }: { seed?: WorkspaceSeed } = {}) {
+  /* Null unless BOTH are known — a per-head figure from a guessed headcount
+     is a guess with a decimal point. */
+  const avgAnnualCtc = seed?.monthlyPayroll != null && seed?.headcount != null && seed.headcount > 0
+    ? (seed.monthlyPayroll / seed.headcount) * 12
+    : null;
+  const [ctc, setCtc] = useState(orDefault(avgAnnualCtc, 1_200_000));
   const [basicPct, setBasicPct] = useState(45);
   const [metro, setMetro] = useState(true);
   const [regime, setRegime] = useState<"new" | "old">("new");
@@ -97,6 +115,12 @@ export function PayrollCalc() {
   const I = "rounded-md border bg-background px-2 h-9 text-sm outline-none focus:ring-2 focus:ring-ring";
 
   return (
+    <div className="space-y-4">
+      <ExampleFigures
+        source={avgAnnualCtc != null ? "yours" : "example"}
+        what="package"
+        note="This is your AVERAGE cost to company — total monthly payroll divided by headcount, annualised. It matches no single employee; change it to the person you are costing."
+      />
     <div className="grid lg:grid-cols-2 gap-4">
       <Card className="p-5 space-y-3">
         <div className="font-semibold">Package</div>
@@ -148,6 +172,7 @@ export function PayrollCalc() {
           {m.marginalRelief && <> · marginal relief applied</>}
         </p>
       </Card>
+    </div>
     </div>
   );
 }

@@ -2,6 +2,9 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
+import { computeTax } from "@/lib/tax-slabs";
 import {
   computeAdvanceTax, nextInstalment, SCHEDULE, PRESUMPTIVE_SCHEDULE,
   ADVANCE_TAX_AS_OF, ADVANCE_TAX_SECTION_NOTE, ADVANCE_TAX_THRESHOLD,
@@ -31,8 +34,25 @@ import {
  * showed is still here. What is new is payment entry per date, the interest,
  * the presumptive schedule, and a marker for which instalment is next.
  */
-export function AdvanceTax() {
-  const [tax, setTax] = useState(240_000);
+/*
+  The year's tax, computed from recorded profit using this repo's own slabs.
+
+  The input here is "total tax for the year" — not profit — so seeding it
+  means running the profit through lib/tax-slabs, the same module /tax uses.
+  That is deliberate: two places computing Indian income tax is how two
+  screens come to disagree about what someone owes, and this file's own
+  header already argues for importing the schedule rather than copying it.
+
+  THE ASSUMPTION, STATED ON SCREEN: individual slabs, new regime, no
+  deductions. Right for a proprietor, wrong for a company. An owner who
+  knows better overwrites one field; an owner who does not is told what was
+  assumed rather than left to infer it from a number that looks official.
+*/
+export function AdvanceTax({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const seededTax = seed?.netProfitAnnual != null && seed.netProfitAnnual > 0
+    ? Math.round(computeTax(seed.netProfitAnnual, "new", { salaried: false }).total)
+    : null;
+  const [tax, setTax] = useState(orDefault(seededTax, 240_000));
   const [presumptive, setPresumptive] = useState(false);
 
   /* Cumulative rupees paid by each due date, keyed by the date label. Starts
@@ -57,6 +77,11 @@ export function AdvanceTax() {
 
   return (
     <div className="space-y-4">
+      <ExampleFigures
+        source={seededTax != null ? "yours" : "example"}
+        what="tax for the year"
+        note="Computed from your recorded annual profit at individual new-regime slabs with no deductions. If you trade through a company, or claim deductions, replace it."
+      />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="block">

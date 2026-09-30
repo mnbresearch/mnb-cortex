@@ -2,15 +2,17 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { DiscountImpact } from "@/components/discount-impact";
+import { getWorkspaceSeed } from "@/lib/workspace-seed";
 
 export const dynamic = "force-dynamic";
 
-export default function Discount() {
+export default async function Discount() {
+  const seed = await getWorkspaceSeed();
   return (
     <>
       <Topbar title="Discount Impact" subtitle="Before you cut prices, see what it really costs" />
       <PageShell>
-        <DiscountImpact />
+        <DiscountImpact seed={seed} />
         <Section title="The discount trap" desc="Why 10% off is bigger than it looks">
           <div className="text-sm text-muted-foreground space-y-2">
             <p>A discount comes straight off your margin, not your price. If you keep 38% margin and give 10% off, you've given away more than a quarter of your profit per unit — so you need a lot more volume just to stand still.</p>

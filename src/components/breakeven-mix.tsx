@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
 type Prod = { id: string; name: string; price: number; varCost: number; volume: number };
 
@@ -13,8 +15,18 @@ const SEED: Prod[] = [
   { id: "p3", name: "Product F", price: 500, varCost: 380, volume: 5000 },
 ];
 
-export function BreakevenMix() {
-  const [fixed, setFixed] = useState(2_500_000);
+/*
+  Fixed costs seeded from recorded annual operating expenses.
+
+  STATED PLAINLY BECAUSE IT IS AN APPROXIMATION: `opex` is all operating
+  expense, and break-even wants the FIXED part of it. For most SMEs the two
+  are close — rent, salaries and utilities dominate — but a business with
+  large variable overheads will be seeded high. The banner says so, and the
+  field is editable, which is the honest shape: a real starting number the
+  owner corrects, rather than an invented one they accept.
+*/
+export function BreakevenMix({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const [fixed, setFixed] = useState(orDefault(seed?.opex, 2_500_000));
   const [prods, setProds] = useState<Prod[]>(SEED);
 
   const calc = useMemo(() => {
@@ -43,6 +55,11 @@ export function BreakevenMix() {
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
     <div className="space-y-4">
+      <ExampleFigures
+        source={seedSource(seed, "opex")}
+        what="fixed costs"
+        note="Seeded from your recorded annual operating expenses. Break-even wants only the FIXED share of that — rent, salaries, utilities — so trim it if you carry large variable overheads."
+      />
       <Card className="p-5 space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <label className="text-sm"><span className="text-muted-foreground block mb-1">Fixed costs / month</span>

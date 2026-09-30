@@ -5,17 +5,37 @@ import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { inr } from "@/lib/utils";
 import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
 type Row = { id: string; label: string; amount: number };
-const seed = (label: string, amount: number): Row => ({ id: Math.random().toString(36).slice(2), label, amount });
+const row = (label: string, amount: number): Row => ({ id: Math.random().toString(36).slice(2), label, amount });
 
-const ASSETS: Row[] = [
-  seed("Cash & bank", 1_500_000), seed("Receivables", 2_200_000), seed("Inventory", 1_800_000),
-  seed("Plant & equipment", 4_000_000), seed("Investments", 800_000),
+/*
+  FOUR OF THESE NINE LINES ARE REAL. THE OTHER FIVE CANNOT BE.
+
+  Cash, receivables, stock at cost and payables are all recorded in the
+  workspace, and they are the four that move week to week — exactly the ones
+  worth not retyping. Plant & equipment, investments, the two loans and tax
+  due are not stored anywhere: there is no fixed-asset register and no debt
+  schedule in this product.
+
+  So this is a PARTIAL seed, and the banner says which half is which. The
+  alternative — leaving all nine invented because five of them must be —
+  is what the page did before, and it presented a fictional balance sheet in
+  the second person.
+*/
+const assetRows = (s?: WorkspaceSeed): Row[] => [
+  row("Cash & bank", orDefault(s?.cash, 1_500_000)),
+  row("Receivables", orDefault(s?.receivables, 2_200_000)),
+  row("Inventory", orDefault(s?.inventoryValue, 1_800_000)),
+  row("Plant & equipment", 4_000_000),
+  row("Investments", 800_000),
 ];
-const LIABS: Row[] = [
-  seed("Payables", 1_600_000), seed("Working-capital loan", 2_500_000), seed("Term loan", 3_000_000),
-  seed("GST / tax due", 400_000),
+const liabRows = (s?: WorkspaceSeed): Row[] => [
+  row("Payables", orDefault(s?.payables, 1_600_000)),
+  row("Working-capital loan", 2_500_000),
+  row("Term loan", 3_000_000),
+  row("GST / tax due", 400_000),
 ];
 
 function Ledger({ title, rows, setRows, tone }: { title: string; rows: Row[]; setRows: (r: Row[]) => void; tone: string }) {
@@ -25,7 +45,7 @@ function Ledger({ title, rows, setRows, tone }: { title: string; rows: Row[]; se
     <Card className="p-5 space-y-2">
       <div className="flex items-center justify-between">
         <div className="font-semibold">{title}</div>
-        <Button size="sm" variant="outline" onClick={() => setRows([...rows, seed("New line", 0)])}><Plus className="h-4 w-4" /></Button>
+        <Button size="sm" variant="outline" onClick={() => setRows([...rows, row("New line", 0)])}><Plus className="h-4 w-4" /></Button>
       </div>
       {rows.map((r) => (
         <div key={r.id} className="flex items-center gap-2">
@@ -39,9 +59,9 @@ function Ledger({ title, rows, setRows, tone }: { title: string; rows: Row[]; se
   );
 }
 
-export function NetWorthBuilder() {
-  const [assets, setAssets] = useState<Row[]>(ASSETS);
-  const [liabs, setLiabs] = useState<Row[]>(LIABS);
+export function NetWorthBuilder({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const [assets, setAssets] = useState<Row[]>(() => assetRows(seed));
+  const [liabs, setLiabs] = useState<Row[]>(() => liabRows(seed));
   const m = useMemo(() => {
     const a = assets.reduce((s, r) => s + r.amount, 0);
     const l = liabs.reduce((s, r) => s + r.amount, 0);
@@ -50,7 +70,11 @@ export function NetWorthBuilder() {
 
   return (
     <div className="space-y-4">
-      <ExampleFigures what="assets and liabilities" />
+      <ExampleFigures
+        source={seedSource(seed, "cash", "receivables", "inventoryValue", "payables")}
+        what="cash, receivables, stock and payables"
+        note="Those four come from your workspace. Plant & equipment, investments, both loans and tax due are still examples — this product keeps no fixed-asset register or debt schedule, so type those in."
+      />
       <div className="grid lg:grid-cols-2 gap-4">
         <Ledger title="Assets" rows={assets} setRows={setAssets} tone="text-success" />
         <Ledger title="Liabilities" rows={liabs} setRows={setLiabs} tone="text-danger" />

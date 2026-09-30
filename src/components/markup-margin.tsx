@@ -2,10 +2,32 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
-export function MarkupMargin() {
-  const [cost, setCost] = useState(620);
-  const [price, setPrice] = useState(1000);
+/*
+  Price is your average order value. Cost is that price times your own
+  COGS-to-revenue ratio.
+
+  The second one is a DERIVATION, not a record, and it is worth being exact
+  about what it assumes: that this order costs the same proportion to
+  fulfil as the business does on average. For a single-product business
+  that is nearly true; for one selling both a ₹200 accessory and a ₹2 lakh
+  machine it is not. It is still built entirely from two figures the
+  workspace actually holds, which is the difference between a starting point
+  and a fabrication.
+
+  Both are null unless the ratio can honestly be formed — revenue must be
+  non-zero, or dividing by it invents a margin of infinity.
+*/
+export function MarkupMargin({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const cogsRatio = seed?.cogs != null && seed?.revenue != null && seed.revenue > 0
+    ? seed.cogs / seed.revenue : null;
+  const seededPrice = seed?.avgOrderValue ?? null;
+  const seededCost = seededPrice != null && cogsRatio != null ? seededPrice * cogsRatio : null;
+
+  const [cost, setCost] = useState(Math.round(orDefault(seededCost, 620)));
+  const [price, setPrice] = useState(Math.round(orDefault(seededPrice, 1000)));
 
   const m = useMemo(() => {
     const profit = price - cost;
@@ -26,6 +48,12 @@ export function MarkupMargin() {
   );
 
   return (
+    <div className="space-y-4">
+      <ExampleFigures
+        source={seededPrice != null ? "yours" : "example"}
+        what="price and cost"
+        note="Price is your average order value. Cost applies your overall COGS-to-revenue ratio to it — an average, so correct it for this particular product."
+      />
     <div className="grid lg:grid-cols-2 gap-4">
       <Card className="p-5 space-y-4">
         <div className="grid grid-cols-2 gap-3">{F("Cost", cost, setCost)}{F("Selling price", price, setPrice)}</div>
@@ -48,6 +76,7 @@ export function MarkupMargin() {
           <tbody>{REF.map((r) => <tr key={r.margin} className="border-b last:border-0"><td className="py-1.5">{r.margin}%</td><td className="py-1.5 font-medium">{r.markup.toFixed(0)}%</td></tr>)}</tbody>
         </table>
       </Card>
+    </div>
     </div>
   );
 }

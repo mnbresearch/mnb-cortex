@@ -3,8 +3,8 @@
   "generated_from": "src/app/(app)/**/page.tsx, one hop through imports and /api route handlers",
   "totals": {
     "modules": 132,
-    "reads-only": 16,
-    "reference": 28,
+    "reads-only": 25,
+    "reference": 19,
     "data-backed": 87,
     "browser-only": 1
   },
@@ -99,11 +99,11 @@
     },
     "advance-tax": {
       "route": "advance-tax",
-      "depth": "reference",
-      "reads": false,
+      "depth": "reads-only",
+      "reads": true,
       "writes": false,
       "ai": false,
-      "seeded": false,
+      "seeded": true,
       "saves": false,
       "restores": false,
       "persists": false
@@ -231,11 +231,11 @@
     },
     "breakeven": {
       "route": "breakeven",
-      "depth": "reference",
-      "reads": false,
+      "depth": "reads-only",
+      "reads": true,
       "writes": false,
       "ai": false,
-      "seeded": false,
+      "seeded": true,
       "saves": false,
       "restores": false,
       "persists": false
@@ -539,11 +539,11 @@
     },
     "discount": {
       "route": "discount",
-      "depth": "reference",
-      "reads": false,
+      "depth": "reads-only",
+      "reads": true,
       "writes": false,
       "ai": false,
-      "seeded": false,
+      "seeded": true,
       "saves": false,
       "restores": false,
       "persists": false
@@ -561,11 +561,11 @@
     },
     "dscr": {
       "route": "dscr",
-      "depth": "reference",
-      "reads": false,
+      "depth": "reads-only",
+      "reads": true,
       "writes": false,
       "ai": false,
-      "seeded": false,
+      "seeded": true,
       "saves": false,
       "restores": false,
       "persists": false
@@ -858,11 +858,11 @@
     },
     "markup": {
       "route": "markup",
-      "depth": "reference",
-      "reads": false,
+      "depth": "reads-only",
+      "reads": true,
       "writes": false,
       "ai": false,
-      "seeded": false,
+      "seeded": true,
       "saves": false,
       "restores": false,
       "persists": false
@@ -913,11 +913,11 @@
     },
     "networth": {
       "route": "networth",
-      "depth": "reference",
-      "reads": false,
+      "depth": "reads-only",
+      "reads": true,
       "writes": false,
       "ai": false,
-      "seeded": false,
+      "seeded": true,
       "saves": false,
       "restores": false,
       "persists": false
@@ -957,11 +957,11 @@
     },
     "payroll": {
       "route": "payroll",
-      "depth": "reference",
-      "reads": false,
+      "depth": "reads-only",
+      "reads": true,
       "writes": false,
       "ai": false,
-      "seeded": false,
+      "seeded": true,
       "saves": false,
       "restores": false,
       "persists": false
@@ -1089,11 +1089,11 @@
     },
     "rate-card": {
       "route": "rate-card",
-      "depth": "reference",
-      "reads": false,
+      "depth": "reads-only",
+      "reads": true,
       "writes": false,
       "ai": false,
-      "seeded": false,
+      "seeded": true,
       "saves": false,
       "restores": false,
       "persists": false
@@ -1353,11 +1353,11 @@
     },
     "tax": {
       "route": "tax",
-      "depth": "reference",
-      "reads": false,
+      "depth": "reads-only",
+      "reads": true,
       "writes": false,
       "ai": false,
-      "seeded": false,
+      "seeded": true,
       "saves": false,
       "restores": false,
       "persists": false

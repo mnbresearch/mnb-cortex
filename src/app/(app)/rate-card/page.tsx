@@ -2,16 +2,18 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { RateCard } from "@/components/rate-card";
 
+import { getWorkspaceSeed } from "@/lib/workspace-seed";
 import { calcMetadata } from "@/lib/calculator-seo";
 
 export const dynamic = "force-dynamic";
 export const metadata = calcMetadata("/rate-card");
 
-export default function RateCardPage() {
+export default async function RateCardPage() {
+  const seed = await getWorkspaceSeed();
   return (
     <>
       <Topbar title="Billable Rate Calculator" subtitle="The rate you must charge to hit your income" />
-      <PageShell><RateCard /></PageShell>
+      <PageShell><RateCard seed={seed} /></PageShell>
     </>
   );
 }

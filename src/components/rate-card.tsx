@@ -3,10 +3,19 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
 import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
-export function RateCard() {
+/*
+  Annual business costs come from the ledger; the target income does not.
+
+  `targetIncome` is what the owner WANTS to earn — a decision, not a record,
+  and there is nothing in the workspace that knows it. Seeding it from past
+  profit would quietly tell someone their goal is whatever they made last
+  year, which is the opposite of what this tool is for.
+*/
+export function RateCard({ seed }: { seed?: WorkspaceSeed } = {}) {
   const [targetIncome, setTargetIncome] = useState(1_800_000); // desired annual take-home
-  const [costs, setCosts] = useState(600_000);                 // annual business costs
+  const [costs, setCosts] = useState(orDefault(seed?.opex, 600_000)); // annual business costs, from the ledger
   const [profitPct, setProfitPct] = useState(20);              // margin buffer
   const [workDays, setWorkDays] = useState(220);               // working days/yr
   const [billablePct, setBillablePct] = useState(65);          // % of day that's billable
@@ -29,7 +38,11 @@ export function RateCard() {
 
   return (
     <div className="space-y-4">
-      <ExampleFigures what="hours and rates" />
+      <ExampleFigures
+        source={seedSource(seed, "opex")}
+        what="annual business costs"
+        note="Your target income and billable hours are decisions, not records — those stay as examples for you to set."
+      />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {F("Target take-home / year", targetIncome, setTargetIncome)}

@@ -2,9 +2,22 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
-export function DscrCalc() {
-  const [noi, setNoi] = useState(3_600_000);      // annual net operating income (EBITDA-ish)
+/*
+  NOI IS EXACTLY A FIELD WE ALREADY HAVE.
+
+  A lender's DSCR test is annual operating income over annual debt service,
+  and `ebitdaAnnual` is read straight from the finance ledger's own EBITDA
+  column. This is the tightest of the seeded calculators: no ratio, no
+  apportionment, no assumption — the input IS the stored figure.
+
+  Debt service is not seeded. Nothing in the workspace records loan
+  repayments, and guessing one would change the answer a bank cares about.
+*/
+export function DscrCalc({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const [noi, setNoi] = useState(orDefault(seed?.ebitdaAnnual, 3_600_000));      // annual net operating income (EBITDA)
   const [existingDebt, setExistingDebt] = useState(1_200_000); // annual existing debt service
   const [rate, setRate] = useState(12);
   const [tenure, setTenure] = useState(7);
@@ -31,6 +44,11 @@ export function DscrCalc() {
 
   return (
     <div className="space-y-4">
+      <ExampleFigures
+        source={seedSource(seed, "ebitdaAnnual")}
+        what="operating income"
+        note="Existing debt service is not in your workspace — fill that in yourself, it is the figure the ratio turns on."
+      />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {F("Annual operating income (EBITDA)", noi, setNoi)}

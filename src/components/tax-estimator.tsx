@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
 import { computeTax, RATES_AS_OF } from "@/lib/tax-slabs";
+import { ExampleFigures } from "@/components/example-figures";
+import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 
 /**
  * The slab ladder, the deductions, the rebate and the surcharge all now come
@@ -10,8 +12,17 @@ import { computeTax, RATES_AS_OF } from "@/lib/tax-slabs";
  * hardcoded here AND separately there, at FY 2024-25 values, and had drifted
  * apart from each other as well as from the law. See that file for the detail.
  */
-export function TaxEstimator() {
-  const [income, setIncome] = useState(1_500_000);
+/*
+  Income seeded from recorded annual net profit.
+
+  For the proprietorships and partnerships that make up most of this
+  product's users, business profit IS the income these slabs apply to. For a
+  private limited company it is not — the company pays corporate tax and the
+  director takes a salary. The banner names the assumption rather than
+  leaving the reader to discover it from a wrong number.
+*/
+export function TaxEstimator({ seed }: { seed?: WorkspaceSeed } = {}) {
+  const [income, setIncome] = useState(orDefault(seed?.netProfitAnnual, 1_500_000));
   const [regime, setRegime] = useState<"new" | "old">("new");
   const [salaried, setSalaried] = useState(true);
   const [ded80c, setDed80c] = useState(150_000);
@@ -44,6 +55,12 @@ export function TaxEstimator() {
   );
 
   return (
+    <div className="space-y-4">
+      <ExampleFigures
+        source={seedSource(seed, "netProfitAnnual")}
+        what="income"
+        note="Taken as your recorded annual net profit, which is the taxable income for a proprietorship or partnership. If you trade through a company, replace it with your salary — these are individual slabs."
+      />
     <div className="grid lg:grid-cols-2 gap-4">
       <Card className="p-5 space-y-3">
         <div className="font-semibold">Your income</div>
@@ -106,6 +123,7 @@ export function TaxEstimator() {
           </div>
         </div>
       </Card>
+    </div>
     </div>
   );
 }
