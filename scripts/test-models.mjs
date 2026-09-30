@@ -192,6 +192,78 @@ check(text.length >= 3, "there is more than one fallback",
   delete process.env.GEMINI_MODEL;
 }
 
+/* ========================================================================= */
+/*  THE OTHER THREE PROVIDERS — which this suite never looked at             */
+/* ========================================================================= */
+/*
+  Everything above is Google. The summary line below used to read "all live
+  as of <date>" on the strength of that alone, while the Anthropic, Groq and
+  OpenAI defaults sat unchecked in eight inline call sites. Two of them were
+  dead by the time anybody looked:
+
+    claude-3-5-sonnet-20241022   retired 2025-10-28 — every request errors
+    llama-3.3-70b-versatile      decommissioned by Groq 2026-08-16 — 404
+
+  Both are reachable through bring-your-own-key, which is sold. A customer
+  pasting a valid Groq key and no GROQ_MODEL got a hard failure on every AI
+  action in the product, from a key that was perfectly good.
+
+  They now live in one module, and this is what keeps it honest.
+*/
+{
+  const md = readFileSync(join(root, "src/lib/ai/model-defaults.ts"), "utf8");
+
+  /* Models each provider has withdrawn. Add to this list rather than quietly
+     editing a default: a name here is a fact somebody verified. */
+  const PROVIDER_RETIRED = new Map([
+    ["claude-3-5-sonnet-20241022", "Anthropic retired it on 2025-10-28"],
+    ["claude-3-5-sonnet-20240620", "Anthropic retired the 3.5 Sonnet family"],
+    ["claude-3-opus-20240229", "Anthropic deprecated Opus 3"],
+    ["llama-3.3-70b-versatile", "Groq decommissioned it on 2026-08-16"],
+    ["llama-3.1-70b-versatile", "Groq decommissioned it earlier"],
+    ["gpt-4-vision-preview", "OpenAI withdrew the preview"],
+  ]);
+
+  const defaults = [...md.matchAll(/export const ([A-Z_]+_DEFAULT_MODEL)\s*=\s*"([^"]+)"/g)]
+    .map((m) => ({ name: m[1], model: m[2] }));
+
+  check(defaults.length === 3, "all three provider defaults are declared in one module",
+    defaults.map((d) => `${d.name}=${d.model}`).join(" "));
+
+  for (const d of defaults) {
+    check(!PROVIDER_RETIRED.has(d.model),
+      `${d.name} "${d.model}" is not a withdrawn model`,
+      PROVIDER_RETIRED.get(d.model) || "");
+  }
+
+  /* No inline model id may creep back into a call site. That is how six
+     copies of a dying Groq model came to exist. */
+  const inline = [];
+  for (const f of ["priorities", "gst", "visibility", "act", "bankstatement", "cortex"]) {
+    const src = readFileSync(join(root, `src/lib/ai/${f}.ts`), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    for (const m of src.matchAll(/process\.env\.(GROQ_MODEL|ANTHROPIC_MODEL|OPENAI_MODEL)\s*\|\|\s*"([^"]+)"/g)) {
+      inline.push(`lib/ai/${f}.ts: ${m[1]} || "${m[2]}"`);
+    }
+  }
+  check(inline.length === 0,
+    "no call site hardcodes its own provider model fallback",
+    inline.length ? inline.join("\n      ") + "\n      Use model-defaults.ts — six copies is six things to update." : "");
+
+  /* The stamp goes stale, because a model list is a claim about the world.
+     Twelve months, matching how fast these providers actually retire things:
+     the Groq model here lasted about twenty months. */
+  const stamp = (md.match(/MODEL_DEFAULTS_CHECKED_ON = "(\d{4})-(\d{2})-(\d{2})"/) || []);
+  check(stamp.length === 4, "model-defaults carries a verification date");
+  if (stamp.length === 4) {
+    const months = (Date.now() - Date.parse(`${stamp[1]}-${stamp[2]}-${stamp[3]}`)) / (30.44 * 86_400_000);
+    check(months < 12,
+      "the provider defaults were verified within twelve months",
+      `stamp reads ${stamp[1]}-${stamp[2]}-${stamp[3]} — ${Math.round(months)} months ago. ` +
+      "Re-check each provider's deprecation page and move the date.");
+  }
+}
+
 console.log(`\nmodels: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   console.log("\nFAILURES:");
@@ -199,3 +271,4 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(`  ${text.length} text, ${image.length} image candidates — all live as of ${CHECKED_ON}; default "${text[0]}".`);
+console.log(`  Anthropic, Groq and OpenAI defaults checked too — those were never in scope before, and two were dead.`);

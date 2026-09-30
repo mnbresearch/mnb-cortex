@@ -3,6 +3,7 @@ import "server-only";
 import { geminiTextModels } from "@/lib/ai/models";
 import { aiKey } from "@/lib/ai/byo";
 import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
+import { groqModel } from "@/lib/ai/model-defaults";
 
 export type Draft = { subject: string; body: string };
 
@@ -74,7 +75,7 @@ Return JSON: {"subject": "...", "body": "..."}`;
     try {
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${qkey}` },
-        body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", messages: [{ role: "system", content: SYS }, { role: "user", content: prompt }], temperature: 0.6, response_format: { type: "json_object" } }),
+        body: JSON.stringify({ model: groqModel(), messages: [{ role: "system", content: SYS }, { role: "user", content: prompt }], temperature: 0.6, response_format: { type: "json_object" } }),
       });
       if (r.ok) { const j = await r.json(); const t = j?.choices?.[0]?.message?.content || ""; const p = safeJson(t); if (p?.body) return { subject: String(p.subject || "").slice(0, 200), body: String(p.body || "") }; }
     } catch { /* fall through */ }

@@ -6,6 +6,7 @@ import "server-only";
 import { geminiTextModels } from "@/lib/ai/models";
 import { aiKey } from "@/lib/ai/byo";
 import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
+import { groqModel } from "@/lib/ai/model-defaults";
 
 export type Txn = { date: string; desc: string; amount: number; direction: "in" | "out"; category: string };
 export type MonthPoint = { key: string; label: string; inflow: number; outflow: number; net: number };
@@ -100,7 +101,7 @@ async function callJson(prompt: string): Promise<any | null> {
     try {
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${qkey}` },
-        body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", messages: [{ role: "system", content: SYS }, { role: "user", content: prompt }], temperature: 0.1, response_format: { type: "json_object" } }),
+        body: JSON.stringify({ model: groqModel(), messages: [{ role: "system", content: SYS }, { role: "user", content: prompt }], temperature: 0.1, response_format: { type: "json_object" } }),
       });
       if (r.ok) { const j = await r.json(); const t = j?.choices?.[0]?.message?.content || ""; const parsed = safeJson(t); if (parsed) return parsed; }
     } catch { /* fall through */ }

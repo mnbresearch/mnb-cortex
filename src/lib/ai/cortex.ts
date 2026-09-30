@@ -9,6 +9,7 @@ import { generationConfig, profileFor, STANDARD, type GenProfile } from "@/lib/a
 // Read-only, org-scoped lookups the model can call. See lib/ai/tools.ts for why
 // these are named queries rather than generated SQL.
 import { TOOL_DECLARATIONS, TOOL_NAMES, runTool } from "@/lib/ai/tools";
+import { anthropicModel, groqModel, openaiModel } from "@/lib/ai/model-defaults";
 
 export const COO_SYSTEM = `You are MNB Cortex — the AI Chief Operating Officer for an SME owner.
 You are NOT a chatbot or a dashboard. You behave like a McKinsey/BCG-grade operator who has read all of the company's data.
@@ -265,7 +266,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
     if (provider === "groq" && aiKey("GROQ_API_KEY")) {
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey("GROQ_API_KEY")}` },
-        body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
+        body: JSON.stringify({ model: groqModel(), messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
       });
       if (!r.ok) return await note("groq", r); // 429 rate-limit or 5xx → let the caller retry
       const j = await r.json();
@@ -275,7 +276,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
     if (provider === "openai" && aiKey("OPENAI_API_KEY")) {
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey("OPENAI_API_KEY")}` },
-        body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
+        body: JSON.stringify({ model: openaiModel(), messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
       });
       if (!r.ok) return await note("openai", r);
       const j = await r.json();
@@ -285,7 +286,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
     if (provider === "anthropic" && aiKey("ANTHROPIC_API_KEY")) {
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: { "Content-Type": "application/json", "x-api-key": aiKey("ANTHROPIC_API_KEY")!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022", max_tokens: 1024, system: sys, messages }),
+        body: JSON.stringify({ model: anthropicModel(), max_tokens: 1024, system: sys, messages }),
       });
       if (!r.ok) return await note("anthropic", r);
       const j = await r.json();
@@ -349,8 +350,8 @@ export async function streamCortex(messages: Msg[], context: string): Promise<Re
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
   const enc = new TextEncoder();
   const openaiLike =
-    (provider === "groq" && aiKey("GROQ_API_KEY")) ? { url: "https://api.groq.com/openai/v1/chat/completions", key: aiKey("GROQ_API_KEY")!, model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile" } :
-    (provider === "openai" && aiKey("OPENAI_API_KEY")) ? { url: "https://api.openai.com/v1/chat/completions", key: aiKey("OPENAI_API_KEY")!, model: process.env.OPENAI_MODEL || "gpt-4o-mini" } : null;
+    (provider === "groq" && aiKey("GROQ_API_KEY")) ? { url: "https://api.groq.com/openai/v1/chat/completions", key: aiKey("GROQ_API_KEY")!, model: groqModel() } :
+    (provider === "openai" && aiKey("OPENAI_API_KEY")) ? { url: "https://api.openai.com/v1/chat/completions", key: aiKey("OPENAI_API_KEY")!, model: openaiModel() } : null;
 
   if (openaiLike) {
     try {

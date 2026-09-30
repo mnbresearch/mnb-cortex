@@ -2,6 +2,7 @@ import "server-only";
 import { geminiTextModels } from "@/lib/ai/models";
 import { aiKey } from "@/lib/ai/byo";
 import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
+import { groqModel } from "@/lib/ai/model-defaults";
 
 // "What should I do next?" — the guided command layer that turns 130+ tools into
 // the 3–5 that matter for THIS business right now. Grounded in the workspace's
@@ -95,7 +96,7 @@ async function callJson(prompt: string, sys: string): Promise<any[] | null> {
     try {
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${qkey}` },
-        body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", messages: [{ role: "system", content: sys }, { role: "user", content: prompt }], temperature: 0.2, response_format: { type: "json_object" } }),
+        body: JSON.stringify({ model: groqModel(), messages: [{ role: "system", content: sys }, { role: "user", content: prompt }], temperature: 0.2, response_format: { type: "json_object" } }),
       });
       if (r.ok) { const j = await r.json(); const t = j?.choices?.[0]?.message?.content || ""; const parsed = safeArray(t); if (parsed) return parsed; }
     } catch { /* fall through */ }

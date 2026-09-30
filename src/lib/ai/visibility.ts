@@ -5,6 +5,7 @@ import { aiKey } from "@/lib/ai/byo";
 import "server-only";
 import { geminiTextModels } from "@/lib/ai/models";
 import { generationConfig, STANDARD } from "@/lib/ai/generation";
+import { groqModel, openaiModel } from "@/lib/ai/model-defaults";
 import {
   findBrand, namedBrands, citations as readCitations, score as scoreOutcomes,
   brandAliases, tokens, type Citation, type Scores,
@@ -101,7 +102,7 @@ async function askGemini(prompt: string): Promise<EngineAnswer> {
 async function askOpenAI(prompt: string): Promise<EngineAnswer> {
   const key = aiKey("OPENAI_API_KEY");
   if (!key) return NO_ANSWER;
-  const model = process.env.OPENAI_VISIBILITY_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = process.env.OPENAI_VISIBILITY_MODEL || openaiModel();
   try {
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -138,7 +139,7 @@ async function askGroq(prompt: string): Promise<EngineAnswer> {
     const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+        model: groqModel(),
         messages: [{ role: "system", content: NEUTRAL_SYSTEM }, { role: "user", content: prompt }],
         temperature: 0.3,
       }),
