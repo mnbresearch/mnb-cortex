@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,7 @@ export function DecisionJournal({
   const [loading, setLoading] = useState("");
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   /* Read the local journal once. For a signed-out visitor this IS the journal;
      for a signed-in one it is a migration candidate. */
@@ -113,7 +115,10 @@ export function DecisionJournal({
     fd.set("kind", "decision"); fd.set("id", id);
     startTransition(async () => {
       const r = await deleteWorkbenchEntry(fd);
-      if (r && !r.ok) setNote(r.error);
+      if (r && !r.ok) { setNote(r.error); return; }
+      /* See nps-tracker.tsx: revalidatePath does not re-render a mounted
+         client component holding its list as a prop. */
+      router.refresh();
     });
   }
 

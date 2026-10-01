@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Save, Loader2, History } from "lucide-react";
@@ -41,6 +42,7 @@ export function CapTable({
   const [scenarioName, setScenarioName] = useState("");
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   function saveScenario() {
     const name = scenarioName.trim();
@@ -54,6 +56,7 @@ export function CapTable({
       if (r && !r.ok) { setNote(r.error); return; }
       setScenarioName("");
       setNote(`Saved "${name}".`);
+      router.refresh();   // same staleness as the delete path above
     });
   }
 
@@ -70,6 +73,27 @@ export function CapTable({
       const r = await deleteWorkbenchEntry(fd);
       if (r && !r.ok) { setNote(r.error); return; }
       setNote(`Removed "${s.title}".`);
+      /*
+        THE ROW LEFT THE DATABASE AND STAYED ON THE SCREEN.
+
+        deleteWorkbenchEntry calls revalidatePath(), and that genuinely works
+        — the entry is gone on the next full load. But this component holds
+        its list as a PROP from the server render, and marking a route stale
+        does not re-render a client component that is already mounted. So the
+        delete succeeded, the note said "Removed", and the row sat there until
+        the owner pressed reload.
+
+        That is worse than the bug it replaced. "Permanent by omission" at
+        least looked permanent; this tells you it is gone and keeps showing it.
+
+        router.refresh() re-fetches the server tree and hands this component
+        fresh props. collections-console.tsx is the only other place in the
+        repo that needed it, for the same reason.
+
+        After SUCCESS only: refreshing on failure would discard the error note
+        before it could be read.
+      */
+      router.refresh();
     });
   }
 

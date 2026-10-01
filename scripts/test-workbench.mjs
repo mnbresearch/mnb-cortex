@@ -322,6 +322,52 @@ for (const [file, kind] of WB_SURFACES) {
 }
 
 /* ======================================================================== */
+/* A MUTATION THE SCREEN DOES NOT REFLECT IS A LIE                          */
+/* ======================================================================== */
+
+/*
+  Found in production, one commit after shipping the delete buttons.
+
+  deleteWorkbenchEntry worked perfectly — the row left `strategy_docs`, the
+  server action returned ok, and the note read 'Removed "September 2026".'
+  The row then stayed on screen until the owner pressed reload.
+
+  revalidatePath() marks the ROUTE stale. It does not re-render a client
+  component that is already mounted and holding its list as a prop from the
+  previous server render. So the UI confirmed a deletion and kept displaying
+  the deleted thing.
+
+  That is worse than the gap it replaced. "No delete button" at least looked
+  permanent; this says it is gone and shows it to you anyway — and an owner
+  who clicks twice because the first click "did not work" is then told "That
+  entry was already gone", which reads like a bug in their data.
+
+  NOTHING IN THIS SUITE COULD HAVE CAUGHT IT. Every assertion here reads
+  source, and the source was correct in isolation: the action deletes, the
+  component calls it, the button is labelled. The defect lived in the gap
+  between two correct things — the same shape as the /quote ON CONFLICT bug,
+  and found the same way, by pressing the button.
+
+  So the rule is asserted instead: a component that mutates a workbench list
+  must also refresh the tree that produced it.
+*/
+for (const [file, kind] of WB_SURFACES) {
+  const code = strip(src(file));
+  check(/useRouter\(\)/.test(code), `${kind}: the surface holds a router`);
+  const mutators = [...code.matchAll(/await (save|delete|patch)WorkbenchEntry\(/g)];
+  check(mutators.length > 0, `${kind}: it mutates workbench entries`);
+  check(/router\.refresh\(\)/.test(code),
+    `${kind}: and refreshes after mutating`,
+    "revalidatePath does not re-render an already-mounted client component holding its list as a prop");
+  /*
+    After SUCCESS, not before the error check — refreshing on failure throws
+    away the error note before it can be read.
+  */
+  check(!/if \(r && !r\.ok\) \{[^}]*\}\s*\n\s*router\.refresh\(\);\s*\n\s*return;/.test(code),
+    `${kind}: the refresh does not pre-empt an error message`);
+}
+
+/* ======================================================================== */
 
 console.log(`\nworkbench + cron clock: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
