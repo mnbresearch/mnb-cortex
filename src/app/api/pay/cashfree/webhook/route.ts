@@ -587,10 +587,18 @@ async function handleSubscriptionEvent(type: string, body: any) {
   }
 
   const { emitQuietly } = await import("@/lib/webhooks");
-  emitQuietly(orgId, "payment.succeeded", { kind: "subscription", subscription_id: ref, plan: plan.id, cycle: annual ? "annual" : "monthly", amount, event: type });
+  await emitQuietly(orgId, "payment.succeeded", { kind: "subscription", subscription_id: ref, plan: plan.id, cycle: annual ? "annual" : "monthly", amount, event: type });
   /* A renewal is the payment a customer is MOST likely not to recognise —
      they did not click anything. It is the one that most needs our receipt. */
   const { sendPaymentReceipt } = await import("@/lib/pay/receipt");
-  void sendPaymentReceipt({ orgId, orderId: claimId, amount, kind: "plan", ref: plan.id,
-    label: `${plan.name} renewal (${annual ? "annual" : "monthly"})`, endsAt });
+  /*
+    Awaited. This is the RENEWAL receipt — the charge a customer is least
+    likely to recognise, because they did not click anything to cause it. The
+    file says so a few lines up. Losing it silently is how a renewal becomes a
+    dispute.
+  */
+  try {
+    await sendPaymentReceipt({ orgId, orderId: claimId, amount, kind: "plan", ref: plan.id,
+      label: `${plan.name} renewal (${annual ? "annual" : "monthly"})`, endsAt });
+  } catch (e: any) { console.error(`[cashfree-sub] renewal receipt for ${claimId} failed —`, e?.message); }
 }

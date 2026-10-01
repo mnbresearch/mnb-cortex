@@ -3,6 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { ReceivablesAging } from "@/components/receivables-aging";
 import { getSalesOrders, getUserAndOrg } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
+import { daysPastDueIST } from "@/lib/statutory";
 
 export const dynamic = "force-dynamic";
 
@@ -47,13 +48,17 @@ async function allOpenReceivables(): Promise<{ rows: any[]; live: boolean; cappe
  * together in a bucket labelled "Current (0–30)" under a column headed "Days
  * outstanding" — so money that was not owed yet was displayed as money that was
  * up to a month late. The sign is now kept and the labels say which is which.
+ *
+ * The ARITHMETIC was wrong too, in a way that made this page disagree with the
+ * dashboard every evening. `Math.round((Date.now() - due) / 86_400_000)` with
+ * `due` parsed as UTC midnight crosses the half-day mark at 12:00 UTC — 17:30
+ * IST — so from half past five an invoice due TODAY counted as one day past
+ * due and was added to `totals.overdue` and the 0–30 bucket. metrics.ts gets
+ * the dashboard's figure right with an IST date comparison, so the two screens
+ * printed different overdue totals for the same ledger. One definition now,
+ * in lib/statutory.ts, anchored on IST midnight and exact to the day.
  */
-function daysPastDue(due: any): number {
-  if (!due) return 0;
-  const t = new Date(due).getTime();
-  if (!Number.isFinite(t)) return 0;
-  return Math.round((Date.now() - t) / 86_400_000);
-}
+const daysPastDue = (due: any): number => daysPastDueIST(due);
 
 export default async function Receivables() {
   /*

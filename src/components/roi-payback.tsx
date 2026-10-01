@@ -46,7 +46,7 @@ export function RoiPayback() {
       </div>
       <div className={`rounded-lg border p-4 text-sm ${m.npv >= 0 ? "border-success/30 bg-success/5" : "border-danger/30 bg-danger/5"}`}>
         {m.npv >= 0
-          ? <span className="text-success">Worth it: even after discounting future returns at {discount}%, this creates <b>{inr(m.npv)}</b> of value today, paying back in <b>{m.paybackMonths.toFixed(1)} months</b>.</span>
+          ? <span className="text-success">Worth it: even after discounting future returns at {discount}%, this creates <b>{inr(m.npv)}</b> of value today{m.paybackMonths === Infinity ? ", though with no monthly return there is no payback period to quote" : <>, paying back in <b>{m.paybackMonths.toFixed(1)} months</b></>}.</span>
           : <span className="text-danger">Careful: discounted at {discount}%, the returns don't cover the investment — NPV is negative. Only proceed if there's strategic value beyond the cash.</span>}
       </div>
     </Card>

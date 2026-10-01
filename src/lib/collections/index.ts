@@ -1,6 +1,7 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { normalizeCustomerName } from "@/lib/customer-match";
+import { daysPastDueIST } from "@/lib/statutory";
 import { draftReminder, containsForbidden, type Tone, type Channel } from "@/lib/collections/draft";
 
 /**
@@ -177,8 +178,16 @@ export async function findCandidates(orgId: string, policy?: Policy): Promise<Ca
   const out: Candidate[] = [];
 
   for (const inv of invoices) {
+    /*
+      IST. `Math.floor((Date.now() - dueUTCmidnight) / 86_400_000)` is one day
+      short for the 5h30m after midnight IST, because `Date.now()` is measured
+      against a UTC-anchored due date. That gates `daysPastDue < first_after_days`
+      below — holding the first reminder back a day — and it is interpolated
+      into the draft body as "now N days past its due date", so the number we
+      put in front of the debtor was short by one.
+    */
     const due = inv.due_date ? new Date(inv.due_date).getTime() : null;
-    const daysPastDue = due ? Math.floor((now - due) / 86_400_000) : 0;
+    const daysPastDue = inv.due_date ? daysPastDueIST(inv.due_date) : 0;
     const thread = threads.get(String(inv.id));
     /*
       normalizeCustomerName returns null for a name that normalises to nothing
@@ -355,7 +364,7 @@ export async function prepareDrafts(orgId: string, businessName: string, limit =
     if (c.attempts === 0) {
       try {
         const { emitQuietly } = await import("@/lib/webhooks");
-        emitQuietly(orgId, "invoice.overdue", {
+        await emitQuietly(orgId, "invoice.overdue", {
           invoice_id: c.invoiceId, invoice_no: c.invoiceNo, party: c.party,
           amount: c.amount, due_date: c.dueDate, days_past_due: c.daysPastDue,
         });
@@ -492,10 +501,56 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
       WhatsApp template needs the invoice number as a positional parameter, and
       one round trip per message in a 25-message run is not free.
     */
-    const { data: th0 } = await svc.from("collection_threads")
+    /*
+      ======================================================================
+      `|| {}` TURNED THIS GUARD INTO ITS OPPOSITE
+      ======================================================================
+
+      It was `.single()` with the error discarded, then `th0 || {}`. `.single()`
+      returns an ERROR, not a row, whenever the query matches zero rows — so on
+      any miss `t0` became `{}` and every field below was `undefined`. Follow
+      that into decideMessage (./rules.ts):
+
+        thread.status === "recovered"        false  → PAID check skipped
+        thread.status === "excluded"         false  → EXCLUDED check skipped
+        Number(undefined || 0) >= max        0 >= 3 → ATTEMPT CAP skipped
+        thread.party ? … : null              null   → DO-NOT-CONTACT NEVER READ
+        if (thread.last_sent_at)             false  → MINIMUM GAP skipped
+
+      All four refusals vanish and the decision falls through to `send`. The
+      recipient check above it passes, because the recipient comes from the
+      MESSAGE row, not the thread.
+
+      So the re-read whose own comment says it exists to stop "the 'I told it
+      not to contact them and it did' incident" was, on a missing thread, the
+      thing that guaranteed the send. A failed read opened every gate at once.
+
+      Reachable as a race: the queue is read at the top of this function, and a
+      thread can be deleted mid-run — the owner deletes the invoice
+      (`collection_threads.invoice_id` cascades) or purges the workspace. Any
+      other cause of a failed read has the same effect. Low probability,
+      highest cost in the module: a reminder sent in the customer's own name,
+      to a party they explicitly told us not to contact.
+
+      Now: no thread, no send. Cancelling is never harmful — the invoice stays
+      in the queue to be redrafted — and it is the only direction that is safe
+      when we cannot see the state the decision depends on.
+    */
+    const { data: th0, error: thErr } = await svc.from("collection_threads")
       .select("attempts, last_sent_at, status, party, amount, invoices(invoice_no)")
-      .eq("id", m.thread_id).single();
-    const t0: any = th0 || {};
+      .eq("id", m.thread_id).maybeSingle();
+
+    if (thErr || !th0) {
+      const why = thErr
+        ? `Could not re-check the limits for this reminder (${thErr.message})`
+        : "The invoice this reminder belongs to is no longer here";
+      console.error(`[collections] refusing to send message ${m.id} — thread ${m.thread_id} unreadable:`, thErr?.message || "no row");
+      await svc.from("collection_messages")
+        .update({ status: "cancelled", error: why }).eq("id", m.id);
+      continue;
+    }
+
+    const t0: any = th0;
 
     /*
       One decision, made in ./rules.ts, so every branch below is reachable by

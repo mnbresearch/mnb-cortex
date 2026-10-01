@@ -130,8 +130,34 @@ export function CapTable({
       const postMoney = r.preMoney + r.raise;
       // ESOP top-up (pre-money, dilutes founders): add pool to reach r.esop% post
       const targetEsopShares = 0; // simplified: treat esop as a % added to pool below
-      const pricePerShare = r.preMoney / totalShares;
-      const newInvestorShares = r.raise / pricePerShare;
+      /*
+        A ZERO PRE-MONEY TURNED EVERY PERCENTAGE ON THE PAGE INTO "NaN%".
+
+        Clear the Pre-money cell (plain type="number"; `upd()` does
+        `Number("")` → 0) and the chain is:
+
+          pricePerShare     = 0 / 10,000,000      = 0
+          newInvestorShares = raise / 0           = Infinity
+          totalShares                             = Infinity
+          investorPct       = Infinity / Infinity = NaN
+          esopPct           = Infinity / Infinity = NaN
+
+        The summary then read "Investors NaN%" and "ESOP pool NaN%" while
+        "Founders now own" read a confident 0.0% (finite / Infinity), and the
+        ownership bar got `width: NaN%` and collapsed.
+
+        The existing guard at load() — `Number(r?.preMoney) || 0` — was aimed
+        at this and cannot reach it: it maps a NaN arriving from a saved
+        scenario to 0, and 0 is precisely the input that regenerates NaN
+        through the live edit path. The fix has to sit at the arithmetic.
+
+        A round at zero pre-money is not a modelling case to approximate; it is
+        an incomplete form. Issuing no shares leaves the round a no-op, the
+        founders' percentage unchanged, and every figure finite — so the page
+        stays readable while the owner is still typing.
+      */
+      const pricePerShare = r.preMoney > 0 && totalShares > 0 ? r.preMoney / totalShares : 0;
+      const newInvestorShares = pricePerShare > 0 ? r.raise / pricePerShare : 0;
       // ESOP: expand pool so esop% of post-round belongs to pool
       let poolAdd = 0;
       const preRoundTotal = totalShares + newInvestorShares;

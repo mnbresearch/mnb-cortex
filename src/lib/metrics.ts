@@ -702,7 +702,7 @@ export async function recomputeMetrics(orgId: string): Promise<{
           open and already announced, and firing again would double-notify.
         */
         if (!error) {
-          emitQuietly(orgId, "alert.created", {
+          await emitQuietly(orgId, "alert.created", {
             rule_id: b.rule.id, metric_key: b.rule.metric_key,
             severity: b.severity, title: b.title, body: b.body,
           });
@@ -826,7 +826,7 @@ export async function recomputeMetrics(orgId: string): Promise<{
     await svc.from("finance_ledger").upsert([positionRow], { onConflict: "org_id,period" });
   } catch { /* the chart is secondary to the KPIs — don't fail the recompute */ }
 
-  emitQuietly(orgId, "metrics.recomputed", {
+  await emitQuietly(orgId, "metrics.recomputed", {
     org_id: orgId,
     metrics: metrics.map((m) => ({ key: m.metric_key, label: m.label, value: m.value, unit: m.unit, status: m.status })),
   });

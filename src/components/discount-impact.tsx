@@ -77,7 +77,9 @@ export function DiscountImpact({ seed }: { seed?: WorkspaceSeed } = {}) {
         {m.belowCost ? (
           <span className="text-danger">A {discount}% discount sells <b>below cost</b> — you'd lose money on every unit. Don't.</span>
         ) : (
-          <span>A <b>{discount}% discount</b> cuts your margin from <b>{m.marginPctBefore.toFixed(0)}%</b> to <b>{m.marginPctAfter.toFixed(0)}%</b>. To make the same total profit you'd need to sell <b>{m.upliftPct.toFixed(0)}% more units</b> — {m.upliftPct > 40 ? "a very tall order. A smaller discount or added value usually beats this." : "achievable if the promotion genuinely drives demand."}</span>
+          <span>A <b>{discount}% discount</b> cuts your margin from <b>{m.marginPctBefore.toFixed(0)}%</b> to <b>{m.marginPctAfter.toFixed(0)}%</b>. {m.upliftPct === Infinity
+              ? <>At that discount the price equals your cost, so <b>no volume makes it back</b> — every extra unit adds work and no profit.</>
+              : <>To make the same total profit you'd need to sell <b>{m.upliftPct.toFixed(0)}% more units</b> — {m.upliftPct > 40 ? "a very tall order. A smaller discount or added value usually beats this." : "achievable if the promotion genuinely drives demand."}</>}</span>
         )}
       </div>
     </Card>

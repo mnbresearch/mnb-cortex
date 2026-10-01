@@ -116,3 +116,4 @@
 # but a cross-product dependency, so the file now guards on the column's
 # existence and does nothing when it is absent. See the file itself.
 2026_zzzl_receivables_index.sql
+2026_zzzm_msme_ist_window.sql

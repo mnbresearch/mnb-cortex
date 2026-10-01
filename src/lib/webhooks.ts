@@ -185,7 +185,91 @@ export async function retryPending(limit = 200, budget?: Budget): Promise<{ trie
   return { tried, delivered, stoppedEarly };
 }
 
-/** Fire-and-forget: a webhook must never break the action that triggered it. */
-export function emitQuietly(orgId: string | null | undefined, event: WebhookEvent, payload: Record<string, any>): void {
-  void emit(orgId, event, payload).catch(() => {});
+/**
+ * Queue the event, then let delivery happen in the background.
+ *
+ * ============================================================================
+ * THE GUARANTEE THIS FILE DOCUMENTS WAS NOT BEING KEPT
+ * ============================================================================
+ *
+ * emit() above says, correctly:
+ *
+ *     "Queue-first means a crash mid-send still leaves a row the cron will
+ *      retry — the event is never simply lost."
+ *
+ * This wrapper was `void emit(...).catch(() => {})`, which threw that away at
+ * all eight call sites. emit()'s FIRST await is the endpoint lookup and the
+ * queue insert is the second; neither had resolved by the time this function
+ * returned. Every caller then returns its own response immediately —
+ * settle.ts, refund.ts and the subscription webhook all `return` on the very
+ * next line.
+ *
+ * On Vercel a function can be frozen the moment it responds, and this codebase
+ * has no `waitUntil` or `after()` anywhere (Next 14.2 does not offer `after`),
+ * so there is nothing holding it open. The queue row is never written, the
+ * nightly `retryPending()` sweeps rows that exist and finds none, and the
+ * event is gone with NO TRACE — the deliveries list in the developers UI shows
+ * nothing, so the customer cannot tell a dropped event from one that never
+ * fired.
+ *
+ * Which is the exact failure the comment at the top of this file says the
+ * webhooks were rebuilt to end: three events "were selectable in the
+ * developers UI and fired by nothing, so a customer could wire up an
+ * integration against a promise and never learn it was inert." This made that
+ * probabilistic rather than fixing it. It is a paid Business-plan feature.
+ *
+ * ============================================================================
+ * AWAIT THE QUEUE, FLOAT THE DELIVERY
+ * ============================================================================
+ *
+ * The two halves have completely different costs and completely different
+ * recoverability:
+ *
+ *   ENQUEUE   one select and one insert against our own database, a few
+ *             milliseconds — and it is the DURABLE step. Awaiting it is what
+ *             makes the file's stated guarantee true.
+ *
+ *   DELIVER   an outbound HTTP request per endpoint, up to TIMEOUT_MS each,
+ *             to a third-party URL we do not control. Slow, and genuinely
+ *             safe to lose, because a row left `pending` is what
+ *             retryPending() exists to sweep.
+ *
+ * So the caller now waits for the part that must not be lost and not for the
+ * part that is designed to be retried. "A webhook must never break the action
+ * that triggered it" still holds — nothing here throws.
+ */
+export async function emitQuietly(orgId: string | null | undefined, event: WebhookEvent, payload: Record<string, any>): Promise<void> {
+  if (!orgId) return;
+  const svc = serviceClient();
+  if (!svc) return;
+
+  try {
+    const { data, error } = await svc.from("webhook_endpoints")
+      .select("id, url, secret, events").eq("org_id", orgId).eq("is_active", true).limit(50);
+    if (error) { console.error(`[webhooks] could not read endpoints for ${orgId} —`, error.message); return; }
+
+    const targets = ((data as any[]) || []).filter(
+      (e) => !Array.isArray(e.events) || e.events.length === 0 || e.events.includes(event),
+    );
+    if (!targets.length) return;
+
+    const rows = targets.map((t) => ({ org_id: orgId, endpoint_id: t.id, event, payload }));
+    const { data: queued, error: qErr } = await svc.from("webhook_deliveries").insert(rows).select("id, endpoint_id");
+    if (qErr) {
+      /* Nothing was queued, so nothing will be retried. Say so — this is the
+         only moment the event exists anywhere. */
+      console.error(`[webhooks] ${event} for ${orgId} was NOT queued —`, qErr.message);
+      return;
+    }
+
+    /* Now the slow part, unawaited and allowed to be lost. Every row above is
+       `pending` until `attempt` marks it otherwise, and retryPending() sweeps
+       pending rows nightly, so a freeze here costs latency, not the event. */
+    void Promise.all(((queued as any[]) || []).map(async (q) => {
+      const t = targets.find((x) => x.id === q.endpoint_id);
+      if (t) await attempt(svc, q.id, t, event, payload);
+    })).catch(() => { /* every failure is already recorded on the delivery row */ });
+  } catch (e: any) {
+    console.error(`[webhooks] ${event} for ${orgId} threw before queueing —`, e?.message);
+  }
 }

@@ -654,14 +654,49 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
       });
     }
 
-    emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
+    await emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
     recordFunnel("payment_succeeded", { orgId, meta: { kind: "plan", plan: ref, cycle, amount: order.amount } });
     /* Our own receipt, in our own name. The gateway's confirmation carries
        the merchant ACCOUNT's identity, which is shared and is not the product
        the customer bought. Best-effort: the grant has already committed and
        must not depend on mail. */
-    void sendPaymentReceipt({ orgId, orderId, amount: order.amount, kind: "plan", ref,
+/*
+    AWAITED, not `void`.
+
+    The grant has already committed, so this must not be allowed to fail the
+    settlement — that reasoning was right and is unchanged. What it did NOT
+    justify was dropping the promise: `void` meant the receipt's three reads
+    (organizations, memberships, auth.admin.getUserById) plus the Resend call
+    had not started resolving when this function returned, and on Vercel the
+    process can be frozen the instant the response goes out. The receipt was
+    lost, AND so was the `email_sends` row that would have recorded the miss —
+    so the operator console could not see it either.
+
+    sendEmail never throws (it returns a result), and sendPaymentReceipt wraps
+    its own work, so awaiting cannot break the grant. It costs a little
+    latency on a page the customer is already waiting on, which is the correct
+    trade for the document that answers "I don't recognise this charge" — the
+    most common chargeback reason code.
+  */
+  /*
+    AWAITED AND WRAPPED, which is what the old `void` was reaching for and
+    did not achieve.
+
+    The property that matters — "mail can never decide whether a paid customer
+    got their plan" — is delivered by two things: the grant has ALREADY
+    committed above, and nothing here can throw into this path. `void` gave
+    the second and destroyed the receipt to get it: the promise had not
+    resolved when the function returned, and on Vercel the process can be
+    frozen the moment the response goes out, so the receipt AND the
+    `email_sends` row that would have recorded the miss were both lost.
+
+    try/catch gives the same protection locally and provably, instead of
+    relying on a transitive claim about sendEmail never throwing.
+  */
+  try {
+    await sendPaymentReceipt({ orgId, orderId, amount: order.amount, kind: "plan", ref,
       label: `the ${ref} plan (${cycle === "annual" ? "annual" : "monthly"})`, endsAt });
+  } catch (e: any) { console.error(`[settle] plan receipt for ${orderId} failed —`, e?.message); }
     return { orgId, ok: true, kind: "plan", plan: ref, cycle, endsAt };
   }
 
@@ -716,8 +751,12 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
         const balance = await grantCredits(orgId, pack.credits, reason, null);
         await markGranted(svc, orderId, null);
         recordFunnel("payment_succeeded", { orgId, meta: { kind: "credits", pack: pack.id, amount: order.amount } });
-        void sendPaymentReceipt({ orgId, orderId, amount: order.amount, kind: "credits", ref,
-          label: `${pack.credits.toLocaleString("en-IN")} credits` });
+      /* Awaited for the same reason as the plan receipt above. */
+    /* Awaited and wrapped, for the reason given at the plan receipt above. */
+        try {
+          await sendPaymentReceipt({ orgId, orderId, amount: order.amount, kind: "credits", ref,
+            label: `${pack.credits.toLocaleString("en-IN")} credits` });
+        } catch (e: any) { console.error(`[settle] credits receipt for ${orderId} failed —`, e?.message); }
         return { orgId, ok: true, kind: "credits", credits: pack.credits, balance };
       } catch (e: any) {
         /*

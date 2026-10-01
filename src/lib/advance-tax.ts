@@ -82,6 +82,8 @@
  * Pure and dependency-free, so scripts/test-advance-tax.mjs can execute it.
  */
 
+import { istToday } from "./statutory.ts";
+
 /** Rendered on screen. A fact about when a human last checked, not a promise. */
 export const ADVANCE_TAX_AS_OF = "Advance-tax rules · last verified September 2026";
 
@@ -284,8 +286,36 @@ export function computeAdvanceTax(input: {
  * Returns null after 15 March, when nothing is left to pay for the year.
  */
 export function nextInstalment(today: Date, presumptive = false): { by: string; date: Date; daysAway: number } | null {
-  const y = today.getUTCFullYear();
-  const m = today.getUTCMonth();       // 0 = January
+  /*
+    ==========================================================================
+    IST CALENDAR COMPONENTS, NOT UTC ONES
+    ==========================================================================
+
+    This read `today.getUTCFullYear/getUTCMonth/getUTCDate()`. The instant is
+    correct — the component is "use client", so `new Date()` is the user's own
+    clock — but the UTC *components* of that instant are yesterday's for the
+    5h30m after midnight IST. Three wrong answers followed, all about a date
+    that costs money under s.234C:
+
+      16 Jun, 02:00 IST   UTC date is the 15th, so `ref` is the 15th, days = 0,
+                          and the page says "Next instalment: 15 Jun — today".
+                          It was due YESTERDAY. The customer is told they are
+                          still on time while interest is already accruing.
+
+      15 Jun, 02:00 IST   "in 1 day" for something due today.
+
+      1 Apr,  02:00 IST   getUTCMonth() is 2 (March), so fyStartYear = y - 1 and
+                          the function walks LAST year's four dates, all past,
+                          and returns null. On the first day of the financial
+                          year the page shows no next instalment at all.
+
+    istToday() is the repo's established answer to exactly this (it is why
+    /compliance and /gst are correct) and gives calendar parts in Asia/Kolkata
+    whatever timezone the clock is read in — so this is right on the server too
+    if the function is ever called there.
+  */
+  const { y, m: m1, d: dayOfMonth } = istToday(today);
+  const m = m1 - 1;                    // istToday is 1-based; the rest here is 0-based
   /* FY starts in April: Jan–Mar belong to the FY that began LAST calendar year. */
   const fyStartYear = m >= 3 ? y : y - 1;
 
@@ -298,7 +328,7 @@ export function nextInstalment(today: Date, presumptive = false): { by: string; 
         { by: "15 Mar", date: new Date(Date.UTC(fyStartYear + 1, 2, 15)) },
       ];
 
-  const ref = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const ref = Date.UTC(y, m, dayOfMonth);
   for (const d of dates) {
     const days = Math.round((d.date.getTime() - ref) / 86_400_000);
     if (days >= 0) return { by: d.by, date: d.date, daysAway: days };

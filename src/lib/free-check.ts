@@ -142,6 +142,28 @@ export function analyseLedger(rows: FreeCheckRow[], now: number = Date.now()): F
   };
   if (!rows.length) return out;
 
+  /*
+    COMPARE DATES TO TODAY'S DATE, NOT TO THIS INSTANT.
+
+    Every date here is parsed to UTC midnight by parseDate(), and the tests
+    below were `deadline < now` / `issued + 45*DAY < now` against a wall-clock
+    millisecond. UTC midnight of the due date passes `now` at 00:00 UTC, which
+    is 05:30 IST — so an invoice became "overdue" at half past five in the
+    morning ON ITS OWN DUE DATE, with `days` computed as 0.
+
+    Everything else in the product treats due-today as not-yet-overdue
+    (metrics.ts, worst-invoice.ts, /receivables), and this is the PUBLIC
+    lead-magnet tool — the first number a prospect ever sees from Cortex. It
+    reporting more overdue invoices than the product then shows them is the
+    worst possible place for the two to disagree.
+
+    Reducing `now` to its IST calendar date and comparing date-to-date makes
+    the boundary exact and keeps the injected `now` in the tests meaningful.
+  */
+  const todayMs = Date.parse(`${new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date(now))}T00:00:00Z`);
+
   const byParty = new Map<string, { amount: number; overdue: number }>();
   let anyDate = false;
   let oldest = { days: 0, party: "" };
@@ -172,8 +194,8 @@ export function analyseLedger(rows: FreeCheckRow[], now: number = Date.now()): F
       guess as a fact.
     */
     const deadline = due ?? (issued !== null ? issued + 30 * DAY : null);
-    if (deadline !== null && deadline < now) {
-      const days = Math.floor((now - deadline) / DAY);
+    if (deadline !== null && deadline < todayMs) {
+      const days = Math.floor((todayMs - deadline) / DAY);
       out.overdueCount++;
       out.overdueValue += value;
       cur.overdue += value;
@@ -189,7 +211,7 @@ export function analyseLedger(rows: FreeCheckRow[], now: number = Date.now()): F
       that way. Claiming it as a certainty would be the same overreach the
       in-product module was rewritten to remove.
     */
-    if (issued !== null && issued + 45 * DAY < now) {
+    if (issued !== null && issued + 45 * DAY < todayMs) {
       out.msmeAtRisk += value;
       out.msmeCount++;
     }

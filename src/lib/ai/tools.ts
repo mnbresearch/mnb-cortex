@@ -1,4 +1,5 @@
 import "server-only";
+import { daysPastDueIST } from "@/lib/statutory";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -42,11 +43,24 @@ const clampLimit = (n: any, fallback = 5) => {
   return Math.min(Math.floor(v), MAX_ROWS);
 };
 
+/*
+  `Math.round((Date.now() - dueUTCmidnight) / 86_400_000)` crosses the half-day
+  mark at 12:00 UTC = 17:30 IST, so from half past five every evening an
+  invoice due TODAY came back as `days_past_due: 1`.
+
+  That value is not merely displayed — it is handed to Gemini, and the
+  `only_overdue` filter is `days_past_due > 0`. So asked "who should I chase?"
+  after 17:30, the assistant named a customer whose invoice was not yet late,
+  with a specific number of days attached. A model will not second-guess a
+  figure the tool hands it.
+
+  daysPastDueIST is the one definition, anchored on IST midnight. Null stays
+  null: no due date means the model is told nothing rather than told zero.
+*/
 const days = (from: string | null | undefined): number | null => {
   if (!from) return null;
-  const t = new Date(from).getTime();
-  if (Number.isNaN(t)) return null;
-  return Math.round((Date.now() - t) / 86_400_000);
+  if (!Number.isFinite(new Date(String(from)).getTime())) return null;
+  return daysPastDueIST(from);
 };
 
 /**

@@ -283,6 +283,79 @@ export function istToday(now = new Date()): { y: number; m: number; d: number } 
 }
 
 /**
+ * Today's IST calendar date as "YYYY-MM-DD".
+ *
+ * lib/metrics.ts already computed exactly this inline, with en-CA, to decide
+ * which receivables are overdue — and it is the only place in the product that
+ * got it right. Five other places wrote `new Date().toISOString().slice(0,10)`
+ * instead, which is the UTC date and therefore YESTERDAY's for the 5h30m after
+ * midnight IST. Exported here so the comparison has one definition rather than
+ * six, and so the correct one is the easy one to reach for.
+ */
+export function istTodayISO(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(now);
+}
+
+/**
+ * Whole days a dated invoice is past due, in IST. NEGATIVE means not yet due.
+ *
+ * ============================================================================
+ * WHY `Math.round(…/86_400_000)` WAS WRONG IN TWO SEPARATE WAYS
+ * ============================================================================
+ *
+ * Four places computed ageing as `Math.round((Date.now() - due) / 86_400_000)`
+ * where `due` is a date-only column parsed as UTC MIDNIGHT. Both halves fail:
+ *
+ *   ROUNDING. The half-day crossover is at 12:00 UTC, which is 17:30 IST. So
+ *   from half past five every evening, an invoice due TODAY rounds up to "1
+ *   day past due". /receivables therefore printed an overdue total that
+ *   included every invoice due that day, while the dashboard — using the
+ *   correct string comparison in metrics.ts — printed a smaller one. Two
+ *   screens of the same product disagreeing about the same rupees, every
+ *   evening.
+ *
+ *   THE UTC ANCHOR. Measuring from `Date.now()` rather than from today's IST
+ *   midnight makes the answer depend on the time of day at all, which a count
+ *   of whole days between two calendar dates must not.
+ *
+ * The worst instance reached a customer's inbox: lib/actions.ts put this
+ * number into the reminder email body, so a debtor could be told their
+ * invoice was a day later than it was — in our customer's name.
+ *
+ * ============================================================================
+ * HOW THIS ONE IS CORRECT
+ * ============================================================================
+ *
+ * Both sides are reduced to a calendar date first, then both are parsed at UTC
+ * midnight and subtracted. The UTC parsing is not a bug here but the point:
+ * once both operands are date-only, UTC is just a fixed origin, both are
+ * shifted identically, and the difference is exact whole days with no
+ * rounding, no time-of-day term and no DST. lib/worst-invoice.ts has worked
+ * this way all along; this generalises it instead of adding a seventh variant.
+ *
+ * Returns 0 for a missing or unparseable date — the callers all treat "no due
+ * date" as "not overdue", which is the safe direction for a figure that
+ * decides whether to chase someone.
+ */
+export function daysPastDueIST(due: unknown, now = new Date()): number {
+  if (!due) return 0;
+  const iso = String(due).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    /* Not a date-only column — a timestamp, say. Reduce it to its IST calendar
+       date rather than giving up, so a mixed-shape import still ages. */
+    const t = new Date(String(due)).getTime();
+    if (!Number.isFinite(t)) return 0;
+    return daysPastDueIST(istTodayISO(new Date(t)), now);
+  }
+  const dueMs = Date.parse(`${iso}T00:00:00Z`);
+  const todayMs = Date.parse(`${istTodayISO(now)}T00:00:00Z`);
+  if (!Number.isFinite(dueMs) || !Number.isFinite(todayMs)) return 0;
+  return Math.round((todayMs - dueMs) / 86_400_000);
+}
+
+/**
  * Everything falling due within `withinDays`, soonest first.
  *
  * Only ever looks FORWARD. A missed deadline is not something Cortex can help

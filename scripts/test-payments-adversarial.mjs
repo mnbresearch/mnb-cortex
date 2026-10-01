@@ -500,17 +500,44 @@ console.log("\nOUR OWN RECEIPT — the gateway's carries the wrong product name"
 
   /* Mail must never affect whether the customer got what they paid for. */
   /*
-    THE PROPERTY, NOT A COUNT. This was `>= 3 occurrences of "void
-    sendPaymentReceipt"`, which broke when the read-back-success path stopped
-    returning early and fell through to the common tail — one fewer call site,
-    same guarantee, and the duplicated receipt was the thing removed. Counting
-    call sites asserts the shape of the code; what matters is that EVERY call is
-    fire-and-forget, so mail can never decide whether a paid customer got their
-    plan.
+    THE PROPERTY, NOT A COUNT — and then, once, not the property either.
+
+    This started as `>= 3 occurrences of "void sendPaymentReceipt"`, which
+    broke when a call site legitimately disappeared. It was rewritten to
+    "EVERY call is fire-and-forget", which reads like the property and is
+    still a shape: `void` is ONE WAY to stop mail breaking a grant, and it is
+    the way that costs the receipt.
+
+    On Vercel a function can be frozen the moment it responds, and this
+    codebase has no waitUntil or after() (Next 14.2 has neither). `void` meant
+    sendPaymentReceipt's three reads and its Resend call had not resolved when
+    settleOrder returned — so the receipt was lost, and so was the
+    `email_sends` row that would have recorded the loss. This assertion was
+    pinning that in place.
+
+    The actual guarantee has two parts, and both are checked now:
+
+      1. the receipt call cannot throw into the settle path   → try/catch
+      2. the grant has already committed before it runs        → ordering
+
+    An awaited call inside try/catch satisfies the first as locally and
+    provably as `void` did, without destroying the thing being sent.
   */
   const receiptCalls = settle.match(/\w*\s*sendPaymentReceipt\(/g) || [];
-  check(`every receipt call is fire-and-forget (${receiptCalls.length} found)`,
-        receiptCalls.length >= 2 && receiptCalls.every((c) => /void\s*sendPaymentReceipt\(/.test(c)));
+  check(`every receipt call is awaited (${receiptCalls.length} found)`,
+        receiptCalls.length >= 2 && receiptCalls.every((c) => /await\s*sendPaymentReceipt\(/.test(c)),
+        "`void` loses the receipt on a serverless freeze — the charge the customer " +
+        "least recognises is the one with no confirmation");
+  check("...and cannot throw into the grant",
+        [...settle.matchAll(/await\s*sendPaymentReceipt\(/g)].every((m) => {
+          /* A `try {` within the 400 characters before the call, with no
+             intervening `}` closing it — enough to tell a wrapped call from
+             one that merely sits in a function containing a try elsewhere. */
+          const before = settle.slice(Math.max(0, m.index - 400), m.index);
+          const t = before.lastIndexOf("try {");
+          return t !== -1 && !before.slice(t).includes("} catch");
+        }),
+        "the grant has already committed; a mail failure must not unwind it");
   check("...and the sender never throws", /return sendEmail\(/.test(r) && !/throw /.test(r));
 }
 

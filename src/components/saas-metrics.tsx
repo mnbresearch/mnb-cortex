@@ -55,7 +55,7 @@ export function SaasMetrics({ seed }: { seed?: WorkspaceSeed } = {}) {
 
   async function analyse() {
     setLoading(true); setOut("");
-    const input = `SaaS metrics: ${customers} customers, ARPU ₹${arpu}/mo, monthly churn ${churn}%, ${newPerMonth} new customers/mo, CAC ₹${cac}, gross margin ${grossMargin}%. Computed: MRR ${inr(m.mrr)}, ARR ${inr(m.arr)}, LTV ${m.ltv === Infinity ? "n/a" : inr(m.ltv)}, LTV:CAC ${m.ratio === Infinity ? "n/a" : m.ratio.toFixed(1)}x, CAC payback ${m.paybackMonths.toFixed(1)} months, net new ${m.netNew.toFixed(0)}/mo (${m.growthPct.toFixed(1)}% growth). What are the 3 highest-leverage moves to improve these, and which metric is the real constraint?`;
+    const input = `SaaS metrics: ${customers} customers, ARPU ₹${arpu}/mo, monthly churn ${churn}%, ${newPerMonth} new customers/mo, CAC ₹${cac}, gross margin ${grossMargin}%. Computed: MRR ${inr(m.mrr)}, ARR ${inr(m.arr)}, LTV ${m.ltv === Infinity ? "n/a" : inr(m.ltv)}, LTV:CAC ${m.ratio === Infinity ? "n/a" : m.ratio.toFixed(1)}x, CAC payback ${m.paybackMonths === Infinity ? "n/a" : `${m.paybackMonths.toFixed(1)} months`}, net new ${m.netNew.toFixed(0)}/mo (${m.growthPct.toFixed(1)}% growth). What are the 3 highest-leverage moves to improve these, and which metric is the real constraint?`;
     try {
       const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "strategy", input }) });
       const j = await r.json(); setOut(j.text || "No response.");
@@ -95,7 +95,13 @@ export function SaasMetrics({ seed }: { seed?: WorkspaceSeed } = {}) {
         <Stat label="LTV" value={m.ltv === Infinity ? "—" : inr(m.ltv)} />
         <Stat label="Avg. lifetime" value={m.lifetimeMonths === Infinity ? "—" : `${m.lifetimeMonths.toFixed(1)} mo`} />
         <Stat label="LTV : CAC" value={m.ratio === Infinity ? "—" : `${m.ratio.toFixed(1)}x`} cls={ratioTone} />
-        <Stat label="CAC payback" value={`${m.paybackMonths.toFixed(1)} mo`} cls={payTone} />
+        {/* `Infinity.toFixed(1)` renders the literal string "Infinity". The
+             three stats above all guard for it and this one did not, so
+             clearing ARPU or Gross margin — `Number("") === 0`, on any
+             keystroke — printed "CAC payback Infinity mo" in red. The same
+             value went unguarded into the AI prompt above, where the model
+             would read it as a figure about the business. */}
+        <Stat label="CAC payback" value={m.paybackMonths === Infinity ? "—" : `${m.paybackMonths.toFixed(1)} mo`} cls={payTone} />
         <Stat label="Net new / mo" value={`${m.netNew >= 0 ? "+" : ""}${m.netNew.toFixed(0)}`} cls={m.netNew >= 0 ? "text-success" : "text-danger"} />
         <Stat label="Monthly growth" value={`${m.growthPct.toFixed(1)}%`} cls={m.growthPct >= 0 ? "text-success" : "text-danger"} />
       </div>

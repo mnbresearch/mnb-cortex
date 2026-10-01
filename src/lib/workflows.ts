@@ -5,6 +5,7 @@ import { withOrgAiKeys } from "@/lib/ai/byo";
 import { recomputeMetrics } from "@/lib/metrics";
 import { sendEmail } from "@/lib/email";
 import { brandFrom } from "@/lib/branded-email";
+import { istTodayISO } from "@/lib/statutory";
 
 /**
  * The workflow executor.
@@ -68,7 +69,12 @@ export async function executeWorkflow(
         }
 
         case "receivables": {
-          const today = new Date().toISOString().slice(0, 10);
+          /* IST. The UTC date is yesterday's for 5h30m after midnight IST, so
+             the `due_date < today` filter below dropped invoices that went
+             overdue yesterday — understating both the count and the rupee
+             total that go out in the workflow email. Same fix as
+             sendReminderAI; metrics.ts was always correct. */
+          const today = istTodayISO();
           const { data } = await svc.from("invoices")
             .select("party,amount,due_date,status").eq("org_id", orgId).eq("type", "receivable")
             .or("status.is.null,status.not.ilike.paid").limit(500);

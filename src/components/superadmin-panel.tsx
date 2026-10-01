@@ -189,13 +189,35 @@ export function OrgManager({ org }: { org: ManagedOrg }) {
   */
   const dirty = plan !== (org.plan || "watch") || status !== (org.subscription_status || "trialing");
 
+  /*
+    The spinner has to stop even when the request never answers.
+
+    `call()` is a bare `fetch` + `r.json()`; both reject on a network drop or
+    an HTML error page. With no catch here, the rejection was unhandled,
+    `setBusy("")` never ran and no message was set — so "Revoke" or "Set to"
+    on a paying workspace spun forever and the operator learned nothing about
+    whether the mutation landed. `confirmRun` below calls this with `void`,
+    so there was nowhere else for the failure to surface.
+
+    This is the one card in the product where the two-click confirm exists
+    precisely because the actions are destructive; leaving their outcome
+    ambiguous is the opposite of that care.
+  */
   async function run(tag: string, extra: Record<string, any>) {
     setBusy(tag); setMsg("");
-    const j = await call("manage", { org_id: org.id, ...extra });
-    setBusy("");
-    if (!j.ok) { setMsg(j.error || "Failed"); return; }
-    if (typeof j.credits === "number") setCredits(j.credits);
-    setMsg(j.creditsWarning || "Saved.");
+    try {
+      const j = await call("manage", { org_id: org.id, ...extra });
+      if (!j.ok) { setMsg(j.error || "Failed"); return; }
+      if (typeof j.credits === "number") setCredits(j.credits);
+      setMsg(j.creditsWarning || "Saved.");
+    } catch (e: any) {
+      /* Deliberately does NOT say the change failed — the request may well
+         have reached the server and committed. Reloading is the only way to
+         find out, so that is what it tells the operator to do. */
+      setMsg(`Couldn't reach the server (${e?.message || "network error"}). Reload to see whether this applied.`);
+    } finally {
+      setBusy("");
+    }
   }
 
   /*

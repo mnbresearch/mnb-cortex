@@ -432,7 +432,7 @@ export async function handleRefundEvent(
       if (a.error) console.error("[refund] customer alert not written:", a.error.message);
     }
 
-    emitQuietly(orgId, "payment.refunded", {
+    await emitQuietly(orgId, "payment.refunded", {
       order_id: orderId, kind, ref, amount: paid, refunded: totalRefunded,
       event: type, action, detail, share: plan.share,
     });

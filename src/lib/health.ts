@@ -375,8 +375,22 @@ async function checkEmail(): Promise<Check> {
     only when it is not already open, because an alert that arrives on every
     blip is an alert that gets filtered.
   */
+  /*
+    Awaited. `/api/health` is polled by uptime monitors — short, fast requests,
+    the worst possible host for trailing async work, because the function can
+    be frozen the moment it answers. `void` here meant the operator_alerts row
+    and the escalation email for a CONFIRMED email-provider fault could be
+    dropped by the very request that detected it.
+
+    The comment above exists because "the incident that prompted all of this
+    was found by a person reading the status page by hand; nothing alerted."
+    Raising the alert and then not waiting for it to be written reproduces that
+    in miniature. alertEmailFault has its own try/catch and cannot throw, and
+    it no-ops when an alert is already open, so awaiting costs one round trip
+    on the rare non-operational poll and nothing at all on the common one.
+  */
   if (v.status !== "operational" && !v.fromDeliveries) {
-    void alertEmailFault(v.status, v.detail, correlationId);
+    await alertEmailFault(v.status, v.detail, correlationId);
   }
 
   return {

@@ -11,6 +11,7 @@ import { capRows, accountForRows, topWarning, REVALIDATE_AFTER_IMPORT } from "@/
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { fail, type ActionResult } from "@/lib/action-result";
+import { istTodayISO, daysPastDueIST } from "@/lib/statutory";
 
 async function requireOrg() {
   const { orgId } = await getUserAndOrg();
@@ -442,7 +443,21 @@ export async function sendReminderAI(): Promise<ActionResult | void> {
 
   // Was hardcoded to "Apex Traders ₹18 L (48 days)" — a real email, to the real
   // customer, about a company that does not exist. Read their actual ledger.
-  const today = new Date().toISOString().slice(0, 10);
+  /*
+    IST, not UTC.
+
+    This was `new Date().toISOString().slice(0, 10)`, which is the UTC date —
+    yesterday's, for the 5h30m after midnight IST. The filter below is
+    `String(i.due_date) < today`, so an invoice that went overdue YESTERDAY was
+    excluded, and if it was the only one the action returned "You have no
+    overdue receivables right now — nothing to chase." A false negative on the
+    product's core promise, and it suppresses the chase the owner asked for.
+
+    metrics.ts has always done this comparison correctly, in IST, which is why
+    the dashboard could show an overdue total while this said there was
+    nothing to chase.
+  */
+  const today = istTodayISO();
   const { data: rows } = await sb.from("invoices")
     .select("party,amount,due_date,status").eq("org_id", orgId).eq("type", "receivable")
     .or("status.is.null,status.not.ilike.paid").limit(500);
@@ -455,7 +470,15 @@ export async function sendReminderAI(): Promise<ActionResult | void> {
   }
 
   const total = overdue.reduce((a, i) => a + Number(i.amount || 0), 0);
-  const days = (d: any) => (d ? Math.max(0, Math.round((Date.now() - new Date(d).getTime()) / 86_400_000)) : 0);
+  /*
+    This number goes into the EMAIL BODY below — a real message, to our
+    customer's customer, in our customer's name. `Math.round` against a UTC
+    midnight flips at 17:30 IST, so a reminder sent in the evening overstated
+    the lateness by a day. Being wrong about how late someone is, in a letter
+    chasing them for money, is the one place in this product where a one-day
+    error is embarrassing rather than cosmetic.
+  */
+  const days = (d: any) => Math.max(0, daysPastDueIST(d));
   const top = overdue.slice(0, 5)
     .map((i) => `<li>${i.party || "Unnamed party"} — ₹${Number(i.amount || 0).toLocaleString("en-IN")}${i.due_date ? ` (${days(i.due_date)} days)` : ""}</li>`)
     .join("");
@@ -705,7 +728,7 @@ export async function runWorkflow(fd: FormData): Promise<ActionResult | void> {
   });
   await sb.from("workflows").update({ last_run: new Date().toISOString() }).eq("id", id).eq("org_id", orgId);
   const { emitQuietly } = await import("@/lib/webhooks");
-  emitQuietly(orgId, "workflow.completed", { name, ok: run.ok, summary: run.summary, steps: run.results });
+  await emitQuietly(orgId, "workflow.completed", { name, ok: run.ok, summary: run.summary, steps: run.results });
   await logActivity(orgId, "workflow", `Ran workflow "${name}" — ${run.summary}`);
   ["/workflows", "/dashboard", "/alerts"].forEach((p) => revalidatePath(p));
 }

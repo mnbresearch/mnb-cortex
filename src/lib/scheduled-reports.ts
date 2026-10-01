@@ -232,7 +232,7 @@ export async function runScheduledReports(budget?: Budget): Promise<ReportRun> {
         }
       }
 
-      emitQuietly(r.org_id, "report.generated", { mode: r.mode, cadence: r.cadence, to });
+      await emitQuietly(r.org_id, "report.generated", { mode: r.mode, cadence: r.cadence, to });
     } else {
       out.errors++;
     }

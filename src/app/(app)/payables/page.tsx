@@ -2,15 +2,15 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { PayablesDpo } from "@/components/payables-dpo";
 import { getInvoices, getPurchaseOrders } from "@/lib/data";
+import { daysPastDueIST } from "@/lib/statutory";
 
 export const dynamic = "force-dynamic";
 
 const n = (v: any) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
-const ageDays = (d: any) => {
-  if (!d) return 0;
-  const t = new Date(d).getTime();
-  return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 86_400_000)) : 0;
-};
+/* IST, floor-exact, shared with /receivables and the reminder emails. The
+   UTC `Math.round` this replaced flipped at 17:30 IST, so from half past five
+   a bill due today aged as one day old and inflated DPO. */
+const ageDays = (d: any) => Math.max(0, daysPastDueIST(d));
 
 export default async function Payables() {
   /*
