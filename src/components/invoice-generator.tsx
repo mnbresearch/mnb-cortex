@@ -21,12 +21,29 @@ const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumF
  * `saved` is fetched on the server and passed in so the list is populated in
  * the first paint and reflects the workspace, not this browser.
  */
-export function InvoiceGenerator({ saved = [] }: { saved?: SavedInvoice[] }) {
-  const [seller, setSeller] = useState({ name: "Your Company Pvt Ltd", gstin: "27ABCDE1234F1Z5", addr: "Mumbai, Maharashtra" });
-  const [buyer, setBuyer] = useState({ name: "Customer Name", gstin: "", addr: "" });
+export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: SavedInvoice[]; orgName?: string | null }) {
+  /*
+    PLACEHOLDER TEXT MUST NOT BE A VALUE — the same defect as /quote.
+
+    These opened pre-filled with "Your Company Pvt Ltd", a fabricated GSTIN
+    ("27ABCDE1234F1Z5"), "Mumbai, Maharashtra" and "Customer Name" as their
+    VALUES rather than placeholder attributes. Nothing cleared on focus.
+
+    On an INVOICE this is worse than on a quote. Save it unedited and the
+    workspace gains a receivable owed by "Customer Name" that ages towards
+    overdue, counts in DSO and the ageing buckets, and can surface in the
+    dashboard's "worst overdue invoice" warning as though it were a real
+    debtor. The fabricated GSTIN is worse still: a tax invoice carrying
+    someone else's format-valid GSTIN is not a document to hand a customer.
+
+    The seller is now the workspace's real name. Everything else is a true
+    placeholder, and save refuses until the buyer is named.
+  */
+  const [seller, setSeller] = useState({ name: orgName || "", gstin: "", addr: "" });
+  const [buyer, setBuyer] = useState({ name: "", gstin: "", addr: "" });
   const [meta, setMeta] = useState({ no: "INV-0001", date: new Date().toISOString().slice(0, 10) });
   const [intraState, setIntraState] = useState(true);
-  const [items, setItems] = useState<Item[]>([{ id: "1", desc: "Product / service", qty: 1, rate: 1000, gst: 18 }]);
+  const [items, setItems] = useState<Item[]>([{ id: "1", desc: "", qty: 1, rate: 1000, gst: 18 }]);
   const [due, setDue] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -42,6 +59,20 @@ export function InvoiceGenerator({ saved = [] }: { saved?: SavedInvoice[] }) {
   function del(id: string) { setItems((xs) => xs.filter((i) => i.id !== id)); }
 
   async function save() {
+    /*
+      An invoice with no buyer becomes a receivable with no one to chase —
+      it ages, counts in DSO, and can be named in the dashboard warning.
+      Refused here with an explanation; the server refuses an empty party
+      too, but by then the owner only sees "could not save".
+    */
+    if (!items.some((i) => i.desc.trim())) {
+      setSaveMsg({ ok: false, text: "Describe at least one line so the invoice says what it is for." });
+      return;
+    }
+    if (!buyer.name.trim()) {
+      setSaveMsg({ ok: false, text: "Name the customer before saving — an invoice with no buyer becomes a receivable nobody can chase." });
+      return;
+    }
     setSaving(true);
     setSaveMsg(null);
     try {
@@ -137,7 +168,7 @@ export function InvoiceGenerator({ saved = [] }: { saved?: SavedInvoice[] }) {
               <div className="flex items-center gap-2">
                 {/* title= is not an accessible name for a screen reader; these
                     four inputs were announced as "edit text" and nothing else. */}
-                <input aria-label={`Item ${n + 1} description`} className={I + " flex-1"} value={it.desc} onChange={(e) => upd(it.id, "desc", e.target.value)} />
+                <input aria-label={`Item ${n + 1} description`} placeholder="Product or service" className={I + " flex-1"} value={it.desc} onChange={(e) => upd(it.id, "desc", e.target.value)} />
                 <input aria-label={`Item ${n + 1} quantity`} className={I + " w-16"} type="number" value={it.qty} onChange={(e) => upd(it.id, "qty", e.target.value)} title="Qty" />
                 <input aria-label={`Item ${n + 1} rate`} className={I + " w-24"} type="number" value={it.rate} onChange={(e) => upd(it.id, "rate", e.target.value)} title="Rate" />
                 <input aria-label={`Item ${n + 1} GST percent`} aria-invalid={warn ? true : undefined} className={I + " w-16" + (warn ? " border-warning" : "")} type="number" value={it.gst} onChange={(e) => upd(it.id, "gst", e.target.value)} title="GST %" />

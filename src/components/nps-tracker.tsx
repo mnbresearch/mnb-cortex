@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,29 @@ export function NpsTracker({
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
   const [label, setLabel] = useState("");
   const [note, setNote] = useState("");
+
+  /*
+    THE LIST IS MIRRORED INTO STATE, AND THAT IS NOT BELT-AND-BRACES.
+
+    First attempt at this bug was router.refresh() alone. It is in the
+    deployed build and the row STILL did not disappear: the delete succeeded,
+    the note said "Removed", and the reading stayed on screen.
+
+    Why: this list renders straight from the `history` prop. router.refresh()
+    re-fetches the server tree, but called from inside the same transition
+    that is awaiting the action, the new props do not land before the user
+    has already read a screen that contradicts the message above it.
+
+    action-board.tsx solved this correctly months ago and I did not look:
+    hold the server list in state, update it optimistically, and re-sync from
+    the prop with useEffect when the authoritative version arrives. The UI is
+    then right immediately and right again when the server agrees.
+
+    The refresh stays — it is what makes the useEffect below fire with real
+    data rather than leaving local state as the only truth.
+  */
+  const [rows, setRows] = useState<WorkbenchEntry<NpsData>[]>(history);
+  useEffect(() => { setRows(history); }, [history]);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -108,6 +131,8 @@ export function NpsTracker({
     startTransition(async () => {
       const r = await deleteWorkbenchEntry(fd);
       if (r && !r.ok) { setNote(r.error); return; }
+      /* Off the screen now, not when the server tree happens to arrive. */
+      setRows((rs) => rs.filter((x) => String(x.id) !== String(id)));
       setNote(`Removed "${title}".`);
       /*
         THE ROW LEFT THE DATABASE AND STAYED ON THE SCREEN.
@@ -133,7 +158,7 @@ export function NpsTracker({
     });
   }
 
-  const series = [...history].reverse();
+  const series = [...rows].reverse();
 
   const F = (label: string, value: number, set: (n: number) => void, color: string) => (
     <label className="block">

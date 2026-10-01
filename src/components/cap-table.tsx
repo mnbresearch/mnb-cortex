@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,11 @@ export function CapTable({
   const [rounds, setRounds] = useState<Round[]>(R0);
   const [scenarioName, setScenarioName] = useState("");
   const [note, setNote] = useState("");
+
+  /* Mirrored from the prop for the reason written at length in
+     nps-tracker.tsx: router.refresh() alone left a deleted row on screen. */
+  const [saved, setSaved] = useState<WorkbenchEntry<CapTableData>[]>(scenarios);
+  useEffect(() => { setSaved(scenarios); }, [scenarios]);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -72,6 +77,7 @@ export function CapTable({
     startTransition(async () => {
       const r = await deleteWorkbenchEntry(fd);
       if (r && !r.ok) { setNote(r.error); return; }
+      setSaved((xs) => xs.filter((x) => String(x.id) !== String(s.id)));
       setNote(`Removed "${s.title}".`);
       /*
         THE ROW LEFT THE DATABASE AND STAYED ON THE SCREEN.
@@ -175,10 +181,10 @@ export function CapTable({
               {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
             </Button>
           </div>
-          {scenarios.length > 0 && (
+          {saved.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 pt-1 border-t">
               <span className="text-xs text-muted-foreground flex items-center gap-1 pt-2"><History className="h-3.5 w-3.5" /> Saved:</span>
-              {scenarios.map((s) => (
+              {saved.map((s) => (
                 <span key={s.id} className="mt-2 inline-flex items-center rounded-full border text-xs overflow-hidden">
                   <button
                     onClick={() => load(s)}

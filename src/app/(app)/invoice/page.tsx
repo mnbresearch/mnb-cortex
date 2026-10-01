@@ -3,19 +3,20 @@ import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { InvoiceGenerator } from "@/components/invoice-generator";
 import { listInvoices } from "@/lib/actions";
+import { getOrgProfile } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function Invoice() {
   // Fetched server-side so the saved list reflects the WORKSPACE, on every
   // device, rather than whatever this browser happens to remember.
-  const saved = await listInvoices();
+  const [saved, org] = await Promise.all([listInvoices(), getOrgProfile()]);
 
   return (
     <>
       <Topbar title="GST Invoice Generator" subtitle="Raise a compliant tax invoice — and keep it" />
       <PageShell>
-        <InvoiceGenerator saved={saved} />
+        <InvoiceGenerator saved={saved} orgName={org?.name ?? null} />
         <Section title="About this invoice" desc="India GST-ready">
           <div className="text-sm text-muted-foreground space-y-2">
             <p>Automatically splits tax into CGST + SGST for same-state (intra-state) supply, or IGST for inter-state &mdash; just toggle the checkbox. Add as many line items as you need, each with its own GST rate.</p>

@@ -21,7 +21,7 @@ const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumF
  * owed, and putting one in the receivables table with a special status is how a
  * pipeline number ends up inside a cash forecast.
  */
-export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
+export function QuoteBuilder({ saved = [], orgName = null }: { saved?: any[]; orgName?: string | null }) {
   const [quoteMsg, setQuoteMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busyId, setBusyId] = useState("");
   const [, startTransition] = useTransition();
@@ -92,12 +92,29 @@ export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
     );
   }
 
-  const [from, setFrom] = useState({ name: "Your Company Pvt Ltd", detail: "GSTIN · Mumbai · contact@company.com" });
-  const [to, setTo] = useState({ name: "Client Name", detail: "" });
+  /*
+    PLACEHOLDER TEXT MUST NOT BE A VALUE.
+
+    These four fields opened pre-filled with "Your Company Pvt Ltd",
+    "GSTIN · Mumbai · contact@company.com", "Client Name" and
+    "Service / product" as their VALUES. They read as placeholders and
+    behave as data: nothing clears on focus, and saveQuote accepted them
+    without complaint. A quotation addressed to a customer called "Client
+    Name", for one line item called "Service / product", saved cleanly —
+    and `Invoice it` then turned it into a real receivable carrying that
+    name, which flows into DSO, the ageing buckets and the collections
+    chase-first list.
+
+    The seller is now the workspace's real name, which the product has
+    known since signup. Everything else is a true placeholder, and save
+    refuses to proceed until the buyer is named.
+  */
+  const [from, setFrom] = useState({ name: orgName || "", detail: "" });
+  const [to, setTo] = useState({ name: "", detail: "" });
   const [meta, setMeta] = useState({ no: "QT-0001", date: new Date().toISOString().slice(0, 10), validity: 15 });
   const [gst, setGst] = useState(18);
   const [notes, setNotes] = useState("50% advance, balance on delivery. Prices valid for the period above.");
-  const [items, setItems] = useState<Item[]>([{ id: "1", desc: "Service / product", qty: 1, rate: 50000 }]);
+  const [items, setItems] = useState<Item[]>([{ id: "1", desc: "", qty: 1, rate: 50000 }]);
 
   const totals = useMemo(() => {
     const sub = items.reduce((s, it) => s + it.qty * it.rate, 0);
@@ -109,6 +126,27 @@ export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function save() {
+    /*
+      A QUOTE WITH NO BUYER MUST NOT REACH RECEIVABLES.
+
+      `Invoice it` converts a saved quote into a real invoice, which counts
+      towards DSO, the ageing buckets and the collections chase-first list.
+      Before this guard a blank (or placeholder) buyer sailed through:
+      saveQuote never checked `party`, so the workspace acquired a debtor
+      called "Client Name" and the dashboard went on to name it in the
+      "worst overdue invoice" warning as though it were a real customer.
+
+      Checked here AND in saveQuote — the server is the boundary that
+      matters, this is the one that explains itself.
+    */
+    if (!to.name.trim()) {
+      setSaveMsg({ ok: false, text: "Name the client before saving — a quote with no buyer becomes a receivable with no one to chase." });
+      return;
+    }
+    if (!items.some((i) => i.desc.trim())) {
+      setSaveMsg({ ok: false, text: "Describe at least one line so the quote says what it is for." });
+      return;
+    }
     setSaving(true); setSaveMsg(null);
     try {
       // Validity is entered as a number of days; the table stores the date it
@@ -128,7 +166,7 @@ export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
   }
 
   function upd(id: string, f: keyof Item, v: string) { setItems((xs) => xs.map((i) => i.id === id ? { ...i, [f]: f === "desc" ? v : Number(v) } : i)); }
-  function add() { setItems((xs) => [...xs, { id: Date.now() + "", desc: "Item", qty: 1, rate: 0 }]); }
+  function add() { setItems((xs) => [...xs, { id: Date.now() + "", desc: "", qty: 1, rate: 0 }]); }
   function del(id: string) { setItems((xs) => xs.filter((i) => i.id !== id)); }
 
   function print() {
@@ -157,8 +195,8 @@ export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
   return (
     <Card className="p-5 space-y-4">
       <div className="grid sm:grid-cols-2 gap-4">
-        <div className="space-y-2"><div className="text-sm font-medium">From</div><input className={I + " w-full"} value={from.name} onChange={(e) => setFrom({ ...from, name: e.target.value })} /><input className={I + " w-full"} value={from.detail} onChange={(e) => setFrom({ ...from, detail: e.target.value })} /></div>
-        <div className="space-y-2"><div className="text-sm font-medium">To</div><input className={I + " w-full"} value={to.name} onChange={(e) => setTo({ ...to, name: e.target.value })} /><input className={I + " w-full"} placeholder="Client details" aria-label="Client details" value={to.detail} onChange={(e) => setTo({ ...to, detail: e.target.value })} /></div>
+        <div className="space-y-2"><div className="text-sm font-medium">From</div><input className={I + " w-full"} placeholder="Your business name" aria-label="Your business name" value={from.name} onChange={(e) => setFrom({ ...from, name: e.target.value })} /><input className={I + " w-full"} placeholder="GSTIN · city · contact email" aria-label="Your GSTIN, city and contact" value={from.detail} onChange={(e) => setFrom({ ...from, detail: e.target.value })} /></div>
+        <div className="space-y-2"><div className="text-sm font-medium">To</div><input className={I + " w-full"} placeholder="Client name" aria-label="Client name" required value={to.name} onChange={(e) => setTo({ ...to, name: e.target.value })} /><input className={I + " w-full"} placeholder="Client details" aria-label="Client details" value={to.detail} onChange={(e) => setTo({ ...to, detail: e.target.value })} /></div>
       </div>
       <div className="flex flex-wrap gap-3 items-center">
         <input className={I} value={meta.no} onChange={(e) => setMeta({ ...meta, no: e.target.value })} placeholder="Quote #" aria-label="Quote #" />
@@ -172,7 +210,7 @@ export function QuoteBuilder({ saved = [] }: { saved?: any[] }) {
       <div className="space-y-2">
         {items.map((it) => (
           <div key={it.id} className="flex items-center gap-2">
-            <input className={I + " flex-1"} value={it.desc} onChange={(e) => upd(it.id, "desc", e.target.value)} />
+            <input className={I + " flex-1"} placeholder="Service or product" aria-label="Line item description" value={it.desc} onChange={(e) => upd(it.id, "desc", e.target.value)} />
             <input className={I + " w-16"} type="number" value={it.qty} onChange={(e) => upd(it.id, "qty", e.target.value)} title="Qty" />
             <input className={I + " w-28"} type="number" value={it.rate} onChange={(e) => upd(it.id, "rate", e.target.value)} title="Rate" />
             <button onClick={() => del(it.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button>
