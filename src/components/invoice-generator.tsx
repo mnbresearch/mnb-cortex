@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { saveInvoice, type SavedInvoice } from "@/lib/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumF
  * the first paint and reflects the workspace, not this browser.
  */
 export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: SavedInvoice[]; orgName?: string | null }) {
+  const router = useRouter();
   /*
     PLACEHOLDER TEXT MUST NOT BE A VALUE — the same defect as /quote.
 
@@ -90,6 +92,17 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
         */
         meta: { seller, buyer, items, intraState, subtotal: totals.sub, tax: totals.tax },
       });
+      /*
+        Reflect the write — see scripts/test-mutation-reflects.mjs.
+
+        This path awaits the action OUTSIDE a transition, which is why it
+        updates correctly today. The three that awaited inside startTransition
+        did not, and each was found broken in production separately. Depending
+        on that distinction means depending on an undocumented detail of how
+        React schedules a server action; an explicit refresh costs one round
+        trip and makes every mutation behave the same.
+      */
+      router.refresh();
       setSaveMsg(res.ok
         ? { ok: true, text: `Saved. ${meta.no} now appears in Receivables and counts towards your DSO.` }
         : { ok: false, text: res.error || "Could not save." });

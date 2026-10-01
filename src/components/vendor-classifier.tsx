@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Check, Loader2 } from "lucide-react";
 import { setVendorUdyam } from "@/lib/actions";
@@ -22,6 +23,7 @@ const OPTIONS: { id: string; label: string; hint: string }[] = [
 ];
 
 export function VendorClassifier({ vendors }: { vendors: any[] }) {
+  const router = useRouter();
   const [state, setState] = useState<Record<string, string>>(
     Object.fromEntries(vendors.map((v) => [v.id, v.udyam_category || ""])),
   );
@@ -36,7 +38,8 @@ export function VendorClassifier({ vendors }: { vendors: any[] }) {
       fd.set("id", id);
       fd.set("udyam_category", category);
       const res = await setVendorUdyam(fd);
-      if (!res?.ok) setState((s) => ({ ...s, [id]: prev }));   // put it back
+      if (!res?.ok) { setState((s) => ({ ...s, [id]: prev })); return; }   // put it back
+      router.refresh();   // reflect the write; see test-mutation-reflects.mjs
     } catch {
       setState((s) => ({ ...s, [id]: prev }));
     } finally { setBusy(null); }

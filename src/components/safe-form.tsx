@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, RotateCcw } from "lucide-react";
 import {
   isControlFlowException, isActionResult, messageForThrown, classifyFailure,
@@ -75,6 +76,7 @@ export function SafeForm({
   */
   const lastSubmission = useRef<FormData | null>(null);
   const [retrying, startTransition] = useTransition();
+  const router = useRouter();
 
   async function run(fd: FormData) {
     setError(null);
@@ -93,6 +95,32 @@ export function SafeForm({
         announce(setError, result.error, noteRef);
         return;
       }
+      /*
+        THE SCREEN MUST REFLECT THE WRITE. THIS IS THE ONE PLACE TO SAY IT.
+
+        Server actions here call revalidatePath() and it genuinely works —
+        the data is right on the next full load. But revalidatePath marks a
+        ROUTE stale; it does not re-render a client component that is already
+        mounted, and the client router cache keys on the FULL url including
+        its query string, which revalidatePath does not carry.
+
+        /data proved both halves at once. Deleting an invoice from the Data
+        Explorer at `/data?table=invoices&q=ZZ` removed the row from the
+        database and left it on screen. An owner tidying up a bad import sees
+        a Delete button that does nothing, clicks it again, and is told the
+        record is already gone — which reads as a bug in their data rather
+        than in our rendering.
+
+        SafeForm wraps every form-based mutation in the product (18 call
+        sites), so the fix belongs here rather than in eighteen components.
+        The same defect was fixed by hand twice this week — /nps and
+        /captable — before anyone noticed it had a single shared cause.
+
+        AFTER SUCCESS ONLY. Refreshing after a returned failure would re-render
+        the tree and discard the error message before it could be read; the
+        early `return` above is what keeps those two apart.
+      */
+      router.refresh();
       if (successMessage) setDone(successMessage);
     } catch (e) {
       /*

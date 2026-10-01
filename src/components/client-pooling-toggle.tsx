@@ -1,5 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { setClientPooling } from "@/lib/actions";
 import { Loader2, Wallet, WalletMinimal } from "lucide-react";
 
@@ -26,6 +27,7 @@ import { Loader2, Wallet, WalletMinimal } from "lucide-react";
   thing to fix.
 */
 export function ClientPoolingToggle({ orgId, clientName, pooled }: { orgId: string; clientName: string; pooled: boolean }) {
+  const router = useRouter();
   const [on, setOn] = useState(pooled);
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
@@ -38,8 +40,9 @@ export function ClientPoolingToggle({ orgId, clientName, pooled }: { orgId: stri
       fd.set("client", orgId);
       fd.set("on", next ? "1" : "0");
       const r = await setClientPooling(fd);
-      if (r.ok) setOn(next);
-      else setErr(r.error || "Could not change that.");
+      if (!r.ok) { setErr(r.error || "Could not change that."); return; }
+      setOn(next);
+      router.refresh();   // reflect the write; see test-mutation-reflects.mjs
     });
   }
 

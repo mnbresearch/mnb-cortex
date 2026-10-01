@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { saveQuote, setQuoteStatus, convertQuoteToInvoice } from "@/lib/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumF
  * pipeline number ends up inside a cash forecast.
  */
 export function QuoteBuilder({ saved = [], orgName = null }: { saved?: any[]; orgName?: string | null }) {
+  const router = useRouter();
   const [quoteMsg, setQuoteMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busyId, setBusyId] = useState("");
   const [, startTransition] = useTransition();
@@ -157,6 +159,7 @@ export function QuoteBuilder({ saved = [], orgName = null }: { saved?: any[]; or
         quote_no: meta.no, party: to.name, amount: totals.grand, valid_until: validUntil,
         meta: { from, to, items, gst, notes, subtotal: totals.sub, tax: totals.tax },
       });
+      router.refresh();   // reflect the write; see test-mutation-reflects.mjs
       setSaveMsg(res.ok
         ? { ok: true, text: `Saved. ${meta.no} is kept in this workspace — it is not counted as money owed until you invoice it.` }
         : { ok: false, text: res.error || "Could not save." });

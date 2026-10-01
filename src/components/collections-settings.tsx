@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Check, AlertCircle } from "lucide-react";
@@ -20,6 +21,7 @@ const I = "rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:
  * that removes the human from the loop.
  */
 export function CollectionsSettings({ policy, whatsappReady }: { policy: Policy; whatsappReady: boolean }) {
+  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [channels, setChannels] = useState<string[]>(policy.channels);
@@ -30,6 +32,7 @@ export function CollectionsSettings({ policy, whatsappReady }: { policy: Policy;
     try {
       const r = await saveCollectionPolicy(fd);
       setMsg(r.ok ? { ok: true, text: "Saved." } : { ok: false, text: r.error || "Could not save." });
+      if (r.ok) router.refresh();   // reflect the write; see test-mutation-reflects.mjs
     } catch { setMsg({ ok: false, text: "Could not reach the server." }); }
     finally { setSaving(false); }
   }
