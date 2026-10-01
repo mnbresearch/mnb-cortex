@@ -83,12 +83,33 @@ export async function runScheduledReports(budget?: Budget): Promise<ReportRun> {
   const svc = serviceClient();
   if (!svc) return out;
 
+  /*
+    A FAILED FETCH USED TO BE INDISTINGUISHABLE FROM "NOBODY HAS REPORTS".
+
+    This was `catch { return out; }` with the error never read. Since PostgREST
+    returns `{ data: null, error }` rather than throwing, a rejected query left
+    `rows = []`, the loop did nothing, and the cron recorded a perfectly normal
+    `{ checked: 0, sent: 0, errors: 0 }`. Every subscriber's report silently
+    stops arriving and the run that dropped them reports full health.
+
+    Counting it as an error is what makes it visible: the cron's own status
+    already fails on errors, so the outage surfaces instead of averaging away.
+  */
   let rows: any[] = [];
   try {
-    const { data } = await svc.from("scheduled_reports")
+    const { data, error } = await svc.from("scheduled_reports")
       .select("id, org_id, mode, cadence, send_to, last_sent").eq("is_active", true).limit(300);
+    if (error) {
+      console.error("[scheduled-reports] could not read the schedule —", error.message);
+      out.errors++;
+      return out;
+    }
     rows = (data as any[]) || [];
-  } catch { return out; }
+  } catch (e: any) {
+    console.error("[scheduled-reports] reading the schedule threw —", e?.message);
+    out.errors++;
+    return out;
+  }
 
   for (const r of rows) {
     // A report is an AI call plus an email: up to ~8s. `last_sent` is the guard,
@@ -129,8 +150,88 @@ export async function runScheduledReports(budget?: Budget): Promise<ReportRun> {
     const res = await sendEmail(to, title, html, { from: brandFrom() });
     if (res.sent) {
       out.sent++;
-      // last_sent is the idempotency guard — only advance it on a real send.
-      try { await svc.from("scheduled_reports").update({ last_sent: new Date().toISOString() }).eq("id", r.id); } catch {}
+      /*
+        ======================================================================
+        `last_sent` IS THE ONLY IDEMPOTENCY GUARD, AND IT WAS WRITTEN INTO A
+        `catch {}` THAT COULD NOT CATCH
+        ======================================================================
+
+        The line above this one used to say so itself — "last_sent is the
+        idempotency guard — only advance it on a real send" — and then advanced
+        it with `try { ...update... } catch {}`. PostgREST reports a failed
+        update by returning `{ error }`; it does not throw. A zero-row update
+        does not even return an error. So the guard's write had no handling of
+        any kind for either way it can fail.
+
+        What a stale `last_sent` costs, via isDue() above:
+
+          !lastSent            → due
+          weekly               → due once `since >= 6.5 days`
+          monthly              → due once `since >= 28 days`
+
+        The cron runs daily (`30 4 * * *`). So a WEEKLY report whose guard fails
+        to advance is due again tomorrow morning, and the morning after, and
+        every morning until someone intervenes. Each run:
+
+          · charges the workspace's AI credits (chargeOrgForMode, above)
+          · generates the report
+          · emails it to the customer
+
+        The customer gets their "weekly" summary daily and pays for each one. A
+        brand-new weekly report whose very first guard write fails has
+        `last_sent = null`, which isDue() treats as due — so it loops from the
+        first day. A daily report is unaffected, which is exactly why this could
+        sit here unnoticed: the common case looks right.
+
+        One retry, then an alert. The guard lives in the database, so if the
+        database will not take it there is nothing in this process that can
+        stop the loop — but an operator can, and they cannot act on a failure
+        nobody records. It is also counted as an error rather than a clean
+        send, because a send we cannot remember making is not a success.
+      */
+      let guarded = false;
+      for (let attempt = 0; attempt < 2 && !guarded; attempt++) {
+        try {
+          const { data: marked, error } = await svc.from("scheduled_reports")
+            .update({ last_sent: new Date().toISOString() })
+            .eq("id", r.id)
+            .select("id");
+          guarded = !error && (marked?.length ?? 0) > 0;
+          if (!guarded) {
+            console.error(
+              `[scheduled-reports] attempt ${attempt + 1}: could not advance last_sent for ${r.id} —`,
+              error ? error.message : `matched ${marked?.length ?? 0} rows`);
+          }
+        } catch (e: any) {
+          console.error(`[scheduled-reports] attempt ${attempt + 1} threw for ${r.id} —`, e?.message);
+        }
+      }
+
+      if (!guarded) {
+        out.errors++;
+        try {
+          const { operatorAlert } = await import("@/lib/operator-alert");
+          await operatorAlert({
+            kind: "report_guard_unwritten",
+            severity: r.cadence === "daily" ? "amber" : "red",
+            orgId: String(r.org_id),
+            title: `Scheduled report ${r.id} sent but not marked (${r.cadence})`,
+            body:
+              `A ${r.cadence} ${r.mode} report was emailed to ${to} and ` +
+              `scheduled_reports.last_sent could not be advanced.\n\n` +
+              (r.cadence === "daily"
+                ? `Cadence is daily, so the next run is due anyway — no duplicate ` +
+                  `will be sent. Still worth finding out why the write failed.`
+                : `THE CRON RUNS DAILY AND last_sent IS THE ONLY GUARD, so this ` +
+                  `report will be regenerated, recharged and resent EVERY MORNING ` +
+                  `until last_sent is set or is_active is turned off. Set ` +
+                  `last_sent on row ${r.id} now.`),
+          });
+        } catch (e: any) {
+          console.error(`[scheduled-reports] guard alert failed for ${r.id} —`, e?.message);
+        }
+      }
+
       emitQuietly(r.org_id, "report.generated", { mode: r.mode, cadence: r.cadence, to });
     } else {
       out.errors++;

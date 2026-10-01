@@ -5,6 +5,37 @@ import { isSuperAdmin } from "@/lib/superadmin";
 import { PLAN_CREDITS, creditCost, IMAGE_WEEKLY, VIDEO_WEEKLY, TRIAL_CREDITS } from "@/lib/config";
 
 const RESET_DAYS = 30;
+
+/**
+ * Roll the monthly allowance, and say so when it does not roll.
+ *
+ * Both call sites were `try { await svc.rpc("sync_allowance", ...) } catch {}`.
+ * This one is NOT a correctness bug — the charge immediately below it reads the
+ * balance fresh, so a failed sync denies the call rather than over-granting,
+ * which is the safe direction. It is a diagnosis bug, and an expensive one:
+ *
+ *   the customer sees "you're out of credits" on a plan they are paying for
+ *   the ledger shows no grant, because the grant never happened
+ *   nothing anywhere records that the top-up was attempted and refused
+ *
+ * Support then cannot tell that case apart from genuine exhaustion, which is
+ * the difference between "your allowance failed to roll, fixed, sorry" and
+ * telling a paying customer to buy more credits they already own.
+ *
+ * Deliberately does not throw or surface to the user. A failed roll must not
+ * turn into a failed request when the charge can still legitimately succeed on
+ * the balance already there.
+ */
+async function syncAllowance(svc: any, orgId: string, amount: number, whose: "own" | "firm"): Promise<void> {
+  try {
+    const { error } = await svc.rpc("sync_allowance", { p_org: orgId, p_amount: amount, p_days: RESET_DAYS });
+    if (error) {
+      console.error(`[credits] ${whose} allowance did not roll for ${orgId} (${amount}) —`, error.message);
+    }
+  } catch (e: any) {
+    console.error(`[credits] ${whose} allowance sync threw for ${orgId} (${amount}) —`, e?.message);
+  }
+}
 const WEEK_MS = 7 * 86_400_000;
 
 export type CreditState = {
@@ -121,13 +152,26 @@ export async function getCreditState(): Promise<CreditState> {
       if (svc) {
         try {
           const { data: nb, error: rpcErr } = await svc.rpc("sync_allowance", { p_org: meterOrgId, p_amount: allowance, p_days: RESET_DAYS });
+          /* Falling back to the stored balance is right — the number shown is
+             then simply pre-roll rather than wrong. Logging is what lets
+             support tell "allowance didn't roll" apart from "genuinely spent",
+             which from the customer's side look identical. */
+          if (rpcErr) console.error(`[credits] allowance did not roll for ${meterOrgId} (${allowance}) —`, rpcErr.message);
           if (!rpcErr && typeof nb === "number") {
             balance = nb;
             // reflect the advanced reset date
             const { data: fresh } = await svc.from("organizations").select("credits_reset_at").eq("id", meterOrgId).single();
             resetAt = (fresh as any)?.credits_reset_at ?? resetAt;
           }
-        } catch { /* rpc missing — leave balance as read */ }
+        } catch (e: any) {
+          /* The documented case is sync_allowance not existing yet on a
+             database where the credits migration has not run — a thrown
+             network/transport error rather than a PostgREST rejection, which
+             the `rpcErr` check above already handles. Leaving the balance as
+             read is correct either way; saying so is what stops a support
+             conversation guessing. */
+          console.error(`[credits] allowance sync unavailable for ${meterOrgId} —`, e?.message);
+        }
       }
     }
     return { known: true, enforceable: true, unlimited, balance, allowance, plan, resetAt };
@@ -335,13 +379,13 @@ export async function chargeOrgForMode(
           const firmPlan = String((firmRow as any)?.plan || "").toLowerCase();
           const firmAllowance = planAllowance(firmPlan, statusOf(firmRow), (firmRow as any)?.credits_allowance);
           if (firmAllowance > 0) {
-            try { await svc.rpc("sync_allowance", { p_org: payerOrgId, p_amount: firmAllowance, p_days: RESET_DAYS }); } catch {}
+            await syncAllowance(svc, payerOrgId, firmAllowance, "firm");
           }
         }
       } catch { /* unreadable firm → this workspace pays for itself */ }
     }
 
-    if (!pooledFor && allowance > 0) { try { await svc.rpc("sync_allowance", { p_org: orgId, p_amount: allowance, p_days: RESET_DAYS }); } catch {} }
+    if (!pooledFor && allowance > 0) { await syncAllowance(svc, orgId, allowance, "own"); }
 
     const { data: nb, error: rpcErr } = await svc.rpc("charge_credits", {
       p_org: payerOrgId,

@@ -167,8 +167,102 @@ async function handleSubscriptionEvent(type: string, body: any) {
 
   const { data: org } = await svc.from("organizations")
     .select("id, subscription_ends_at").eq("subscription_ref", ref).maybeSingle();
-  if (!org) return;
-  const orgId = (org as any).id;
+
+  /*
+    ==========================================================================
+    A CHARGE WE CANNOT ATTRIBUTE IS THE WORST THING THIS FILE CAN BE SILENT
+    ABOUT
+    ==========================================================================
+
+    This was `if (!org) return;` — a bare return, which acks the webhook with
+    a 200. Cashfree is told we handled it and never retries. The customer's
+    card is debited on schedule, every cycle, and the workspace is granted
+    nothing. No row records it, no alert fires, no HTTP status reflects it.
+    The only way anyone finds out is the customer writing in, which puts the
+    burden of noticing a billing failure on the person being overcharged.
+
+    `subscription_ref` is written in exactly one place (POST in
+    /api/pay/cashfree/subscription), so there are several ways to arrive here
+    with no match: that write failing, a mandate created before the column
+    existed, a row restored from an older backup, an operator clearing it. The
+    cause does not change what is owed — a debit we took and did not honour.
+
+    So: alert, and look up the workspace the mandate itself names before
+    giving up. `subscription_note` is our own `plan:<id>:<cycle>:<orgId>`
+    string, which is how the grant below already decides what was bought; it
+    can equally say who bought it. Attributing from it turns an unrecoverable
+    silence into a normal, correct grant.
+
+    The alert fires even when recovery succeeds. A charge that only landed
+    because of a fallback is a defect with a customer attached, and it should
+    be looked at while the evidence is fresh rather than averaged away.
+  */
+  let orgId = (org as any)?.id as string | undefined;
+
+  /*
+    Read the paid-until date HERE rather than at the two places below that use
+    it. Both used to say `(org as any).subscription_ends_at` directly, which was
+    safe only because `org` had already been proven non-null by the bare return
+    above. The recovery path reaches those lines with `org === null`, so leaving
+    them would turn a repaired charge into a TypeError — the fix breaking the
+    case it exists for.
+  */
+  let orgEndsAt: string | null = (org as any)?.subscription_ends_at ?? null;
+
+  if (!orgId) {
+    const { getSubscription: lookupSub } = await import("@/lib/pay/subscription");
+    const { operatorAlert: alertOperator } = await import("@/lib/operator-alert");
+    const noted = await lookupSub(ref);
+    let recovered = false;
+
+    if (noted.ok && noted.orgId) {
+      const { data: byNote, error: adoptErr } = await svc.from("organizations")
+        .update({ subscription_ref: ref })
+        .eq("id", noted.orgId)
+        .is("subscription_ref", null)
+        .select("id, subscription_ends_at");
+      if (!adoptErr && (byNote?.length ?? 0) > 0) {
+        orgId = String((byNote as any[])[0].id);
+        orgEndsAt = (byNote as any[])[0].subscription_ends_at ?? null;
+        recovered = true;
+      }
+    }
+
+    await alertOperator({
+      kind: recovered ? "subscription_charge_recovered" : "subscription_charge_unattributable",
+      severity: recovered ? "amber" : "red",
+      orgId: orgId || noted.orgId || null,
+      title: recovered
+        ? `Recovered an unattributed ${type} for mandate ${ref}`
+        : `UNATTRIBUTABLE ${type} for mandate ${ref}`,
+      body: recovered
+        ? `No workspace referenced mandate ${ref}, so this charge would have been ` +
+          `silently dropped. Cashfree's own note named workspace ${orgId}, the ` +
+          `reference has been stored, and the cycle is being granted normally. ` +
+          `Find out why subscription_ref was missing.`
+        : `Cashfree reports ${type} for mandate ${ref} and NO workspace can be ` +
+          `matched to it — not by subscription_ref, and not by the mandate's own ` +
+          `note (${noted.ok ? `note org "${noted.orgId || "absent"}"` : `lookup failed: ${noted.error || "unknown"}`}).\n\n` +
+          `If this was a real debit, a customer has been charged and granted ` +
+          `nothing. Find the payment in the Cashfree dashboard, grant the cycle ` +
+          `by hand or refund it, and set organizations.subscription_ref so future ` +
+          `renewals attribute.`,
+    });
+
+    /*
+      Still nothing, and this looks like a payment rather than the ₹1 mandate
+      check: throw. A 500 makes Cashfree retry, which is the right outcome for
+      a charge we could not honour — a transient database failure then resolves
+      itself on redelivery instead of costing the customer a cycle. Acking it
+      would discard the only remaining record that we owe them something.
+    */
+    if (!orgId) {
+      if (/PAYMENT_SUCCESS|CHARGE_SUCCESS/i.test(type) && !/AUTH/i.test(type)) {
+        throw new Error(`unattributable subscription charge for ${ref}`);
+      }
+      return;
+    }
+  }
 
   // AUTH events are the ₹1 mandate-verification debit, not a cycle payment.
   // Excluding them by type is the robust guard: it holds even if Cashfree names
@@ -219,18 +313,34 @@ async function handleSubscriptionEvent(type: string, body: any) {
    */
   const recordUngranted = async (reason: string, note: string, amount: number | null) => {
     const id = `sub_${ref}_ungranted_${new Date().toISOString().slice(0, 10)}`;
+    let rowErr: string | null = null;
     try {
-      await svc.from(PAYMENTS_TABLE).upsert(
+      const { error } = await svc.from(PAYMENTS_TABLE).upsert(
         { order_id: id, org_id: orgId, kind: `subscription_ungranted`, ref, amount, status: reason, provider: "cashfree" },
         { onConflict: "order_id", ignoreDuplicates: true },
       );
-    } catch { /* the alert below is the backstop */ }
+      if (error) rowErr = error.message;
+    } catch (e: any) {
+      rowErr = e?.message || "threw";
+    }
+    /*
+      "The alert below is the backstop" was true, and still left a gap: this
+      row is what the reconciliation job and support read later, so the alert
+      has to say whether it exists. An operator told "a debit granted nothing"
+      will go looking in `payments` for it; finding nothing there, with no
+      indication that the row itself failed to write, sends them hunting for a
+      payment they will conclude never happened.
+    */
     await operatorAlert({
       kind: reason,
       severity: "red",
       title: `Recurring debit on ${ref} granted nothing`,
       body: `${type}. ${note} Workspace ${orgId}. This mandate will be debited again next cycle and will fail the same way `
-        + `until it is fixed or cancelled.`,
+        + `until it is fixed or cancelled.`
+        + (rowErr
+            ? `\n\nNOTE: the payments row could not be written either (${rowErr}), so this alert is the ONLY record. `
+              + `Reconciliation will not find it. Order id ${id}, ref ${ref}, amount ${amount}.`
+            : ``),
       orgId, orderId: id,
     });
   };
@@ -337,7 +447,7 @@ async function handleSubscriptionEvent(type: string, body: any) {
     six hours later would grant twice, and a genuine cycle shorter than six
     hours would be dropped — and this product sells no such cycle.
   */
-  const currentEnds = (org as any).subscription_ends_at || null;
+  const currentEnds = orgEndsAt || null;
   if (!paymentId && currentEnds) {
     const { data: applied } = await svc.from(PAYMENTS_TABLE)
       .select("order_id, created_at, period_to")
@@ -393,7 +503,7 @@ async function handleSubscriptionEvent(type: string, body: any) {
 
   // ---- Grant --------------------------------------------------------------
   const days = annual ? 365 : 30;
-  const cur = (org as any).subscription_ends_at ? new Date((org as any).subscription_ends_at).getTime() : 0;
+  const cur = orgEndsAt ? new Date(orgEndsAt).getTime() : 0;
   const from = Math.max(cur, Date.now()); // stack onto whatever is left
   /* Hoisted out of the update so the receipt below can tell the customer what
      they are now paid until — the single most useful line on a renewal notice,
@@ -420,9 +530,21 @@ async function handleSubscriptionEvent(type: string, body: any) {
     // retrying this row is the only evidence of it for reconciliation and
     // support. Because granted_at is still null, the claim branch above
     // re-opens it on the next attempt instead of deduplicating the retry away.
+    /*
+      The throw below does trigger a retry, which is why this was left best-
+      effort. But `grant_failed` is the status the idempotency check above
+      reads and the status reconciliation looks for, so if it does not land the
+      row keeps whatever it had and the evidence of the failure is only in a
+      log line. Logging the write's own failure costs nothing and is the
+      difference between a diagnosable retry loop and a mysterious one.
+    */
     try {
-      await svc.from(PAYMENTS_TABLE).update({ status: "grant_failed" }).eq("order_id", claimId);
-    } catch { /* best effort — the throw below still triggers a retry */ }
+      const { error: markErr } = await svc.from(PAYMENTS_TABLE)
+        .update({ status: "grant_failed" }).eq("order_id", claimId);
+      if (markErr) console.error(`[cashfree-sub] could not mark ${claimId} grant_failed:`, markErr.message);
+    } catch (e: any) {
+      console.error(`[cashfree-sub] marking ${claimId} grant_failed threw:`, e?.message);
+    }
     /*
       AND TELL SOMEBODY. `grant_failed` was written by this line and read by
       exactly one other: the idempotency check above. admin-metrics excluded it

@@ -153,6 +153,21 @@ export type SubStatus = {
   planId?: string;
   annual?: boolean;
   nextCharge?: string;
+  /**
+   * WHICH WORKSPACE THIS MANDATE WAS CREATED FOR, per our own note.
+   *
+   * `subscription_note` is written by createSubscription above as
+   * `plan:<id>:<monthly|annual>:<orgId>`. It is OUR string, sent to Cashfree
+   * at mint time and read back from them — a caller cannot influence it, and
+   * it survives even when our own `organizations.subscription_ref` does not.
+   *
+   * It was already being parsed here and then thrown away: the destructure
+   * took planId and cycle and dropped the fourth field. Returning it gives
+   * the one case that needs it an authoritative answer — a mandate exists at
+   * Cashfree and our row has no reference to it, so "whose is this?" cannot
+   * be answered from our own tables at all.
+   */
+  orgId?: string;
   error?: string;
 };
 
@@ -163,13 +178,14 @@ export async function getSubscription(subscriptionId: string): Promise<SubStatus
     const j = await r.json().catch(() => ({} as any));
     if (!r.ok) return { ok: false, error: j?.message || `HTTP ${r.status}` };
     const note = String(j?.subscription_note || "");
-    const [, planId, cycle] = note.split(":");
+    const [, planId, cycle, noteOrgId] = note.split(":");
     return {
       ok: true,
       status: j?.subscription_status,
       planId,
       annual: cycle === "annual",
       nextCharge: j?.subscription_next_scheduled_time || undefined,
+      orgId: noteOrgId || undefined,
     };
   } catch (e: any) {
     return { ok: false, error: e?.message };

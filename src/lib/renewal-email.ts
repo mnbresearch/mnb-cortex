@@ -153,11 +153,48 @@ export async function sendRenewalReminders(budget?: Budget): Promise<RenewalResu
       out. The address problem usually resolves within a day, and this is the
       same fix already applied twelve lines below.
     */
+    /*
+      THIS IS THE ONE WRITE HERE THAT MATTERS, AND IT HAD NO ERROR HANDLING.
+
+      The claim row is what makes a notice un-resendable. Releasing it is
+      therefore the only way a failed attempt gets a second chance, and
+      `(org_id, kind, period_end)` is uniquely indexed — so if the delete does
+      not land, this notice is never retried for this period.
+
+      That is the renewal reminder. The last thing a customer gets before their
+      plan lapses. Losing it means they discover the lapse by being locked out
+      of their own workspace, which is both the worst possible way to find out
+      and the version most likely to end the relationship.
+
+      "Nothing better to do" was true of recovering — there isn't another
+      mechanism — and false of reporting. An operator who can see the release
+      failed can delete the row by hand before tomorrow's run.
+    */
     const releaseClaim = async () => {
       try {
-        await svc.from("renewal_notices").delete()
+        const { error } = await svc.from("renewal_notices").delete()
           .eq("org_id", o.id).eq("kind", kind).eq("period_end", o.subscription_ends_at);
-      } catch { /* it will be retried only if this succeeds; nothing better to do */ }
+        if (!error) return;
+        console.error(`[renewal] could not release the ${kind} claim for ${o.id} —`, error.message);
+        const { operatorAlert } = await import("@/lib/operator-alert");
+        await operatorAlert({
+          kind: "renewal_claim_stuck",
+          severity: "red",
+          orgId: String(o.id),
+          title: `A ${kind} renewal notice is stuck and will never retry`,
+          body:
+            `The notice could not be sent and its claim row could not be ` +
+            `released (${error.message}).\n\n` +
+            `(org_id, kind, period_end) is uniquely indexed, so tomorrow's run ` +
+            `will skip this workspace: the customer will receive NO ${kind} ` +
+            `warning before ${o.subscription_ends_at} and will find out their ` +
+            `plan lapsed by being locked out.\n\n` +
+            `Delete the renewal_notices row for org ${o.id}, kind ${kind}, ` +
+            `period_end ${o.subscription_ends_at}, or contact them directly.`,
+        });
+      } catch (e: any) {
+        console.error(`[renewal] releasing the ${kind} claim for ${o.id} threw —`, e?.message);
+      }
     };
 
     const contact = await billingContact(svc, o.id);
@@ -168,7 +205,20 @@ export async function sendRenewalReminders(budget?: Budget): Promise<RenewalResu
 
     if (res.sent) {
       out.sent++;
-      try { await svc.from("renewal_notices").update({ sent_to: contact.email }).eq("org_id", o.id).eq("kind", kind).eq("period_end", o.subscription_ends_at); } catch {}
+      /*
+        Harmless if it fails, unlike the release above — and worth saying why,
+        because this line looks like the same bug and is not.
+
+        The idempotency guard here is the INSERT taken BEFORE the send (claim,
+        then send, then release on failure). `sent_to` only records which
+        address was used. A failure cannot cause a duplicate notice; it costs
+        us the ability to answer "where did we send it?" in support, which is
+        exactly what the log line is for.
+      */
+      const { error: addrErr } = await svc.from("renewal_notices")
+        .update({ sent_to: contact.email })
+        .eq("org_id", o.id).eq("kind", kind).eq("period_end", o.subscription_ends_at);
+      if (addrErr) console.error(`[renewal] sent ${kind} to ${contact.email} for ${o.id} but did not record the address —`, addrErr.message);
     } else {
       out.errors++;
       // Release the claim so tomorrow's run retries rather than skipping forever.
