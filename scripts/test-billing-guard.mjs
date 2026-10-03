@@ -35,7 +35,21 @@ const bad = (n, d) => { failures.push(`${n}\n      ${d}`); console.log(`  FAIL  
 function check(cond, name, detail = "") { cond ? ok(name) : bad(name, detail); }
 
 const MIGRATION = "supabase/migrations/2026_org_billing_guard.sql";
-const sql = readFileSync(MIGRATION, "utf8");
+/*
+  TWO FILES, APPLIED IN ORDER, BECAUSE THAT IS WHAT PRODUCTION HAS.
+
+  2026_zzzp widens the protected list to cover practice_org_id and
+  referral_code. Testing only the original would assert the guard as it was
+  before the hole was closed — which is how this test passed while the hole
+  was open.
+*/
+const WIDENING = "supabase/migrations/2026_zzzp_guard_practice_link.sql";
+const baseSql = readFileSync(MIGRATION, "utf8");
+const widenSql = readFileSync(WIDENING, "utf8")
+  /* Strip the trailing verify SELECT; PGlite's exec is fine with it but the
+     result is noise and cortex_has_billing_guard may not exist yet. */
+  .replace(/\/\* -+ verify -+[\s\S]*$/, "");
+const sql = `${baseSql}\n${widenSql}`;
 
 /* The migration must actually be the thing under test. */
 check(/create trigger cortex_org_billing_guard/i.test(sql),
@@ -74,7 +88,26 @@ async function main() {
       subscription_ref text,
       trial_ends_at timestamptz,
       autorenew_status text,
-      autorenew_next timestamptz
+      autorenew_next timestamptz,
+      /*
+        ADDED AFTER THE FIXTURE MISSED A REAL COLUMN FOR MONTHS.
+
+        This CREATE TABLE is hand-written, and it used to stop at
+        autorenew_next — a copy of the protected list, which is the one thing
+        it must not be. 2026_zzzd_practice_pool.sql added practice_org_id to
+        the real table in 2026; the fixture never heard about it, so the
+        attack below could not be attempted on it and the coverage check two
+        hundred lines down had nothing to compare. The column that decides
+        WHOSE CREDITS PAY was writable by any workspace owner the whole time.
+
+        The derivation check at the end of this file now reads the column set
+        out of the migrations, so a fixture that falls behind fails loudly
+        rather than quietly narrowing what is tested.
+      */
+      practice_org_id uuid references organizations(id) on delete set null,
+      referral_code text,
+      statutory_profile jsonb,
+      billing_phone text
     );
     grant select, update on organizations to authenticated, anon, service_role;
   `);
@@ -124,6 +157,22 @@ async function main() {
     trial_ends_at: "'2099-01-01'",
     autorenew_status: "'ACTIVE'",
     autorenew_next: "'2099-01-01'",
+    /*
+      THE ONE THIS TEST MISSED.
+
+      practice_org_id names the org whose credits pay for every AI action in
+      this workspace, and whose plan decides whether this workspace is
+      unlocked at all. src/lib/credit-pool.ts opens by naming the exact attack
+      — "sign up, point practice_org_id at a large paying firm, and spend
+      their month" — and asserts "only the firm can write it". Nothing
+      enforced that until 2026_zzzp.
+
+      Note the null-to-value direction: the column is normally NULL, so a
+      guard written with <> instead of `is distinct from` would still let this
+      through. The migration uses `is distinct from`; this exercises it.
+    */
+    practice_org_id: "'00000000-0000-0000-0000-0000000000ff'",
+    referral_code: "'STOLEN1'",
   };
   for (const [col, val] of Object.entries(attacks)) {
     const e = await asRole("authenticated", `update organizations set ${col} = ${val} where id = '${ID}'`);
@@ -206,8 +255,17 @@ async function main() {
     alternative (column GRANTs) turns "someone added a column" into a production
     outage. The cost is that it must be kept honest, which is this check's job.
   */
+  /*
+    THE LAST ARRAY WINS, because `create or replace function` means the last
+    definition applied is the one Postgres holds. Reading the FIRST match
+    parsed the 2026 list out of the original migration and reported the
+    widened one as missing — i.e. it described a function that no longer
+    exists. Exactly the kind of near-miss this file is for.
+  */
+  const arrays = [...sql.matchAll(/protected constant text\[\] :=\s*array\[([\s\S]*?)\]/g)];
+  check(arrays.length >= 1, "parse: found a protected-column array at all");
   const listed = new Set(
-    (sql.match(/protected constant text\[\] :=\s*array\[([\s\S]*?)\]/)?.[1] || "")
+    (arrays[arrays.length - 1]?.[1] || "")
       .match(/'([a-z_]+)'/g)?.map((s) => s.replace(/'/g, "")) || []
   );
   check(listed.size >= 10, "parse: read the protected-column list from the migration",
@@ -218,12 +276,150 @@ async function main() {
   const MUST_COVER = [
     "credits", "credits_allowance", "credits_reset_at", "plan",
     "subscription_status", "subscription_ends_at", "trial_ends_at",
+    "practice_org_id",   // whose credits pay; read by credits.ts via credit-pool
   ];
   for (const col of MUST_COVER) {
     if (!billingSrc.includes(col)) continue;   // not actually read; nothing to protect
     check(listed.has(col), `coverage: ${col} is read by billing code and is protected`,
       `credits.ts/entitlement.ts reads "${col}" but the trigger does not guard it`);
   }
+
+  /* ======================================================================= */
+  /* EVERY COLUMN MUST BE CLASSIFIED — derived, not hand-listed              */
+  /* ======================================================================= */
+  /*
+    WHY THE CHECK ABOVE IS NOT ENOUGH, AND WHY IT FAILED.
+
+    MUST_COVER is a list someone types. 2026_zzzd_practice_pool.sql added
+    practice_org_id to organizations in 2026; nobody went back and typed it
+    here, and `if (!billingSrc.includes(col)) continue` means an absent name
+    costs nothing — the loop simply had one fewer thing to say. The guard's
+    own header promised "add a column to the table, forget to protect it, and
+    this fails". It did not fail. For months the column that redirects who
+    pays was writable by any workspace owner through PostgREST.
+
+    So stop typing the list. Derive the column set from the migrations — the
+    same files that create the table — and require EVERY column to be either:
+
+      · in the trigger's protected array, or
+      · in SAFE_TO_SELF_EDIT below, with a reason.
+
+    The database still allows-by-default (2026_org_billing_guard.sql explains
+    at length why column GRANTs are the wrong instrument: a new column would
+    become a production outage instead of a gap). This check puts the
+    strictness in the TEST instead, where a new column costs someone thirty
+    seconds of classification and cannot cost a customer their credits.
+  */
+  const migrationDir = "supabase/migrations";
+  const { readdirSync } = await import("node:fs");
+  const orgColumns = new Set();
+  /*
+    schema.sql holds the CREATE TABLE; the migrations hold everything added
+    since. Both, or the derived set is only the columns someone remembered to
+    add later — which is most of the risk, but not the claim this check makes.
+  */
+  const sqlSources = ["supabase/schema.sql", ...readdirSync(migrationDir).map((f) => `${migrationDir}/${f}`)];
+  for (const path of sqlSources) {
+    if (!path.endsWith(".sql")) continue;
+    const src = readFileSync(path, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*--.*$/gm, "");
+    /* create table organizations ( ... ) */
+    const created = src.match(/create table (?:if not exists )?(?:public\.)?organizations\s*\(([\s\S]*?)\n\s*\);/i);
+    if (created) {
+      for (const line of created[1].split("\n")) {
+        const m = line.match(/^\s*([a-z_][a-z0-9_]*)\s+[a-z]/i);
+        if (m && !/^(primary|unique|check|constraint|foreign|references)$/i.test(m[1])) {
+          orgColumns.add(m[1].toLowerCase());
+        }
+      }
+    }
+    /* alter table organizations add column [if not exists] <name> */
+    const alterBlocks = src.matchAll(
+      /alter table (?:if exists )?(?:public\.)?organizations\b([\s\S]*?);/gi
+    );
+    for (const blk of alterBlocks) {
+      for (const m of blk[1].matchAll(/add column\s+(?:if not exists\s+)?([a-z_][a-z0-9_]*)/gi)) {
+        orgColumns.add(m[1].toLowerCase());
+      }
+    }
+  }
+
+  check(orgColumns.size >= 15, "derive: read the organizations column set from the migrations",
+    `only found ${orgColumns.size} columns (${[...orgColumns].join(", ")}) — ` +
+    `the classification check below would be vacuous`);
+  check(orgColumns.has("practice_org_id"),
+    "derive: the derivation sees a column added by a LATER migration",
+    "practice_org_id was added in 2026_zzzd — if the parser cannot see it, " +
+    "this check has the same blind spot as the hand-written list it replaces");
+
+  /*
+    Columns a workspace owner may legitimately change. Every entry is
+    something the product's own settings UI writes — verified against
+    actions.ts:updateOrgProfile and api/workspace/*.
+  */
+  const SAFE_TO_SELF_EDIT = new Map([
+    ["id", "the primary key; RLS scopes the row, not this"],
+    ["created_at", "set by default; harmless"],
+    ["updated_at", "bookkeeping"],
+    ["name", "workspace settings"],
+    ["industry", "workspace settings / onboarding"],
+    ["accent", "white-label theming"],
+    ["logo_url", "white-label theming"],
+    ["annual_revenue_cr", "workspace profile, used for sizing not billing"],
+    ["currency", "display only"],
+    ["billing_phone", "contact detail for invoices; not an entitlement"],
+    ["statutory_profile", "which statutes apply to this business; no money effect"],
+    ["is_demo", "demo-data marker"],
+    ["owner_id", "set at creation; membership is the real control"],
+    ["slug", "display"],
+    ["whatsapp_template", "collections template name"],
+    ["whatsapp_lang", "collections template language"],
+    ["reply_to", "outbound reply address"],
+    ["gst_turnover", "statutory sizing input"],
+    ["gst_tax", "statutory sizing input"],
+    ["company", "display"],
+    ["note", "free text"],
+    ["meta", "free-form settings blob"],
+    ["source", "attribution"],
+    ["score", "derived"],
+    ["search", "derived"],
+  ]);
+
+  const unclassified = [...orgColumns].filter(
+    (c) => !listed.has(c) && !SAFE_TO_SELF_EDIT.has(c)
+  ).sort();
+  check(unclassified.length === 0,
+    "classify: every organizations column is either protected or declared safe",
+    unclassified.length
+      ? `UNCLASSIFIED: ${unclassified.join(", ")} — decide for each whether a ` +
+        `workspace owner may write it. If it decides entitlement, payment, ` +
+        `identity or attribution, add it to the trigger's protected array ` +
+        `(a new create-or-replace migration). If it is a harmless setting, ` +
+        `add it to SAFE_TO_SELF_EDIT here with a reason.`
+      : "");
+
+  /* The fixture must not fall behind the schema either — that is the other
+     half of how practice_org_id went untested for months. */
+  const { rows: fixtureCols } = await db.query(
+    `select column_name from information_schema.columns
+      where table_name = 'organizations' and table_schema = 'current_schema'()`
+  ).catch(() => ({ rows: [] }));
+  const inFixture = new Set(
+    (fixtureCols.length
+      ? fixtureCols
+      : (await db.query(
+          `select column_name from information_schema.columns where table_name = 'organizations'`
+        )).rows
+    ).map((r) => String(r.column_name).toLowerCase())
+  );
+  const protectedMissingFromFixture = [...listed].filter((c) => !inFixture.has(c)).sort();
+  check(protectedMissingFromFixture.length === 0,
+    "fixture: every protected column exists in the test table, so the attack is really attempted",
+    protectedMissingFromFixture.length
+      ? `the trigger protects ${protectedMissingFromFixture.join(", ")} but the ` +
+        `CREATE TABLE at the top of this file has no such column, so no attack ` +
+        `was run against it`
+      : "");
 
   /* --------------------------------------------------- shared payments table
      The `payments` table is shared with another product in the same Supabase
@@ -255,6 +451,121 @@ async function main() {
         `${label} sets kind on every payments upsert`,
         `${file} writes a payments row without kind — it would drop out of revenue`);
     }
+  }
+
+  /* ======================================================================= */
+  /* THE LEGITIMATE PATH STILL WORKS, AND THE CAP IS NO LONGER THE CALLER'S  */
+  /* ======================================================================= */
+  /*
+    Two things have to be true at once, and proving one without the other is
+    how a security fix becomes an outage:
+
+      1. A client can no longer attach ITSELF to a firm (the attack above,
+         now blocked by the trigger).
+      2. A FIRM can still claim a client (the feature, which goes through
+         cortex_practice_claim).
+
+    (2) survives (1) only because the claim function is SECURITY DEFINER, so
+    current_user inside it is the function's owner and the guard's
+    `not in ('authenticated','anon')` test lets it through. That is a subtle
+    dependency between two files, and the kind of thing that reads as obvious
+    right up until someone "tidies" the function to invoker rights — which is
+    a mistake 2026_org_billing_guard.sql records having already made once, in
+    the other direction, on this very trigger.
+
+    So it is executed, not reasoned about. auth.uid() is stubbed over a GUC,
+    which is what Supabase's own local tooling does.
+  */
+  {
+    await db.exec(`
+      create schema if not exists auth;
+      create or replace function auth.uid() returns uuid
+        language sql stable as $fn$
+          select nullif(current_setting('test.uid', true), '')::uuid
+        $fn$;
+      create table memberships (org_id uuid, user_id uuid, role text);
+      grant select on memberships to authenticated, anon;
+    `);
+
+    const FIRM = "11111111-1111-1111-1111-111111111111";
+    const CLIENT = "22222222-2222-2222-2222-222222222222";
+    const ADMIN = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    const OUTSIDER = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
+    await db.exec(`
+      insert into organizations (id, name, plan) values
+        ('${FIRM}',   'Firm & Co', 'practice'),
+        ('${CLIENT}', 'Client Ltd', 'watch');
+      insert into memberships values
+        ('${FIRM}',   '${ADMIN}',    'owner'),
+        ('${CLIENT}', '${ADMIN}',    'admin'),
+        ('${CLIENT}', '${OUTSIDER}', 'owner');
+    `);
+
+    /** Call the RPC the way the browser would: as `authenticated`, as a user. */
+    async function claim(uid, args) {
+      await db.exec(`select set_config('test.uid', '${uid}', false);`);
+      await db.exec(`set role authenticated;`);
+      let out, err = null;
+      try {
+        out = (await db.query(`select cortex_practice_claim($1,$2,$3) as v`, args)).rows[0].v;
+      } catch (e) { err = String(e.message || e); }
+      await db.exec(`reset role;`);
+      return err ? `ERROR:${err}` : out;
+    }
+    const linkOf = async (id) =>
+      (await db.query(`select practice_org_id as v from organizations where id = $1`, [id])).rows[0].v;
+
+    /* (1) The feature works — and this is also the proof that the new trigger
+           did not break it. */
+    check(await claim(ADMIN, [FIRM, CLIENT, 25]) === "ok",
+      "pool: a firm admin can still claim a client through the RPC",
+      "the trigger added by this migration has broken the legitimate path — " +
+      "cortex_practice_claim must stay SECURITY DEFINER");
+    check(String(await linkOf(CLIENT)) === FIRM,
+      "pool: and the link is actually written",
+      "the RPC said ok but practice_org_id did not change");
+
+    /* (2) The attack the trigger exists for, from the client's own session. */
+    await db.exec(`update organizations set practice_org_id = null where id = '${CLIENT}';`);
+    await db.exec(`select set_config('test.uid', '${OUTSIDER}', false);`);
+    const selfAttach = await asRole("authenticated",
+      `update organizations set practice_org_id = '${FIRM}' where id = '${CLIENT}'`);
+    check(selfAttach !== null,
+      "pool: a client owner CANNOT attach their own workspace to a firm",
+      "this is the exploit credit-pool.ts names in its own header — " +
+      "sign up, point practice_org_id at a paying firm, spend their month");
+    check(await linkOf(CLIENT) === null,
+      "pool: and nothing was written",
+      `practice_org_id is now ${await linkOf(CLIENT)}`);
+
+    /* (3) Rank is still required. */
+    check(await claim(OUTSIDER, [FIRM, CLIENT, 25]) === "not-a-member-of-firm",
+      "pool: a non-member of the firm cannot claim against it");
+
+    /* (4) THE CAP. Fill the firm to its plan limit, then ask for more with
+           p_limit = -1 — the exact bypass, sent the way a browser would. */
+    await db.exec(`
+      insert into organizations (id, name, plan, practice_org_id)
+      select gen_random_uuid(), 'C' || g, 'watch', '${FIRM}'
+        from generate_series(1, 25) g;
+    `);
+    check(await claim(ADMIN, [FIRM, CLIENT, 25]) === "client-limit-reached",
+      "pool: the advertised 25-client cap is enforced");
+    check(await claim(ADMIN, [FIRM, CLIENT, -1]) === "client-limit-reached",
+      "pool: and p_limit = -1 from the caller does NOT lift it",
+      "the cap was being read from a number the caller sent — a ₹29,999/mo " +
+      "Practice account would fund unlimited client workspaces");
+    check(await claim(ADMIN, [FIRM, CLIENT, 999999]) === "client-limit-reached",
+      "pool: nor does an absurdly large one");
+    check(await linkOf(CLIENT) === null,
+      "pool: and the over-cap client is still unlinked");
+
+    /* (5) A caller may still be STRICTER than the plan — the one direction
+           that is safe, and the reason the parameter was kept. */
+    await db.exec(`delete from organizations where name like 'C%' and practice_org_id = '${FIRM}';`);
+    check(await claim(ADMIN, [FIRM, CLIENT, 0]) === "client-limit-reached",
+      "pool: a caller asking for a tighter cap than the plan is honoured");
   }
 
   /* ----------------------------------------------------------------- report */

@@ -66,8 +66,36 @@ export function brandReplyTo(): string {
   return BRAND.REPLY_TO;
 }
 
+/*
+  QUOTES ADDED AS HARDENING — AND THIS IS NOT A FIX FOR A LIVE BUG, WHICH IS
+  WORTH SAYING RATHER THAN IMPLYING.
+
+  A review flagged this as an attribute-injection hole: renderBrandedEmail
+  splits the body on a URL pattern whose class `[^\s<]+` permits a double
+  quote, and emits `<a href="${href}" …>` with the raw match on the paths
+  that pass no tracking token (/api/inquiry, /api/access-request,
+  /api/visibility/public — all unauthenticated, all read by an operator).
+
+  Checked at the line, that does not happen: the call is
+  `esc(bodyText).split(...)`, so escaping runs BEFORE the split. Any `"` in
+  the body is already `&quot;` by the time it could reach the attribute, and
+  a character entity inside an attribute value cannot terminate it.
+
+  The two characters are added anyway, for one reason: the safety of this
+  function currently depends on the ORDER of two expressions on one line. If
+  anyone ever moves the linkify ahead of the escape — a reasonable-looking
+  refactor — the hole the review described becomes real. Making esc complete
+  removes that dependency. The behaviour of every existing caller is
+  unchanged except that quotes in email bodies now render as entities, which
+  mail clients display identically.
+*/
 function esc(s: string) {
-  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return (s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 export type MergeVars = { name?: string; email?: string; firstName?: string };

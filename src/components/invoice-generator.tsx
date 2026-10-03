@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Printer, Save, Check, Loader2, AlertCircle } from "lucide-react";
 import { gstRateWarning } from "@/lib/gst-rates";
+import { escapeHtml as h } from "@/lib/utils";
 
 type Item = { id: string; desc: string; qty: number; rate: number; gst: number };
 const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -111,12 +112,27 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
     } finally { setSaving(false); }
   }
 
+  /*
+    EVERY INTERPOLATION IS ESCAPED, because this builds a document and hands
+    it to document.write() on our own origin.
+
+    seller.name is seeded from the workspace name (page.tsx passes orgName),
+    which any admin can set via updateOrgProfile. Unescaped, one admin could
+    store `<img src=x onerror=...>` and have it execute in every colleague's
+    browser the next time they printed an invoice — against auth cookies that
+    Supabase's SSR client sets httpOnly:false, and with no script-src in the
+    CSP to catch it. buyer.* and it.desc are typed here, but they are saved
+    and reloaded, so they are stored input too.
+
+    h() is lib/utils' escapeHtml, the same helper the markdown renderer uses.
+    Numbers through rupee() need no escaping; strings all do.
+  */
   function print() {
-    const rows = items.map((it) => { const amt = it.qty * it.rate; return `<tr><td>${it.desc}</td><td style="text-align:right">${it.qty}</td><td style="text-align:right">${rupee(it.rate)}</td><td style="text-align:right">${it.gst}%</td><td style="text-align:right">${rupee(amt)}</td></tr>`; }).join("");
+    const rows = items.map((it) => { const amt = it.qty * it.rate; return `<tr><td>${h(it.desc)}</td><td style="text-align:right">${it.qty}</td><td style="text-align:right">${rupee(it.rate)}</td><td style="text-align:right">${it.gst}%</td><td style="text-align:right">${rupee(amt)}</td></tr>`; }).join("");
     const taxRows = intraState
       ? `<tr><td colspan="4" style="text-align:right">CGST</td><td style="text-align:right">${rupee(totals.tax / 2)}</td></tr><tr><td colspan="4" style="text-align:right">SGST</td><td style="text-align:right">${rupee(totals.tax / 2)}</td></tr>`
       : `<tr><td colspan="4" style="text-align:right">IGST</td><td style="text-align:right">${rupee(totals.tax)}</td></tr>`;
-    const html = `<html><head><title>${meta.no}</title><style>
+    const html = `<html><head><title>${h(meta.no)}</title><style>
       body{font-family:system-ui,Arial,sans-serif;color:#111;padding:32px;max-width:760px;margin:auto}
       h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px}
       .row{display:flex;justify-content:space-between;gap:24px;margin:18px 0}
@@ -124,10 +140,10 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
       th,td{border:1px solid #ddd;padding:8px}
       th{background:#f5f5f5;text-align:left} tfoot td{font-weight:bold}
     </style></head><body>
-      <div class="row"><div><h1>TAX INVOICE</h1><div class="muted">${meta.no} · ${meta.date}</div></div></div>
+      <div class="row"><div><h1>TAX INVOICE</h1><div class="muted">${h(meta.no)} · ${h(meta.date)}</div></div></div>
       <div class="row">
-        <div><b>${seller.name}</b><div class="muted">${seller.addr}</div><div class="muted">GSTIN: ${seller.gstin}</div></div>
-        <div style="text-align:right"><b>Bill to</b><div>${buyer.name}</div><div class="muted">${buyer.addr}</div><div class="muted">${buyer.gstin ? "GSTIN: " + buyer.gstin : ""}</div></div>
+        <div><b>${h(seller.name)}</b><div class="muted">${h(seller.addr)}</div><div class="muted">GSTIN: ${h(seller.gstin)}</div></div>
+        <div style="text-align:right"><b>Bill to</b><div>${h(buyer.name)}</div><div class="muted">${h(buyer.addr)}</div><div class="muted">${buyer.gstin ? "GSTIN: " + h(buyer.gstin) : ""}</div></div>
       </div>
       <table><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">GST</th><th style="text-align:right">Amount</th></tr></thead>
       <tbody>${rows}</tbody>

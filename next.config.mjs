@@ -75,8 +75,30 @@ const nextConfig = {
     // that is a 1000-transformation monthly quota a stranger can exhaust in
     // minutes, after which images degrade site-wide — and it lends the domain
     // to serving arbitrary third-party content. Only hosts actually used.
+    /*
+      `*.supabase.co` IS AN ATTACKER-CONTROLLED WILDCARD, AND THAT MATTERS
+      MORE NOW THAN WHEN IT WAS WRITTEN.
+
+      The note below is right that `**` made /_next/image an open proxy, and
+      narrowing it was the fix. But a wildcard over supabase.co is not a
+      narrowing in the way it looks: anyone can create a free Supabase project
+      and get their own <ref>.supabase.co, so this line still lets a stranger
+      choose the bytes this domain's Image Optimizer fetches and decodes.
+
+      What makes that worth a one-line change today rather than a backlog
+      item: `npm audit` on this tree reports Next 14.2.35 against
+      GHSA-2xp9-vwfh-vxw4 — "Unauthenticated Remote Code Execution in Image
+      Optimization API when AVIF files are used", critical, patched only in
+      >= 15.5.24. There is NO patched 14.x. Until the major upgrade happens,
+      the reachable mitigation is to stop letting anyone pick the image
+      source, so the project ref is pinned.
+
+      Verified before pinning: NEXT_PUBLIC_SUPABASE_URL is this one project,
+      and only two files import next/image at all, neither of which builds a
+      Supabase URL from user input.
+    */
     remotePatterns: [
-      { protocol: "https", hostname: "*.supabase.co" },
+      { protocol: "https", hostname: "krklgsmeamnxeawdlmka.supabase.co" },
       { protocol: "https", hostname: "*.googleusercontent.com" },
       { protocol: "https", hostname: "cortex.mnbresearch.com" },
       { protocol: "https", hostname: "mnbresearch.com" },

@@ -965,6 +965,27 @@ async function checkSchema(): Promise<Check> {
       "43B(h) exposure ages in UTC, so /msme reports ZERO on the morning a bill " +
       "crosses 45 days — an under-reported disallowed deduction",
     ],
+    /*
+      The billing guard is probed below via cortex_has_billing_guard(), which
+      answers whether the TRIGGER exists. It cannot tell which version of the
+      function the trigger points at — and the gap that mattered was inside
+      the function body: practice_org_id was missing from the protected list,
+      so any workspace owner could redirect their AI spend onto another org's
+      credit balance. Trigger present, hole open, status page green.
+    */
+    [
+      "cortex_guard_org_billing", "practice_org_id",
+      "2026_zzzp_guard_practice_link.sql",
+      "the billing guard does not protect practice_org_id — ANY WORKSPACE OWNER " +
+      "CAN POINT THEIR WORKSPACE AT A PAYING FIRM and spend that firm's pooled " +
+      "credits, and be entitled by that firm's plan",
+    ],
+    [
+      "cortex_practice_claim", "v_plan_limit",
+      "2026_zzzp_guard_practice_link.sql",
+      "the Practice client cap is read from a number the caller sends, so " +
+      "p_limit = -1 funds unlimited client workspaces on one subscription",
+    ],
   ];
 
   await Promise.all(FN_PROBES.map(async ([fn, needle, file, consequence]) => {

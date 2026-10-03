@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Printer, Save, Check, Loader2, AlertCircle, FileOutput } from "lucide-react";
 import { gstRateWarning } from "@/lib/gst-rates";
+import { escapeHtml as h } from "@/lib/utils";
 
 type Item = { id: string; desc: string; qty: number; rate: number };
 const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -172,23 +173,28 @@ export function QuoteBuilder({ saved = [], orgName = null }: { saved?: any[]; or
   function add() { setItems((xs) => [...xs, { id: Date.now() + "", desc: "", qty: 1, rate: 0 }]); }
   function del(id: string) { setItems((xs) => xs.filter((i) => i.id !== id)); }
 
+  /*
+    Escaped for the same reason as invoice-generator.tsx: this writes a whole
+    document onto our own origin via document.write, and from.name is seeded
+    from the workspace name, which any admin can set. See the note there.
+  */
   function print() {
-    const rows = items.map((it) => `<tr><td>${it.desc}</td><td style="text-align:right">${it.qty}</td><td style="text-align:right">${rupee(it.rate)}</td><td style="text-align:right">${rupee(it.qty * it.rate)}</td></tr>`).join("");
-    const html = `<html><head><title>${meta.no}</title><style>
+    const rows = items.map((it) => `<tr><td>${h(it.desc)}</td><td style="text-align:right">${it.qty}</td><td style="text-align:right">${rupee(it.rate)}</td><td style="text-align:right">${rupee(it.qty * it.rate)}</td></tr>`).join("");
+    const html = `<html><head><title>${h(meta.no)}</title><style>
       body{font-family:system-ui,Arial,sans-serif;color:#111;padding:32px;max-width:760px;margin:auto}
       h1{font-size:22px;margin:0 0 4px;color:#1f4a3b}.muted{color:#666;font-size:13px}
       .row{display:flex;justify-content:space-between;gap:24px;margin:18px 0}
       table{width:100%;border-collapse:collapse;margin-top:16px;font-size:14px}
       th,td{border:1px solid #ddd;padding:8px}th{background:#f0f5f2;text-align:left}tfoot td{font-weight:bold}
     </style></head><body>
-      <div class="row"><div><h1>QUOTATION</h1><div class="muted">${meta.no} · ${meta.date} · valid ${meta.validity} days</div></div></div>
-      <div class="row"><div><b>${from.name}</b><div class="muted">${from.detail}</div></div><div style="text-align:right"><b>For</b><div>${to.name}</div><div class="muted">${to.detail}</div></div></div>
+      <div class="row"><div><h1>QUOTATION</h1><div class="muted">${h(meta.no)} · ${h(meta.date)} · valid ${h(String(meta.validity))} days</div></div></div>
+      <div class="row"><div><b>${h(from.name)}</b><div class="muted">${h(from.detail)}</div></div><div style="text-align:right"><b>For</b><div>${h(to.name)}</div><div class="muted">${h(to.detail)}</div></div></div>
       <table><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr><td colspan="3" style="text-align:right">Subtotal</td><td style="text-align:right">${rupee(totals.sub)}</td></tr>
       <tr><td colspan="3" style="text-align:right">GST ${gst}%</td><td style="text-align:right">${rupee(totals.tax)}</td></tr>
       <tr><td colspan="3" style="text-align:right">Total</td><td style="text-align:right">${rupee(totals.grand)}</td></tr></tfoot></table>
-      <p class="muted" style="margin-top:20px"><b>Terms:</b> ${notes}</p>
+      <p class="muted" style="margin-top:20px"><b>Terms:</b> ${h(notes)}</p>
       <p class="muted">This is a quotation, not a tax invoice.</p>
       <script>window.onload=()=>window.print()</script></body></html>`;
     const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); }

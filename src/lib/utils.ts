@@ -50,12 +50,37 @@ export const statusBg: Record<string, string> = {
  * That is not a theoretical severity here. Supabase's SSR client sets the auth
  * cookies with httpOnly:false — the access and refresh tokens are readable from
  * `document.cookie` — so one XSS in this app is a full account takeover, not a
- * defacement. Escaping at the source is the fix; the CSP added in
- * next.config.mjs is only the second line.
+ * defacement.
+ *
+ * ESCAPING AT THE SOURCE IS NOT THE FIRST LINE, IT IS THE ONLY ONE. An earlier
+ * version of this comment called the CSP in next.config.mjs "the second line",
+ * which overstates it: that policy sets object-src, base-uri, form-action and
+ * frame-ancestors, and NO script-src. Nothing there stops injected script. A
+ * useful script-src needs per-request nonces (inline bootstrap scripts mean
+ * 'unsafe-inline' would permit the `onerror=` payloads this guards against
+ * anyway) and has to be verified against every CDN the app loads — the
+ * form-action note in next.config.mjs records what a CSP directive shipped
+ * without that verification cost last time. Until that work is done, assume
+ * any unescaped interpolation is exploitable.
  *
  * Order matters: `&` first, or the escapes below get double-escaped.
  */
-function escapeHtml(s: string): string {
+/*
+  EXPORTED, because two files that needed it did not have it.
+
+  This was module-private, so invoice-generator.tsx and quote-builder.tsx —
+  which build a whole HTML document by template literal and hand it to
+  document.write() — each interpolated the workspace name, the buyer name and
+  every line-item description raw. The workspace name is writable by any
+  admin, so one admin could store a payload that ran in every colleague's
+  browser the next time they printed an invoice. On the same origin, against
+  cookies this file's own comment above notes are readable from script.
+
+  A security helper nobody outside the file can reach is a helper that gets
+  reimplemented badly or skipped. agents-console.tsx had already written its
+  own copy for exactly this reason.
+*/
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

@@ -37,7 +37,26 @@ export function clientIp(req: Request): string {
 function isMissingFunction(error: any): boolean {
   const code = String(error?.code || "");
   if (code === "PGRST202" || code === "42883") return true;
-  return /could not find the function|does not exist/i.test(String(error?.message || ""));
+  /*
+    NARROWED, BECAUSE THE TEXT FALLBACK WAS CATCHING THE WRONG THING.
+
+    This used to end with /could not find the function|does not exist/i. The
+    second half matches far more than a missing function: Postgres reports a
+    missing TABLE as `relation "rate_limits" does not exist` (42P01). So if
+    the table were dropped or had never been created while the RPC existed,
+    every bucket in the product would quietly return "allowed" — including
+    vis:global, which is the only ceiling on the unauthenticated
+    /api/visibility/public lead magnet, and contact:global, which caps
+    outbound email. The header of this file promises "Fails CLOSED"; that one
+    regex made it fail open on the most likely way for the dependency to be
+    broken.
+
+    Keeping a text fallback at all is for a gateway that drops `code`, so it
+    now has to actually name a FUNCTION. Anything else fails closed, which is
+    the documented and intended direction.
+  */
+  const msg = String(error?.message || "");
+  return /could not find the function|function [^ ]+ does not exist/i.test(msg);
 }
 
 /** Check one bucket. Returns true when the caller is still within allowance. */
