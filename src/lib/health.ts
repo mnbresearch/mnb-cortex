@@ -623,6 +623,50 @@ async function checkCron(): Promise<Check> {
   }
 }
 
+/*
+  ============================================================================
+  "CANNOT VERIFY" WAS TELLING THE OPERATOR THE WRONG FIX, CONFIDENTLY
+  ============================================================================
+
+  Every RPC probe below used to collapse ANY error into one sentence naming one
+  cause — "run 2026_zzzo_fn_body_probe.sql first". An error from PostgREST has
+  at least three causes that need three different actions:
+
+      PGRST202   the function does not exist           → run the migration
+      42501      it exists, EXECUTE is not granted     → fix the grant
+      anything   the database said something else      → read what it said
+
+  and the probe reported all of them as the first one.
+
+  That is not a cosmetic difference. It happened here. 2026_zzzo_fn_body_probe
+  ends with `revoke execute ... from public, anon, authenticated` and — unlike
+  cortex_has_billing_guard right beside it, which has always said
+  `grant execute ... to authenticated, service_role` — never granted it back to
+  the role that actually calls it. So the status page could have sat on "run
+  this file", the operator could have run it correctly any number of times, and
+  the message would not have changed. The product would have been telling them
+  to do something that was already done.
+
+  This is the same defect this file keeps being used to fix, turned inward: a
+  check that reports a guess as a finding. An unverifiable thing is reported as
+  unverifiable, WITH the reason the database gave.
+*/
+function rpcFailure(error: { code?: string; message?: string } | null | undefined, runFile: string): string {
+  const code = String(error?.code || "");
+  const msg = String(error?.message || "").trim();
+  /*
+    Code first, text second. PostgREST sets `code` reliably, but a proxy or an
+    older gateway in front of it may not, and the message is then all there is.
+  */
+  if (code === "PGRST202" || code === "42883" || /could not find the function|does not exist/i.test(msg)) {
+    return `NOT INSTALLED — run ${runFile}`;
+  }
+  if (code === "42501" || /permission denied/i.test(msg)) {
+    return `installed, but EXECUTE is not granted to service_role — re-run ${runFile}, which now grants it`;
+  }
+  return `cannot verify — ${msg || "the probe failed and returned no message"}`;
+}
+
 /** Confirms a migration landed, by selecting a column it introduced. */
 async function checkSchema(): Promise<Check> {
   const sb = serviceClient();
@@ -877,7 +921,7 @@ async function checkSchema(): Promise<Check> {
   try {
     const { data, error } = await sb.rpc("cortex_upsert_arbiters_ok");
     if (error) {
-      missing.push("2026_upsert_arbiter_fix (cannot verify)");
+      missing.push(`2026_upsert_arbiter_fix (helper: ${rpcFailure(error, "2026_upsert_arbiter_fix.sql")})`);
     } else if (data === false) {
       missing.push("2026_upsert_arbiter_fix (UPSERTS BROKEN — invoice save and store sync will fail)");
     }
@@ -927,20 +971,23 @@ async function checkSchema(): Promise<Check> {
     try {
       const { data, error } = await sb.rpc("cortex_fn_has", { p_name: fn, p_needle: needle });
       if (error) {
-        /* The helper itself is missing, which is its own unrun migration. */
-        missing.push(`${file} (cannot verify — run 2026_zzzo_fn_body_probe.sql first)`);
+        /*
+          The helper could not answer. WHY it could not answer decides what the
+          operator should do about it, so say which — see rpcFailure above.
+        */
+        missing.push(`${file} (helper 2026_zzzo_fn_body_probe: ${rpcFailure(error, "2026_zzzo_fn_body_probe.sql")})`);
       } else if (data === false) {
         missing.push(`${file} (NOT APPLIED — ${consequence})`);
       }
-    } catch {
-      missing.push(`${file} (cannot verify — run 2026_zzzo_fn_body_probe.sql first)`);
+    } catch (e: any) {
+      missing.push(`${file} (cannot verify — the probe threw: ${e?.message || "no message"})`);
     }
   }));
 
   try {
     const { data, error } = await sb.rpc("cortex_has_billing_guard");
     if (error) {
-      missing.push("2026_org_billing_guard (cannot verify — helper not installed)");
+      missing.push(`2026_org_billing_guard (helper: ${rpcFailure(error, "2026_org_billing_guard.sql")})`);
     } else if (data === false) {
       missing.push("2026_org_billing_guard (TRIGGER MISSING — billing is bypassable)");
     }

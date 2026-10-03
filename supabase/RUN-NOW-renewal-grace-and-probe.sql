@@ -168,14 +168,33 @@ as $$
   );
 $$;
 
+/*
+  REVOKE **AND GRANT**.
+
+  The first version of this file stopped at the revoke, under a comment saying
+  "the health endpoint calls this with the service role" — which describes the
+  caller, it does not grant it anything. A new function's only EXECUTE
+  privilege is the implicit grant to PUBLIC; revoke that and service_role is
+  left with nothing unless this project's default privileges happen to cover
+  it. cortex_has_billing_guard, which the same health check calls two lines
+  later, has always said `grant execute ... to authenticated, service_role`.
+
+  Running this file WITHOUT the grant below applies both function fixes
+  correctly and still leaves /api/health reporting "cannot verify", which
+  reads exactly like the file was never run.
+*/
 revoke execute on function cortex_fn_has(text, text) from public, anon, authenticated;
--- The health endpoint calls this with the service role.
+grant execute on function cortex_fn_has(text, text) to service_role;
 
 /* ===========================================================================
-   VERIFY. Returns ONE ROW. All three columns must be true.
+   VERIFY. Returns ONE ROW. All FOUR columns must be true.
 
    It reads each function's own source back out of the catalogue, so nothing
    except the replacements above actually being in place can satisfy it.
+
+   The fourth column is the grant, checked separately from installation,
+   because those are two different failures with two different fixes and the
+   status page cannot tell them apart from the outside.
    =========================================================================== */
 
 select
@@ -184,4 +203,7 @@ select
   (select prosrc like '%Asia/Kolkata%' from pg_proc
     where proname = 'cortex_msme_exposure' limit 1)         as msme_ist_applied,
   (select count(*) = 1 from pg_proc
-    where proname = 'cortex_fn_has')                        as health_probe_installed;
+    where proname = 'cortex_fn_has')                        as health_probe_installed,
+  has_function_privilege(
+    'service_role', 'public.cortex_fn_has(text, text)', 'EXECUTE'
+  )                                                         as health_probe_executable;

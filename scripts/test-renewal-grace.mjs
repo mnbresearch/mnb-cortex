@@ -249,11 +249,29 @@ eq(statusOf({ subscription_status: "active", subscription_ends_at: ago(2), autor
     as its own is not a guard.
   */
   const fnBlock = h.slice(h.indexOf("const FN_PROBES"), h.indexOf("cortex_has_billing_guard"));
-  check(fnBlock.length > 0 && (fnBlock.match(/cannot verify/g) || []).length >= 2,
+  /*
+    MATCH THE BEHAVIOUR, NOT THE WORDING.
+
+    This counted two occurrences of the literal "cannot verify" — and then
+    fired on a change that made the messages BETTER. The error branch now
+    distinguishes a missing helper from a missing grant (see rpcFailure in
+    health.ts), so one of the two branches no longer uses that phrase while
+    still doing exactly what this assertion exists to require.
+
+    What actually matters is that neither branch can fall through silently:
+    an error and a throw must both push onto `missing`, because anything not
+    pushed is reported as operational. Counting pushes says that; counting a
+    phrase says only that somebody kept the wording.
+  */
+  check(fnBlock.length > 0 && (fnBlock.match(/missing\.push\(/g) || []).length >= 3,
     "an absent probe helper reports UNVERIFIED on BOTH paths, not operational",
     "reporting a control as present on the strength of a check that never ran " +
-    "is worse than having no check — it actively reassures. Both the error " +
-    "branch and the throw branch have to say so.");
+    "is worse than having no check — it actively reassures. The error branch, " +
+    "the throw branch and the data===false branch must each record a finding.");
+  check(/catch\s*\([^)]*\)\s*\{[^}]*missing\.push/.test(fnBlock),
+    "the throw path records a finding rather than swallowing the exception",
+    "an empty catch here is the exact shape of the bug: the probe never ran " +
+    "and the status page says everything is fine");
 
   const probeFile = readdirSync(new URL("supabase/migrations/", ROOT))
     .find((f) => /create or replace function cortex_fn_has/.test(read(`supabase/migrations/${f}`)));

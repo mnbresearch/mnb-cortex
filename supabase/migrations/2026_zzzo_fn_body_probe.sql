@@ -76,5 +76,21 @@ as $$
   );
 $$;
 
+/*
+  REVOKE AND GRANT, NOT REVOKE ALONE.
+
+  The first version of this file stopped at the revoke, with a comment saying
+  "the health endpoint calls this with the service role" — as though stating
+  the caller granted it the privilege. It does not. A new function's only
+  EXECUTE privilege is the implicit grant to PUBLIC, and revoking that leaves
+  service_role with nothing unless this project's default privileges happen to
+  cover it, which is not something to leave to chance on the one check whose
+  job is to notice an unapplied migration.
+
+  cortex_has_billing_guard, thirty lines away in 2026_org_billing_guard.sql,
+  has always ended `grant execute ... to authenticated, service_role`. This is
+  that convention, minus `authenticated`, which has no business reading
+  function bodies.
+*/
 revoke execute on function cortex_fn_has(text, text) from public, anon, authenticated;
--- The health endpoint calls this with the service role.
+grant execute on function cortex_fn_has(text, text) to service_role;

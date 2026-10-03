@@ -244,6 +244,11 @@ $$;
 
 revoke execute on function public.cron_cursor_advance(text, timestamptz, uuid, int, boolean)
   from public, anon, authenticated;
+/* The cron calls this as service_role, so it needs EXECUTE back explicitly —
+   a revoke from PUBLIC removes the only privilege a new function starts with.
+   See 2026_cron_fairness.sql for the full note. Idempotent. */
+grant execute on function public.cron_cursor_advance(text, timestamptz, uuid, int, boolean)
+  to service_role;
 
 select 'cron_cursors' as check_name,
        case when to_regclass('public.cron_cursors') is not null then 'OK' else 'FAIL' end as result,

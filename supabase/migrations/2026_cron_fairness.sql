@@ -78,3 +78,18 @@ $$;
 
 revoke execute on function public.cron_cursor_advance(text, timestamptz, uuid, int, boolean)
   from public, anon, authenticated;
+/*
+  AND GRANT IT BACK TO THE ONLY ROLE THAT CALLS IT.
+
+  This was a revoke with no grant. SECURITY INVOKER changes who the function
+  runs AS; it does not change who is allowed to CALL it. A new function's only
+  EXECUTE privilege is the implicit grant to PUBLIC, so revoking that can leave
+  service_role — the role the cron actually uses — unable to call it, and the
+  symptom is a cursor that silently never advances while "Scheduled jobs" still
+  reports operational.
+
+  Every other function in these migrations pairs the revoke with this line.
+  Idempotent, so re-running costs nothing.
+*/
+grant execute on function public.cron_cursor_advance(text, timestamptz, uuid, int, boolean)
+  to service_role;
