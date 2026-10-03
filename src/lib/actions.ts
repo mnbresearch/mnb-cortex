@@ -1532,11 +1532,28 @@ export async function addWebhook(fd: FormData): Promise<ActionResult | void> {
   const label = str(fd.get("label"));
   const events = str(fd.get("events")).split(",").map((e) => e.trim()).filter(Boolean);
 
-  const { newSecret } = await import("@/lib/webhooks");
+  const { newSecret, storeSecret } = await import("@/lib/webhooks");
   const svc = serviceClient();
   if (!svc) return fail("This workspace is not fully configured on our side yet — please contact support and quote 'service role'.");
+  /*
+    ENCRYPTED AT REST, and refused rather than downgraded.
+
+    The signing secret used to go into the column in plain text. It is the
+    HMAC key the customer's receiving system uses to decide an event really
+    came from us, so whoever reads it can forge one — the same value the
+    integration credentials already get AES-256-GCM for.
+
+    storeSecret returns null when ENCRYPTION_KEY is absent. Refusing to create
+    the endpoint is the only honest branch: the alternative is silently writing
+    plaintext, which is exactly the state being fixed. Matches what
+    /api/integrations already does when it cannot encrypt.
+  */
+  const stored = storeSecret(newSecret());
+  if (!stored) {
+    return fail("Webhooks can't be set up until encryption is configured on our side — please contact support and quote 'ENCRYPTION_KEY'.");
+  }
   const { error } = await svc.from("webhook_endpoints").insert({
-    org_id: orgId, url, label: label || null, events, secret: newSecret(),
+    org_id: orgId, url, label: label || null, events, secret: stored,
   });
   if (error) throw new Error(error.message);
   await logActivity(orgId, "crud", `Added webhook endpoint ${url}`);

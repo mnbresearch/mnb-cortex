@@ -83,19 +83,116 @@ function isPrivateV4(ip: string): boolean {
   return false;
 }
 
+/**
+ * Expand an IPv6 string into its eight 16-bit groups, or null if it is not one.
+ *
+ * Handles `::` compression and a trailing dotted quad
+ * (`::ffff:169.254.169.254`), so the caller gets one canonical shape to reason
+ * about instead of the half-dozen ways the same address can be written.
+ */
+function v6Groups(s: string): number[] | null {
+  let str = s;
+
+  /*
+    A trailing dotted quad becomes two hex groups first, so the rest of the
+    parse only ever deals with hextets.
+  */
+  const dotted = str.match(/^(.*:)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (dotted) {
+    const q = dotted[2].split(".").map(Number);
+    if (q.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+    str = `${dotted[1]}${((q[0] << 8) | q[1]).toString(16)}:${((q[2] << 8) | q[3]).toString(16)}`;
+  }
+
+  const halves = str.split("::");
+  if (halves.length > 2) return null;
+
+  const parse = (part: string) =>
+    part === "" ? [] : part.split(":").map((h) => (/^[0-9a-f]{1,4}$/.test(h) ? parseInt(h, 16) : NaN));
+
+  const head = parse(halves[0] ?? "");
+  const tail = halves.length === 2 ? parse(halves[1] ?? "") : [];
+  if ([...head, ...tail].some((n) => Number.isNaN(n))) return null;
+
+  if (halves.length === 1) return head.length === 8 ? head : null;
+
+  const fill = 8 - head.length - tail.length;
+  if (fill < 0) return null;
+  return [...head, ...Array(fill).fill(0), ...tail];
+}
+
 function isPrivateV6(ip: string): boolean {
   const s = ip.toLowerCase().replace(/^\[|\]$/g, "");
   if (s === "::1" || s === "::") return true;
   if (s.startsWith("fc") || s.startsWith("fd")) return true; // unique local
   if (s.startsWith("fe80")) return true;                     // link-local
   if (s.startsWith("ff")) return true;                       // multicast
+
   /*
-    IPv4-mapped and IPv4-compatible forms. `::ffff:169.254.169.254` is the
-    metadata endpoint wearing a different hat, and a v4 check that only ever
-    sees dotted quads will wave it through.
+    ==========================================================================
+    IPv4-MAPPED FORMS, CHECKED AS NUMBERS — NOT AS A DOTTED-QUAD STRING
+    ==========================================================================
+
+    This used to be:
+
+        const m = s.match(/(?:^::ffff:|^::)(\d+\.\d+\.\d+\.\d+)$/);
+        if (m) return isPrivateV4(m[1]);
+
+    The intent was right and the comment named the exact target —
+    `::ffff:169.254.169.254` is "the metadata endpoint wearing a different
+    hat". The regex only ever matched the DOTTED spelling, and by the time
+    assertPublicUrl sees a URL host, the WHATWG parser has already
+    re-serialised it to hex:
+
+        new URL("https://[::ffff:169.254.169.254]/").hostname
+          === "[::ffff:a9fe:a9fe]"
+
+    So the regex never fired on the one path where an attacker chooses the
+    string. Executed against the old code, all four of these were ALLOWED:
+
+        https://[::ffff:169.254.169.254]/latest/meta-data/   → cloud metadata
+        https://[::ffff:127.0.0.1]/
+        https://[::ffff:10.0.0.1]/
+        https://[0:0:0:0:0:ffff:169.254.169.254]/
+
+    while the plain `https://169.254.169.254/` was correctly blocked. The
+    dotted form still mattered — dns.lookup returns dotted quads — so the old
+    branch was doing real work on the DNS path and none on the literal path,
+    which is why it looked correct.
+
+    Parsing to groups removes the spelling from the question entirely. Every
+    way of writing the same address now reduces to the same eight numbers.
   */
-  const m = s.match(/(?:^::ffff:|^::)(\d+\.\d+\.\d+\.\d+)$/);
-  if (m) return isPrivateV4(m[1]);
+  const g = v6Groups(s);
+  if (!g) return true; // unparseable: refuse rather than guess
+
+  const v4FromTail = () =>
+    `${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`;
+
+  const zero = (n: number) => g.slice(0, n).every((x) => x === 0);
+
+  /* ::ffff:a.b.c.d — IPv4-mapped (RFC 4291). The common one. */
+  if (zero(5) && g[5] === 0xffff) return isPrivateV4(v4FromTail());
+
+  /* ::ffff:0:a.b.c.d — IPv4-translated (RFC 2765). */
+  if (zero(4) && g[4] === 0xffff && g[5] === 0) return isPrivateV4(v4FromTail());
+
+  /*
+    ::a.b.c.d — IPv4-compatible, deprecated but still parsed by most stacks.
+    `::` and `::1` are already handled above, so a non-zero tail here is a real
+    embedded v4 address.
+  */
+  if (zero(6) && (g[6] !== 0 || g[7] !== 0)) return isPrivateV4(v4FromTail());
+
+  /*
+    64:ff9b::/96 — NAT64 (RFC 6052). A translator rewrites these to the
+    embedded v4 address, so `64:ff9b::169.254.169.254` reaches metadata on any
+    network running one. Cheap to cover and the same class of mistake.
+  */
+  if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0) {
+    return isPrivateV4(v4FromTail());
+  }
+
   return false;
 }
 
@@ -171,13 +268,42 @@ export async function assertPublicUrl(raw: string, opts: { allowHttp?: boolean }
  */
 export async function safeFetch(
   raw: string,
-  init: RequestInit & { maxRedirects?: number; allowHttp?: boolean } = {},
+  init: RequestInit & { maxRedirects?: number; allowHttp?: boolean; timeoutMs?: number } = {},
 ): Promise<Response> {
-  const { maxRedirects = 4, allowHttp = false, ...rest } = init;
+  const { maxRedirects = 4, allowHttp = false, timeoutMs = 15_000, ...rest } = init;
   let url = (await assertPublicUrl(raw, { allowHttp })).toString();
 
+  /*
+    ==========================================================================
+    A DEFAULT DEADLINE, BECAUSE FIVE OF SIX CALL SITES SUPPLIED NONE
+    ==========================================================================
+
+    This passed `init` straight to fetch and added no signal of its own. Only
+    webhooks.ts set one (8s). importFromUrl, both Shopify calls, the Google
+    Sheets pull and the Slack probe each had no deadline at all.
+
+    The 5s DNS race in assertPublicUrl bounds RESOLUTION only — not the
+    connection, and not the body read. A customer endpoint that accepts and
+    then dribbles bytes holds the request open indefinitely. sync/index.ts
+    already names the consequence: "A provider pull is an external HTTP call
+    with no timeout of its own: budget generously and stop rather than risk
+    the whole run." The cron budget protects the siblings; nothing protected
+    the call.
+
+    An explicit `signal` from the caller still wins — webhooks.ts keeps its
+    tighter 8s — so this is a floor for the callers that forgot, not a ceiling
+    imposed on the ones that thought about it.
+
+    The deadline covers the WHOLE redirect chain rather than resetting per
+    hop, because four hops of 15s each is a minute, which is not a deadline.
+  */
+  const hasOwnSignal = Boolean((rest as any).signal);
+  const ctrl = hasOwnSignal ? null : new AbortController();
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+
+  try {
   for (let hop = 0; hop <= maxRedirects; hop++) {
-    const res = await fetch(url, { ...rest, redirect: "manual" });
+    const res = await fetch(url, { ...rest, redirect: "manual", ...(ctrl ? { signal: ctrl.signal } : {}) });
     if (res.status < 300 || res.status > 399) return res;
     const loc = res.headers.get("location");
     if (!loc) return res;
@@ -210,4 +336,7 @@ export async function safeFetch(
     url = (await assertPublicUrl(new URL(loc, url).toString(), { allowHttp })).toString();
   }
   throw new BlockedUrlError("That address redirected too many times.");
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import crypto from "crypto";
 import { serviceClient } from "@/lib/supabase/server";
 import type { Budget } from "@/lib/cron-budget";
@@ -53,6 +54,58 @@ export function newSecret(): string {
   return "whsec_" + crypto.randomBytes(24).toString("base64url");
 }
 
+/**
+ * The signing secret as stored, and as used.
+ *
+ * ============================================================================
+ * WHY THIS EXISTS
+ * ============================================================================
+ *
+ * `webhook_endpoints.secret` was plaintext in the database, which left one
+ * codebase with three different standards for three kinds of secret:
+ *
+ *     api_keys.key                  SHA-256 hash  (never recoverable)
+ *     integrations.credentials      AES-256-GCM   (crypto.ts)
+ *     webhook_endpoints.secret      plaintext
+ *
+ * It cannot be hashed — we have to reproduce it to sign every delivery — but
+ * nothing stopped it going through the same envelope the integration
+ * credentials use, and nothing did.
+ *
+ * What the secret is worth: it is the HMAC key the customer's receiving system
+ * uses to decide a request genuinely came from Cortex. Whoever holds it can
+ * forge an event that their system will accept as real. data.ts already
+ * restricts reading it to admins for exactly that reason; this puts the same
+ * value behind encryption at rest as well.
+ *
+ * ============================================================================
+ * DUAL READ, BECAUSE THE ROWS THAT EXIST ARE PLAINTEXT
+ * ============================================================================
+ *
+ * encryptSecret produces `v1.<iv>.<tag>.<ciphertext>`; a legacy secret starts
+ * with `whsec_`. So the stored shape says which it is, and no migration or
+ * backfill is needed — existing endpoints keep signing correctly and the next
+ * secret written is encrypted.
+ *
+ * FAIL CLOSED ON WRITE, FAIL READABLE ON READ. If ENCRYPTION_KEY is absent,
+ * `storeSecret` refuses rather than silently storing plaintext — the same rule
+ * the integrations route already follows. `usableSecret` returns null when a
+ * ciphertext cannot be decrypted, which surfaces as a delivery failure the
+ * admin can see, rather than signing with the literal ciphertext and producing
+ * a signature the receiver silently rejects forever.
+ */
+export function storeSecret(plain: string): string | null {
+  const enc = encryptSecret(plain);
+  return enc || null;
+}
+
+export function usableSecret(stored: string | null | undefined): string | null {
+  const s = String(stored || "");
+  if (!s) return null;
+  if (!s.startsWith("v1.")) return s;   // legacy plaintext, still valid
+  return decryptSecret(s);
+}
+
 /** The signature a receiver should recompute to trust the request. */
 export function sign(secret: string, timestamp: string, body: string): string {
   return crypto.createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("base64");
@@ -97,6 +150,25 @@ async function attempt(svc: any, deliveryId: string, endpoint: any, event: strin
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
 
   let status = 0, errMsg = "";
+
+  /*
+    The stored secret may be encrypted (new) or plaintext (registered before
+    this changed). usableSecret handles both. A null means the ciphertext is
+    there but unreadable — ENCRYPTION_KEY missing or rotated — and signing with
+    the raw ciphertext would produce a signature the receiver rejects forever
+    while every delivery looked "sent". Record it as the failure it is.
+  */
+  const signingKey = usableSecret(endpoint.secret);
+  if (!signingKey) {
+    await svc.from("webhook_deliveries").update({
+      status: "failed",
+      error: "Signing secret could not be read — ENCRYPTION_KEY is missing or has changed. Re-create this endpoint to issue a new secret.",
+      attempts: (endpoint.attempts ?? 0) + 1,
+    }).eq("id", deliveryId);
+    clearTimeout(timer);
+    return false;
+  }
+
   try {
     /*
       THE ENDPOINT URL IS THE CUSTOMER'S, AND THIS RUNS ON THE CRON.
@@ -120,7 +192,7 @@ async function attempt(svc: any, deliveryId: string, endpoint: any, event: strin
         "User-Agent": "MNBCortex-Webhook/1",
         "X-Cortex-Event": event,
         "X-Cortex-Timestamp": ts,
-        "X-Cortex-Signature": sign(endpoint.secret, ts, body),
+        "X-Cortex-Signature": sign(signingKey, ts, body),
       },
       body,
       signal: ctrl.signal,

@@ -1,6 +1,6 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
-import { decryptSecret } from "@/lib/crypto";
+import { credentialsFor } from "@/lib/credentials";
 import { recomputeQuietly } from "@/lib/metrics";
 import type { Budget } from "@/lib/cron-budget";
 import { safeFetch } from "@/lib/net-guard";
@@ -284,47 +284,33 @@ export function isSyncable(provider: string): boolean {
  * token, and Shopify/Razorpay/Stripe could never authenticate — only Google
  * Sheets worked, because its single field happens to be plain text.
  */
-async function credentialsFor(svc: any, orgId: string, provider: string): Promise<Creds | null> {
-  const { data } = await svc
-    .from("integrations").select("config, credentials_encrypted")
-    .eq("org_id", orgId).eq("provider", provider).maybeSingle();
-  if (!data) return null;
+/*
+  ==========================================================================
+  THE SECOND COPY OF credentialsFor IS GONE — IT HAD LOST THE ALLOWLIST
+  ==========================================================================
 
-  const out: Creds = {};
+  This file carried its own private credentialsFor, identical in shape to the
+  one in lib/credentials.ts and missing the hardening that one was given:
 
-  // Non-secret fields first, so a decrypt failure still leaves a usable error
-  // message rather than an empty object.
-  const cfg = (data as any).config;
-  if (cfg && typeof cfg === "object") {
-    for (const [k, v] of Object.entries(cfg)) {
-      if (k === "hint" || k === "last_test_ok" || k === "last_test_at") continue;
-      out[k] = String(v ?? "");
-    }
-  }
-
-  // Then the real credentials, which win on conflict.
-  const enc = String((data as any).credentials_encrypted || "");
-  if (enc) {
-    // decryptSecret returns null (it does not throw) when ENCRYPTION_KEY is
-    // absent or has changed since the credential was saved. Without this check
-    // the sync fell through to config-only and reported "needs an access token",
-    // which sends the user looking for the wrong problem entirely.
-    const plain = decryptSecret(enc);
-    if (!plain) {
-      throw new Error("Saved credentials could not be decrypted — ENCRYPTION_KEY is missing or has changed. Re-connect this integration to store them again.");
-    }
-    try {
-      const parsed = JSON.parse(plain);
-      if (parsed && typeof parsed === "object") {
-        for (const [k, v] of Object.entries(parsed)) out[k] = String(v ?? "");
+      for (const [k, v] of Object.entries(cfg)) {
+        if (k === "hint" || ...) continue;
+        out[k] = String(v ?? "");          // every key, whatever it is named
       }
-    } catch {
-      throw new Error("Saved credentials are corrupt. Re-connect this integration.");
-    }
-  }
 
-  return Object.keys(out).length ? out : null;
-}
+  lib/credentials.ts was changed to read a plaintext `config` field only when
+  the CATALOGUE declares that field non-password, and to skip any key it does
+  not recognise — "an unknown key in a plaintext column is exactly the shape
+  of the attack". 2026_integrations_lockdown.sql records the same rule as a
+  `comment on column`. That change was applied to one of the two copies.
+
+  Exploiting the gap needed an admin writing a password-named field straight
+  through PostgREST, so the exposure was narrow. The problem is the shape: a
+  security fix applied to one of two identical functions is a regression
+  waiting for whichever call site the next reader does not know about.
+
+  Same signature, same serviceClient, same decrypt-and-explain error strings —
+  so this is a deletion, not a rewrite.
+*/
 
 /**
  * Upsert on the natural key, so a re-sync updates rather than duplicates.
@@ -405,7 +391,7 @@ export async function syncProvider(orgId: string, provider: string, days = 90): 
   if (!svc) { out.error = "Service role not configured."; return out; }
 
   try {
-    const creds = await credentialsFor(svc, orgId, id);
+    const creds = await credentialsFor(orgId, id);
     if (!creds) { out.error = `No saved ${conn.label} credentials for this workspace.`; return out; }
 
     const since = new Date(Date.now() - days * 86_400_000).toISOString();

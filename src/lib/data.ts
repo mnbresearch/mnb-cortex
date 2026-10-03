@@ -427,15 +427,24 @@ export async function getLeads() {
   return { rows: (data as any[]) || [], live: true };
 }
 
-export async function getIntegrations() {
-  const { orgId } = await getUserAndOrg();
-  if (!orgId) return { map: {} as Record<string, any>, live: false };
-  const sb = await createClient();
-  const { data } = await sb.from("integrations").select("*").eq("org_id", orgId);
-  const map: Record<string, any> = {};
-  for (const r of (data as any[] || [])) map[r.provider] = r;
-  return { map, live: true };
-}
+/*
+  getIntegrations() IS GONE. It had no callers and selected the ciphertext.
+
+      const { data } = await sb.from("integrations").select("*")...
+
+  `select("*")` on that table includes `credentials_encrypted`, and the
+  function returned the whole row keyed by provider — so wiring it into any
+  page would have put every integration's encrypted credential into the HTML
+  payload. Inert ciphertext, but there is no reason for it to leave the
+  server, and a zero-caller function shaped like that is a trap for whoever
+  needs "the integrations for this org" next.
+
+  What they should use instead:
+    · getIntegrationState()  (above) — selects provider, status, config only
+    · credentialsFor()       (lib/credentials.ts) — server-side, allowlisted,
+                               decrypts, and is the ONLY reader of the
+                               credential column
+*/
 
 const EXPLORE_TABLES = ["sales_orders", "invoices", "inventory_items", "employees", "purchase_orders", "production_runs"];
 /**
@@ -675,7 +684,26 @@ export async function getWebhooks() {
   const cols = "id, org_id, url, events, is_active, label, created_at, last_ok_at, last_error, fail_count"
     + (canSeeSecret ? ", secret" : "");
   const { data } = await svc.from("webhook_endpoints").select(cols).eq("org_id", orgId).order("created_at", { ascending: false });
-  return { rows: (data as any[]) || [], live: true, canSeeSecret };
+  let rows = (data as any[]) || [];
+
+  /*
+    The column is now AES-256-GCM ciphertext (lib/webhooks storeSecret), so an
+    admin viewing /developers would otherwise be shown `v1.<iv>.<tag>.<ct>` and
+    paste that into their receiving system as the signing key.
+
+    Decrypt for display only, and only for the admin who already passed the
+    role check above. An unreadable one shows as null rather than ciphertext —
+    "no secret shown" is a prompt to re-create the endpoint; a wrong secret is
+    a receiver that rejects every event with no explanation.
+
+    Legacy rows registered before encryption are returned unchanged, which is
+    what usableSecret does with anything not prefixed `v1.`.
+  */
+  if (canSeeSecret) {
+    const { usableSecret } = await import("@/lib/webhooks");
+    rows = rows.map((r) => ({ ...r, secret: usableSecret(r.secret) }));
+  }
+  return { rows, live: true, canSeeSecret };
 }
 
 export async function getWebhookDeliveries(limit = 15) {
