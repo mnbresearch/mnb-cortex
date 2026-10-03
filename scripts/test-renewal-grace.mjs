@@ -113,7 +113,15 @@ eq(statusOf({ subscription_status: "active", subscription_ends_at: ago(2), autor
   const files = readdirSync(new URL("supabase/migrations/", ROOT))
     .filter((f) => /\.sql$/.test(f))
     .sort()
-    .filter((f) => /expire_lapsed_subscriptions/.test(read(`supabase/migrations/${f}`)));
+    /*
+      DEFINES it, not merely MENTIONS it. The first version matched any file
+      containing the name, and 2026_zzzo_fn_body_probe.sql mentions `expire_%`
+      in the clause that scopes the probe to our own functions — so it sorted
+      last, was picked as "the live definition", and failed for having no
+      mandate check in a file that defines nothing.
+    */
+    .filter((f) => /create or replace function expire_lapsed_subscriptions/
+      .test(read(`supabase/migrations/${f}`)));
   const live = files[files.length - 1];
   check(Boolean(live), "a migration defines expire_lapsed_subscriptions");
 
@@ -210,6 +218,63 @@ eq(statusOf({ subscription_status: "active", subscription_ends_at: ago(2), autor
     "status, no next charge, and no way to switch a live mandate off");
   check(!/\bPLANS\.find/.test(a.replace(/ALL_PLANS\.find/g, "")),
     "and nowhere falls back to the live-only list");
+}
+
+/* ========================================================================= */
+/* 6. AND THE PRODUCT MUST BE ABLE TO TELL YOU IT WAS NEVER APPLIED          */
+/* ========================================================================= */
+
+/*
+  Both fixes in this area are `create or replace function`. They add no column,
+  and every schema probe in health.ts works by SELECTing a column a migration
+  introduced — so the health check was structurally blind to them. That is not
+  hypothetical: the 43B(h) IST fix sat unapplied for two days while
+  /api/health reported "Schema migrations: operational".
+
+  A hand-run migration with nothing checking it was run is exactly how "it is
+  fixed" and "it is fixed for customers" come apart.
+*/
+{
+  const h = strip(read("src/lib/health.ts"));
+  check(/cortex_fn_has/.test(h),
+    "health.ts probes function BODIES, not only columns",
+    "a `create or replace function` migration is invisible to a column probe");
+  check(/expire_lapsed_subscriptions/.test(h) && /cortex_msme_exposure/.test(h),
+    "and names both function migrations that must be run by hand");
+  /*
+    SCOPED TO THE FN_PROBES BLOCK. My first version sliced from the first
+    `cortex_fn_has` to the end of the file and matched the "cannot verify" in
+    the BILLING GUARD probe below it — so the mutation that deletes this
+    block's own handling passed. A guard that reads a neighbour's correctness
+    as its own is not a guard.
+  */
+  const fnBlock = h.slice(h.indexOf("const FN_PROBES"), h.indexOf("cortex_has_billing_guard"));
+  check(fnBlock.length > 0 && (fnBlock.match(/cannot verify/g) || []).length >= 2,
+    "an absent probe helper reports UNVERIFIED on BOTH paths, not operational",
+    "reporting a control as present on the strength of a check that never ran " +
+    "is worse than having no check — it actively reassures. Both the error " +
+    "branch and the throw branch have to say so.");
+
+  const probeFile = readdirSync(new URL("supabase/migrations/", ROOT))
+    .find((f) => /create or replace function cortex_fn_has/.test(read(`supabase/migrations/${f}`)));
+  check(Boolean(probeFile), "a migration defines cortex_fn_has");
+  if (probeFile) {
+    const sql = read(`supabase/migrations/${probeFile}`);
+    check(/revoke execute on function cortex_fn_has/.test(sql),
+      "and revokes execute from public, anon and authenticated",
+      "it reads pg_proc; only the service role should reach it");
+    check(/set search_path = pg_catalog, public/.test(sql),
+      "and pins search_path, since it is security definer",
+      "without it a caller could shadow pg_proc with their own table");
+    check(/returns boolean/.test(sql),
+      "and returns a boolean, never the function source");
+  }
+
+  /* Every hand-run file must be listed, or it never runs on a rebuild. */
+  const order = read("supabase/migrations/ORDER.txt");
+  for (const f of ["2026_zzzn_renewal_grace_sweep.sql", "2026_zzzo_fn_body_probe.sql"]) {
+    check(order.includes(f), `${f} is listed in ORDER.txt`);
+  }
 }
 
 console.log(`\nrenewal grace: ${pass} passed, ${failures.length} failed`);

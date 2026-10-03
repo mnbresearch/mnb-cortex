@@ -885,6 +885,58 @@ async function checkSchema(): Promise<Check> {
     missing.push("2026_upsert_arbiter_fix (cannot verify)");
   }
 
+  /*
+    ==========================================================================
+    MIGRATIONS THAT ONLY REPLACE A FUNCTION, WHICH NO COLUMN PROBE CAN SEE
+    ==========================================================================
+
+    Every probe above selects a column a migration introduced. That is the
+    right test for a migration that adds a column, and it is structurally
+    blind to `create or replace function`, which changes no table and moves
+    nothing a SELECT can reach.
+
+    This is not hypothetical. The 43B(h) IST correction sat unapplied for two
+    days while /api/health reported "Schema migrations: operational", because
+    it replaces cortex_msme_exposure and adds no column. /msme under-reported
+    a disallowed deduction the whole time, and nothing said so.
+
+    cortex_fn_has() reads pg_proc.prosrc — the text Postgres actually holds —
+    and answers whether an expected marker is present. Same three outcomes as
+    the probes above: applied, NOT applied, or cannot verify. An absent helper
+    is reported as unverified rather than fine, because green has to mean
+    green; that rule is already written out two blocks up, and it was learnt
+    the hard way.
+  */
+  const FN_PROBES: [string, string, string, string][] = [
+    [
+      "expire_lapsed_subscriptions", "autorenew_status",
+      "2026_zzzn_renewal_grace_sweep.sql",
+      "the nightly sweep is EXPIRING CUSTOMERS WHOSE MANDATE IS LIVE — locking " +
+      "them out of a product they are paying for, skipping their autopilot, and " +
+      "emailing them that their plan has ended",
+    ],
+    [
+      "cortex_msme_exposure", "Asia/Kolkata",
+      "2026_zzzm_msme_ist_window.sql",
+      "43B(h) exposure ages in UTC, so /msme reports ZERO on the morning a bill " +
+      "crosses 45 days — an under-reported disallowed deduction",
+    ],
+  ];
+
+  await Promise.all(FN_PROBES.map(async ([fn, needle, file, consequence]) => {
+    try {
+      const { data, error } = await sb.rpc("cortex_fn_has", { p_name: fn, p_needle: needle });
+      if (error) {
+        /* The helper itself is missing, which is its own unrun migration. */
+        missing.push(`${file} (cannot verify — run 2026_zzzo_fn_body_probe.sql first)`);
+      } else if (data === false) {
+        missing.push(`${file} (NOT APPLIED — ${consequence})`);
+      }
+    } catch {
+      missing.push(`${file} (cannot verify — run 2026_zzzo_fn_body_probe.sql first)`);
+    }
+  }));
+
   try {
     const { data, error } = await sb.rpc("cortex_has_billing_guard");
     if (error) {
