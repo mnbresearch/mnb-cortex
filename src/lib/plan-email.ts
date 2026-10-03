@@ -48,7 +48,7 @@ function renderHtml(firstName: string, plan: Priority[], unsub: string): string 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
   </td></tr>
   <tr><td style="padding:14px 28px 22px"><a href="${APP_URL}/plan" style="display:inline-block;background:${C_TO};color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 22px;border-radius:9px">Open your full plan →</a></td></tr>
-  <tr><td style="padding:0 28px 8px;color:#1a2420;font-size:14px"><p style="margin:0">— Cortex, your AI COO</p></td></tr>
+  <tr><td style="padding:0 28px 8px;color:#1a2420;font-size:14px"><p style="margin:0">— Cortex</p></td></tr>
   <tr><td style="padding:4px 28px 26px">
     <hr style="border:none;border-top:1px solid #e6e9ef;margin:20px 0" />
     <p style="color:#6b7280;font-size:12px;line-height:1.6;margin:0">
@@ -62,7 +62,7 @@ function renderHtml(firstName: string, plan: Priority[], unsub: string): string 
 }
 function renderText(firstName: string, plan: Priority[], unsub: string): string {
   const lines = plan.map((p, i) => `${i + 1}. ${p.title} [${U[p.urgency] || "This week"}]\n   ${p.why}\n   ${p.tool}: ${APP_URL}${p.href}`).join("\n\n");
-  return [`Hi ${firstName},`, "", "Based on your numbers, here's what I'd focus on this week:", "", lines, "", `Open your full plan: ${APP_URL}/plan`, "", "— Cortex, your AI COO", "", "————", "MNB Cortex · MNB Research · contact@mnbresearch.com", `Unsubscribe: ${unsub}`].join("\n");
+  return [`Hi ${firstName},`, "", "Based on your numbers, here's what I'd focus on this week:", "", lines, "", `Open your full plan: ${APP_URL}/plan`, "", "— Cortex", "", "————", "MNB Cortex · MNB Research · contact@mnbresearch.com", `Unsubscribe: ${unsub}`].join("\n");
 }
 
 /*

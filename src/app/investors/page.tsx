@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Download } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { SmoothScroll, Cursor, Kinetic, SectionLabel } from "@/components/loco";
 import { Reveal } from "@/components/landing-extras";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
@@ -163,15 +163,27 @@ export default function Investors() {
             </span>
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <a
-              href="/investor-onepager.pdf"
-              target="_blank"
-              rel="noopener"
-              className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium"
-              data-cursor
-            >
-              <Download className="h-4 w-4" /> Download one-pager (PDF)
-            </a>
+            {/*
+              THE ONE-PAGER PDF IS GONE, AND THE REASON IS THIS PAGE'S OWN RULE.
+
+              Two hundred lines below, this page says: "This repository runs a
+              suite whose entire job is stopping published claims from drifting
+              from the code; the same standard applies here."
+
+              It could not apply here. A PDF is a binary, so not one of the four
+              claims suites can read a word of it, and every retired claim
+              survived inside it: a "3-day trial, no card" (TRIAL_DAYS is 0),
+              "AI COO" positioning, "130+ tools, 300+ AI agents, 25 industries"
+              (128 / 438 / 27), "recommended by ChatGPT, Gemini & Perplexity"
+              (the feature queries Gemini), and a KPI band of AbroBot's figures
+              — student data points, visa success rates — under a Cortex
+              heading, which test-claims.mjs exists specifically to prevent.
+
+              An investor reading a document we cannot check is worse than an
+              investor reading the page, which is derived from the code and
+              guarded. The link comes back when the PDF is regenerated from the
+              same constants this page renders.
+            */}
             <Link
               href="/contact"
               className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors"
@@ -213,7 +225,7 @@ export default function Investors() {
             ))}
           </div>
           <p className="mt-6 text-sm text-muted-foreground max-w-3xl">
-            The free 60-second Business Health Check is the top of this funnel — the product&rsquo;s first chapter, not a
+            The free Business Health Check is the top of this funnel — the product&rsquo;s first chapter, not a
             lead magnet.
           </p>
         </div>
@@ -415,15 +427,7 @@ export default function Investors() {
             outcome metrics above turned from instrumented into proven.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <a
-              href="/investor-onepager.pdf"
-              target="_blank"
-              rel="noopener"
-              className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium"
-              data-cursor
-            >
-              <Download className="h-4 w-4" /> Download one-pager
-            </a>
+            {/* Second link to the same unreadable PDF — see the note above. */}
             <a
               href="mailto:contact@mnbresearch.com"
               className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors"

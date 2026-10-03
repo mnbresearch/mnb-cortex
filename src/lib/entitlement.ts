@@ -88,7 +88,27 @@ export function effectiveStatus(
   const t = new Date(endsAt).getTime();
   if (!Number.isFinite(t)) return s;
 
-  const grace = String(opts?.autorenew || "").toUpperCase() === "ACTIVE" ? RENEWAL_GRACE_DAYS : 0;
+  /*
+    INITIALIZED COUNTS AS A LIVE MANDATE, NOT JUST ACTIVE.
+
+    `INITIALIZED` is what POST /api/pay/cashfree/subscription writes the moment
+    a mandate is created, and Cashfree may not promote it to ACTIVE until the
+    first debit authorises. A customer mid-authorisation — who has done
+    everything asked of them and is waiting on their bank — is the last person
+    to lock out of a product they are paying for.
+
+    The grace remains a FLOOR, NOT A LICENCE: three days after the period ends
+    the workspace expires whatever the mandate says, so a mandate that is live
+    at the gateway but never debits cannot hold a workspace open. The exposure
+    is three days of an already-paid-for product, which is the same exposure
+    ACTIVE already carried.
+
+    The nightly sweep (2026_zzzn_renewal_grace_sweep.sql) and renewal-email.ts
+    both name these two states. This is the definition they are pinned to by
+    scripts/test-renewal-grace.mjs.
+  */
+  const LIVE_MANDATE = ["ACTIVE", "INITIALIZED"];
+  const grace = LIVE_MANDATE.includes(String(opts?.autorenew || "").toUpperCase()) ? RENEWAL_GRACE_DAYS : 0;
   return Date.now() > t + grace * 86_400_000 ? "expired" : "active";
 }
 

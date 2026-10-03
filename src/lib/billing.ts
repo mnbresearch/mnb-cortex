@@ -2,7 +2,7 @@ import "server-only";
 import { TRIAL_DAYS } from "@/lib/config";
 import { createClient } from "@/lib/supabase/server";
 import { isLocked } from "@/lib/paywall";
-import { isHardStopped } from "@/lib/entitlement";
+import { isHardStopped, effectiveStatus } from "@/lib/entitlement";
 import { getUserAndOrg } from "@/lib/data";
 
 const DAY = 86_400_000;
@@ -17,6 +17,15 @@ export type BillingStatus = {
   subscriptionEndsAt: string | null;
   /** True when the lapse is a paid plan running out, not a trial ending. */
   lapsedSubscription: boolean;
+  /**
+   * Is a payment mandate live for this workspace?
+   *
+   * Surfaced because every "your plan renews in N days — Renew" prompt is
+   * WRONG for these customers: the mandate debits on its own, and following
+   * the prompt buys a second period they did not need. The renewal EMAIL has
+   * carried this guard for a while; the in-app banner never had the field.
+   */
+  autorenewActive: boolean;
   plan: string;
   locked: boolean;         // must upgrade to continue
   /** Credits the workspace can still spend. Bought credits ARE an entitlement. */
@@ -40,7 +49,7 @@ export type BillingStatus = {
 export async function getBillingStatus(): Promise<BillingStatus> {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) {
-    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, plan: "starter", locked: false, credits: 0, pooledBy: null };
+    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, autorenewActive: false, plan: "starter", locked: false, credits: 0, pooledBy: null };
   }
   const sb = await createClient();
 
@@ -50,6 +59,8 @@ export async function getBillingStatus(): Promise<BillingStatus> {
   let plan = "starter";
   let created: number | null = null;
   let trialEnd: number | null = null;
+  /* Needed for the renewal grace below: a live mandate is not a lapse yet. */
+  let autorenewStatus: string | null = null;
   let subEnd: number | null = null;
   let credits = 0;
   let unlimited = false;
@@ -68,6 +79,7 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     created = (data as any).created_at ? new Date((data as any).created_at).getTime() : null;
     trialEnd = (data as any).trial_ends_at ? new Date((data as any).trial_ends_at).getTime() : (created ? created + TRIAL_DAYS * DAY : null);
     subEnd = (data as any).subscription_ends_at ? new Date((data as any).subscription_ends_at).getTime() : null;
+    autorenewStatus = (data as any).autorenew_status ?? null;
     credits = Number((data as any).credits ?? 0);
     unlimited = (data as any).credits_allowance === -1;
     practiceOrgId = (data as any).practice_org_id || null;
@@ -143,6 +155,10 @@ export async function getBillingStatus(): Promise<BillingStatus> {
                otherwise a covered client still reads as an expired trial. */
             subEnd = (firmRow as any).subscription_ends_at ? new Date((firmRow as any).subscription_ends_at).getTime() : null;
             trialEnd = (firmRow as any).trial_ends_at ? new Date((firmRow as any).trial_ends_at).getTime() : trialEnd;
+            /* And the payer's mandate, for the same reason: the grace that
+               keeps the FIRM served has to keep its covered clients served
+               too, or a pooled client locks out while the firm does not. */
+            autorenewStatus = (firmRow as any).autorenew_status ?? null;
           }
         }
       }
@@ -165,10 +181,40 @@ export async function getBillingStatus(): Promise<BillingStatus> {
   */
   const blocked = isHardStopped(subStatus);
 
-  // A paid plan runs out at the end of the period it was bought for. The nightly
-  // cron flips the row to 'expired', but we evaluate it live too so the paywall
-  // is correct the moment the period ends rather than at the next cron run.
-  const lapsedSubscription = subStatus === "active" && subEnd !== null && now > subEnd;
+  /*
+    ==========================================================================
+    THE SAME GRACE THE SERVER GRANTS, OR THE UI LOCKS SOMEONE THE SERVER SERVES
+    ==========================================================================
+
+    This was:
+
+        subStatus === "active" && subEnd !== null && now > subEnd
+
+    — a second, independent implementation of "has the period run out", with no
+    renewal grace at all. entitlement.ts gives a live mandate three days
+    (RENEWAL_GRACE_DAYS) because UPI Autopay gives 24h pre-debit notice, bank
+    retries are routine and a webhook can lag. This file imported isHardStopped
+    from that module and then re-derived the lapse itself, so the two disagreed
+    by up to three days.
+
+    The direction of the disagreement is the bad one. chargeForMode() uses
+    statusOf() and serves the customer; this function locks the screen. So a
+    customer whose mandate debits a few hours late saw the "Your subscription
+    has ended" modal over a product that was, at that moment, still working for
+    them. paywall.ts:45-54 states the invariant that breaks: "A UI that locks
+    someone the server would serve is a customer who paid and cannot see what
+    they paid for."
+
+    effectiveStatus() is now the single definition. It returns "expired" only
+    once any applicable grace is used up, so the comment this replaces stays
+    true — the paywall is still correct the moment the period genuinely ends,
+    rather than waiting for the next cron run.
+  */
+  const liveStatus = effectiveStatus(subStatus, subEnd ? new Date(subEnd).toISOString() : null, {
+    trialEndsAt: trialEnd ? new Date(trialEnd).toISOString() : null,
+    autorenew: autorenewStatus,
+  });
+  const lapsedSubscription = subStatus === "active" && subEnd !== null && liveStatus === "expired";
   const paidAndCurrent = subStatus === "active" && !lapsedSubscription;
 
   let status: BillingStatus["status"] = paidAndCurrent
@@ -219,6 +265,7 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     trialEndsAt: trialEnd ? new Date(trialEnd).toISOString() : null,
     subscriptionEndsAt: subEnd ? new Date(subEnd).toISOString() : null,
     lapsedSubscription,
+    autorenewActive: ["ACTIVE", "INITIALIZED"].includes(String(autorenewStatus || "").toUpperCase()),
     plan, locked, credits, pooledBy,
   };
 }

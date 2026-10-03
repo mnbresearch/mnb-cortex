@@ -15,8 +15,19 @@ export default function Visibility() {
           <div className="text-sm flex items-start gap-2">
             <Radar className="h-4 w-4 text-primary mt-0.5 shrink-0" />
             <span>
-              Over 100 million people now ask AI (ChatGPT, Gemini, Perplexity) for recommendations before they buy. Cortex runs your buyer questions
-              through live AI engines, shows whether <b>you</b> get named — or a competitor does — and drafts the exact content to get you recommended.
+              {/*
+                THE PUBLIC PAGE WAS FIXED AND THIS ONE — THE PAID ONE — WAS NOT.
+
+                src/app/ai-visibility/page.tsx carries a long note explaining
+                that there is no OpenAI call and no Perplexity call anywhere in
+                the feature: it queries Gemini. scripts/test-claims.mjs pins
+                that page and does not scan the (app) route group, so the
+                signed-in version kept naming three engines to the customers
+                actually paying for it. "Over 100 million people" had no source
+                in the repo either.
+              */}
+              Buyers increasingly ask an AI assistant for recommendations before they buy. Cortex runs your buyer questions
+              through Google Gemini, shows whether <b>you</b> get named — or a competitor does — and drafts the exact content to get you recommended.
             </span>
           </div>
         </Card>

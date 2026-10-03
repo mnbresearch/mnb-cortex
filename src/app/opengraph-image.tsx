@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 export const runtime = "edge";
-export const alt = "MNB Cortex — The AI operating brain for your business";
+export const alt = "MNB Cortex — The early-warning system for your business";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export default function OG() {
@@ -12,7 +12,7 @@ export default function OG() {
           <div style={{ fontSize: 40, fontWeight: 700 }}>MNB Cortex</div>
         </div>
         <div style={{ fontSize: 74, fontWeight: 800, marginTop: 44, lineHeight: 1.05, letterSpacing: -2 }}>Your business now has a brain of its own.</div>
-        <div style={{ fontSize: 30, color: "#8fd8cc", marginTop: 26 }}>One AI operating brain for your whole company — it reads everything, remembers everything, and acts.</div>
+        <div style={{ fontSize: 30, color: "#8fd8cc", marginTop: 26 }}>One early-warning system for your whole company — it reads everything, remembers everything, and acts.</div>
       </div>
     ), { ...size }
   );

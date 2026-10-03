@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
     gate = await chargeForMode("chat");
     if (!gate.ok) {
-      const d = creditDenial(gate, "Chatting with your AI COO");
+      const d = creditDenial(gate, "Asking Cortex");
       return new Response(d.body.error, { status: d.status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
     const context = await getBusinessContext();

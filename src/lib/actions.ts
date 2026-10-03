@@ -1224,7 +1224,7 @@ export async function inviteMember(fd: FormData): Promise<ActionResult | void> {
   const mail = await sendEmail(email, `You're invited to ${orgName} on MNB Cortex`,
     `<h2>You've been invited</h2><p>${user?.email || "A teammate"} invited you to join <b>${orgName}</b> on MNB Cortex as <b>${role}</b>.</p>
      <p>Sign in with this email address to accept: <a href="${appUrl}/login">${appUrl}/login</a></p>
-     <p>— MNB Cortex, the AI COO for SMEs</p>`,
+     <p>— MNB Cortex</p>`,
     { kind: "invite", orgId });
   await logActivity(orgId, "crud", `Invited ${email} as ${role}`);
   revalidatePath("/admin");

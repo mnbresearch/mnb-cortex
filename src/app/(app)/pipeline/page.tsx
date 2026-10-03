@@ -116,11 +116,47 @@ export default async function Pipeline() {
                       <div className="text-xs mt-1 font-medium">{inr(Number(d.value) || 0)}</div>
                       {live && (
                         <div className="flex items-center gap-1 mt-2">
-                          <SafeForm action={moveDeal} className="flex-1">
+                          {/*
+                            THIS FORM HAD NO SUBMIT CONTROL, SO THE BOARD WAS
+                            READ-ONLY AND NOBODY NOTICED.
+
+                            A <select> change does not submit a form, and a
+                            form with no submit control has no implicit
+                            submission either. SafeForm renders a plain
+                            <form action={run}> and has no submit-on-change
+                            behaviour — `requestSubmit` appears nowhere in the
+                            codebase. So the dropdown moved nothing, while the
+                            line under the board told the owner "Change a
+                            card's stage dropdown to move the deal."
+
+                            moveDeal() is also the ONLY place a won deal is
+                            turned into a sales_orders row — the code whose own
+                            comment says a founder could otherwise "close their
+                            biggest deal of the year and watch the dashboard not
+                            move". Unreachable, so that is exactly what
+                            happened: every closed deal stayed out of revenue,
+                            out of the dashboard, and out of the AI's context.
+                            Add and Delete were the only working controls.
+
+                            A VISIBLE BUTTON RATHER THAN AUTO-SUBMIT. Firing on
+                            `change` would be worse than the bug for keyboard
+                            users: arrowing through a native select fires change
+                            on every option it passes, so a keyboard user would
+                            move the deal through three stages on the way to the
+                            one they wanted. An explicit control is also what
+                            makes the state of the card unambiguous.
+                          */}
+                          <SafeForm action={moveDeal} className="flex-1 flex items-center gap-1">
                             <input type="hidden" name="id" value={d.id} />
-                            <select name="stage" defaultValue={d.stage} className="w-full rounded-md border bg-background px-1.5 h-7 text-[11px]">
+                            <label className="sr-only" htmlFor={`stage-${d.id}`}>Stage for {d.customer_name}</label>
+                            <select id={`stage-${d.id}`} name="stage" defaultValue={d.stage} className="w-full rounded-md border bg-background px-1.5 h-7 text-[11px]">
                               {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
                             </select>
+                            <button
+                              type="submit"
+                              className="shrink-0 rounded-md border px-2 h-7 text-[11px] font-medium hover:bg-accent transition-colors"
+                              aria-label={`Move ${d.customer_name} to the selected stage`}
+                            >Move</button>
                           </SafeForm>
                           <DeleteButton table="sales_pipeline" id={d.id} path="/pipeline" />
                         </div>
@@ -133,7 +169,7 @@ export default async function Pipeline() {
             );
           })}
         </div>
-        {live && <p className="text-xs text-muted-foreground">Change a card's stage dropdown to move the deal. Sign-in required to edit.</p>}
+        {live && <p className="text-xs text-muted-foreground">Pick a stage and press Move. Marking a deal Won also records it as a sales order, so it reaches your revenue and dashboard. Sign-in required to edit.</p>}
       </PageShell>
     </>
   );

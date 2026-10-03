@@ -94,7 +94,7 @@ Reply to this email to reach them directly.`;
     // Confirm to the requester.
     const userBody = `Hi ${name.split(" ")[0] || "there"},
 
-Thanks for your interest in MNB Cortex — the AI COO for your business.
+Thanks for your interest in MNB Cortex — the early-warning system for your business.
 
 Our team has received your request and will reach out shortly with access. In the meantime, you can tell us more about your business here: ${CONTACT_URL}
 

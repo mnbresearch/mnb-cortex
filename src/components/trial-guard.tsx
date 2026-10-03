@@ -71,7 +71,7 @@ const PLANS = ALL_PLANS
   wizard's own destinations came to be missing from it.
 */
 
-export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = false, subscriptionEndsAt = null }: { status: string; daysLeft: number; locked: boolean; lapsedSubscription?: boolean; subscriptionEndsAt?: string | null }) {
+export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = false, subscriptionEndsAt = null, autorenewActive = false }: { status: string; daysLeft: number; locked: boolean; lapsedSubscription?: boolean; subscriptionEndsAt?: string | null; autorenewActive?: boolean }) {
   const path = usePathname();
   const [dismissed, setDismissed] = useState(false);
 
@@ -127,7 +127,22 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
   // ---- Renewal reminder for a paid plan about to lapse ----
   // Only when there IS a recorded end date: an active workspace without one
   // never expires and must never be nagged to renew.
-  if (status === "active" && subscriptionEndsAt && daysLeft <= 7 && !dismissed && !isBannerSuppressed(path)) {
+  /*
+    NOT WHEN A MANDATE IS LIVE.
+
+    This banner said "Your plan renews in N days" with a Renew button, to
+    every active workspace inside seven days of its period end — including the
+    ones whose auto-renewal is switched on and will debit by itself. A customer
+    who follows the prompt buys a SECOND period; settle.ts stacks it correctly
+    onto the first, which means the arithmetic is right about a payment they
+    should never have been asked to make.
+
+    lib/renewal-email.ts has carried exactly this guard for a while, with the
+    comment "a live mandate renews on its own — reminding them to 'renew now'
+    would be wrong". The in-app banner was never given the field to check. It
+    has it now.
+  */
+  if (status === "active" && subscriptionEndsAt && daysLeft <= 7 && !autorenewActive && !dismissed && !isBannerSuppressed(path)) {
     const urgent = daysLeft <= 2;
     return (
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100%-2rem)]">

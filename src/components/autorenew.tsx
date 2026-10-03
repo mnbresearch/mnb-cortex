@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { RefreshCw, ShieldCheck, Loader2, X } from "lucide-react";
-import { PLANS } from "@/lib/config";
+import { ALL_PLANS } from "@/lib/config";
 
 /**
  * Auto-renewal control.
@@ -30,7 +30,23 @@ export function AutoRenew({
   const [annual, setAnnual] = useState(false);
   const [live, setLive] = useState(status || "");
 
-  const plan = PLANS.find((p) => p.id === String(planId || "").toLowerCase());
+  /*
+    ALL_PLANS, NOT PLANS — or the customers most likely to need this control
+    are the ones who cannot see it.
+
+    PLANS holds the six live tiers. A workspace on a retired plan (starter,
+    growth, business, aicoo) or on one an operator provisioned by hand
+    (superadmin-actions.ts writes `premium` and `solo`) found no match, this
+    component returned null, and billing/page.tsx rendered the "Auto-renewal"
+    heading with NOTHING UNDER IT — no status, no next-charge date, and no way
+    to switch a live mandate off. Their only route out was their bank or a
+    support ticket.
+
+    Everything behind this already handled retired plans correctly:
+    pay/settle.ts and the subscription webhook both resolve against ALL_PLANS
+    for precisely this reason. The UI was the one place that did not.
+  */
+  const plan = ALL_PLANS.find((p) => p.id === String(planId || "").toLowerCase());
   const amount = plan ? (annual ? plan.annual : plan.monthly) : 0;
   const upiOk = amount > 0 && amount <= UPI_MAX;
   const on = live === "ACTIVE" || live === "INITIALIZED";

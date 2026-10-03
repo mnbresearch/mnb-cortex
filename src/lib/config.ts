@@ -1,5 +1,11 @@
 export const APP_VERSION = "6.40.0";
-export const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "919711488481";
+/*
+  …88480. The public footer, the contact page, the privacy, terms and refund
+  pages all publish …88480; this default was …88481, so the pricing modal's
+  "Message on WhatsApp" button opened a chat with a different number from the
+  one on the page it was launched from.
+*/
+export const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "919711488480";
 
 // ADMIN_EMAIL and SUPER_ADMINS moved to src/lib/operators.ts, which is
 // server-only. This file is imported by client components, so anything

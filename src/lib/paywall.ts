@@ -112,6 +112,36 @@ export const PAYWALL_ALLOW = [
   */
   "/calculators",  // advertised as free in the public footer
   "/deadlines",    // same list, same promise
+
+  /*
+    …AND THE CALCULATORS THEMSELVES, NOT JUST THE PAGE THAT LISTS THEM.
+
+    The note above was right and the fix was one level too shallow. Only the
+    INDEX was allow-listed. The 28 tools live at their own top-level routes —
+    /gst-calc, /epf, /runway, /tds — so a signed-up workspace reached a page
+    headed "All 28 are free and need no account" and hit the full-screen
+    "Choose a plan to get started" modal on clicking any single one of them.
+
+    All 28, not 27 of them: TRIAL_DAYS and TRIAL_CREDITS are both 0, so EVERY
+    new workspace is locked from its first second. This was not an edge case,
+    it was every signup, on the one surface the public footer calls "Free
+    tools".
+
+    Listed as literals rather than imported from nav.ts to keep this module
+    dependency-free — it is imported by both a server module (billing.ts) and
+    a client component (trial-guard.tsx), and nav.ts pulls in the whole lucide
+    icon set. scripts/test-free-calculators.mjs pins this list to nav's
+    CALCULATORS in both directions, so adding a calculator without adding it
+    here fails, and so does the reverse.
+
+    Serving them costs nothing: every one is a stateless arithmetic tool. Not
+    one spends a credit or calls a model.
+  */
+  "/abtest", "/adbudget", "/advance-tax", "/amortization", "/breakeven",
+  "/buyvslease", "/ccc", "/debt", "/depreciation", "/dscr", "/epf", "/funnel",
+  "/gratuity", "/gst-calc", "/gst-latefee", "/inventory-turns", "/itc", "/ltv",
+  "/markup", "/networth", "/prepay", "/rate-card", "/rentvsbuy", "/roi",
+  "/runway", "/sip", "/tax", "/tds",
 ] as const;
 
 /*

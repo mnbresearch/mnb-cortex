@@ -39,7 +39,7 @@ const SETUP: Priority[] = [
   { title: "Add your real numbers", why: "Upload a bank statement and Cortex reads your true cash position in seconds.", tool: TOOLS.bank.label, href: TOOLS.bank.href, urgency: "high" },
   { title: "Read your latest GST return", why: "Get your turnover, tax split, ITC and net payable — no spreadsheets.", tool: TOOLS.gst.label, href: TOOLS.gst.href, urgency: "medium" },
   { title: "Ask how your business is doing", why: "Ask in plain language once data is in — Cortex answers from your numbers.", tool: TOOLS.chat.label, href: TOOLS.chat.href, urgency: "medium" },
-  { title: "See if AI recommends you", why: "Check whether ChatGPT & Gemini name your business to buyers.", tool: TOOLS.visibility.label, href: TOOLS.visibility.href, urgency: "low" },
+  { title: "See if AI recommends you", why: "Check whether AI assistants name your business to buyers.", tool: TOOLS.visibility.label, href: TOOLS.visibility.href, urgency: "low" },
 ];
 
 const RULES: Priority[] = [
@@ -108,7 +108,7 @@ export async function buildPriorities(context: string, hasData: boolean): Promis
   if (!hasData) return { priorities: SETUP, mode: "setup" };
 
   const menu = Object.entries(TOOLS).map(([k, v]) => `${k} = ${v.label}`).join("; ");
-  const sys = `You are an AI COO for an Indian SME. Return ONLY a JSON array, no prose, no code fences.`;
+  const sys = `You are the early-warning analyst for an Indian SME. Return ONLY a JSON array, no prose, no code fences.`;
   const prompt = `From this business's live data, choose the 3-5 MOST IMPORTANT actions the owner should take this week, ordered most urgent first.
 Return a JSON array of objects EXACTLY like:
 [{"title":"imperative, max 8 words","why":"one specific sentence, cite a real number from the data when possible","tool":"one key from the menu","urgency":"high|medium|low"}]

@@ -43,6 +43,7 @@
 */
 import { readFileSync } from "node:fs";
 import { isLocked, isAllowedWhileLocked, PAYWALL_ALLOW } from "../src/lib/paywall.ts";
+import { CALCULATORS } from "../src/lib/nav.ts";
 
 let pass = 0;
 const failures = [];
@@ -164,10 +165,36 @@ for (const [path, why] of [
 
 /* ============================ 5. THE LIST STAYS HONEST ==================== */
 
+/*
+  THE BUDGET IS ON AD-HOC ENTRIES, NOT ON THE DECLARED FREE-TOOLS CATEGORY.
+
+  The rule — "the list grows one reasonable-sounding entry at a time" — is the
+  right rule, and the 28 calculators are precisely one reasonable-sounding
+  entry. They are allow-listed because the public footer has a "Free tools"
+  column and /calculators says "all 28 are free and need no account", and all
+  28 were behind the wall for every signup (TRIAL_DAYS and TRIAL_CREDITS are
+  both 0, so a new workspace is locked from its first second).
+
+  Counting them individually would either fail forever or force the threshold
+  up to ~40, which retires the guard. So they are excluded from the budget and
+  pinned separately instead: test-claims-blindspots.mjs asserts the calculator
+  entries equal nav's CALCULATORS in BOTH directions, and that none of them
+  prefix-matches a billable route. The pressure stays exactly where it was —
+  an eleventh ad-hoc page still fails here.
+*/
+const CALC_PATHS = new Set(CALCULATORS.map((c) => c.href));
+const adHoc = PAYWALL_ALLOW.filter((a) => !CALC_PATHS.has(a));
+
 check(
-  "the allow list is short",
-  PAYWALL_ALLOW.length <= 10,
-  `${PAYWALL_ALLOW.length} entries — every addition is a page given away for free, and the list grows one reasonable-sounding entry at a time`,
+  "the allow list is short, excluding the pinned free-tools category",
+  adHoc.length <= 10,
+  `${adHoc.length} ad-hoc entries (plus ${PAYWALL_ALLOW.length - adHoc.length} pinned calculators) — every addition is a page given away for free, and the list grows one reasonable-sounding entry at a time`,
+);
+
+check(
+  "and the free-tools category is exactly the calculators, nothing smuggled in",
+  PAYWALL_ALLOW.length - adHoc.length === CALCULATORS.length,
+  `${PAYWALL_ALLOW.length - adHoc.length} calculator entries vs ${CALCULATORS.length} calculators in nav`,
 );
 
 /*

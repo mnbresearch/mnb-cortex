@@ -22,13 +22,38 @@ export const BRAND = {
   LEGAL_ENTITY: "Abrobot Technologies Private Limited",
   CONTACT_EMAIL: "contact@mnbresearch.com",
   REPLY_TO: process.env.EMAIL_REPLY_TO || "contact@mnbresearch.com",
-  PHONE: "+91 97114 88481",
+  /*
+    …88480, matching every public page and the contact form. The footer of
+    every email said …88481 while the website said …88480, so a customer
+    replying to one and calling the other reached two different numbers.
+  */
+  PHONE: "+91 97114 88480",
   WEBSITE: "https://www.mnbresearch.com",
-  TAGLINE: "The AI COO for your business",
-  BADGES: ["Shark Tank India Featured", "DPIIT-Recognised Startup", "10,000+ Businesses Served"],
+  /*
+    The product is an early-warning system, not an "AI COO". That framing was
+    retired from the pages and scripts/test-positioning.mjs guards it — but the
+    guard globs `.tsx` under src/app and src/components, and this is a `.ts`
+    data module, so the old tagline kept shipping in the header of every single
+    email the product sends.
+  */
+  TAGLINE: "Early warning for your business",
+  /*
+    "10,000+ Businesses Served" IS BANNED, AND WAS IN EVERY EMAIL.
+
+    scripts/test-claims.mjs refuses that string with the reason "a 200x
+    overstatement of the published customer count" — the published figure is
+    "50+" (config.ts). The ban scans a list of ten page files. This module is
+    not one of them, so the claim survived in the footer of the shared email
+    shell used by alert digests, lifecycle nudges, inquiry replies to leads,
+    campaign mail and operator alerts.
+
+    An overstatement in an email is worse than on a page: it arrives
+    unprompted, it is addressed to a named person, and it is retained.
+  */
+  BADGES: ["Shark Tank India Featured", "DPIIT-Recognised Startup"],
   COLOR_FROM: "#1f4a3b",
   COLOR_TO: "#2f6b54",
-  DISCLAIMER: `MNB Cortex is the AI operating brain for your business. © ${new Date().getFullYear()} Abrobot Technologies Private Limited. All rights reserved.`,
+  DISCLAIMER: `MNB Cortex is the early-warning system for your business. © ${new Date().getFullYear()} Abrobot Technologies Private Limited. All rights reserved.`,
 };
 
 /** The RFC-5322 From value: "MNB Cortex by MNB Research <hello@updates.mnbresearch.com>". */

@@ -53,7 +53,7 @@ const GROUPS: Group[] = [
     title: "Get discovered & remember",
     desc: "Win the AI-search era, and never lose context.",
     tools: [
-      { href: "/visibility", name: "AI Visibility (AEO)", icon: Radar, blurb: "See if ChatGPT, Gemini & Perplexity recommend you.", you: "A visibility score, who's cited instead, and the content that fixes it.", cost: c("visibility") },
+      { href: "/visibility", name: "AI Visibility (AEO)", icon: Radar, blurb: "See if AI assistants recommend you.", you: "A visibility score, who's cited instead, and the content that fixes it.", cost: c("visibility") },
       { href: "/memory", name: "Cortex Memory", icon: BrainCircuit, blurb: "A permanent, evolving memory of your business.", you: "Every tool gets sharper because Cortex remembers.", cost: null },
     ],
   },

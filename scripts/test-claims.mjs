@@ -466,7 +466,15 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
   const prose = landing.replace(/className=(?:"[^"]*"|\{`[^`]*`\})/g, "");
   const timeClaims = [...prose.matchAll(/\b(\d+)\s*-?\s*(?:min|minute|second|sec)s?\b/gi)]
     .map((m) => m[0].trim().toLowerCase().replace(/\s+/g, " "));
-  const ALLOWED_TIME = new Set(["60-second", "60 second", "60 seconds", "3 min", "2 min"]);
+  /*
+    "2-minute" / "2 minutes" replaced "60-second", and has the mechanism the
+    rule asks for: /health-check's own page states "About two minutes", so the
+    landing page now quotes the number the thing itself claims. They disagreed
+    by 2x, one click apart — the CTA promised 60 seconds and the page it opened
+    said two minutes. test-claims-blindspots.mjs asserts the two agree, so this
+    entry cannot drift back on its own.
+  */
+  const ALLOWED_TIME = new Set(["60-second", "60 second", "60 seconds", "3 min", "2 min", "2-minute", "2 minute", "2 minutes"]);
   const rogue = timeClaims.filter((t) => !ALLOWED_TIME.has(t));
   check(rogue.length === 0,
     "no new stopwatch promise slipped onto the landing page",

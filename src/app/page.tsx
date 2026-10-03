@@ -139,7 +139,22 @@ const HOW = [
 
 // Problem-specific: the day-to-day reality of running an SME, and how Cortex changes it.
 const OLD_NEW = [
-  { old: "You find out a customer hasn't paid when you need the cash.", now: "Cortex emails you the day an invoice crosses its due date — with the name and the number." },
+  /*
+    WAS: "Cortex emails you the day an invoice crosses its due date — with the
+    name and the number."
+
+    Three things in that sentence were wrong. The only email mechanism is an
+    alert RULE, and the seeded default is an AGGREGATE threshold (receivables
+    past due above ₹5,00,000), not a per-invoice trigger — so a business with
+    ₹80,000 overdue is never emailed about any invoice. The alert body carries
+    the total and no party and no invoice number. And "the day it crosses" is
+    the nightly sweep, which is budgeted.
+
+    The NAMED warning is real — insights.ts writes "<party> owes you ₹X, N days
+    past due" — but it is rendered in the app, which is where the honest
+    version of this sentence now points.
+  */
+  { old: "You find out a customer hasn't paid when you need the cash.", now: "Your overdue list is ranked worst-first and names who to chase — and Cortex emails you when the total crosses the line you set." },
   { old: "You pay a small supplier late and lose the deduction at year end.", now: "It watches the MSME 45-day clock (43B(h)) and tells you which bills to clear first." },
   { old: "A GST or TDS date passes and you find out from a notice.", now: "Every statutory deadline that applies to you, warned before — not after." },
   { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Vyapar and Busy files as they come." },
@@ -228,7 +243,7 @@ const OBJECTIONS = [
       genuinely costs nothing.
     */
     q: "Do I have to pay to find out if it works?",
-    a: "No. The 60-second health check needs no account at all. And after you sign up you can import your own file and see your own dashboard and overdue list before you buy anything — it's your numbers that should convince you, not ours.",
+    a: "No. The health check needs no account at all. And after you sign up you can import your own file and see your own dashboard and overdue list before you buy anything — it's your numbers that should convince you, not ours.",
   },
   {
     q: "What if I want out?",
@@ -304,7 +319,7 @@ export default function Home() {
               </Link>
             </Magnetic>
             <Link href="/health-check" className="flex sm:inline-flex items-center justify-center gap-2 rounded-full border px-7 h-12 text-sm font-medium hover:bg-accent transition-colors">
-              Free 60-second check <ArrowRight className="h-4 w-4" />
+              Free 2-minute check <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
           {/* The header has a Sign in button, but it sits in a bar with no
@@ -506,7 +521,7 @@ export default function Home() {
       <section id="health-check" className="px-5 lg:px-10 py-24 lg:py-28 bg-secondary/20">
         <div className="max-w-7xl mx-auto grid lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-16 items-start">
           <div>
-            <SectionLabel n="03">Free · 60 seconds</SectionLabel>
+            <SectionLabel n="03">Free · about 2 minutes</SectionLabel>
             <h2 className="font-display display-3 tracking-tightest mt-6 leading-[1.1]">
               How healthy is <span className="text-primary">your</span> business, really?
             </h2>

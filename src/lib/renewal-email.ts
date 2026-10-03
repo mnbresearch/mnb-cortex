@@ -125,9 +125,27 @@ export async function sendRenewalReminders(budget?: Budget): Promise<RenewalResu
     const daysLeft = Math.ceil((end - now) / DAY);
     const status = String(o.subscription_status || "");
 
-    // A live mandate renews on its own — reminding them to "renew now" would be
-    // wrong, and the lapsed notice would be plain incorrect.
-    if (String(o.autorenew_status || "") === "ACTIVE" && status === "active") { out.skipped++; continue; }
+    /*
+      A live mandate renews on its own — reminding them to "renew now" would be
+      wrong, and the lapsed notice would be plain incorrect.
+
+      THE `status === "active"` CONJUNCT DEFEATED THIS ONE CRON STEP EARLIER.
+      expire_lapsed_subscriptions() runs first in the same nightly route, and
+      it used to flip an ended period to `expired` with no renewal grace and no
+      reference to autorenew_status. By the time this loop ran, a live-mandate
+      customer's status was `expired`, this skip missed, and the branch below
+      selected kind = "lapsed" — so we emailed "Your plan has ended. Renew my
+      plan" to someone whose mandate was about to debit. Our own dunning mail,
+      inviting a double payment.
+
+      The sweep is fixed (2026_zzzn_renewal_grace_sweep.sql). This no longer
+      depends on it: the mandate alone is enough to skip, because a live
+      mandate means no notice of ANY kind is the right notice. INITIALIZED
+      counts too — that is a mandate mid-authorisation, the last customer to
+      chase for money.
+    */
+    const mandateLive = ["ACTIVE", "INITIALIZED"].includes(String(o.autorenew_status || "").toUpperCase());
+    if (mandateLive) { out.skipped++; continue; }
 
     // Which notice, if any, is due today.
     let kind: Notice | null = null;
