@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Topbar } from "@/components/topbar";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Send, User, Mic, BrainCircuit, Check } from "lucide-react";
+import { Sparkles, Send, User, Mic, BrainCircuit, Check, ListChecks } from "lucide-react";
 import type { ChatMessage } from "@/types";
 import { mdToHtml } from "@/lib/utils";
 
@@ -21,7 +21,16 @@ const SUGGESTIONS = [
   "Show me revenue by month this year",
   "How much do I owe suppliers right now?",
   "Tell me everything about Sharma Traders",
+  "Export my receivables ageing to Excel",
+  "Send a payment reminder to whoever is most overdue",
 ];
+
+/*
+  When the reply says an action is waiting on /approvals, or was done under
+  the owner's rule, give the person the one link they need next to it. The
+  words come from the tool result text (lib/ai/tools.ts), not from a guess.
+*/
+const ACTION_HINT = /approvals page|waiting for approval|needs their tap|within the owner's rule/i;
 
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -136,6 +145,11 @@ export default function Chat() {
                   <div className="max-w-[80%]">
                     <div className={`rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${m.role === "user" ? "bg-secondary" : "bg-card border"}`}
                       dangerouslySetInnerHTML={{ __html: md(m.content) }} />
+                    {m.role === "assistant" && m.content && !loading && ACTION_HINT.test(m.content) && (
+                      <a href="/approvals" className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 h-8 text-xs font-medium text-primary hover:bg-primary/10">
+                        <ListChecks className="h-3.5 w-3.5" aria-hidden="true" /> Review on Approvals
+                      </a>
+                    )}
                     {m.role === "assistant" && m.content && !loading && (
                       <button onClick={() => remember(i, m.content)} disabled={saved[i]}
                         className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">

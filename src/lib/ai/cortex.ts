@@ -270,23 +270,11 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
     }
     // ---- Groq (FREE: console.groq.com) — OpenAI-compatible ----
     if (provider === "groq" && aiKey("GROQ_API_KEY")) {
-      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey("GROQ_API_KEY")}` },
-        body: JSON.stringify({ model: groqModel(), messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
-      });
-      if (!r.ok) return await note("groq", r); // 429 rate-limit or 5xx → let the caller retry
-      const j = await r.json();
-      return j?.choices?.[0]?.message?.content ?? null;
+      return await openaiCompatible("groq", "https://api.groq.com/openai/v1/chat/completions", aiKey("GROQ_API_KEY")!, groqModel(), sys, messages, toolOrg, toolUser);
     }
     // ---- OpenAI ----
     if (provider === "openai" && aiKey("OPENAI_API_KEY")) {
-      const r = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey("OPENAI_API_KEY")}` },
-        body: JSON.stringify({ model: openaiModel(), messages: [{ role: "system", content: sys }, ...messages], temperature: 0.4 }),
-      });
-      if (!r.ok) return await note("openai", r);
-      const j = await r.json();
-      return j?.choices?.[0]?.message?.content ?? null;
+      return await openaiCompatible("openai", "https://api.openai.com/v1/chat/completions", aiKey("OPENAI_API_KEY")!, openaiModel(), sys, messages, toolOrg, toolUser);
     }
     // ---- Anthropic ----
     if (provider === "anthropic" && aiKey("ANTHROPIC_API_KEY")) {
@@ -304,6 +292,50 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
     return null; // network/transient — retry
   }
   lastFailure = { provider, detail: provider === "none" ? "no provider key configured" : "no matching provider branch" };
+  return null;
+}
+
+/*
+  THE SAME TOOL LOOP FOR THE OPENAI-COMPATIBLE PROVIDERS.
+
+  Until now only the Gemini branch offered tools. With GROQ or OPENAI first in
+  the chain the model had no way to look a record up or to propose an action,
+  so "mark invoice 1042 paid" produced a confident paragraph and no proposal —
+  on exactly the provider that most deployments use because it is the one
+  that streams. The declarations are plain JSON Schema, so they translate to
+  the OpenAI shape without change; the loop mirrors the Gemini one: three
+  rounds, four calls per round, only declared names, every lookup scoped by
+  toolOrg, no tools at all without a session.
+*/
+async function openaiCompatible(
+  label: string, url: string, key: string, model: string, sys: string, messages: Msg[],
+  toolOrg?: string | null, toolUser?: string | null,
+): Promise<string | null> {
+  const useTools = Boolean(toolOrg);
+  let convo: any[] = [{ role: "system", content: sys }, ...messages];
+  const tools = useTools ? TOOL_DECLARATIONS.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } })) : undefined;
+  for (let round = 0; round < 4; round++) {
+    const r = await fetch(url, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model, messages: convo, temperature: 0.4, ...(tools ? { tools, tool_choice: "auto" } : {}) }),
+    });
+    if (!r.ok) return await note(label, r); // 429 rate-limit or 5xx → let the caller retry
+    const j = await r.json();
+    const msg = j?.choices?.[0]?.message;
+    const calls: any[] = Array.isArray(msg?.tool_calls) ? msg.tool_calls : [];
+    if (!useTools || !calls.length || round === 3) return msg?.content ?? null;
+
+    convo = [...convo, { role: "assistant", content: msg?.content ?? null, tool_calls: calls }];
+    for (const c of calls.slice(0, 4)) {
+      const fname = String(c?.function?.name || "");
+      let args: any = {};
+      try { args = c?.function?.arguments ? JSON.parse(c.function.arguments) : {}; } catch { args = {}; }
+      const result = TOOL_NAMES.has(fname)
+        ? await runTool(fname, args, toolOrg!, toolUser ?? null)
+        : { ok: false, error: `Unknown tool: ${fname}` };
+      convo.push({ role: "tool", tool_call_id: c.id, content: JSON.stringify(result) });
+    }
+  }
   return null;
 }
 
@@ -345,6 +377,39 @@ Everything else in Cortex — your dashboard, imports and the 50+ calculators �
 
 // ---- Streaming (OpenAI-compatible providers: Groq/OpenAI); others fall back to one chunk ----
 export async function streamCortex(messages: Msg[], context: string): Promise<ReadableStream<Uint8Array>> {
+  const enc = new TextEncoder();
+  /*
+    TOOLS BEFORE TOKENS.
+
+    When there is a signed-in workspace, the answer must come from the
+    tool-capable runner: that is the only path on which "who owes me the most"
+    reads real invoices and "mark 1042 paid" becomes a proposal on /approvals.
+    The raw token stream below cannot call tools, so on it the model answers
+    from the snapshot alone and — worse — can narrate an action it never took.
+    The product's rule is that it never says done unless something was done;
+    a faster stream is not worth breaking that rule. The reply is emitted in
+    small chunks so the page still reads as typing.
+
+    No session (public demo, cron) → nothing to look up → genuine streaming.
+  */
+  try {
+    const { getUserAndOrg } = await import("@/lib/data");
+    const { orgId } = await getUserAndOrg();
+    if (orgId) {
+      const full = await runCortex(messages, context);
+      return new ReadableStream<Uint8Array>({
+        async start(c) {
+          const words = full.split(/(?<=\s)/);
+          for (let i = 0; i < words.length; i += 6) {
+            c.enqueue(enc.encode(words.slice(i, i + 6).join("")));
+            if (i + 6 < words.length) await sleep(12);
+          }
+          c.close();
+        },
+      });
+    }
+  } catch { /* no session → stream below */ }
+
   // Genuine token streaming only exists for the OpenAI-compatible providers, so
   // look for one ANYWHERE in the chain rather than only at its head. Previously
   // this read the single top provider: with Gemini configured it was never
@@ -354,7 +419,6 @@ export async function streamCortex(messages: Msg[], context: string): Promise<Re
   const chain = providerChain();
   const provider = chain.find((c) => (c === "groq" && aiKey("GROQ_API_KEY")) || (c === "openai" && aiKey("OPENAI_API_KEY"))) || chain[0];
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
-  const enc = new TextEncoder();
   const openaiLike =
     (provider === "groq" && aiKey("GROQ_API_KEY")) ? { url: "https://api.groq.com/openai/v1/chat/completions", key: aiKey("GROQ_API_KEY")!, model: groqModel() } :
     (provider === "openai" && aiKey("OPENAI_API_KEY")) ? { url: "https://api.openai.com/v1/chat/completions", key: aiKey("OPENAI_API_KEY")!, model: openaiModel() } : null;

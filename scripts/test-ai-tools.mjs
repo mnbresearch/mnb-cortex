@@ -205,6 +205,28 @@ async function main() {
     `got ${likeLiteral("a_b")}`);
   check(likeLiteral("50%") === "50\\%", "and escapes %");
 
+
+  /*
+    EVERY PROVIDER GETS THE SAME TOOLS, THE SAME GUARDS.
+
+    Tools used to exist only on the Gemini branch; on Groq/OpenAI the model
+    answered from the snapshot and could narrate an action it never took. The
+    OpenAI-compatible loop must (a) exist, (b) offer tools only with a session
+    org, (c) refuse undeclared names, (d) scope every call by toolOrg, and
+    (e) be bounded. And the chat stream must take the tool-capable path when a
+    workspace is signed in — a token stream cannot call tools.
+  */
+  const CORTEX = readFileSync("src/lib/ai/cortex.ts", "utf8");
+  const oc = CORTEX.slice(CORTEX.indexOf("async function openaiCompatible"), CORTEX.indexOf("/** Record an upstream non-OK response"));
+  check(oc.length > 200, "an OpenAI-compatible tool loop exists");
+  check(/const useTools = Boolean\(toolOrg\)/.test(oc), "openai-compatible: tools only with a session org");
+  check(/TOOL_NAMES\.has\(fname\)\s*\?\s*await runTool\(fname, args, toolOrg!/.test(oc), "openai-compatible: undeclared names refused, lookups scoped by toolOrg");
+  check(/round < 4/.test(oc) && /calls\.slice\(0, 4\)/.test(oc), "openai-compatible: bounded rounds and calls per round");
+  check(/openaiCompatible\("groq"/.test(CORTEX) && /openaiCompatible\("openai"/.test(CORTEX), "both Groq and OpenAI go through the tool loop");
+  const sc = CORTEX.slice(CORTEX.indexOf("export async function streamCortex"), CORTEX.indexOf("export async function generateReport"));
+  check(/if \(orgId\) \{[\s\S]*?await runCortex\(messages, context\)/.test(sc), "streamCortex uses the tool-capable runner when a workspace is signed in");
+  check(sc.indexOf("await runCortex(messages, context)") < sc.indexOf("openaiLike ="), "…and decides that BEFORE falling to the raw token stream");
+
   console.log(`\nai tools: ${pass} passed, ${failures.length} failed`);
   if (failures.length) { console.log("\nFAILURES:"); failures.forEach((f) => console.log("  ✗ " + f)); process.exit(1); }
   console.log(`  ${declared.length} tools, all org-scoped and read-only; cross-tenant leak attempted and blocked.`);
