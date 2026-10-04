@@ -5,7 +5,16 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "6.40.0", date: "Latest", items: ["A more premium look — the brand has moved from the generic ‘AI green’ to a refined graphite-and-champagne-gold palette across the whole product", "New ink + gold theme in both light and dark modes, with a warm bone/ivory light theme and a deep graphite dark theme", "Re-coloured logo, app icons, PWA install icon and browser theme colour to match — a consistent, high-end feel from the homepage into the app"] },
+  { v: "6.41.0", date: "Latest", items: [
+    "Cortex can now act — ask in chat to mark an invoice paid, move a due date, send a reminder, stop chasing a party, note something on a customer, or export a workbook; each becomes a proposal on the new Approvals page that runs only when you approve it, or on its own within rules you set per action (daily count, rupee ceiling, known parties only)",
+    "Needs your decision — anything still waiting is emailed to the workspace owner once a day with a one-tap link that opens that proposal; opening the link changes nothing, only the Approve button does",
+    "Excel — upload a .xlsx or .csv, say what to change in plain English, read the plan and the before/after, approve, download; calculated columns are written as live formulas",
+    "Automate this — describe an automation in a sentence on Workflows and Cortex turns it into steps you can read before it is created; new workflows start paused, with Pause/Resume on every card",
+    "Customer pages — click any customer for everything the workspace knows: orders, invoices with live ageing, reminder threads, what Cortex remembers, lifetime and overdue totals, with Remind and Stop-chasing right there",
+    "Monthly MIS pack — one .xlsx from Reports or Investor Update: KPI overview, 24-month trend with margin formulas, receivables ageing, payables, top customers, collections",
+    "The dashboard opens with what waits on you — actions to approve, reminder drafts, open alerts, deadlines this week — and the bell's Mark all read now really dismisses them",
+  ] },
+  { v: "6.40.0", date: "Earlier", items: ["A more premium look — the brand has moved from the generic ‘AI green’ to a refined graphite-and-champagne-gold palette across the whole product", "New ink + gold theme in both light and dark modes, with a warm bone/ivory light theme and a deep graphite dark theme", "Re-coloured logo, app icons, PWA install icon and browser theme colour to match — a consistent, high-end feel from the homepage into the app"] },
   { v: "6.39.0", date: "Earlier", items: ["Mobile fix — the homepage’s in-product dashboard preview no longer overflows to the right on phones (a hidden sidebar column was being reserved, jamming the content); the live demo and preview now sit cleanly on small screens"] },
   { v: "6.38.0", date: "Earlier", items: ["New Investors page — a public /investors page (linked in the footer) with the positioning, the moat, why-now, business model and team, plus a downloadable one-page PDF"] },
   { v: "6.37.0", date: "Earlier", items: ["Tailored from minute one — new workspaces get a friendly ‘What does your business do?’ prompt on the dashboard; pick your industry and Cortex instantly personalises your playbook, tools and agents", "Once set, the prompt becomes your industry playbook automatically"] },
