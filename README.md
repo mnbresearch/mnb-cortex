@@ -11,7 +11,7 @@ Built with **Next.js 16 (App Router) · TypeScript · Tailwind · Supabase (Post
 
 ## What's inside
 
-128 module pages, 438 agent definitions and 28 calculators. Rather than list them
+129 module pages, 438 agent definitions and 28 calculators. Rather than list them
 here — where the list goes stale the moment someone adds a page — the sources of
 truth are:
 
@@ -106,7 +106,7 @@ After a user signs up, run in the Supabase SQL editor (or wire a button):
     |  |  |- login/                   # magic-link + Google
     |  |  |- auth/callback/route.ts   # OAuth/OTP exchange
     |  |  |- api/chat/route.ts        # AI COO endpoint
-    |  |  |- (app)/                   # authenticated shell + 128 module pages
+    |  |  |- (app)/                   # authenticated shell + 129 module pages
     |  |- components/   # sidebar, topbar, KPI cards, charts, UI primitives
     |  |- lib/          # supabase clients, data layer, AI layer, demo data
     |  |- types/

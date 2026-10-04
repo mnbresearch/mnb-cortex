@@ -228,7 +228,17 @@ async function exportXlsx(args: Record<string, unknown>, ctx: Ctx): Promise<Hand
 
 /* ------------------------------------------------------------------------ */
 
+async function transformWorkbook(): Promise<HandlerResult> {
+  /*
+    Only reachable if something proposes this through the engine (chat, a
+    workflow). The engine has no file to work on — uploads are never stored —
+    so the honest answer is a pointer to the page that does.
+  */
+  return { ok: false, error: "Workbook transforms run from the Excel page, where you upload the file: /excel. They cannot be queued." };
+}
+
 export const HANDLERS: Record<string, (args: Record<string, unknown>, ctx: Ctx) => Promise<HandlerResult>> = {
+  transform_workbook: transformWorkbook,
   update_invoice_due_date: updateInvoiceDueDate,
   mark_invoice_paid: markInvoicePaid,
   add_do_not_contact: addDoNotContact,

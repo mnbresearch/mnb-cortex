@@ -152,6 +152,7 @@ export const NAV = [
   { href: "/workflows", label: "Workflows", icon: Workflow, group: "Automation", sub: "Automate" },
   { href: "/approvals", label: "Approvals", icon: CheckCircle2, group: "Automation", sub: "Automate" },
   { href: "/import", label: "Import data", icon: Upload, group: "Automation", sub: "Your data & tools" },
+  { href: "/excel", label: "Excel", icon: FileSpreadsheet, group: "Automation", sub: "Your data & tools" },
   { href: "/data", label: "Data Explorer", icon: Database, group: "Automation", sub: "Your data & tools" },
   { href: "/connect", label: "Connect", icon: Plug, group: "Automation", sub: "Your API keys & accounts" },
   { href: "/integrations", label: "Integrations", icon: Plug, group: "Automation", sub: "Your data & tools" },

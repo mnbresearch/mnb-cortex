@@ -87,6 +87,7 @@ export const MODE_PROFILE_NAME: Record<string, keyof typeof PROFILE_OUTPUT_TOKEN
     means the whole pricing model is reasoning about the wrong call.
   */
   improve_prompt: "FAST",
+  transform_plan: "FAST",
   scenario: "DEEP", forecast: "DEEP", strategy: "DEEP", investor: "DEEP",
   board: "DEEP", valuation: "DEEP", deepdive: "DEEP", report: "DEEP",
   gst: "EXTRACT", bankstatement: "EXTRACT",

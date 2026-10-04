@@ -188,6 +188,27 @@ export const CATALOGUE: readonly ActionDef[] = [
       days: { type: "number", min: 1, max: 3650, description: "Look-back window in days where it applies; defaults to 365." },
     },
   },
+  {
+    key: "transform_workbook",
+    title: "Transform an uploaded workbook",
+    describe: (a) => `Apply ${Array.isArray(a.steps) ? a.steps.length : "the planned"} step${Array.isArray(a.steps) && a.steps.length === 1 ? "" : "s"} to ${a.source ?? "the uploaded file"} and download the result.`,
+    /*
+      Recorded, not executed, through the engine. The file lives in the
+      person's browser for the length of the request and nowhere else, so the
+      executor cannot run this later from a queue — there is nothing to run it
+      on. The Excel page does the work inline and writes a done row for the
+      history; the handler exists so a chat proposal gets a clear answer
+      instead of a dead entry.
+    */
+    effect: "export",
+    reversible: false,
+    blastRadius: { rows: 10_000 },
+    minRank: "analyst",
+    defaultMode: "auto",
+    args: {
+      source: { type: "string", maxLength: 200, description: "The uploaded file's name." },
+    },
+  },
 ] as const;
 
 export const CATALOGUE_BY_KEY: Readonly<Record<string, ActionDef>> = Object.freeze(

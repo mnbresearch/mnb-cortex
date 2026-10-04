@@ -132,6 +132,9 @@ export const CREDIT_COSTS: Record<string, number> = {
     (571), so using it is always cheaper than generating twice.
   */
   improve_prompt: 14,
+  /* Workbook transform: plans a short JSON op list from one instruction. FAST tier; the
+     transform itself is deterministic code and costs nothing. */
+  transform_plan: 14,
 
   // STANDARD — the default working answer.
   chat: 19, ask: 19, document: 19, meeting: 19,
