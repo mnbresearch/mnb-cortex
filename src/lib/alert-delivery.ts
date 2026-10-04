@@ -50,12 +50,21 @@ export type DeliveryResult = { orgs: number; sent: number; alerts: number };
  * two callers is one that is wrong in one of them.
  */
 export async function ownerEmail(svc: any, orgId: string): Promise<string | null> {
+  return (await ownerContact(svc, orgId))?.email ?? null;
+}
+
+/**
+ * The same resolution, keeping the user id as well — the decision digest
+ * signs its links to a specific recipient so that approvals from email are
+ * attributed to a real member, never to "someone with the link".
+ */
+export async function ownerContact(svc: any, orgId: string): Promise<{ email: string; userId: string; role: string } | null> {
   try {
     const { data: mems } = await svc.from("memberships")
       .select("user_id, role").eq("org_id", orgId).in("role", ["owner", "admin"]).limit(3);
     for (const m of ((mems as any[]) || []).sort((a: any) => (a.role === "owner" ? -1 : 1))) {
       const { data } = await svc.auth.admin.getUserById(m.user_id);
-      if (data?.user?.email) return data.user.email;
+      if (data?.user?.email) return { email: data.user.email, userId: m.user_id, role: m.role };
     }
   } catch { /* fall through */ }
   return null;

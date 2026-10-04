@@ -722,6 +722,9 @@ async function checkSchema(): Promise<Check> {
        the owner's point of view, as "Cortex could not record that". */
     ["action_proposals", "idempotency_key", "2026_zzzr_actions"],
     ["action_policies", "requires_caps", "2026_zzzr_actions"],
+    /* Without this the "needs your decision" email never goes out — by design,
+       since it has nowhere to record that it did. */
+    ["action_proposals", "notified_at", "2026_zzzs_proposal_notify"],
     /*
       BOTH COLUMNS, because one of them is load-bearing for the most important
       path in the product.

@@ -39,6 +39,7 @@ const COLLECTIONS_CAP = capFor(SHARE.collections, COLLECTIONS_PER_MS);
 export async function GET(req: Request) {
   let scheduledWorkflows = 0;
   let alertsEmailed = 0;
+  let decisionsEmailed = 0;
   let collectionsSent = 0;
   let collectionsSwept = 0;
   let collectionsEnabled = 0;
@@ -222,6 +223,17 @@ export async function GET(req: Request) {
       const { deliverAlerts } = await import("@/lib/alert-delivery");
       const d = await deliverAlerts(new URL(req.url).origin, budget.slice(SHARE.alerts));
       alertsEmailed = d.sent;
+    } catch { /* same */ }
+
+    /*
+      Tell the owner what Cortex wants to do and is waiting on. Proposals that
+      nobody hears about expire unseen in seven days; this is the email that
+      makes "approve-first" a workflow rather than a queue.
+    */
+    try {
+      const { sendDecisionDigests } = await import("@/lib/engine/decision-digest");
+      const d = await sendDecisionDigests(new URL(req.url).origin, budget.slice(SHARE.decisions));
+      decisionsEmailed = d.sent;
     } catch { /* same */ }
 
     try {
@@ -620,7 +632,7 @@ export async function GET(req: Request) {
     console.error("[cron] coverage alert —", e?.message);
   }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, proposalsExpired, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, collectionsSent, coverage,
+  return NextResponse.json({ ok: true, ran, skipped, expired, proposalsExpired, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, decisionsEmailed, collectionsSent, coverage,
     /*
       How long the run took and whether it finished with room to spare. If
       `budget_left_ms` trends towards zero, the caps in lib/cron-budget.ts need

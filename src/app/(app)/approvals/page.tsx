@@ -194,7 +194,7 @@ export default async function Approvals() {
         {live && (
           <Section
             title={queue.length ? `Waiting for you (${queue.length})` : "Waiting for you"}
-            desc="Each one says what will happen, why, and whether it can be undone"
+            desc="Each one says what will happen, why, and whether it can be undone. Anything still waiting is emailed to the workspace owner once a day with a one-tap decision link."
             right={<Link href="/approvals/rules" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"><Settings2 className="h-3.5 w-3.5" aria-hidden="true" /> Rules</Link>}
           >
             {queue.length === 0 ? (

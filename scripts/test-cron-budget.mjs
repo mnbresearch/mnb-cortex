@@ -191,7 +191,7 @@ check("the budget is created from the declared maxDuration",
   "the clock and the function limit must be the same number",
 );
 
-for (const step of ["renewals", "reports", "workflows", "collections", "alerts", "webhooks", "sync", "weeklyPlan", "sweep", "analysis"]) {
+for (const step of ["renewals", "reports", "workflows", "collections", "alerts", "decisions", "webhooks", "sync", "weeklyPlan", "sweep", "analysis"]) {
   check(
     `the ${step} step is given a slice of the shared clock`,
     new RegExp(`SHARE\\.${step}\\b`).test(cronSrc),

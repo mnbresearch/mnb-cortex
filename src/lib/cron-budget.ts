@@ -119,7 +119,14 @@ export const SHARE = {
     misses its day is simply never sent.
   */
   lifecycle: 15_000,
-  analysis: 30_000,
+  /*
+    "Needs your decision" digest: one owner lookup and one send per workspace
+    with proposals waiting, ~2.5s each. Carved out of analysis, same reasoning
+    as lifecycle: an analysis missed tonight runs tomorrow; a proposal nobody
+    was told about expires unseen in seven days.
+  */
+  decisions: 10_000,
+  analysis: 20_000,
 } as const;
 
 /*
