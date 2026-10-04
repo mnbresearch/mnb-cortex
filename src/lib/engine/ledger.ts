@@ -37,6 +37,31 @@ const svcOrThrow = () => {
   return svc;
 };
 
+/*
+  EVERY STATUS WRITE READS ITS ROW BACK — including the bookkeeping ones.
+
+  The claim (approved → executing) was always row-count-checked. The writes
+  AFTER it — failed, done, blocked, undo-failed — were not, on the reasoning
+  that a row we had just claimed must still exist. scripts/test-silent-writes
+  rejected that reasoning, correctly: it holds a ceiling on the number of
+  `.update()` calls in src/ that bind an error and never select back, and
+  these five raised it. "Must still exist" is exactly the assumption that
+  turns a deleted-mid-flight row into a ledger entry that says "executing"
+  forever while the UI says nothing.
+
+  So: one helper. It selects back, and a zero-row result is logged as an
+  error naming the proposal, because after a claim it means the ledger has
+  lost a row it was in the middle of — which an operator needs to hear about,
+  not a return value somebody may ignore.
+*/
+async function mark(id: string, orgId: string, patch: Record<string, unknown>): Promise<boolean> {
+  const svc = svcOrThrow();
+  const { data, error } = await svc.from("action_proposals").update(patch).eq("id", id).eq("org_id", orgId).select("id");
+  if (error) { console.error(`[engine] could not update proposal ${id}: ${error.message}`); return false; }
+  if (!data || data.length !== 1) { console.error(`[engine] proposal ${id} vanished mid-flight (status write touched ${data?.length ?? 0} rows)`); return false; }
+  return true;
+}
+
 /** Start of today in IST, as an ISO string — every customer is in India. */
 function istMidnightISO(now = new Date()): string {
   const ist = new Date(now.getTime() + 5.5 * 3_600_000);
@@ -197,7 +222,7 @@ export async function execute(id: string, orgId: string, actorId: string | null,
   const p = claimed[0] as Proposal;
   const def = CATALOGUE_BY_KEY[p.action];
   if (!def) {
-    await svc.from("action_proposals").update({ status: "failed", error: "Unknown action." }).eq("id", id);
+    await mark(id, orgId, { status: "failed", error: "Unknown action." });
     return { ok: false, error: "Unknown action." };
   }
 
@@ -205,16 +230,14 @@ export async function execute(id: string, orgId: string, actorId: string | null,
     const [policy, usage] = await Promise.all([getPolicy(orgId, def.key), getUsage(orgId, def, p.args)]);
     const again = decide(def, p.args, policy, usage);
     if (again.verdict !== "auto") {
-      await svc.from("action_proposals")
-        .update({ status: again.verdict === "blocked" ? "blocked" : "proposed", policy_verdict: again.verdict, policy_reason: `At execution: ${again.reason}`, decided_at: null })
-        .eq("id", id);
+      await mark(id, orgId, { status: again.verdict === "blocked" ? "blocked" : "proposed", policy_verdict: again.verdict, policy_reason: `At execution: ${again.reason}`, decided_at: null });
       return { ok: false, error: again.reason };
     }
   }
 
   const handler = HANDLERS[def.key];
   if (!handler) {
-    await svc.from("action_proposals").update({ status: "failed", error: "No handler." }).eq("id", id);
+    await mark(id, orgId, { status: "failed", error: "No handler." });
     return { ok: false, error: `No handler is wired for ${def.key}.` };
   }
 
@@ -226,12 +249,16 @@ export async function execute(id: string, orgId: string, actorId: string | null,
   }
 
   if (!outcome.ok) {
-    await svc.from("action_proposals").update({ status: "failed", error: outcome.error.slice(0, 1000), executed_at: new Date().toISOString() }).eq("id", id);
+    await mark(id, orgId, { status: "failed", error: outcome.error.slice(0, 1000), executed_at: new Date().toISOString() });
     return { ok: false, error: outcome.error };
   }
-  await svc.from("action_proposals")
-    .update({ status: "done", result: { ...outcome.result, summary: outcome.summary }, undo: outcome.undo, executed_at: new Date().toISOString() })
-    .eq("id", id);
+  /*
+    The handler has already acted. If this write fails the action HAPPENED
+    but the ledger does not say so — the one outcome worse than a failure, so
+    it is surfaced to the caller rather than swallowed.
+  */
+  const recorded = await mark(id, orgId, { status: "done", result: { ...outcome.result, summary: outcome.summary }, undo: outcome.undo, executed_at: new Date().toISOString() });
+  if (!recorded) return { ok: false, error: `${outcome.summary} — but the ledger could not record it. Check the Approvals history before repeating this.` };
   return { ok: true, summary: outcome.summary };
 }
 
@@ -248,10 +275,11 @@ export async function undo(id: string, orgId: string, actorId: string): Promise<
 
   const r = await undoHandler((p as any).undo, { orgId, proposalId: id, actorId });
   if (!r.ok) {
-    await svc.from("action_proposals").update({ status: "done", error: `Undo failed: ${r.error}`.slice(0, 500) }).eq("id", id);
+    await mark(id, orgId, { status: "done", error: `Undo failed: ${r.error}`.slice(0, 500) });
     return r;
   }
-  await svc.from("action_proposals").update({ status: "undone", undone_at: new Date().toISOString(), undone_by: actorId }).eq("id", id);
+  const recorded = await mark(id, orgId, { status: "undone", undone_at: new Date().toISOString(), undone_by: actorId });
+  if (!recorded) return { ok: false, error: `${r.summary} — but the ledger could not record the undo.` };
   return r;
 }
 
