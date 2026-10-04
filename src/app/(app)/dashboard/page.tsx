@@ -25,6 +25,10 @@ import Link from "next/link";
 
 import { getFirstRun } from "@/lib/first-run";
 import { SetupPath } from "@/components/setup-path";
+import { NeedsYouStrip } from "@/components/needs-you";
+import { getNeedsYou } from "@/lib/needs-you";
+import { dismissAlert } from "@/lib/actions";
+import { SafeForm } from "@/components/safe-form";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +38,7 @@ export default async function Dashboard() {
     getMetrics(), getInsights(), getAlerts(), getFinanceSeries(), getOrgProfile(), getFirstRun(),
   ]);
   const isReal = Boolean(orgId);                 // signed-in workspace vs public demo preview
+  const needsYou = orgId ? await getNeedsYou(orgId) : null;
   const hasMetrics = metrics.length > 0;
   // Only looked up when there is nothing to show — the healthy path pays nothing.
   const recomputeFailure = isReal && !hasMetrics ? await getRecomputeFailure(orgId) : null;
@@ -95,6 +100,8 @@ export default async function Dashboard() {
           <ExportButton rows={metrics} filename="business-health.csv" columns={["label","value","unit","delta_pct","status"]} />
           <PrintButton />
         </div>
+        {/* What waits on a human, before anything else. */}
+        {needsYou && <NeedsYouStrip n={needsYou} />}
         {/* AI summary banner */}
         <Card className="p-5 bg-gradient-to-br from-primary/10 to-purple-500/5 border-primary/20">
           <div className="flex items-start gap-3">
@@ -232,9 +239,17 @@ export default async function Dashboard() {
             <div className="p-5 pb-2 font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-warning" /> Alerts</div>
             <div className="p-3 pt-1 space-y-2">
               {alerts.length ? alerts.map((a) => (
-                <div key={a.id} className={cn("rounded-lg border p-3", statusBg[a.severity])}>
-                  <p className="text-sm font-medium">{a.title}</p>
-                  <p className="text-xs opacity-80 mt-0.5">{a.body}</p>
+                <div key={a.id} className={cn("rounded-lg border p-3 flex items-start gap-2", statusBg[a.severity])}>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{a.title}</p>
+                    <p className="text-xs opacity-80 mt-0.5">{a.body}</p>
+                  </div>
+                  {isReal && (
+                    <SafeForm action={dismissAlert}>
+                      <input type="hidden" name="id" value={a.id} />
+                      <button type="submit" className="text-xs opacity-70 hover:opacity-100 whitespace-nowrap" aria-label={`Dismiss alert: ${a.title}`}>Dismiss</button>
+                    </SafeForm>
+                  )}
                 </div>
               )) : <p className="text-sm text-muted-foreground px-2 py-3">No active alerts. Cortex raises them here once it's watching your data.</p>}
             </div>

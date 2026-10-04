@@ -2476,6 +2476,30 @@ export async function dismissAlert(fd: FormData) {
 }
 
 /**
+ * The bell's "Mark all read", made true.
+ *
+ * The notification panel used to flip a local boolean and nothing else: the
+ * badge cleared until the next page load, then every alert came back. Now
+ * every open alert in the workspace is dismissed server-side and the count
+ * of rows actually changed is returned — the UI shows what happened, not what
+ * was requested. Returns rather than throws so a viewer-role click reads as
+ * a sentence, not a crash.
+ */
+export async function dismissAllAlerts(): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  let orgId: string;
+  try { orgId = await requireWriteOrg(); }
+  catch { return { ok: false, error: "Only analysts and above can dismiss alerts." }; }
+  const sb = await createClient();
+  const { data, error } = await sb.from("alerts")
+    .update({ is_read: true, dismissed_at: new Date().toISOString() })
+    .eq("org_id", orgId).eq("is_read", false).select("id");
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/alerts");
+  revalidatePath("/dashboard");
+  return { ok: true, count: (data || []).length };
+}
+
+/**
  * Delete this workspace and everything in it.
  *
  * The landing FAQ and /privacy both told customers they could "export or delete
