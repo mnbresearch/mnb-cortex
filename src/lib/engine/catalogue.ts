@@ -141,6 +141,42 @@ export const CATALOGUE: readonly ActionDef[] = [
     },
   },
   {
+    key: "add_customer_note",
+    title: "Note something about a customer",
+    describe: (a) => `Append to the notes on customer ${a.customer_name ?? a.customer_id}: "${String(a.note ?? "").slice(0, 80)}${String(a.note ?? "").length > 80 ? "…" : ""}".`,
+    effect: "internal_write",
+    reversible: true,
+    blastRadius: { rows: 1 },
+    minRank: "analyst",
+    /*
+      Auto by default: it is append-only (a dated line on the record), touches
+      no money and no message, and undo restores the exact previous text. The
+      wrong note on a customer record is a nuisance, not a loss.
+    */
+    defaultMode: "auto",
+    args: {
+      customer_id: { type: "uuid", required: true, description: "The customer's id in this workspace (look it up with find_party first)." },
+      note: { type: "string", required: true, maxLength: 500, description: "What to record. Dated automatically." },
+      customer_name: { type: "string", maxLength: 120, description: "For the card only; the id is authoritative." },
+    },
+  },
+  {
+    key: "set_customer_status",
+    title: "Change a customer's status",
+    describe: (a) => `Mark customer ${a.customer_name ?? a.customer_id} as ${a.status}.`,
+    effect: "internal_write",
+    reversible: true,
+    blastRadius: { rows: 1 },
+    minRank: "manager",
+    /* Approve by default: "churned" removes a customer from pipeline figures and retention views. */
+    defaultMode: "approve",
+    args: {
+      customer_id: { type: "uuid", required: true, description: "The customer's id in this workspace." },
+      status: { type: "enum", required: true, values: ["lead", "active", "churned"] as const, description: "The new status." },
+      customer_name: { type: "string", maxLength: 120, description: "For the card only." },
+    },
+  },
+  {
     key: "send_payment_reminder",
     title: "Send a payment reminder",
     describe: (a) => `Send a ${a.channel ?? "email"} reminder to the party on invoice ${a.invoice_no ?? a.invoice_id}, through the collections engine.`,

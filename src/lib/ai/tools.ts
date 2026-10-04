@@ -188,7 +188,8 @@ export const TOOL_DECLARATIONS = [
       + "Use when the person asks you to change, send, mark or export something — never just describe what you would do; propose it. "
       + "Actions: update_invoice_due_date {invoice_id, due_date, invoice_no?} · mark_invoice_paid {invoice_id, paid_on?, amount?, invoice_no?} · "
       + "add_do_not_contact {party, reason?} · send_payment_reminder {invoice_id, channel?: email|whatsapp, amount?, invoice_no?} · "
-      + "raise_alert {message, severity?: info|warning|critical} · export_xlsx {dataset: receivables_ageing|payables|customers|sales_orders|inventory|invoices|mis_pack, days?} (mis_pack = the monthly management pack: KPIs, trend, ageing, payables, top customers, collections). "
+      + "raise_alert {message, severity?: info|warning|critical} · export_xlsx {dataset: receivables_ageing|payables|customers|sales_orders|inventory|invoices|mis_pack, days?} (mis_pack = the monthly management pack: KPIs, trend, ageing, payables, top customers, collections) · "
+      + "add_customer_note {customer_id, note, customer_name?} (use find_party to get profile.id) · set_customer_status {customer_id, status: lead|active|churned, customer_name?}. "
       + "Always look the invoice up first (top_receivables / find_party) so invoice_id and amount are real. Give a one-sentence rationale.",
     parameters: {
       type: "object",
@@ -415,7 +416,8 @@ export async function runTool(name: string, args: any, orgId: string, userId: st
             .order("created_at", { ascending: false }).limit(10),
           sb.from("invoices").select("invoice_no, amount, due_date, status, type")
             .eq("org_id", orgId).ilike("party", like).limit(10),
-          sb.from("customers").select("name, company, status, value")
+          /* id included so a follow-up propose_action (add_customer_note, set_customer_status) can name the row — the id is the only thing those actions accept. */
+          sb.from("customers").select("id, name, company, status, value")
             .eq("org_id", orgId).or(`name.ilike.${like},company.ilike.${like}`).limit(3),
         ]);
         const o = (orders.data as any[]) || [];

@@ -282,6 +282,32 @@ const { decide, normaliseCaps, requiresCaps, rupeesOf, CAPPED_EFFECTS } = await 
 }
 
 /* ===================================================================== */
+/* 4b. EVERY UNDO A HANDLER PROMISES, undoHandler CAN PERFORM           */
+/* ===================================================================== */
+{
+  /* A handler that returns undo:{kind:"x"} for a kind the undo switch does not
+     know makes "reversible" a lie on the approval card. Read both sides. */
+  const h = strip(read("src/lib/engine/handlers.ts"));
+  const promised = new Set([...h.matchAll(/undo: \{ kind: "([a-z_]+)"/g)].map((m) => m[1]));
+  const undoBody = h.slice(h.indexOf("export async function undoHandler"));
+  const handled = new Set([...undoBody.matchAll(/case "([a-z_]+)":/g)].map((m) => m[1]));
+  check(promised.size >= 6, `handlers promise several undo kinds (${[...promised].join(", ")})`);
+  for (const k of promised) check(handled.has(k), `undoHandler can perform undo kind "${k}"`);
+  for (const k of handled) check(promised.has(k) || k === "noop", `undo kind "${k}" in undoHandler is one a handler actually produces`);
+  /* And every undo write reads its row back — checked PER CASE, so one
+     missing check cannot hide behind another case's surplus. */
+  const cases = undoBody.split(/\n    case "/).slice(1);
+  let writing = 0;
+  for (const c of cases) {
+    const kind = c.slice(0, c.indexOf('"'));
+    if (!/\.(update|delete)\(/.test(c)) continue;
+    writing++;
+    check(/\.select\("[a-z_]+"\)/.test(c) && /length !== 1/.test(c), `undo "${kind}": the write selects back and checks exactly one row`);
+  }
+  check(writing >= 5, `undo: ${writing} writing cases inspected`);
+}
+
+/* ===================================================================== */
 /* 5. THE LEDGER CODE CHECKS ROW COUNTS ON ITS CLAIMS                    */
 /* ===================================================================== */
 {

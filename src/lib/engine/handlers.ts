@@ -237,7 +237,58 @@ async function transformWorkbook(): Promise<HandlerResult> {
   return { ok: false, error: "Workbook transforms run from the Excel page, where you upload the file: /excel. They cannot be queued." };
 }
 
+/*
+  Two customer-record actions. Both read the row first (so the summary names
+  the customer and the undo carries the exact prior value), write with the
+  row count checked, and scope by org_id.
+*/
+async function addCustomerNote(args: Record<string, unknown>, ctx: Ctx): Promise<HandlerResult> {
+  const svc = svcOrFail();
+  const { data: before, error: readErr } = await svc.from("customers")
+    .select("id, name, notes").eq("org_id", ctx.orgId).eq("id", String(args.customer_id)).maybeSingle();
+  if (readErr) return { ok: false, error: `Could not read the customer: ${readErr.message}` };
+  if (!before) return { ok: false, error: "That customer no longer exists in this workspace." };
+  const prev = (before as any).notes as string | null;
+  const stamp = new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
+  const line = `[${stamp}] ${String(args.note).trim()}`;
+  const next = prev && prev.trim() ? `${prev.trimEnd()}\n${line}` : line;
+  if (next.length > 5000) return { ok: false, error: "The notes on this customer are already at the 5,000-character limit." };
+
+  const { data: rows, error } = await svc.from("customers").update({ notes: next })
+    .eq("org_id", ctx.orgId).eq("id", String(args.customer_id)).select("id");
+  if (error) return { ok: false, error: `Could not save the note: ${error.message}` };
+  if (!rows || rows.length !== 1) return { ok: false, error: "The update touched no rows — the customer may have been deleted." };
+  return {
+    ok: true,
+    summary: `Noted on ${(before as any).name}: "${String(args.note).slice(0, 80)}".`,
+    result: { customer_id: (before as any).id, line },
+    undo: { kind: "set_notes", customer_id: (before as any).id, notes: prev },
+  };
+}
+
+async function setCustomerStatus(args: Record<string, unknown>, ctx: Ctx): Promise<HandlerResult> {
+  const svc = svcOrFail();
+  const { data: before, error: readErr } = await svc.from("customers")
+    .select("id, name, status").eq("org_id", ctx.orgId).eq("id", String(args.customer_id)).maybeSingle();
+  if (readErr) return { ok: false, error: `Could not read the customer: ${readErr.message}` };
+  if (!before) return { ok: false, error: "That customer no longer exists in this workspace." };
+  if ((before as any).status === args.status) return { ok: false, error: `${(before as any).name} is already ${args.status}.` };
+
+  const { data: rows, error } = await svc.from("customers").update({ status: String(args.status) })
+    .eq("org_id", ctx.orgId).eq("id", String(args.customer_id)).select("id");
+  if (error) return { ok: false, error: `Could not change the status: ${error.message}` };
+  if (!rows || rows.length !== 1) return { ok: false, error: "The update touched no rows — the customer may have been deleted." };
+  return {
+    ok: true,
+    summary: `${(before as any).name}: ${(before as any).status || "unset"} → ${args.status}.`,
+    result: { customer_id: (before as any).id, from: (before as any).status, to: args.status },
+    undo: { kind: "set_customer_status", customer_id: (before as any).id, status: (before as any).status },
+  };
+}
+
 export const HANDLERS: Record<string, (args: Record<string, unknown>, ctx: Ctx) => Promise<HandlerResult>> = {
+  add_customer_note: addCustomerNote,
+  set_customer_status: setCustomerStatus,
   transform_workbook: transformWorkbook,
   update_invoice_due_date: updateInvoiceDueDate,
   mark_invoice_paid: markInvoicePaid,
@@ -283,6 +334,20 @@ export async function undoHandler(undo: Record<string, unknown>, ctx: Ctx): Prom
       if (error) return { ok: false, error: error.message };
       if (!data || data.length !== 1) return { ok: false, error: "The alert was already removed." };
       return { ok: true, summary: "Alert removed." };
+    }
+    case "set_notes": {
+      const { data, error } = await svc.from("customers").update({ notes: (undo.notes as string | null) ?? null })
+        .eq("org_id", ctx.orgId).eq("id", String(undo.customer_id)).select("id");
+      if (error) return { ok: false, error: error.message };
+      if (!data || data.length !== 1) return { ok: false, error: "The customer no longer exists." };
+      return { ok: true, summary: "Notes restored to what they were before." };
+    }
+    case "set_customer_status": {
+      const { data, error } = await svc.from("customers").update({ status: (undo.status as string | null) ?? null })
+        .eq("org_id", ctx.orgId).eq("id", String(undo.customer_id)).select("id");
+      if (error) return { ok: false, error: error.message };
+      if (!data || data.length !== 1) return { ok: false, error: "The customer no longer exists." };
+      return { ok: true, summary: `Customer status restored to ${undo.status ?? "unset"}.` };
     }
     case "noop":
       return { ok: true, summary: "Nothing to reverse — the export produced a file for you and changed no data." };
