@@ -5,6 +5,7 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { CollapsibleForm, Field, SelectField } from "@/components/forms";
 import { ReportGenerator } from "@/components/report-generator";
+import { MisPackButton } from "@/components/mis-pack-button";
 import { getScheduledReports } from "@/lib/data";
 import { addScheduledReport, deleteScheduledReport } from "@/lib/actions";
 import { CalendarClock } from "lucide-react";
@@ -22,6 +23,7 @@ export default async function Reports() {
       <Topbar title="Reports" subtitle="Generate now, or have Cortex send it to you on a schedule" />
       <PageShell>
         <ReportGenerator />
+        {sched.live && <MisPackButton />}
 
         <Section
           title="Scheduled reports"

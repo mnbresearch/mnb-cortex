@@ -30,7 +30,7 @@ import { serviceClient } from "@/lib/supabase/server";
     RLS; this filter is the tenant boundary on this path.
 */
 
-export type Dataset = "receivables_ageing" | "payables" | "customers" | "sales_orders" | "inventory" | "invoices";
+export type Dataset = "receivables_ageing" | "payables" | "customers" | "sales_orders" | "inventory" | "invoices" | "mis_pack";
 
 const INR = '"₹"#,##0.00;[Red]-"₹"#,##0.00';
 const DATE = "dd-mmm-yyyy";
@@ -81,6 +81,12 @@ export async function countRowsFor(dataset: string, orgId: string, days: number)
       const { count } = await head(svc.from("inventory_items")).eq("org_id", orgId);
       return count || 0;
     }
+    case "mis_pack": {
+      /* The pack is a set of sheets; "rows" here is the number of KPI rows the
+         Summary will carry, which is what tells the approver it is non-empty. */
+      const { count } = await head(svc.from("health_metrics")).eq("org_id", orgId);
+      return count || 0;
+    }
     default:
       return 0;
   }
@@ -100,6 +106,7 @@ export async function buildWorkbook(dataset: Dataset, orgId: string, days = 365,
     case "customers": await customers(wb, orgId, businessName); break;
     case "sales_orders": await salesOrders(wb, orgId, businessName, sinceISO(days)); break;
     case "inventory": await inventory(wb, orgId, businessName); break;
+    case "mis_pack": await misPack(wb, orgId, businessName); break;
   }
 
   const buffer = Buffer.from(await wb.xlsx.writeBuffer());
@@ -280,4 +287,125 @@ async function inventory(wb: ExcelJS.Workbook, orgId: string, biz: string) {
   ws.getCell(`E${n}`).value = "Total value"; ws.getCell(`E${n}`).font = { bold: true };
   ws.getCell(`F${n}`).value = { formula: rows.length ? `SUM(F2:F${n - 1})` : "0", result: undefined as any };
   ws.getCell(`F${n}`).numFmt = INR; ws.getCell(`F${n}`).font = { bold: true };
+}
+
+
+/* ------------------------------------------------------------- MIS pack */
+/*
+  THE MONTHLY PACK A FOUNDER SENDS TO A BOARD, A BANK OR AN INVESTOR.
+
+  Six sheets, every one of them from rows the workspace already holds:
+    Overview     latest value of every KPI, with its period-over-period change
+    Trend        the finance ledger, newest 24 months, with formulas for
+                 gross/net margin so the reader can see the arithmetic
+    Receivables  open receivables with live ageing (same formulas as the
+                 standalone ageing export)
+    Payables     open payables
+    Customers    top 25 by won-order value in the last 12 months
+    Collections  what Cortex recovered after a reminder, last 90 days (the
+                 same conservative RPC the weekly report uses)
+  Nothing is modelled or projected. A sheet with no rows says so in its
+  first line rather than being omitted, so the reader knows it was looked at.
+*/
+async function misPack(wb: ExcelJS.Workbook, orgId: string, biz: string) {
+  const svc = svcOrThrow();
+  const today = new Date().toLocaleDateString("en-IN");
+
+  // --- Summary: latest row per metric_key
+  const { data: hm } = await svc.from("health_metrics").select("metric_key, label, value, unit, delta_pct, status, as_of")
+    .eq("org_id", orgId).order("as_of", { ascending: false }).limit(500);
+  const latest = new Map<string, any>();
+  for (const r of ((hm as any[]) || [])) if (!latest.has(r.metric_key)) latest.set(r.metric_key, r);
+  const sum = wb.addWorksheet("Overview");
+  sum.getCell("A1").value = safeText(`${biz} — MIS pack`); sum.getCell("A1").font = { bold: true, size: 14 };
+  sum.getCell("A2").value = `Generated ${today} by MNB Cortex from the workspace's own records. Figures are as of each metric's last recompute.`;
+  if (!latest.size) sum.getCell("A4").value = "No KPIs have been computed yet — import data or run a recompute, then regenerate.";
+  else {
+    ["Metric", "Value", "Unit", "Change vs prior (%)", "Status", "As of"].forEach((h, i) => { const c = sum.getCell(4, i + 1); c.value = h; c.font = { bold: true }; });
+    let r = 5;
+    for (const m of Array.from(latest.values())) {
+      sum.getCell(r, 1).value = safeText(m.label || m.metric_key);
+      sum.getCell(r, 2).value = m.value === null ? null : Number(m.value);
+      if (m.unit === "INR") sum.getCell(r, 2).numFmt = INR;
+      sum.getCell(r, 3).value = safeText(m.unit);
+      sum.getCell(r, 4).value = m.delta_pct === null || m.delta_pct === undefined ? null : Number(m.delta_pct);
+      sum.getCell(r, 5).value = safeText(m.status);
+      sum.getCell(r, 6).value = m.as_of ? new Date(m.as_of) : null; sum.getCell(r, 6).numFmt = DATE;
+      r++;
+    }
+    sum.views = [{ state: "frozen", ySplit: 4 }];
+  }
+  [34, 18, 8, 20, 10, 12].forEach((w, i) => (sum.getColumn(i + 1).width = w));
+
+  // --- Trend: finance ledger
+  const { data: fl } = await svc.from("finance_ledger").select("period, revenue, cogs, opex, gross_profit, net_profit, cash_balance, receivables, payables, ebitda")
+    .eq("org_id", orgId).order("period", { ascending: false }).limit(24);
+  const ledger = (((fl as any[]) || []).slice().reverse());
+  const tr = wb.addWorksheet("Trend");
+  header(tr, [
+    { header: "Period", key: "period", width: 12, fmt: "mmm yyyy" }, { header: "Revenue (₹)", key: "revenue", width: 16, fmt: INR },
+    { header: "COGS (₹)", key: "cogs", width: 16, fmt: INR }, { header: "Opex (₹)", key: "opex", width: 16, fmt: INR },
+    { header: "Gross profit (₹)", key: "gp", width: 16, fmt: INR }, { header: "Net profit (₹)", key: "np", width: 16, fmt: INR },
+    { header: "Gross margin", key: "gm", width: 13, fmt: "0.0%" }, { header: "Net margin", key: "nm", width: 13, fmt: "0.0%" },
+    { header: "Cash (₹)", key: "cash", width: 16, fmt: INR }, { header: "Receivables (₹)", key: "rec", width: 16, fmt: INR }, { header: "Payables (₹)", key: "pay", width: 16, fmt: INR },
+  ]);
+  if (!ledger.length) tr.addRow({ period: "No monthly ledger rows yet — the Trend sheet fills in once sales or a bank statement have been imported." });
+  ledger.forEach((r, i) => {
+    const n = i + 2;
+    tr.addRow({
+      period: r.period ? new Date(r.period) : null, revenue: Number(r.revenue) || 0, cogs: Number(r.cogs) || 0, opex: Number(r.opex) || 0,
+      gp: Number(r.gross_profit) || 0, np: Number(r.net_profit) || 0, cash: Number(r.cash_balance) || 0, rec: Number(r.receivables) || 0, pay: Number(r.payables) || 0,
+    });
+    tr.getCell(`G${n}`).value = { formula: `IF(B${n}=0,"",E${n}/B${n})`, result: undefined as any };
+    tr.getCell(`H${n}`).value = { formula: `IF(B${n}=0,"",F${n}/B${n})`, result: undefined as any };
+  });
+
+  // --- Receivables ageing and payables: reuse the standalone builders
+  await receivablesAgeing(wb, orgId, biz);
+  // receivablesAgeing() moves its own Summary sheet to the front; the pack wants Overview first.
+  const ageSummary = wb.worksheets.find((w) => w.name === "Summary");
+  if (ageSummary) ageSummary.name = "Ageing summary";
+  const kpi = wb.worksheets.indexOf(sum);
+  if (kpi > 0) { wb.worksheets.splice(kpi, 1); wb.worksheets.unshift(sum); }
+  await simpleInvoices(wb, orgId, "payable", "Payables", biz);
+
+  // --- Top customers, won orders in the last 12 months
+  const { data: so } = await svc.from("sales_orders").select("customer_name, amount, order_date, status")
+    .eq("org_id", orgId).gte("order_date", sinceISO(365)).limit(10_000);
+  const byCust = new Map<string, { amount: number; orders: number; last: string }>();
+  for (const o of ((so as any[]) || [])) {
+    if (o.status && String(o.status).toLowerCase() !== "won") continue;
+    const k = String(o.customer_name || "(unnamed)");
+    const cur = byCust.get(k) || { amount: 0, orders: 0, last: "" };
+    cur.amount += Number(o.amount) || 0; cur.orders += 1; if (o.order_date && o.order_date > cur.last) cur.last = o.order_date;
+    byCust.set(k, cur);
+  }
+  const top = Array.from(byCust.entries()).sort((a, b) => b[1].amount - a[1].amount).slice(0, 25);
+  const cu = wb.addWorksheet("Top customers");
+  header(cu, [{ header: "Customer", key: "c", width: 34 }, { header: "Won orders (₹, 12m)", key: "a", width: 20, fmt: INR }, { header: "Orders", key: "n", width: 10 }, { header: "Last order", key: "l", width: 14, fmt: DATE }, { header: "Share of total", key: "s", width: 14, fmt: "0.0%" }]);
+  if (!top.length) cu.addRow({ c: "No won orders in the last 12 months." });
+  top.forEach(([name, v], i) => {
+    const n = i + 2;
+    cu.addRow({ c: safeText(name), a: v.amount, n: v.orders, l: v.last ? new Date(v.last) : null });
+    cu.getCell(`E${n}`).value = { formula: `IF(SUM($B$2:$B$${top.length + 1})=0,"",B${n}/SUM($B$2:$B$${top.length + 1}))`, result: undefined as any };
+  });
+
+  // --- Collections, last 90 days, conservative RPC
+  const co = wb.addWorksheet("Collections");
+  co.getCell("A1").value = safeText(`${biz} — collections, last 90 days`); co.getCell("A1").font = { bold: true, size: 14 };
+  try {
+    const { data: rec } = await svc.rpc("cortex_recovery_summary", { p_org: orgId, p_days: 90 });
+    const r = (Array.isArray(rec) ? rec[0] : rec) as any;
+    const rows: Array<[string, number | string]> = [
+      ["Recovered after a Cortex reminder (₹)", Number(r?.amount_recovered) || 0],
+      ["Invoices recovered", Number(r?.invoices_recovered) || 0],
+      ["Still being chased (₹)", Number(r?.amount_chasing) || 0],
+      ["Invoices still being chased", Number(r?.still_chasing) || 0],
+    ];
+    co.getCell("A2").value = "Counts only invoices where a reminder was actually sent and the money then came in.";
+    rows.forEach(([k, v], i) => { co.getCell(4 + i, 1).value = k; co.getCell(4 + i, 2).value = v as any; if (String(k).includes("₹")) co.getCell(4 + i, 2).numFmt = INR; });
+  } catch {
+    co.getCell("A2").value = "Collections is not set up for this workspace yet (the recovery summary function is not installed).";
+  }
+  co.getColumn(1).width = 44; co.getColumn(2).width = 18;
 }

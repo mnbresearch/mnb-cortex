@@ -173,7 +173,7 @@ export const CATALOGUE: readonly ActionDef[] = [
   {
     key: "export_xlsx",
     title: "Produce an Excel workbook",
-    describe: (a) => `Generate a .xlsx of ${a.dataset} for download.`,
+    describe: (a) => a.dataset === "mis_pack" ? "Generate the monthly MIS pack (.xlsx) for download." : `Generate a .xlsx of ${a.dataset} for download.`,
     effect: "export",
     reversible: true,
     blastRadius: { rows: 10_000 },
@@ -182,8 +182,8 @@ export const CATALOGUE: readonly ActionDef[] = [
     args: {
       dataset: {
         type: "enum", required: true,
-        values: ["receivables_ageing", "payables", "customers", "sales_orders", "inventory", "invoices"] as const,
-        description: "Which dataset to export.",
+        values: ["receivables_ageing", "payables", "customers", "sales_orders", "inventory", "invoices", "mis_pack"] as const,
+        description: "Which dataset to export. mis_pack is the monthly management pack: KPI overview, 24-month trend, receivables ageing, payables, top customers, collections — one workbook.",
       },
       days: { type: "number", min: 1, max: 3650, description: "Look-back window in days where it applies; defaults to 365." },
     },

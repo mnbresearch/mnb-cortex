@@ -188,7 +188,7 @@ export const TOOL_DECLARATIONS = [
       + "Use when the person asks you to change, send, mark or export something — never just describe what you would do; propose it. "
       + "Actions: update_invoice_due_date {invoice_id, due_date, invoice_no?} · mark_invoice_paid {invoice_id, paid_on?, amount?, invoice_no?} · "
       + "add_do_not_contact {party, reason?} · send_payment_reminder {invoice_id, channel?: email|whatsapp, amount?, invoice_no?} · "
-      + "raise_alert {message, severity?: info|warning|critical} · export_xlsx {dataset: receivables_ageing|payables|customers|sales_orders|inventory|invoices, days?}. "
+      + "raise_alert {message, severity?: info|warning|critical} · export_xlsx {dataset: receivables_ageing|payables|customers|sales_orders|inventory|invoices|mis_pack, days?} (mis_pack = the monthly management pack: KPIs, trend, ageing, payables, top customers, collections). "
       + "Always look the invoice up first (top_receivables / find_party) so invoice_id and amount are real. Give a one-sentence rationale.",
     parameters: {
       type: "object",

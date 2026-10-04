@@ -104,6 +104,19 @@ const { decide, normaliseCaps, requiresCaps, rupeesOf, CAPPED_EFFECTS } = await 
   check(!validateArgs(ex, { dataset: "all_the_things" }).ok, "args: an enum outside its values is rejected");
   check(validateArgs(ex, { dataset: "receivables_ageing", days: "90" }).ok, "args: a numeric string is accepted as a number");
   check(!validateArgs(ex, { dataset: "receivables_ageing", days: 99999 }).ok, "args: a number above max is rejected");
+  check(validateArgs(ex, { dataset: "mis_pack" }).ok, "args: mis_pack is an exportable dataset");
+  /* Every dataset the catalogue offers must have a builder and a row-counter in xlsx.ts — an enum value with no case is a proposal that always fails. */
+  {
+    const xl = readFileSync(join(ROOT, "src/lib/engine/xlsx.ts"), "utf8");
+    const buildBody = xl.slice(xl.indexOf("export async function buildWorkbook"), xl.indexOf("/* ---------------------------------------------------------------- sheets */"));
+    const countBody = xl.slice(xl.indexOf("export async function countRowsFor"), xl.indexOf("export async function buildWorkbook"));
+    for (const ds of ex.args.dataset.values) {
+      check(new RegExp(`case "${ds}":`).test(buildBody), `xlsx: buildWorkbook has a case for "${ds}"`);
+      check(new RegExp(`case "${ds}":`).test(countBody), `xlsx: countRowsFor has a case for "${ds}"`);
+    }
+    const dsType = xl.match(/export type Dataset = ([^;]+);/)?.[1] || "";
+    for (const ds of ex.args.dataset.values) check(dsType.includes(`"${ds}"`), `xlsx: Dataset type includes "${ds}"`);
+  }
 
   const rem = CATALOGUE_BY_KEY.send_payment_reminder;
   check(rupeesOf(rem, { amount: 12500 }) === 12500, "rupeesOf: reads the amount argument for capped actions");
