@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { DeleteButton } from "@/components/forms";
 import { ExportButton, ExcelButton } from "@/components/export-button";
@@ -12,7 +13,11 @@ import { ExportButton, ExcelButton } from "@/components/export-button";
   pixels apart, is the kind of inconsistency that makes a customer distrust
   both numbers rather than pick one.
 */
-export type Col = { key: string; label: string; kind?: "inr" | "pct" | "text" | "date" | "score" | "ratio" };
+export type Col = {
+  key: string; label: string; kind?: "inr" | "pct" | "text" | "date" | "score" | "ratio";
+  /** Render this cell as a link to `${linkTo}/${row.id}` — the row's own page. */
+  linkTo?: string;
+};
 
 function fmt(v: any, kind?: string) {
   if (v == null) return "—";
@@ -49,7 +54,9 @@ export function DataTable({ title, rows, cols, table, path, live }: { title: str
                 <tr key={r.id} className="border-b border-border/50 hover:bg-accent/40">
                   {cols.map((c) => <td key={c.key} className="px-3 py-2">{c.kind === "score"
                     ? <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${Number(r[c.key]) >= 70 ? "bg-success/10 text-success border-success/20" : Number(r[c.key]) >= 45 ? "bg-warning/10 text-warning border-warning/20" : "bg-danger/10 text-danger border-danger/20"}`}>{r[c.key]}/100</span>
-                    : fmt(r[c.key], c.kind)}</td>)}
+                    : c.linkTo && live && r.id
+                      ? <Link href={`${c.linkTo}/${encodeURIComponent(String(r.id))}`} className="font-medium text-primary hover:underline">{fmt(r[c.key], c.kind)}</Link>
+                      : fmt(r[c.key], c.kind)}</td>)}
                   {live && <td className="px-3 py-2 text-right"><DeleteButton table={table} id={r.id} path={path} /></td>}
                 </tr>
               ))}

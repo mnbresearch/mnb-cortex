@@ -33,7 +33,7 @@ export default async function Customers() {
           <Field name="value" label="Deal value (₹)" type="number" />
         </CollapsibleForm>
         <DataTable title="Customers" rows={rows} live={live} table="customers" path="/customers"
-          cols={[{key:"score",label:"AI score",kind:"score"},{key:"name",label:"Name"},{key:"company",label:"Company"},{key:"status",label:"Status"},{key:"value",label:"Value",kind:"inr"},{key:"email",label:"Email"},{key:"last_touch",label:"Last touch",kind:"date"}]} />
+          cols={[{key:"score",label:"AI score",kind:"score"},{key:"name",label:"Name",linkTo:"/customers"},{key:"company",label:"Company"},{key:"status",label:"Status"},{key:"value",label:"Value",kind:"inr"},{key:"email",label:"Email"},{key:"last_touch",label:"Last touch",kind:"date"}]} />
       </PageShell>
     </>
   );
