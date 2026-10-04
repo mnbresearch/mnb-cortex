@@ -658,8 +658,34 @@ function rpcFailure(error: { code?: string; message?: string } | null | undefine
     Code first, text second. PostgREST sets `code` reliably, but a proxy or an
     older gateway in front of it may not, and the message is then all there is.
   */
-  if (code === "PGRST202" || code === "42883" || /could not find the function|does not exist/i.test(msg)) {
+  /*
+    PGRST202 IS NOT "NOT INSTALLED". It is "not in PostgREST's schema cache",
+    which is true in two different situations with two different fixes:
+
+      · the function was never created            → run the migration
+      · it was created, but PostgREST has not      → notify pgrst, 'reload schema'
+        reloaded its cache since the DDL ran
+
+    Supabase does not always invalidate that cache after DDL run in the SQL
+    editor. On 4 October the operator ran every file, saw the verify rows come
+    back true, and this check still told them "NOT INSTALLED — run the file",
+    because the first version of this branch collapsed both cases into the
+    first. Telling someone to redo work they have done is the failure this
+    whole helper exists to prevent, so the message now names both and leads
+    with the cheap one.
+
+    42883 (undefined_function from Postgres itself) is different: that comes
+    from the database, not the cache, and does mean absent.
+  */
+  if (code === "42883") {
     return `NOT INSTALLED — run ${runFile}`;
+  }
+  if (code === "PGRST202" || /could not find the function|does not exist/i.test(msg)) {
+    return (
+      `not visible to the API — if you have already run ${runFile}, run ` +
+      `\`notify pgrst, 'reload schema';\` in the SQL editor and re-check in a minute; ` +
+      `otherwise run ${runFile}`
+    );
   }
   if (code === "42501" || /permission denied/i.test(msg)) {
     return `installed, but EXECUTE is not granted to service_role — re-run ${runFile}, which now grants it`;

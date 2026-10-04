@@ -281,8 +281,28 @@ if (typeof rpcFailure === "function") {
   const denied = rpcFailure({ code: "42501", message: "permission denied for function cortex_fn_has" }, RUN);
   const other = rpcFailure({ code: "57014", message: "canceling statement due to statement timeout" }, RUN);
 
-  check(/not installed/i.test(missing), "PGRST202 reads as not installed", missing);
+  /*
+    PGRST202 IS AMBIGUOUS, AND THE MESSAGE HAS TO SAY SO.
+
+    The first version of this assertion required PGRST202 to read as "not
+    installed". That encoded a false claim: PGRST202 means "not in PostgREST's
+    schema cache", which is also what a freshly created function returns until
+    the cache reloads. On 4 October the operator ran every file, saw the
+    verify rows return true, and the status page still said NOT INSTALLED —
+    because of this exact assertion's view of the world.
+
+    So: PGRST202 must offer BOTH remedies, reload first (cheap, and the likely
+    one right after a paste), and must not flatly assert absence. 42883 comes
+    from Postgres itself and may say NOT INSTALLED.
+  */
+  check(/reload schema/.test(missing), "PGRST202 offers the schema-cache reload", missing);
   check(missing.includes(RUN), "PGRST202 names the file to run", missing);
+  check(!/^NOT INSTALLED/i.test(missing),
+    "PGRST202 does not flatly assert the function is absent", missing);
+  const absent = rpcFailure({ code: "42883", message: "function cortex_fn_has(text, text) does not exist" }, RUN);
+  check(/^NOT INSTALLED/i.test(absent) && absent.includes(RUN),
+    "42883 (undefined_function from Postgres itself) reads as not installed", absent);
+  check(missing !== absent, "PGRST202 and 42883 produce different messages");
 
   check(/grant|execute/i.test(denied) && /service_role/.test(denied),
     "42501 reads as a missing grant, not a missing migration", denied);
@@ -307,8 +327,8 @@ if (typeof rpcFailure === "function") {
     "a failure with no message still says something", silent);
 
   /* Text-only fallbacks, for a gateway that drops `code`. */
-  check(/not installed/i.test(rpcFailure({ message: "Could not find the function public.x" }, RUN)),
-    "recognises a missing function from the message alone");
+  check(/reload schema/.test(rpcFailure({ message: "Could not find the function public.x" }, RUN)),
+    "recognises a schema-cache miss from the message alone");
   check(/service_role/.test(rpcFailure({ message: "permission denied for function x" }, RUN)),
     "recognises a denied grant from the message alone");
 }

@@ -200,6 +200,19 @@ begin
   return 'ok';
 end $$;
 
+
+/*
+  TELL POSTGREST THE SCHEMA CHANGED.
+
+  Supabase's API layer (PostgREST) keeps its own cache of which functions
+  exist. DDL run in the SQL editor does not always invalidate it. Without this
+  line a function created above can be present in pg_proc and still return
+  PGRST202 "not found in the schema cache" to the app — which /api/health then
+  reports as NOT INSTALLED, and an operator who has just run this file is told
+  to run it again. That exact loop happened on 4 October.
+*/
+notify pgrst, 'reload schema';
+
 -- ===========================================================================
 -- 3. VERIFY. One row. All four columns must be true.
 -- ===========================================================================
