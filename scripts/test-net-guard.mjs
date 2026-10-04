@@ -41,7 +41,20 @@
  * every WordPress.com-hosted endpoint and retried into the same wall forever.
  */
 
-import { assertPublicUrl, isPrivateAddress, BlockedUrlError } from "../src/lib/net-guard.ts";
+/*
+  net-guard.ts carries Next's `import "server-only"` build marker. That package
+  is an alias Next provides at bundle time, not a dependency of this repo, so
+  plain Node cannot resolve it. Same convention as test-byo-runtime and
+  test-email-delivery: copy the file, drop the one marker line, import the copy.
+*/
+import { mkdtempSync, writeFileSync as _w, readFileSync as _r } from "node:fs";
+import { join as _j } from "node:path";
+import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
+const _dir = mkdtempSync(_j(tmpdir(), "net-guard-"));
+const _copy = _j(_dir, "net-guard.ts");
+_w(_copy, _r(new URL("../src/lib/net-guard.ts", import.meta.url), "utf8").replace(/^import ["']server-only["'];?\s*$/m, ""));
+const { assertPublicUrl, isPrivateAddress, BlockedUrlError } = await import(pathToFileURL(_copy).href);
 
 let pass = 0;
 const failures = [];
