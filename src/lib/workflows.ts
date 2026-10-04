@@ -34,6 +34,15 @@ export const ACTIONS: { verb: string; arg: string; does: string }[] = [
   { verb: "email", arg: "<subject>", does: "Email the workspace owner a run summary" },
   { verb: "ai", arg: "<mode> <prompt>", does: "Run an AI mode (brief, actions, risk, costs…) and save the output" },
   { verb: "note", arg: "<text>", does: "Record a note in the run log" },
+  /*
+    THE VERB THAT MAKES "RUNS ON ITS OWN" TRUE. A scheduled workflow may ask
+    Cortex to DO something — through the action engine, never around it. The
+    proposal goes through the same policy as one made in chat: it executes
+    only if the owner's rule for that action says auto (within caps), and
+    otherwise waits on /approvals. So the schedule decides WHEN Cortex asks;
+    the owner still decides WHETHER it may act. See lib/engine.
+  */
+  { verb: "propose", arg: "<action> <json-args>", does: "Ask Cortex to take an action — runs if your rule allows it, otherwise waits for approval" },
 ];
 
 function parse(step: string): { verb: string; rest: string } {
@@ -182,6 +191,45 @@ export async function executeWorkflow(
         case "note": {
           if (rest) facts.push(rest);
           results.push({ step: raw, ok: true, detail: rest || "(empty note)" });
+          break;
+        }
+
+        case "propose": {
+          /*
+            `propose <action> <json>` — e.g.
+              propose export_xlsx {"dataset":"receivables_ageing"}
+              propose raise_alert {"message":"Weekly ageing ready","severity":"info"}
+
+            The action key and arguments are validated by the engine against
+            the catalogue, so a typo here is a clear per-step failure in the run
+            log, not a silent no-op. The idempotency key includes the workflow
+            name so the same step on the same day cannot create two proposals
+            if the scheduler fires twice.
+          */
+          const sp = rest.indexOf(" ");
+          const actionKey = (sp === -1 ? rest : rest.slice(0, sp)).trim();
+          const jsonText = sp === -1 ? "{}" : rest.slice(sp + 1).trim();
+          let args: unknown = {};
+          try { args = jsonText ? JSON.parse(jsonText) : {}; }
+          catch { results.push({ step: raw, ok: false, detail: `The arguments after "${actionKey}" are not valid JSON.` }); break; }
+
+          const { propose } = await import("@/lib/engine/ledger");
+          const day = istTodayISO();
+          const r = await propose({
+            orgId, action: actionKey, args, source: "workflow", proposedBy: null,
+            rationale: `Scheduled by the "${ctx.name}" workflow.`,
+            idempotencyKey: `workflow:${ctx.name}:${actionKey}:${day}:${JSON.stringify(args).slice(0, 80)}`,
+          });
+          if (!r.ok) { results.push({ step: raw, ok: false, detail: r.problems?.length ? `${r.error} ${r.problems.join("; ")}.` : r.error }); break; }
+          if (r.executed) {
+            results.push({ step: raw, ok: r.executed.ok, detail: r.executed.ok ? `Ran on its own (your rule allows it): ${r.executed.summary}` : `Allowed, but failed: ${r.executed.error}` });
+            if (r.executed.ok && r.executed.summary) facts.push(r.executed.summary);
+          } else if (r.verdict.verdict === "blocked") {
+            results.push({ step: raw, ok: false, detail: `Blocked by your rule: ${r.verdict.reason}` });
+          } else {
+            results.push({ step: raw, ok: true, detail: `Proposed — waiting on /approvals. ${r.verdict.reason}` });
+            facts.push(`Proposed ${actionKey}; waiting for approval.`);
+          }
           break;
         }
 

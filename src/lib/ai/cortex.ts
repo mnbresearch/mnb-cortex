@@ -6,8 +6,10 @@ import "server-only";
 import { anyEnvKey, envKey } from "@/lib/env";
 import { geminiTextModels, geminiUrl } from "@/lib/ai/models";
 import { generationConfig, profileFor, STANDARD, type GenProfile } from "@/lib/ai/generation";
-// Read-only, org-scoped lookups the model can call. See lib/ai/tools.ts for why
-// these are named queries rather than generated SQL.
+// Org-scoped lookups the model can call — all read-only except propose_action,
+// which writes a proposal to the action ledger and nothing else. See the header
+// of lib/ai/tools.ts for the full reasoning; it is the one place the model's
+// output can become a (human- or policy-gated) action.
 import { TOOL_DECLARATIONS, TOOL_NAMES, runTool } from "@/lib/ai/tools";
 import { anthropicModel, groqModel, openaiModel } from "@/lib/ai/model-defaults";
 
@@ -19,7 +21,9 @@ Rules:
 - Quantify everything you can using the BUSINESS SNAPSHOT provided. Never invent contradictory numbers.
 - Use Indian business context (INR, lakh/crore, GST, Tally).
 - End with a one-line confidence note when you are extrapolating.
-- Be direct and concise. No fluff, no hedging, no "as an AI".`;
+- Be direct and concise. No fluff, no hedging, no "as an AI".
+- DOING THINGS. When the owner asks you to change, send, mark or export something, use propose_action — do not merely describe what you would do. Look the record up first so the id and amount are real.
+- NEVER say an action was done unless the tool result says it was done. If the result says it is waiting for approval, say exactly that and point to the Approvals page. If it was blocked or failed, say so plainly. The owner relies on your sentence to know what actually happened.`;
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -107,10 +111,12 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
   // gets the default behaviour rather than an error.
   let context2 = context;
   let toolOrg: string | null = null;
+  let toolUser: string | null = null;
   try {
     const { getUserAndOrg } = await import("@/lib/data");
     const { getInstructions, instructionBlock } = await import("@/lib/ai-instructions");
-    const { orgId } = await getUserAndOrg();
+    const { orgId, user } = await getUserAndOrg();
+    toolUser = user?.id || null;
     // Also used to scope every tool lookup below. No session -> no tools.
     toolOrg = orgId || null;
     const extra = instructionBlock(await getInstructions(orgId));
@@ -126,7 +132,7 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
     // three cases the right move is to hand over to the next provider at once.
     const attempts = 3;
     for (let i = 0; i < attempts; i++) {
-      const out = await runOnce(provider, messages, context2, profile, toolOrg);
+      const out = await runOnce(provider, messages, context2, profile, toolOrg, toolUser);
       if (out !== null) return out;
 
       const st = lastFailure?.status;
@@ -141,7 +147,7 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
 }
 
 /** One model call. Returns null on a transient/failed call so the caller can retry. */
-async function runOnce(provider: string, messages: Msg[], context: string, profile: GenProfile, toolOrg?: string | null): Promise<string | null> {
+async function runOnce(provider: string, messages: Msg[], context: string, profile: GenProfile, toolOrg?: string | null, toolUser?: string | null): Promise<string | null> {
   const sys = `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
   try {
     // ---- Google Gemini (FREE: aistudio.google.com) ----
@@ -228,7 +234,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
               // Only names we declared. A model asking for anything else gets a
               // refusal rather than a lookup.
               const result = TOOL_NAMES.has(fname)
-                ? await runTool(fname, c.functionCall.args || {}, toolOrg!)
+                ? await runTool(fname, c.functionCall.args || {}, toolOrg!, toolUser ?? null)
                 : { ok: false, error: `Unknown tool: ${fname}` };
               responses.push({ functionResponse: { name: fname, response: result } });
             }

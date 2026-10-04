@@ -30,8 +30,35 @@ import { createClient } from "@/lib/supabase/server";
  * model chooses which question to ask and with what limit; it cannot choose
  * whose data to ask about. Arguments are clamped, and the row cap is hard.
  *
- * Everything is SELECT. There is no tool that writes, and adding one should be
- * a deliberate decision with its own review, not a convenience.
+ * EVERYTHING IS SELECT — WITH ONE DELIBERATE EXCEPTION, AND THIS IS ITS REVIEW.
+ *
+ * For most of this product's life the line above read "Everything is SELECT.
+ * There is no tool that writes", and three independent security reviews each
+ * verified it and each rested their LLM01 conclusion on it: untrusted text in
+ * a CSV can reach the prompt, but the model's output can only ever become
+ * words a human reads. That sentence is no longer literally true, so here is
+ * exactly how it changed and what still holds.
+ *
+ * `propose_action` is the only tool that is not a SELECT. It does not update
+ * an invoice, send a message, or move money. It writes ONE ROW to
+ * action_proposals — a staging table whose rows do nothing until either a
+ * human approves them on /approvals or the workspace owner's own standing
+ * rule (lib/engine/policy.ts) says the action may run without asking, within
+ * caps the server enforces. The model cannot approve, cannot execute, cannot
+ * set a rule, and cannot name an action outside lib/engine/catalogue.ts. The
+ * executor that eventually acts is deterministic code that never sees the
+ * prompt.
+ *
+ * So the LLM01 boundary has moved from "the model's output is text" to "the
+ * model's output is a typed proposal that a policy the owner controls decides
+ * on". That is a real change and it is recorded as one: the worst case for a
+ * poisoned prompt is now a bad proposal in the queue — rate-limited per day,
+ * labelled as coming from chat, with its rationale and evidence shown so the
+ * person approving can see it is nonsense. It is not a sent message.
+ *
+ * scripts/test-ai-tools.mjs pins this: every tool except propose_action must
+ * contain no write verb, and propose_action must call the ledger's propose()
+ * and nothing else from the engine.
  */
 
 /** Hard ceiling on rows returned to the model, whatever it asks for. */
@@ -153,6 +180,27 @@ export const TOOL_DECLARATIONS = [
       properties: { months: { type: "integer", description: "How many months back (1-24, default 6)." } },
     },
   },
+  {
+    name: "propose_action",
+    description:
+      "Ask Cortex to DO something in this workspace. This does not perform the action: it creates a proposal the owner "
+      + "approves on the Approvals page (or that runs on its own only if the owner has set a rule allowing it). "
+      + "Use when the person asks you to change, send, mark or export something — never just describe what you would do; propose it. "
+      + "Actions: update_invoice_due_date {invoice_id, due_date, invoice_no?} · mark_invoice_paid {invoice_id, paid_on?, amount?, invoice_no?} · "
+      + "add_do_not_contact {party, reason?} · send_payment_reminder {invoice_id, channel?: email|whatsapp, amount?, invoice_no?} · "
+      + "raise_alert {message, severity?: info|warning|critical} · export_xlsx {dataset: receivables_ageing|payables|customers|sales_orders|inventory|invoices, days?}. "
+      + "Always look the invoice up first (top_receivables / find_party) so invoice_id and amount are real. Give a one-sentence rationale.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", description: "One of the action keys listed above." },
+        args: { type: "object", description: "The action's arguments, exactly as named above." },
+        rationale: { type: "string", description: "One sentence: why this should happen, in words the owner will read." },
+        evidence: { type: "array", items: { type: "string" }, description: "Up to 5 short facts you looked at (e.g. 'INV-104 is 47 days past due')." },
+      },
+      required: ["action", "args", "rationale"],
+    },
+  },
 ] as const;
 
 export type ToolResult = { ok: boolean; rows?: any[]; summary?: string; error?: string };
@@ -174,8 +222,20 @@ function likeLiteral(s: string): string {
  * `orgId` is supplied by the caller from the session. It is never read from
  * `args`, which is the whole security model of this file.
  */
-export async function runTool(name: string, args: any, orgId: string): Promise<ToolResult> {
+export async function runTool(name: string, args: any, orgId: string, userId: string | null = null): Promise<ToolResult> {
   if (!orgId) return { ok: false, error: "No workspace in context." };
+
+  /*
+    THE ONE WRITE. Handled before the SELECT switch so it is visibly separate.
+    Everything it can do is bounded by lib/engine: the action must be in the
+    catalogue, the args are validated against the spec, the owner's policy
+    decides auto/approve/blocked, and the proposal is capped per day so a
+    poisoned prompt cannot flood the queue. The model never learns whether an
+    auto-executed proposal "worked" in a way it could exploit — it gets the
+    same shape of answer either way.
+  */
+  if (name === "propose_action") return proposeFromChat(args, orgId, userId);
+
   const sb = await createClient();
 
   try {
@@ -451,4 +511,45 @@ export async function runTool(name: string, args: any, orgId: string): Promise<T
  * this set is to test a name the MODEL supplied, which is an arbitrary string
  * until it has been checked.
  */
+/** Proposals from chat per workspace per day. Enough for real use; not enough for a flood. */
+const CHAT_PROPOSALS_PER_DAY = 30;
+
+async function proposeFromChat(args: any, orgId: string, userId: string | null): Promise<ToolResult> {
+  const { propose, listProposals } = await import("@/lib/engine/ledger");
+  const { CATALOGUE_BY_KEY, isActionKey } = await import("@/lib/engine/catalogue");
+
+  const action = String(args?.action || "");
+  if (!isActionKey(action)) {
+    return { ok: false, error: `"${action}" is not something Cortex can do. The actions are: ${Object.keys(CATALOGUE_BY_KEY).join(", ")}.` };
+  }
+
+  /* Daily flood guard, counted from the ledger like every other cap. */
+  const recent = await listProposals(orgId, { limit: 200 });
+  const since = Date.now() - 86_400_000;
+  const fromChatToday = recent.filter((p) => p.source === "chat" && new Date(p.created_at).getTime() > since).length;
+  if (fromChatToday >= CHAT_PROPOSALS_PER_DAY) {
+    return { ok: false, error: `Cortex has already proposed ${CHAT_PROPOSALS_PER_DAY} actions from chat today. Review them on /approvals before proposing more.` };
+  }
+
+  const r = await propose({
+    orgId, action, args: args?.args ?? {}, source: "chat", proposedBy: userId,
+    rationale: String(args?.rationale || "").slice(0, 500) || null,
+    evidence: Array.isArray(args?.evidence) ? args.evidence.slice(0, 5).map((e: unknown) => String(e).slice(0, 200)) : [],
+  });
+  if (!r.ok) return { ok: false, error: r.problems?.length ? `${r.error} ${r.problems.join("; ")}.` : r.error };
+
+  const def = CATALOGUE_BY_KEY[action];
+  const what = (() => { try { return def.describe(r.proposal.args); } catch { return def.title; } })();
+  if (r.executed) {
+    return r.executed.ok
+      ? { ok: true, summary: `Done, within the owner's rule for this action: ${r.executed.summary}` }
+      : { ok: false, error: `Allowed by the owner's rule, but it did not go through: ${r.executed.error}` };
+  }
+  if (r.verdict.verdict === "blocked") return { ok: false, error: `Not allowed in this workspace: ${r.verdict.reason}` };
+  return {
+    ok: true,
+    summary: `Proposed, not done: "${what}" is waiting for approval on the Approvals page. ${r.verdict.reason} Tell the person it needs their tap.`,
+  };
+}
+
 export const TOOL_NAMES: Set<string> = new Set(TOOL_DECLARATIONS.map((t) => t.name));

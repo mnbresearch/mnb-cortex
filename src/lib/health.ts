@@ -717,6 +717,11 @@ async function checkSchema(): Promise<Check> {
       migration does. So the health endpoint says so out loud.
     */
     ["organizations", "referral_code", "2026_referrals"],
+    /* The action engine's ledger and rules. Without these, /approvals renders
+       an empty queue and every propose_action from chat fails — quietly, from
+       the owner's point of view, as "Cortex could not record that". */
+    ["action_proposals", "idempotency_key", "2026_zzzr_actions"],
+    ["action_policies", "requires_caps", "2026_zzzr_actions"],
     /*
       BOTH COLUMNS, because one of them is load-bearing for the most important
       path in the product.

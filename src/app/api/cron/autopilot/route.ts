@@ -70,6 +70,15 @@ export async function GET(req: Request) {
     expired = Number(data ?? 0);
   } catch { /* migration not applied yet */ }
 
+  // 1a. Expire action proposals nobody decided on within their window, so the
+  //     approvals queue does not fill with week-old suggestions and a stale
+  //     proposal can never be approved against data that has since changed.
+  let proposalsExpired = 0;
+  try {
+    const { expireStale } = await import("@/lib/engine/ledger");
+    proposalsExpired = await expireStale();
+  } catch { /* 2026_zzzr_actions.sql not applied yet — the health probe reports it */ }
+
   // 1b. Renewal reminders. Runs AFTER the expiry sweep so a plan that lapsed
   //     today gets its "your plan has ended" note on the same run. Each notice
   //     is claimed in renewal_notices before sending, so it goes out exactly
@@ -611,7 +620,7 @@ export async function GET(req: Request) {
     console.error("[cron] coverage alert —", e?.message);
   }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, collectionsSent, coverage,
+  return NextResponse.json({ ok: true, ran, skipped, expired, proposalsExpired, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, collectionsSent, coverage,
     /*
       How long the run took and whether it finished with room to spare. If
       `budget_left_ms` trends towards zero, the caps in lib/cron-budget.ts need

@@ -53,10 +53,47 @@ check(!/orgId\s*=\s*args/.test(SRC) && !/args\??\.\s*org/i.test(SRC),
   "orgId is never read from the model's arguments",
   "the model could choose whose data to read");
 
-/* No writes. */
+/*
+  NO WRITES — WITH THE ONE EXCEPTION THIS SUITE NOW PINS EXACTLY.
+
+  For most of this product's life this block asserted that runTool contained
+  no write verb at all, and three security reviews rested on that. It is no
+  longer literally true: propose_action exists. So the invariant is restated
+  precisely rather than loosened:
+
+    · runTool itself still contains no .insert/.update/.upsert/.delete — the
+      one write lives in lib/engine/ledger.ts, reached ONLY through propose().
+    · propose_action is dispatched BEFORE the SELECT switch, through a single
+      helper that calls the ledger's propose() and nothing else from the
+      engine — never approve(), execute() or setPolicy(). The model proposes;
+      it cannot decide or run.
+    · the header no longer claims "everything is SELECT" without qualifying it.
+
+  A test that kept saying "the tools are read-only" after this change would be
+  asserting something false, which is worse than asserting nothing.
+*/
 for (const verb of ["insert(", "update(", "upsert(", "delete("]) {
-  check(!body.includes("." + verb), `no ${verb.replace("(", "")} — the tools are read-only`,
+  check(!body.includes("." + verb), `no ${verb.replace("(", "")} inside runTool — the lookups are read-only`,
     `found .${verb} in runTool`);
+}
+{
+  const helper = SRC.slice(SRC.indexOf("async function proposeFromChat"), SRC.indexOf("export const TOOL_NAMES"));
+  check(helper.length > 200, "propose_action: the helper exists and is the only non-SELECT path");
+  check(/\bpropose\(/.test(helper), "propose_action: calls the ledger's propose()");
+  for (const forbidden of ["approve(", "execute(", "undo(", "setPolicy(", "reject("]) {
+    check(!helper.includes(forbidden), `propose_action: never calls ${forbidden.replace("(", "")} — the model proposes, it does not decide`);
+  }
+  check(/CHAT_PROPOSALS_PER_DAY/.test(helper) && /source === "chat"/.test(helper),
+    "propose_action: capped per day, counted from the ledger",
+    "a poisoned prompt must not be able to flood the approval queue");
+  check(/source: "chat"/.test(helper), "propose_action: labels its proposals as coming from chat",
+    "the person approving must be able to see this came from the model");
+  check(!/args\?\.orgId|args\?\.org_id|args\.org/.test(helper), "propose_action: the workspace comes from the session, not the model's arguments");
+  /* The header must not still make the unqualified claim. */
+  check(!/Everything is SELECT\. There is no tool that writes/.test(SRC),
+    "header: no longer claims every tool is read-only without qualification");
+  check(/propose_action/.test(SRC.slice(0, SRC.indexOf("const MAX_ROWS"))),
+    "header: names the exception and explains it");
 }
 
 /*
@@ -87,7 +124,14 @@ check(rpcCalls.every((c) => /cortex_/.test(c)),
 const declared = [...SRC.matchAll(/name:\s*"([a-z_]+)"/g)].map((m) => m[1]);
 const cases = [...body.matchAll(/case\s+"([a-z_]+)":/g)].map((m) => m[1]);
 check(declared.length >= 6, "parse: found the declarations", `${declared.length}`);
-for (const d of declared) check(cases.includes(d), `tool "${d}" is declared AND implemented`);
+/* propose_action is implemented by early dispatch, not a switch case — assert that explicitly. */
+for (const d of declared) {
+  if (d === "propose_action") {
+    check(/if \(name === "propose_action"\) return proposeFromChat\(/.test(body), `tool "${d}" is declared AND implemented (early dispatch)`);
+    continue;
+  }
+  check(cases.includes(d), `tool "${d}" is declared AND implemented`);
+}
 for (const c of cases) check(declared.includes(c), `case "${c}" is actually declared to the model`);
 
 /* --------------------------------------------- behaviour, on real Postgres */
