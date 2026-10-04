@@ -120,3 +120,4 @@
 2026_zzzn_renewal_grace_sweep.sql
 2026_zzzo_fn_body_probe.sql
 2026_zzzp_guard_practice_link.sql
+2026_zzzq_rpc_grant_probe.sql

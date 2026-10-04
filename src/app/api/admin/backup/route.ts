@@ -15,12 +15,17 @@ export const maxDuration = 300;
  * SUPER-ADMIN ONLY. An earlier draft also accepted CRON_SECRET so a scheduler
  * could pull backups. That was dropped, for two reasons:
  *
- *  1. cronAuthorised() accepts the secret as a ?secret= QUERY PARAMETER. On a
- *     cron route that is merely untidy. On this route the URL would become a
- *     self-contained bearer credential that downloads every customer's data —
- *     and URLs land in platform request logs, shell history, and the config of
- *     whatever uptime monitor you paste it into. Long-lived secret, permanent
- *     exposure.
+ *  1. At the time, cronAuthorised() also accepted the secret as a ?secret=
+ *     QUERY PARAMETER. On a cron route that was merely untidy. On this route
+ *     the URL would have become a self-contained bearer credential that
+ *     downloads every customer's data — and URLs land in platform request
+ *     logs, shell history, and the config of whatever uptime monitor you
+ *     paste it into. Long-lived secret, permanent exposure.
+ *
+ *     That query fallback has since been removed from cronAuthorised()
+ *     entirely — the reasoning above was right about the cron routes too, and
+ *     a portfolio audit flagged the same thing. The decision below stands on
+ *     reason 2 alone, which is the stronger one anyway.
  *  2. CRON_SECRET already authorises three cron endpoints. Adding this one
  *     would have widened the blast radius of a single leaked value from "sends
  *     some emails early" to "exfiltrates the entire platform".

@@ -260,10 +260,25 @@ export default function Privacy() {
         until the investigation is complete.
       </P>
 
+      {/*
+        Rewritten to say what is actually set, because the previous wording
+        implied non-essential cookies that do not exist.
+
+        It said "limited analytics to understand usage" and "you can control
+        non-essential cookies through your browser settings" — which invites
+        the reader to go and switch something off. There is nothing to switch
+        off: there is no advertising or third-party analytics cookie anywhere
+        in this app. Usage analytics is first-party and server-side, and
+        lib/funnel.ts records "no raw IP, no user agent, no cookie, no query
+        string". Naming the three cookies is both more useful and checkable.
+      */}
       <H2>10. Cookies</H2>
       <P>
-        We use essential cookies to keep you signed in and to run the app securely, and limited analytics to understand usage and improve
-        the product. You can control non-essential cookies through your browser settings.
+        We set three first-party cookies, all strictly necessary: your sign-in session, which workspace you
+        are currently viewing, and — if you arrived through a referral link — the referral code, so the
+        person who referred you is credited. We set no advertising cookies and load no third-party trackers.
+        Usage analytics is first-party and recorded on our server without cookies, IP addresses or device
+        fingerprints. Clearing cookies in your browser will sign you out.
       </P>
 
       <H2>11. Breach Response</H2>

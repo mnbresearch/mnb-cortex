@@ -119,7 +119,11 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://cortex.mnbresearch.com/
 curl -s -o /dev/null -w '%{http_code}\n' https://cortex.mnbresearch.com/icon.svg
 
 # expiry sweep + housekeeping; returns {"ok":true,"expired":N,...}
-curl -s "https://cortex.mnbresearch.com/api/cron/autopilot?secret=$CRON_SECRET"
+# HEADER, not ?secret= — the query form was removed from cronAuthorised(),
+# because a URL carrying CRON_SECRET ends up in request logs, shell history
+# and Referer headers. Vercel Cron sends this same header natively.
+curl -s -H "Authorization: Bearer $CRON_SECRET" \
+  https://cortex.mnbresearch.com/api/cron/autopilot
 ```
 
 Then sign in and confirm the dashboard, chat and one calculator still work, and that

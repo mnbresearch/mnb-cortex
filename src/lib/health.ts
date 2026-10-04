@@ -1016,6 +1016,42 @@ async function checkSchema(): Promise<Check> {
     missing.push("2026_org_billing_guard (cannot verify)");
   }
 
+  /*
+    ARE THE PRIVILEGED RPCs ACTUALLY UNREACHABLE FROM A BROWSER?
+
+    charge_credits, grant_credits, sync_allowance and bump_memory_refs are
+    SECURITY INVOKER and are revoked from anon/authenticated by the loop in
+    2026_hardening.sql. Every other check in this function asks whether an
+    OBJECT exists; none of them asks whether a GRANT is what the file says it
+    is — and that loop swallows undefined_function, so a signature mismatch
+    or an out-of-order apply skips the revoke in silence and never retries.
+
+    An external audit read all 103 SQL files and reported these RPCs as
+    unprotected, because the revoke is built with format() and does not grep.
+    They were wrong about the file, but nobody — including us — could show
+    the privilege state in production without opening the SQL editor. Now the
+    status page can: cortex_rpcs_locked() asks pg_catalog directly.
+
+    grant_credits reachable by `authenticated` means any member calls
+    rpc('grant_credits', {p_org: <their org>, p_amount: 1e9}) and the product
+    is free forever, so this is reported with the consequence spelled out.
+  */
+  try {
+    const { data, error } = await sb.rpc("cortex_rpcs_locked");
+    if (error) {
+      missing.push(`2026_zzzq_rpc_grant_probe (probe: ${rpcFailure(error, "2026_zzzq_rpc_grant_probe.sql")})`);
+    } else if (data === false) {
+      missing.push(
+        "PRIVILEGED RPCs ARE BROWSER-REACHABLE — grant_credits/charge_credits/" +
+        "sync_allowance can be called with a signed-in user's own key, so any " +
+        "member can mint themselves unlimited credits. Re-run the privileged-" +
+        "function block in 2026_hardening.sql",
+      );
+    }
+  } catch (e: any) {
+    missing.push(`2026_zzzq_rpc_grant_probe (cannot verify — the probe threw: ${e?.message || "no message"})`);
+  }
+
   const uniq = Array.from(new Set(missing));
   return uniq.length
     ? { name: "Schema migrations", status: "degraded", detail: `Not applied: ${uniq.join(", ")}` }
