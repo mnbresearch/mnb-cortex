@@ -6,8 +6,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CollapsibleForm, Field, SelectField, DeleteButton } from "@/components/forms";
 import { getWorkflowsList, getWorkflowRuns } from "@/lib/data";
-import { addWorkflow, runWorkflow } from "@/lib/actions";
-import { Workflow, Zap, Play } from "lucide-react";
+import { addWorkflow, runWorkflow, toggleWorkflow } from "@/lib/actions";
+import { AutomateThis } from "@/components/automate-this";
+import { Workflow, Zap, Play, Pause, PlayCircle } from "lucide-react";
 import { ACTIONS } from "@/lib/workflows";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +46,9 @@ export default async function Workflows() {
           </div>
         </Card>
 
-        <CollapsibleForm title="New workflow" action={addWorkflow}>
+        {wf.live && <AutomateThis />}
+
+        <CollapsibleForm title="New workflow (write the steps yourself)" action={addWorkflow}>
           <Field name="name" label="Workflow name" required />
           <SelectField name="trigger" label="Trigger" options={["schedule","event","manual"]} />
           <Field name="steps" label="Steps (comma-separated)" placeholder="recompute, receivables, email Daily digest" aria-label="recompute, receivables, email Daily digest" />
@@ -71,6 +74,12 @@ export default async function Workflows() {
                   <SafeForm action={runWorkflow}>
                     <input type="hidden" name="id" value={f.id} /><input type="hidden" name="name" value={f.name} />
                     <button className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-8 px-3 text-xs font-medium hover:opacity-90"><Play className="h-3.5 w-3.5" /> Run now</button>
+                  </SafeForm>
+                  <SafeForm action={toggleWorkflow}>
+                    <input type="hidden" name="id" value={f.id} /><input type="hidden" name="active" value={f.is_active ? "false" : "true"} />
+                    <button className="inline-flex items-center gap-1.5 rounded-lg border h-8 px-3 text-xs font-medium hover:bg-accent">
+                      {f.is_active ? <><Pause className="h-3.5 w-3.5" aria-hidden="true" /> Pause</> : <><PlayCircle className="h-3.5 w-3.5" aria-hidden="true" /> Resume</>}
+                    </button>
                   </SafeForm>
                   <DeleteButton table="workflows" id={f.id} path="/workflows" />
                 </div>

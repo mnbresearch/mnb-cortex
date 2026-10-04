@@ -684,6 +684,41 @@ export async function addWorkflow(fd: FormData) {
   revalidatePath("/workflows");
 }
 
+/**
+ * "Automate this" — create a workflow from a plan the person has just read.
+ *
+ * The plan is RE-VALIDATED here against the verb grammar, the AI modes and
+ * the action catalogue: the browser held it between preview and create, and
+ * the browser is not trusted. Created paused unless asked otherwise, so a
+ * daily schedule never starts before the owner has seen it run once.
+ */
+export async function createWorkflowFromPlan(input: { plan: unknown; activate?: boolean }): Promise<{ ok: true; id: string; name: string; active: boolean } | { ok: false; error: string; problems?: string[] }> {
+  let orgId: string;
+  try { orgId = await requireWriteOrg(); await requireCapability(orgId, "workflows", "Workflow automation"); }
+  catch (e: any) { return { ok: false, error: e?.message || "Not allowed." }; }
+  const { validateWorkflowPlan } = await import("@/lib/engine/automation");
+  const { automationDeps } = await import("@/lib/engine/automation-server");
+  const v = validateWorkflowPlan(input?.plan, automationDeps());
+  if (!v.ok) return { ok: false, error: "That plan is not something a workflow can run, so nothing was created.", problems: v.problems };
+  const sb = await createClient();
+  const { data, error } = await sb.from("workflows").insert({
+    org_id: orgId, name: v.plan.name, trigger: v.plan.trigger, steps: v.plan.steps, is_active: input?.activate === true,
+  }).select("id").single();
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/workflows");
+  return { ok: true, id: String((data as any)?.id), name: v.plan.name, active: input?.activate === true };
+}
+
+/** Pause or resume a workflow. A paused schedule is skipped by the nightly scheduler (is_active). */
+export async function toggleWorkflow(fd: FormData): Promise<ActionResult | void> {
+  const orgId = await requireWriteOrg(); const sb = await createClient();
+  const id = str(fd.get("id")); const active = str(fd.get("active")) === "true";
+  const { data, error } = await sb.from("workflows").update({ is_active: active }).eq("id", id).eq("org_id", orgId).select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length !== 1) return { ok: false, error: "That workflow was not found in this workspace." };
+  revalidatePath("/workflows");
+}
+
 export async function runWorkflow(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg();
   /*

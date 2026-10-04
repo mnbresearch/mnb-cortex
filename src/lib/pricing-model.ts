@@ -88,6 +88,7 @@ export const MODE_PROFILE_NAME: Record<string, keyof typeof PROFILE_OUTPUT_TOKEN
   */
   improve_prompt: "FAST",
   transform_plan: "FAST",
+  automation_plan: "FAST",
   scenario: "DEEP", forecast: "DEEP", strategy: "DEEP", investor: "DEEP",
   board: "DEEP", valuation: "DEEP", deepdive: "DEEP", report: "DEEP",
   gst: "EXTRACT", bankstatement: "EXTRACT",
