@@ -515,6 +515,18 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
     "an absent number with no explanation looks like an oversight rather than a standard");
 }
 
+/*
+  THE VERSION THE APP ANNOUNCES IS THE NEWEST RELEASE IN THE CHANGELOG.
+  APP_VERSION drives the "What's new" popup (shown when it changes), the
+  /changelog "Current:" line and Settings. Left behind once at 6.40.0 while
+  6.41.0 shipped — the page contradicted itself and nobody saw the popup.
+*/
+{
+  const appVersion = readFileSync("src/lib/config.ts", "utf8").match(/export const APP_VERSION = "([^"]+)"/)?.[1];
+  const newest = readFileSync("src/lib/changelog.ts", "utf8").match(/RELEASES: Release\[\] = \[\s*\{ v: "([^"]+)"/)?.[1];
+  check(Boolean(appVersion) && appVersion === newest, "APP_VERSION equals the newest changelog release", `APP_VERSION ${appVersion} vs newest release ${newest}`);
+}
+
 console.log(`\nclaims: ${pass} passed, ${fails.length} failed`);
 if (fails.length) {
   for (const f of fails) console.log("  FAIL " + f);
