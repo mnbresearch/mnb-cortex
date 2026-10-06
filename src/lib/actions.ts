@@ -1622,6 +1622,10 @@ export async function addScheduledReport(fd: FormData): Promise<ActionResult | v
   const mode = str(fd.get("mode")) || "brief";
   const cadence = str(fd.get("cadence")) || "weekly";
   if (!["daily", "weekly", "monthly"].includes(cadence)) return fail("Cadence must be daily, weekly or monthly.");
+  /* The form offers a fixed list; the server holds it to that list, so an
+     unknown mode cannot be saved to fail (or silently fall back) every night. */
+  const REPORT_MODES = ["brief", "report", "actions", "risk", "costs", "forecast", "investor", "benchmark", "mis_pack"];
+  if (!REPORT_MODES.includes(mode)) return fail(`Choose one of: ${REPORT_MODES.join(", ")}.`);
   const sendTo = str(fd.get("send_to"));
   const { error } = await svc.from("scheduled_reports").insert({
     org_id: orgId, mode, cadence, send_to: sendTo || null,

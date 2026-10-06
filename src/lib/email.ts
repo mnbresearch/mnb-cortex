@@ -74,7 +74,11 @@ export async function sendEmail(
    * `kind` and `orgId` are recorded so "what is failing?" can be answered by
    * feature and by workspace instead of guessed from subject lines.
    */
-  opts?: { from?: string; replyTo?: string | null; kind?: string; orgId?: string | null },
+  opts?: {
+    from?: string; replyTo?: string | null; kind?: string; orgId?: string | null;
+    /** Files to attach (Resend `attachments`). Capped at 10 MB total — Resend's own limit is 40 MB. */
+    attachments?: Array<{ filename: string; content: Buffer }>;
+  },
 ): Promise<SendResult> {
   const correlationId = `em_${crypto.randomUUID()}`;
   const key = envKey("RESEND_API_KEY");
@@ -90,6 +94,16 @@ export async function sendEmail(
   const replyTo = opts?.replyTo === null ? "" : (opts?.replyTo || brandReplyTo());
   const payload: any = { from, to: [to], subject, html };
   if (replyTo) payload.reply_to = replyTo;
+  if (opts?.attachments?.length) {
+    const total = opts.attachments.reduce((n, a) => n + a.content.length, 0);
+    if (total > 10 * 1_048_576) {
+      const reason = `attachments total ${(total / 1_048_576).toFixed(1)} MB, over the 10 MB limit`;
+      await record({ correlationId, to, subject, kind: opts?.kind, orgId: opts?.orgId, status: "failed", providerError: reason, attempts: 0, ms: 0 });
+      return { sent: false, state: "rejected", reason, correlationId, attempts: 0, ms: 0 };
+    }
+    /* Filenames go into a MIME header; keep them to a safe character set. */
+    payload.attachments = opts.attachments.map((a) => ({ filename: a.filename.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 120), content: a.content.toString("base64") }));
+  }
 
   /* QUEUED, not sent. The row exists before the attempt so a process that dies
      mid-request still leaves a trace of a message that may have gone out. */

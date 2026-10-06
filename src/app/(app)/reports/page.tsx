@@ -13,7 +13,8 @@ import { CalendarClock } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 /** AI modes that make sense as a recurring report. */
-const MODES = ["brief", "report", "actions", "risk", "costs", "forecast", "investor", "benchmark"];
+/* mis_pack = the monthly management workbook, attached as .xlsx — built from records, no AI credits. */
+const MODES = ["brief", "report", "actions", "risk", "costs", "forecast", "investor", "benchmark", "mis_pack"];
 
 export default async function Reports() {
   const sched = await getScheduledReports();
