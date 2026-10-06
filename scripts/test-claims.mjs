@@ -516,6 +516,18 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
 }
 
 /*
+  ABOLISHED GST SLABS STAY ABOLISHED IN WHAT SEARCH ENGINES SHOW.
+  GST 2.0 (22 Sep 2025) removed 12% and 28%. The calculator's own table was
+  corrected; its SEO description still advertised both, so Google showed a
+  rate list the page itself refuses. Any GST copy offering those slabs fails.
+*/
+{
+  const seo = readFileSync("src/lib/calculator-seo.ts", "utf8");
+  const offenders = [...seo.matchAll(/"[^"]*\b(?:12|28)%[^"]*"/g)].map((m) => m[0]).filter((t) => /gst/i.test(t) || /cgst|sgst|igst/i.test(t));
+  check(offenders.length === 0, "no SEO copy offers the abolished 12% / 28% GST slabs", offenders.join(" | ").slice(0, 200));
+}
+
+/*
   THE VERSION THE APP ANNOUNCES IS THE NEWEST RELEASE IN THE CHANGELOG.
   APP_VERSION drives the "What's new" popup (shown when it changes), the
   /changelog "Current:" line and Settings. Left behind once at 6.40.0 while

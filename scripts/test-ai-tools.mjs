@@ -223,6 +223,7 @@ async function main() {
   check(/TOOL_NAMES\.has\(fname\)\s*\?\s*await runTool\(fname, args, toolOrg!/.test(oc), "openai-compatible: undeclared names refused, lookups scoped by toolOrg");
   check(/round < 4/.test(oc) && /calls\.slice\(0, 4\)/.test(oc), "openai-compatible: bounded rounds and calls per round");
   check(/r\.status === 400 && offerTools/.test(oc) && /body: JSON\.stringify\(\{ model, messages: cleaned, temperature: 0\.4 \}\)/.test(oc), "openai-compatible: a 400 on tools retries once WITHOUT tools instead of failing the chat");
+  check(/if \(!text && useTools\)/.test(CORTEX) && /function_calling_config: \{ mode: "NONE" \}/.test(CORTEX) && /buildBody\(!thinkingUnsupported, true\)/.test(CORTEX), "gemini: an empty answer after tools gets one more words-only call (production error 2026-10-05)");
   check(/ENGINE_UNREACHABLE/.test(CORTEX) && /onEngineFailure/.test(readFileSync("src/app/api/chat/stream/route.ts", "utf8")), "chat stream refunds when no provider answered");
   check(/openaiCompatible\("groq"/.test(CORTEX) && /openaiCompatible\("openai"/.test(CORTEX), "both Groq and OpenAI go through the tool loop");
   const sc = CORTEX.slice(CORTEX.indexOf("export async function streamCortex"), CORTEX.indexOf("export async function generateReport"));

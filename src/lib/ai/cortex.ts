@@ -185,10 +185,13 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
       */
       const useTools = Boolean(toolOrg);
 
-      const buildBody = (withThinking: boolean) => JSON.stringify({
+      const buildBody = (withThinking: boolean, forceText = false) => JSON.stringify({
         system_instruction: { parts: [{ text: sys }] },
         contents,
         ...(useTools ? { tools: [{ function_declarations: TOOL_DECLARATIONS }] } : {}),
+        /* forceText: tools stay declared (the history contains calls to them)
+           but the model may not call another — it must answer in words. */
+        ...(useTools && forceText ? { tool_config: { function_calling_config: { mode: "NONE" } } } : {}),
         generationConfig: withThinking
           ? generationConfig(profile, { temperature: 0.4 })
           : { temperature: 0.4, maxOutputTokens: profile.maxOutputTokens },
@@ -262,8 +265,32 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
           }
 
           // Join every text part: with tools in play the answer can arrive split.
-          const text = (j?.candidates?.[0]?.content?.parts || [])
+          let text = (j?.candidates?.[0]?.content?.parts || [])
             .map((p: any) => p?.text).filter(Boolean).join("").trim() || null;
+          /*
+            NO TEXT AFTER TOOLS → ASK ONCE MORE, WORDS ONLY.
+
+            Seen in production on the first day chat had tools: finishReason
+            STOP with no text, 4 times for 2 people. Either the round cap was
+            reached with the model still asking for a lookup (its last turn is
+            only functionCall parts), or it ended its turn on a tool result
+            without writing. Both are "the model has what it needs but did not
+            speak". One more call with function calling switched off makes it
+            write the answer from what it already looked up, instead of the
+            person getting "I couldn't reach the AI engine".
+          */
+          if (!text && useTools) {
+            const pending = (j?.candidates?.[0]?.content?.parts || []);
+            if (pending.some((p: any) => p?.functionCall)) contents = [...contents, { role: "model", parts: pending }, { role: "user", parts: pending.filter((p: any) => p?.functionCall).map((p: any) => ({ functionResponse: { name: String(p.functionCall.name), response: { ok: false, error: "No more lookups this turn — answer with what you have." } } })) }];
+            const last = await fetch(geminiUrl(model, aiKey("GEMINI_API_KEY")!), {
+              method: "POST", headers: { "Content-Type": "application/json" }, body: buildBody(!thinkingUnsupported, true),
+            });
+            if (last.ok) {
+              const lj = await last.json();
+              text = (lj?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join("").trim() || null;
+              if (text) j = lj;
+            }
+          }
           /*
             An OK response with no text is the thinking-ate-the-budget case:
             the model spent maxOutputTokens reasoning and had none left to

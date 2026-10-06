@@ -53,7 +53,7 @@ export const CALCULATOR_SEO: Record<string, CalcSeo> = {
   "/gst-calc": {
     title: "GST Calculator — add or remove GST, with CGST/SGST/IGST split",
     description:
-      "Add GST to a base price or strip it out of an inclusive one, at 0.25%, 3%, 5%, 12%, 18% or 28%, with the CGST/SGST and IGST split shown separately. Free, no signup.",
+      "Add GST to a base price or strip it out of an inclusive one, at the GST 2.0 rates (0.25%, 3%, 5%, 18% or 40%), with the CGST/SGST and IGST split shown separately. Free, no signup.",
     keywords: ["gst calculator", "gst inclusive exclusive", "cgst sgst igst split", "reverse gst calculator india"],
   },
   "/gst-latefee": {
