@@ -4,6 +4,7 @@ import { normalizeCustomerName } from "@/lib/customer-match";
 import { rScore, fScore, mScore, segmentOf, type SegmentName } from "@/lib/rfm";
 import { listMemories } from "@/lib/memory";
 import { istTodayISO } from "@/lib/statutory";
+import { pageAll } from "@/lib/page-all";
 
 /*
   CUSTOMER 360 — everything the workspace knows about one party, on one page.
@@ -41,6 +42,8 @@ export type Customer360 = {
   rfm: { segment: SegmentName; recencyDays: number | null; r: number; f: number; m: number } | null;
   /** How the rows were matched, so the page can say it. */
   matchedBy: { customerId: number; name: number };
+  /** True when the workspace was too large to read completely — the page says so. */
+  incomplete: boolean;
 };
 
 const dayDiff = (iso: string | null, today: string) => iso ? Math.round((Date.parse(today) - Date.parse(iso.slice(0, 10))) / 86_400_000) : 0;
@@ -52,23 +55,25 @@ export async function getCustomer360(orgId: string, customerId: string): Promise
   const norm = normalizeCustomerName((c as any).name) || normalizeCustomerName((c as any).company);
   const today = istTodayISO();
 
+  /* Every row, paged — a .limit(2000) was silently capped at 1000 by PostgREST
+     and the oldest invoices crowded out the open ones. */
   const [ordersRes, invoicesRes, policyRes] = await Promise.all([
-    sb.from("sales_orders").select("id, order_no, customer_id, customer_name, amount, status, order_date, product").eq("org_id", orgId).order("order_date", { ascending: false }).limit(2000),
-    sb.from("invoices").select("id, invoice_no, party, amount, due_date, status, type, issue_date").eq("org_id", orgId).eq("type", "receivable").order("due_date", { ascending: true }).limit(2000),
+    pageAll<any>((a, b) => sb.from("sales_orders").select("id, order_no, customer_id, customer_name, amount, status, order_date, product").eq("org_id", orgId).order("order_date", { ascending: false }).order("id").range(a, b)),
+    pageAll<any>((a, b) => sb.from("invoices").select("id, invoice_no, party, amount, due_date, status, type, issue_date").eq("org_id", orgId).eq("type", "receivable").order("due_date", { ascending: true }).order("id").range(a, b)),
     sb.from("collection_policies").select("do_not_contact").eq("org_id", orgId).maybeSingle(),
   ]);
 
-  const allOrders = (ordersRes.data as any[]) || [];
+  const allOrders = ordersRes.rows;
   const byId = allOrders.filter((o) => o.customer_id === customerId);
   const byName = norm ? allOrders.filter((o) => o.customer_id !== customerId && normalizeCustomerName(o.customer_name) === norm) : [];
   const orders = [...byId, ...byName].map((o) => ({ id: o.id, order_no: o.order_no, amount: Number(o.amount) || 0, status: o.status, order_date: o.order_date, product: o.product }));
 
-  const invoices = ((invoicesRes.data as any[]) || [])
+  const invoices = invoicesRes.rows
     .filter((i) => norm && normalizeCustomerName(i.party) === norm)
     .map((i) => {
-      const open = i.status !== "paid";
+      const open = String(i.status ?? "").trim().toLowerCase() !== "paid";
       const over = open && i.due_date ? Math.max(0, dayDiff(i.due_date, today)) : 0;
-      return { id: i.id, invoice_no: i.invoice_no, amount: Number(i.amount) || 0, due_date: i.due_date, status: i.status, issue_date: i.issue_date, daysOverdue: over };
+      return { id: i.id, invoice_no: i.invoice_no, amount: Number(i.amount) || 0, due_date: i.due_date, status: (String(i.status ?? "").trim().toLowerCase() || null), issue_date: i.issue_date, daysOverdue: over };
     });
 
   let threads: Customer360["threads"] = [];
@@ -89,7 +94,7 @@ export async function getCustomer360(orgId: string, customerId: string): Promise
   const lifetime = won.reduce((s, o) => s + o.amount, 0);
   const lastOrder = orders.map((o) => o.order_date).filter(Boolean).sort().reverse()[0] || null;
   const firstSeen = [...orders.map((o) => o.order_date), ...invoices.map((i) => i.issue_date), (c as any).created_at?.slice(0, 10)].filter(Boolean).sort()[0] || null;
-  const open = invoices.filter((i) => i.status !== "paid");
+  const open = invoices.filter((i) => String(i.status ?? "").trim().toLowerCase() !== "paid");
   const openReceivable = open.reduce((s, i) => s + i.amount, 0);
   const overdueRows = open.filter((i) => i.daysOverdue > 0);
   const overdue = overdueRows.reduce((s, i) => s + i.amount, 0);
@@ -115,5 +120,6 @@ export async function getCustomer360(orgId: string, customerId: string): Promise
     totals: { lifetime, orders: won.length, lastOrder, openReceivable, overdue, oldestOverdueDays, firstSeen },
     rfm,
     matchedBy: { customerId: byId.length, name: byName.length + invoices.length },
+    incomplete: ordersRes.truncated || invoicesRes.truncated,
   };
 }

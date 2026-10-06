@@ -1,5 +1,6 @@
 import "server-only";
 import ExcelJS from "exceljs";
+import { pageAll } from "@/lib/page-all";
 import { serviceClient } from "@/lib/supabase/server";
 
 /*
@@ -34,6 +35,8 @@ export type Dataset = "receivables_ageing" | "payables" | "customers" | "sales_o
 
 const INR = '"₹"#,##0.00;[Red]-"₹"#,##0.00';
 const DATE = "dd-mmm-yyyy";
+/** Rows per sheet. Paged under the hood — PostgREST would otherwise stop at 1000 without saying so. */
+const MAX_ROWS = 10_000;
 
 function safeText(v: unknown): string {
   const s = v === null || v === undefined ? "" : String(v);
@@ -48,7 +51,7 @@ const svcOrThrow = () => {
 
 function sinceISO(days: number): string {
   const d = new Date(Date.now() - Math.max(1, days) * 86_400_000);
-  return d.toISOString().slice(0, 10);
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); // the IST calendar day
 }
 
 /** Row count the handler records in the ledger, so the history is honest about scope. */
@@ -97,7 +100,7 @@ export async function buildWorkbook(dataset: Dataset, orgId: string, days = 365,
   const wb = new ExcelJS.Workbook();
   wb.creator = "MNB Cortex";
   wb.created = new Date();
-  const stamp = new Date().toISOString().slice(0, 10);
+  const stamp = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); // YYYY-MM-DD in IST
 
   switch (dataset) {
     case "receivables_ageing": await receivablesAgeing(wb, orgId, businessName); break;
@@ -134,11 +137,10 @@ function title(wb: ExcelJS.Workbook, name: string, lines: string[]) {
 
 async function receivablesAgeing(wb: ExcelJS.Workbook, orgId: string, biz: string) {
   const svc = svcOrThrow();
-  const { data } = await svc.from("invoices")
+  const { rows } = await pageAll<any>((a, b) => svc.from("invoices")
     .select("invoice_no, party, amount, due_date, status, created_at")
     .eq("org_id", orgId).eq("type", "receivable").or("status.is.null,status.not.ilike.paid")
-    .order("due_date", { ascending: true }).limit(10_000);
-  const rows = (data as any[]) || [];
+    .order("due_date", { ascending: true }).order("id").range(a, b), { max: MAX_ROWS });
 
   const ws = wb.addWorksheet("Ageing");
   header(ws, [
@@ -173,7 +175,7 @@ async function receivablesAgeing(wb: ExcelJS.Workbook, orgId: string, biz: strin
   const last = rows.length + 1;
   const sum = wb.addWorksheet("Summary");
   sum.getCell("A1").value = safeText(`${biz} — receivables ageing`); sum.getCell("A1").font = { bold: true, size: 14 };
-  sum.getCell("A2").value = `Generated ${new Date().toLocaleDateString("en-IN")} by MNB Cortex. Buckets recompute from Ageing!D (due date) against TODAY().`;
+  sum.getCell("A2").value = `Generated ${new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })} by MNB Cortex. Buckets recompute from Ageing!D (due date) against TODAY().`;
   sum.getCell("A4").value = "Bucket"; sum.getCell("B4").value = "Invoices"; sum.getCell("C4").value = "Amount (₹)";
   ["A4", "B4", "C4"].forEach((c) => (sum.getCell(c).font = { bold: true }));
   const buckets = ["Current", "1-30", "31-60", "61-90", "90+"];
@@ -197,12 +199,13 @@ async function receivablesAgeing(wb: ExcelJS.Workbook, orgId: string, biz: strin
 
 async function simpleInvoices(wb: ExcelJS.Workbook, orgId: string, type: "payable" | null, name: string, biz: string, since?: string) {
   const svc = svcOrThrow();
-  let q = svc.from("invoices").select("invoice_no, party, amount, due_date, status, type, created_at").eq("org_id", orgId);
-  if (type) q = q.eq("type", type).or("status.is.null,status.not.ilike.paid");
-  if (since) q = q.gte("created_at", since);
-  const { data } = await q.order("due_date", { ascending: true }).limit(10_000);
-  const rows = (data as any[]) || [];
-  title(wb, "About", [`${biz} — ${name.toLowerCase()}`, `Generated ${new Date().toLocaleDateString("en-IN")} by MNB Cortex. ${rows.length} rows.`]);
+  const { rows } = await pageAll<any>((a, b) => {
+    let q = svc.from("invoices").select("invoice_no, party, amount, due_date, status, type, created_at").eq("org_id", orgId);
+    if (type) q = q.eq("type", type).or("status.is.null,status.not.ilike.paid");
+    if (since) q = q.gte("created_at", since);
+    return q.order("due_date", { ascending: true }).order("id").range(a, b);
+  }, { max: MAX_ROWS });
+  title(wb, "About", [`${biz} — ${name.toLowerCase()}`, `Generated ${new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })} by MNB Cortex. ${rows.length} rows.`]);
   const ws = wb.addWorksheet(name);
   header(ws, [
     { header: "Invoice", key: "no", width: 14 }, { header: "Party", key: "party", width: 32 },
@@ -222,9 +225,8 @@ async function simpleInvoices(wb: ExcelJS.Workbook, orgId: string, type: "payabl
 
 async function customers(wb: ExcelJS.Workbook, orgId: string, biz: string) {
   const svc = svcOrThrow();
-  const { data } = await svc.from("customers").select("name, status, value, last_touch, notes, created_at").eq("org_id", orgId).order("name").limit(10_000);
-  const rows = (data as any[]) || [];
-  title(wb, "About", [`${biz} — customers`, `Generated ${new Date().toLocaleDateString("en-IN")} by MNB Cortex. ${rows.length} rows.`]);
+  const { rows } = await pageAll<any>((a, b) => svc.from("customers").select("name, status, value, last_touch, notes, created_at").eq("org_id", orgId).order("name").order("id").range(a, b), { max: MAX_ROWS });
+  title(wb, "About", [`${biz} — customers`, `Generated ${new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })} by MNB Cortex. ${rows.length} rows.`]);
   const ws = wb.addWorksheet("Customers");
   header(ws, [
     { header: "Name", key: "name", width: 32 }, { header: "Status", key: "status", width: 14 },
@@ -243,10 +245,9 @@ async function customers(wb: ExcelJS.Workbook, orgId: string, biz: string) {
 
 async function salesOrders(wb: ExcelJS.Workbook, orgId: string, biz: string, since: string) {
   const svc = svcOrThrow();
-  const { data } = await svc.from("sales_orders").select("order_no, customer_name, region, product, amount, status, order_date, is_repeat")
-    .eq("org_id", orgId).gte("order_date", since).order("order_date", { ascending: false }).limit(10_000);
-  const rows = (data as any[]) || [];
-  title(wb, "About", [`${biz} — sales orders since ${since}`, `Generated ${new Date().toLocaleDateString("en-IN")} by MNB Cortex. ${rows.length} rows.`]);
+  const { rows } = await pageAll<any>((a, b) => svc.from("sales_orders").select("order_no, customer_name, region, product, amount, status, order_date, is_repeat")
+    .eq("org_id", orgId).gte("order_date", since).order("order_date", { ascending: false }).order("id").range(a, b), { max: MAX_ROWS });
+  title(wb, "About", [`${biz} — sales orders since ${since}`, `Generated ${new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })} by MNB Cortex. ${rows.length} rows.`]);
   const ws = wb.addWorksheet("Orders");
   header(ws, [
     { header: "Order", key: "no", width: 14 }, { header: "Customer", key: "cust", width: 32 },
@@ -267,9 +268,8 @@ async function salesOrders(wb: ExcelJS.Workbook, orgId: string, biz: string, sin
 
 async function inventory(wb: ExcelJS.Workbook, orgId: string, biz: string) {
   const svc = svcOrThrow();
-  const { data } = await svc.from("inventory_items").select("sku, name, category, on_hand, reorder_level, unit_cost, supplier").eq("org_id", orgId).order("name").limit(10_000);
-  const rows = (data as any[]) || [];
-  title(wb, "About", [`${biz} — inventory`, `Generated ${new Date().toLocaleDateString("en-IN")} by MNB Cortex. ${rows.length} rows. "Below reorder" and "Stock value" are formulas.`]);
+  const { rows } = await pageAll<any>((a, b) => svc.from("inventory_items").select("sku, name, category, on_hand, reorder_level, unit_cost, supplier").eq("org_id", orgId).order("name").order("id").range(a, b), { max: MAX_ROWS });
+  title(wb, "About", [`${biz} — inventory`, `Generated ${new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })} by MNB Cortex. ${rows.length} rows. "Below reorder" and "Stock value" are formulas.`]);
   const ws = wb.addWorksheet("Inventory");
   header(ws, [
     { header: "SKU", key: "sku", width: 14 }, { header: "Item", key: "name", width: 32 },
@@ -309,7 +309,7 @@ async function inventory(wb: ExcelJS.Workbook, orgId: string, biz: string) {
 */
 async function misPack(wb: ExcelJS.Workbook, orgId: string, biz: string) {
   const svc = svcOrThrow();
-  const today = new Date().toLocaleDateString("en-IN");
+  const today = new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
 
   // --- Summary: latest row per metric_key
   const { data: hm } = await svc.from("health_metrics").select("metric_key, label, value, unit, delta_pct, status, as_of")
@@ -370,10 +370,10 @@ async function misPack(wb: ExcelJS.Workbook, orgId: string, biz: string) {
   await simpleInvoices(wb, orgId, "payable", "Payables", biz);
 
   // --- Top customers, won orders in the last 12 months
-  const { data: so } = await svc.from("sales_orders").select("customer_name, amount, order_date, status")
-    .eq("org_id", orgId).gte("order_date", sinceISO(365)).limit(10_000);
+  const { rows: so } = await pageAll<any>((a, b) => svc.from("sales_orders").select("customer_name, amount, order_date, status")
+    .eq("org_id", orgId).gte("order_date", sinceISO(365)).order("id").range(a, b), { max: 50_000 });
   const byCust = new Map<string, { amount: number; orders: number; last: string }>();
-  for (const o of ((so as any[]) || [])) {
+  for (const o of so) {
     if (o.status && String(o.status).toLowerCase() !== "won") continue;
     const k = String(o.customer_name || "(unnamed)");
     const cur = byCust.get(k) || { amount: 0, orders: 0, last: "" };
@@ -394,7 +394,10 @@ async function misPack(wb: ExcelJS.Workbook, orgId: string, biz: string) {
   const co = wb.addWorksheet("Collections");
   co.getCell("A1").value = safeText(`${biz} — collections, last 90 days`); co.getCell("A1").font = { bold: true, size: 14 };
   try {
-    const { data: rec } = await svc.rpc("cortex_recovery_summary", { p_org: orgId, p_days: 90 });
+    const { data: rec, error: recErr } = await svc.rpc("cortex_recovery_summary", { p_org: orgId, p_days: 90 });
+    /* rpc() RETURNS its error rather than throwing — without this the sheet
+       showed "Recovered ₹0" as a fact when the function was simply missing. */
+    if (recErr) throw new Error(recErr.message);
     const r = (Array.isArray(rec) ? rec[0] : rec) as any;
     const rows: Array<[string, number | string]> = [
       ["Recovered after a Cortex reminder (₹)", Number(r?.amount_recovered) || 0],

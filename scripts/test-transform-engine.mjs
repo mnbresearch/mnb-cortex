@@ -198,5 +198,20 @@ section("6. Wiring");
   ok(/transform_plan/.test(cfg), "transform_plan is priced");
 }
 
+section("7. Indian number formats (CSV cells are text)");
+{
+  ok(T.toNum("1,20,000") === 120000 && T.toNum("₹ 45,000.50") === 45000.5 && T.toNum("Rs. 900") === 900, "lakh commas, ₹ and Rs. parse");
+  ok(T.toNum("(1,200)") === -1200 && T.toNum("5,000/-") === 5000, "bracketed negatives and /- parse");
+  ok(Number.isNaN(T.toNum("2026-01-05")) && Number.isNaN(T.toNum("abc")) && Number.isNaN(T.toNum("")), "dates, words and blanks are not numbers");
+  const csv = { columns: ["Party", "Amount"], rows: [{ Party: "A", Amount: "1,20,000" }, { Party: "B", Amount: "9,000" }, { Party: "A", Amount: "30,000" }] };
+  ok(T.applyPlan(csv, [{ op: "filter", column: "Amount", cmp: "gt", value: 100000 }]).diff.rowsAfter === 1, "a numeric filter over lakh-formatted text compares as numbers");
+  const st = T.applyPlan(csv, [{ op: "subtotal", group_by: "Party", sum: "Amount" }]).subtotalSheets[0].rows;
+  ok(st.find((r) => r.Party === "A")["Total Amount"] === 150000, "subtotals sum lakh-formatted text");
+  const srt = T.applyPlan(csv, [{ op: "sort", column: "Amount", dir: "desc" }]).table.rows.map((r) => r.Amount).join("|");
+  ok(srt === "1,20,000|30,000|9,000", `sort is numeric, not lexical: ${srt}`);
+  const gst = T.applyPlan(csv, [{ op: "add_column", name: "GST", expr: "Amount * 0.18" }]).table.rows[0].GST;
+  ok(gst === 21600, "calculated columns read lakh-formatted text");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

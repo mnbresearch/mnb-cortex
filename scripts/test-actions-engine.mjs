@@ -33,7 +33,7 @@ const fails = [];
 const check = (cond, name, detail = "") => { if (cond) pass++; else fails.push(detail ? `${name}\n      ${detail}` : name); };
 
 const { CATALOGUE, CATALOGUE_BY_KEY, validateArgs } = await import("../src/lib/engine/catalogue.ts");
-const { decide, normaliseCaps, requiresCaps, rupeesOf, CAPPED_EFFECTS } = await import("../src/lib/engine/policy.ts");
+const { decide, gateVerdict, normaliseCaps, requiresCaps, rupeesOf, CAPPED_EFFECTS } = await import("../src/lib/engine/policy.ts");
 
 /* ===================================================================== */
 /* 1. THE CATALOGUE IS WELL-FORMED AND MATCHES ITS HANDLERS              */
@@ -288,7 +288,7 @@ const { decide, normaliseCaps, requiresCaps, rupeesOf, CAPPED_EFFECTS } = await 
   /* A handler that returns undo:{kind:"x"} for a kind the undo switch does not
      know makes "reversible" a lie on the approval card. Read both sides. */
   const h = strip(read("src/lib/engine/handlers.ts"));
-  const promised = new Set([...h.matchAll(/undo: \{ kind: "([a-z_]+)"/g)].map((m) => m[1]));
+  const promised = new Set([...h.matchAll(/undo: \{\s*kind: "([a-z_]+)"/g)].map((m) => m[1]));
   const undoBody = h.slice(h.indexOf("export async function undoHandler"));
   const handled = new Set([...undoBody.matchAll(/case "([a-z_]+)":/g)].map((m) => m[1]));
   check(promised.size >= 6, `handlers promise several undo kinds (${[...promised].join(", ")})`);
@@ -305,6 +305,46 @@ const { decide, normaliseCaps, requiresCaps, rupeesOf, CAPPED_EFFECTS } = await 
     check(/\.select\("[a-z_]+"\)/.test(c) && /length !== 1/.test(c), `undo "${kind}": the write selects back and checks exactly one row`);
   }
   check(writing >= 5, `undo: ${writing} writing cases inspected`);
+}
+
+/* ===================================================================== */
+/* 4c. WHO ASKED: rank and source can only make Cortex do LESS          */
+/* ===================================================================== */
+{
+  const dnc = CATALOGUE_BY_KEY.add_do_not_contact;        // manager, default auto
+  const note = CATALOGUE_BY_KEY.add_customer_note;        // analyst, default auto
+  const exp = CATALOGUE_BY_KEY.export_xlsx;               // analyst, export, default auto
+  const auto = { verdict: "auto", reason: "x" };
+  check(gateVerdict(auto, dnc, null, { source: "user", actorRole: "viewer" }).verdict === "approve", "rank: a viewer's auto action waits for approval");
+  check(gateVerdict(auto, dnc, null, { source: "user", actorRole: "analyst" }).verdict === "approve", "rank: an analyst cannot auto-run a manager action");
+  check(gateVerdict(auto, dnc, null, { source: "user", actorRole: "manager" }).verdict === "auto", "rank: a manager can");
+  check(gateVerdict(auto, dnc, null, { source: "user", actorRole: null }).verdict === "approve", "rank: an unknown role counts as no rank");
+  check(gateVerdict(auto, dnc, null, { source: "autopilot" }).verdict === "auto", "rank: system sources with no person are not rank-gated");
+  check(gateVerdict(auto, note, null, { source: "chat", actorRole: "owner" }).verdict === "approve", "chat: a catalogue-default auto does not apply to chat, even for the owner");
+  const ownerRule = { mode: "auto", caps: normaliseCaps({}) };
+  check(gateVerdict(auto, note, ownerRule, { source: "chat", actorRole: "owner" }).verdict === "auto", "chat: an explicit owner rule does apply");
+  check(gateVerdict(auto, exp, null, { source: "chat", actorRole: "analyst" }).verdict === "auto", "chat: exports change no data and stay automatic");
+  check(gateVerdict({ verdict: "blocked", reason: "b" }, dnc, null, { source: "chat", actorRole: "viewer" }).verdict === "blocked", "gates never loosen: blocked stays blocked");
+  check(gateVerdict({ verdict: "approve", reason: "a" }, exp, null, { source: "user", actorRole: "owner" }).verdict === "approve", "gates never loosen: approve stays approve");
+
+  const sa = strip(read("src/lib/engine/server-actions.ts"));
+  for (const fn of ["approveProposal", "rejectProposal", "undoProposal"]) {
+    const body = sa.slice(sa.indexOf(`export async function ${fn}`), sa.indexOf("export async function", sa.indexOf(`export async function ${fn}`) + 10));
+    check(/ledger\.storedAction\(id, orgId\)/.test(body) && !/fd\.get\("action"\)/.test(body), `${fn}: rank comes from the STORED proposal, never the form`);
+  }
+  const led = strip(read("src/lib/engine/ledger.ts"));
+  check(/gateVerdict\(decide\(/.test(led), "ledger: every proposal passes through gateVerdict");
+  check(/\.eq\("idempotency_key", key\)\.eq\("org_id", input\.orgId\)/.test(led), "ledger: the duplicate-key lookup is scoped to the workspace");
+  check(/workflow:\$\{orgId\}:/.test(read("src/lib/workflows.ts")), "workflows: the idempotency key includes the workspace");
+  const tools = strip(read("src/lib/ai/tools.ts"));
+  check(/role === "viewer"/.test(tools) && /actorRole: role/.test(tools), "chat: viewers cannot propose; the proposer's role is passed on");
+  const cx = strip(read("src/lib/ai/cortex.ts"));
+  check(/toolOrg = opts\.tools === true \?/.test(cx), "tools are off unless the caller opts in");
+  check(/runCortex\(messages, context, STANDARD, \{ tools: true \}\)/.test(cx), "…and only the chat stream opts in");
+  const optIns = (cx.match(/tools: true/g) || []).length;
+  check(optIns === 1, `exactly one tools:true opt-in in cortex.ts (found ${optIns})`);
+  const dec = strip(read("src/app/decide/[token]/actions.ts"));
+  check(/from\("memberships"\)/.test(dec) && /RANK\[def\.minRank\]/.test(dec), "decide: membership and rank are re-checked at the moment of deciding");
 }
 
 /* ===================================================================== */

@@ -97,7 +97,20 @@ export function hasAIKey(): boolean {
  * Providers rate-limit under bursty load; without this the app silently returned
  * an off-topic canned answer, which is worse than an honest "try again".
  */
-export async function runCortex(messages: Msg[], context: string, profile: GenProfile = STANDARD): Promise<string> {
+/*
+  TOOLS ARE A CHAT CAPABILITY, NOT AN AI-WIDE ONE.
+
+  Every AI surface funnels through runCortex — reports, agents, the GBP review
+  reply, memory extraction. Offering propose_action on all of them meant text
+  an outsider wrote (a pasted Google review, a synced shopper name) reached a
+  model that could create actions. Only the chat stream passes tools: true.
+*/
+export type RunOptions = { tools?: boolean };
+
+/** The first words of the answer runCortex gives when no provider answered — callers refund on it. */
+export const ENGINE_UNREACHABLE = "I couldn't reach the AI engine.";
+
+export async function runCortex(messages: Msg[], context: string, profile: GenProfile = STANDARD, opts: RunOptions = {}): Promise<string> {
   if (!hasAIKey()) return fallback(messages); // genuinely unconfigured — show the setup hint
 
   // The workspace's own instructions, resolved HERE because every AI feature in
@@ -118,7 +131,7 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
     const { orgId, user } = await getUserAndOrg();
     toolUser = user?.id || null;
     // Also used to scope every tool lookup below. No session -> no tools.
-    toolOrg = orgId || null;
+    toolOrg = opts.tools === true ? (orgId || null) : null;
     const extra = instructionBlock(await getInstructions(orgId));
     if (extra) context2 = `${context}${extra}`;
   } catch { /* no session or no table — carry on with defaults */ }
@@ -143,7 +156,7 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
     // fall through to the next configured provider
   }
 
-  return `I couldn't reach the AI engine. ${describeFailure(lastFailure)}\n\nYour data is safe and nothing was lost — please try again shortly, or check the AI provider settings.`;
+  return `${ENGINE_UNREACHABLE} ${describeFailure(lastFailure)}\n\nYour data is safe and nothing was lost — please try again shortly, or check the AI provider settings.`;
 }
 
 /** One model call. Returns null on a transient/failed call so the caller can retry. */
@@ -307,6 +320,8 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
   rounds, four calls per round, only declared names, every lookup scoped by
   toolOrg, no tools at all without a session.
 */
+const TOOLS_UNSUPPORTED = new Set<string>();
+
 async function openaiCompatible(
   label: string, url: string, key: string, model: string, sys: string, messages: Msg[],
   toolOrg?: string | null, toolUser?: string | null,
@@ -314,16 +329,37 @@ async function openaiCompatible(
   const useTools = Boolean(toolOrg);
   let convo: any[] = [{ role: "system", content: sys }, ...messages];
   const tools = useTools ? TOOL_DECLARATIONS.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } })) : undefined;
+  let offerTools = useTools && !TOOLS_UNSUPPORTED.has(`${label}:${model}`);
+  let lastText: string | null = null;
   for (let round = 0; round < 4; round++) {
-    const r = await fetch(url, {
+    let r = await fetch(url, {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, messages: convo, temperature: 0.4, ...(tools ? { tools, tool_choice: "auto" } : {}) }),
+      body: JSON.stringify({ model, messages: convo, temperature: 0.4, ...(tools && offerTools ? { tools, tool_choice: "auto" } : {}) }),
     });
-    if (!r.ok) return await note(label, r); // 429 rate-limit or 5xx → let the caller retry
+    /*
+      A 400 while tools were offered is usually "this model does not take
+      tools" or Groq's tool_use_failed — not a reason to fail the whole chat.
+      Retry once without them and remember the model, exactly as the Gemini
+      path does for thinkingConfig. The answer then comes from the snapshot.
+    */
+    if (r.status === 400 && offerTools) {
+      const detail = await r.clone().text().catch(() => "");
+      console.warn(`[cortex] ${label}(${model}) refused tools (${detail.slice(0, 160)}); retrying without them.`);
+      if (/tool|function/i.test(detail)) TOOLS_UNSUPPORTED.add(`${label}:${model}`);
+      offerTools = false;
+      const cleaned = convo.filter((m: any) => m.role !== "tool" && !(m.role === "assistant" && m.tool_calls));
+      r = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model, messages: cleaned, temperature: 0.4 }),
+      });
+    }
+    if (!r.ok) return lastText ?? await note(label, r); // keep what an earlier round produced
     const j = await r.json();
     const msg = j?.choices?.[0]?.message;
     const calls: any[] = Array.isArray(msg?.tool_calls) ? msg.tool_calls : [];
-    if (!useTools || !calls.length || round === 3) return msg?.content ?? null;
+    if (msg?.content) lastText = msg.content;
+    if (!offerTools || !calls.length) return msg?.content ?? lastText;
+    if (round === 3) return lastText ?? "I looked several things up but ran out of steps before writing an answer. Ask again more narrowly, and check Approvals for anything I proposed.";
 
     convo = [...convo, { role: "assistant", content: msg?.content ?? null, tool_calls: calls }];
     for (const c of calls.slice(0, 4)) {
@@ -376,7 +412,7 @@ Everything else in Cortex — your dashboard, imports and the 50+ calculators �
 }
 
 // ---- Streaming (OpenAI-compatible providers: Groq/OpenAI); others fall back to one chunk ----
-export async function streamCortex(messages: Msg[], context: string): Promise<ReadableStream<Uint8Array>> {
+export async function streamCortex(messages: Msg[], context: string, hooks: { onEngineFailure?: () => Promise<void> } = {}): Promise<ReadableStream<Uint8Array>> {
   const enc = new TextEncoder();
   /*
     TOOLS BEFORE TOKENS.
@@ -396,7 +432,9 @@ export async function streamCortex(messages: Msg[], context: string): Promise<Re
     const { getUserAndOrg } = await import("@/lib/data");
     const { orgId } = await getUserAndOrg();
     if (orgId) {
-      const full = await runCortex(messages, context);
+      const full = await runCortex(messages, context, STANDARD, { tools: true });
+      /* No provider answered: the person got no answer, so they pay for none. */
+      if (full.startsWith(ENGINE_UNREACHABLE)) { try { await hooks.onEngineFailure?.(); } catch { /* refund is best-effort; the ledger keeps the charge visible */ } }
       return new ReadableStream<Uint8Array>({
         async start(c) {
           const words = full.split(/(?<=\s)/);

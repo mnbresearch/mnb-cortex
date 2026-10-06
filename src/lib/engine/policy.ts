@@ -198,3 +198,46 @@ export function describeCaps(caps: Caps): string {
 function fmt(n: number): string {
   return Math.round(n).toLocaleString("en-IN");
 }
+
+/* ------------------------------------------------------------- who asked */
+/*
+  TWO GATES decide() cannot see, applied after it. Both can only turn an
+  "auto" into an "approve" — never the other way, never into "blocked".
+
+  1. RANK. minRank used to gate only the human approval. The auto path never
+     asked who was proposing, so a viewer could say "stop chasing Acme" in
+     chat and add_do_not_contact (minRank manager, default auto) ran at once.
+     Now a proposer below the action's minRank can ask, but not run: the
+     proposal waits for someone with that rank.
+
+  2. CHAT WITHOUT A RULE. The chat model reads text that people outside the
+     team can write — customer names synced from a store, a pasted review.
+     An instruction hidden in that text could make the model propose an
+     action. A catalogue default of "auto" is a default, not the owner's
+     decision, so from chat it does not apply: an internal change proposed in
+     chat waits for a tap unless the owner has set an explicit rule for that
+     action. Exports change no data and stay automatic.
+
+  Pure, like decide(), so the suite executes it.
+*/
+export const RANK: Readonly<Record<string, number>> = Object.freeze({ viewer: 1, analyst: 2, manager: 3, admin: 4, owner: 5 });
+
+export function gateVerdict(
+  verdict: Verdict,
+  def: ActionDef,
+  policy: Policy | null,
+  who: { source: string; actorRole?: string | null },
+): Verdict {
+  if (verdict.verdict !== "auto") return verdict;
+  if (who.actorRole !== undefined) {
+    const have = RANK[String(who.actorRole || "")] || 0;
+    const need = RANK[def.minRank] || 0;
+    if (have < need) {
+      return { verdict: "approve", reason: `Your role can ask for this but not run it on its own — someone with ${def.minRank} rights needs to approve it.` };
+    }
+  }
+  if (who.source === "chat" && !policy && def.effect !== "export") {
+    return { verdict: "approve", reason: "Suggested in chat. Chat can draw on text written outside your team, so actions it proposes wait for you unless you set a rule for this action." };
+  }
+  return verdict;
+}

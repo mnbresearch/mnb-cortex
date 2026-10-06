@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "crypto";
 import { serviceClient } from "@/lib/supabase/server";
 import { CATALOGUE_BY_KEY, isActionKey, validateArgs, type ActionDef } from "./catalogue";
-import { decide, normaliseCaps, requiresCaps, type Policy, type Usage, type Verdict } from "./policy";
+import { decide, gateVerdict, normaliseCaps, requiresCaps, type Policy, type Usage, type Verdict } from "./policy";
 import { HANDLERS, undoHandler } from "./handlers";
 
 /*
@@ -120,12 +120,18 @@ export async function getUsage(orgId: string, def: ActionDef, args: Record<strin
 export type ProposeInput = {
   orgId: string; action: string; args: unknown; rationale?: string | null; evidence?: unknown[];
   source: Source; proposedBy?: string | null;
+  /**
+   * The proposer's workspace role, when a person (or something acting for one)
+   * proposed it. Below the action's minRank → it can never run automatically.
+   * Omit only for system sources with no person behind them.
+   */
+  actorRole?: string | null;
   /** Stable key so a retried cron or double-click cannot create two. Defaults to a hash of (org, action, args, day). */
   idempotencyKey?: string;
 };
 
 export type ProposeOutcome =
-  | { ok: true; proposal: Proposal; verdict: Verdict; executed?: { ok: boolean; summary?: string; error?: string } }
+  | { ok: true; proposal: Proposal; verdict: Verdict; executed?: { ok: boolean; summary?: string; error?: string }; duplicate?: boolean }
   | { ok: false; error: string; problems?: string[] };
 
 /**
@@ -143,7 +149,7 @@ export async function propose(input: ProposeInput): Promise<ProposeOutcome> {
   const key = input.idempotencyKey || defaultKey(input.orgId, def.key, v.args);
 
   const [policy, usage] = await Promise.all([getPolicy(input.orgId, def.key), getUsage(input.orgId, def, v.args)]);
-  const verdict = decide(def, v.args, policy, usage);
+  const verdict = gateVerdict(decide(def, v.args, policy, usage), def, policy, { source: input.source, actorRole: input.actorRole });
 
   const row = {
     org_id: input.orgId, action: def.key, args: v.args,
@@ -158,8 +164,11 @@ export async function propose(input: ProposeInput): Promise<ProposeOutcome> {
   const { data, error } = await svc.from("action_proposals").insert(row).select("*").maybeSingle();
   if (error) {
     if ((error as any).code === "23505") {
-      const { data: existing } = await svc.from("action_proposals").select("*").eq("idempotency_key", key).maybeSingle();
-      if (existing) return { ok: true, proposal: existing as Proposal, verdict: { verdict: (existing as any).policy_verdict, reason: "Already proposed today." } };
+      /* Scoped to this workspace: the key is unique across all of them, and an
+         unscoped read once handed org B org A's row as "already proposed". */
+      const { data: existing } = await svc.from("action_proposals").select("*").eq("idempotency_key", key).eq("org_id", input.orgId).maybeSingle();
+      if (existing) return { ok: true, duplicate: true, proposal: existing as Proposal, verdict: { verdict: (existing as any).policy_verdict, reason: "Already proposed today." } };
+      return { ok: false, error: "An identical proposal key exists in another workspace; nothing was created. Rename the step or try again." };
     }
     return { ok: false, error: `Could not record the proposal: ${error.message}` };
   }
@@ -270,7 +279,7 @@ export async function undo(id: string, orgId: string, actorId: string): Promise<
   if (!(p as any).undo) return { ok: false, error: "This action cannot be undone." };
 
   /* Claim: done → executing, so two undo clicks cannot both apply. */
-  const { data: rows } = await svc.from("action_proposals").update({ status: "executing" }).eq("id", id).eq("status", "done").select("id");
+  const { data: rows } = await svc.from("action_proposals").update({ status: "executing" }).eq("id", id).eq("org_id", orgId).eq("status", "done").select("id");
   if (!rows || rows.length !== 1) return { ok: false, error: "Already being undone." };
 
   const r = await undoHandler((p as any).undo, { orgId, proposalId: id, actorId });
@@ -320,4 +329,35 @@ export async function expireStale(orgId?: string): Promise<number> {
   if (orgId) q = q.eq("org_id", orgId);
   const { data } = await q.select("id");
   return data?.length || 0;
+}
+
+/**
+ * What to tell a person when their proposal turned out to be one already made
+ * today. Without this every caller said "queued for approval" — including when
+ * the earlier one had already run, failed, or been rejected.
+ */
+export function describeExisting(p: Proposal): { ok: boolean; message: string } {
+  switch (p.status) {
+    case "done": return { ok: true, message: "Already done earlier today — see Approvals history." };
+    case "proposed": return { ok: true, message: "Already waiting for approval in Approvals." };
+    case "approved": case "executing": return { ok: true, message: "Already approved and running." };
+    case "rejected": return { ok: false, message: "This exact action was rejected earlier today; it was not proposed again." };
+    case "failed": return { ok: false, message: `This exact action failed earlier today${p.error ? `: ${p.error}` : ""}. Fix the cause and try tomorrow, or change the details.` };
+    case "blocked": return { ok: false, message: p.policy_reason || "This action is blocked in this workspace." };
+    case "expired": return { ok: false, message: "This exact action expired earlier today without a decision." };
+    case "undone": return { ok: true, message: "This exact action ran earlier today and was undone." };
+    default: return { ok: true, message: `Already proposed today (${p.status}).` };
+  }
+}
+
+/**
+ * The action a stored proposal is for, read from the ledger. Role checks on
+ * approve/reject/undo use THIS, never an action name the browser sent — the
+ * form value let an analyst approve an admin-only payment by labelling it as
+ * an export.
+ */
+export async function storedAction(id: string, orgId: string): Promise<string | null> {
+  const svc = svcOrThrow();
+  const { data } = await svc.from("action_proposals").select("action").eq("id", id).eq("org_id", orgId).maybeSingle();
+  return (data as any)?.action ?? null;
 }

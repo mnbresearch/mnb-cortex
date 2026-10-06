@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { assertRole } from "@/lib/roles";
+import { assertRole, currentRole } from "@/lib/roles";
 import { getUserAndOrg } from "@/lib/data";
 import { ok, fail, type ActionResult } from "@/lib/action-result";
 import { CATALOGUE_BY_KEY, isActionKey } from "./catalogue";
@@ -39,12 +39,14 @@ export async function proposeAction(fd: FormData): Promise<ActionResult> {
   if (!isActionKey(action)) return fail("That is not something Cortex can do.");
   let args: unknown = {};
   try { args = JSON.parse(String(fd.get("args") || "{}")); } catch { return fail("The action's details were not readable."); }
+  const { role } = await currentRole();
   const r = await ledger.propose({
-    orgId, action, args, source: "user", proposedBy: userId,
+    orgId, action, args, source: "user", proposedBy: userId, actorRole: role,
     rationale: String(fd.get("rationale") || "").slice(0, 500) || null,
   });
   bump();
   if (!r.ok) return fail(r.problems?.length ? `${r.error} ${r.problems.join("; ")}.` : r.error);
+  if (r.duplicate) { const d = ledger.describeExisting(r.proposal); return d.ok ? ok(d.message) : fail(d.message); }
   if (r.executed) return r.executed.ok ? ok(r.executed.summary) : fail(r.executed.error || "Could not run it.");
   return r.verdict.verdict === "blocked"
     ? fail(r.verdict.reason)
@@ -54,9 +56,10 @@ export async function proposeAction(fd: FormData): Promise<ActionResult> {
 export async function approveProposal(fd: FormData): Promise<ActionResult> {
   const { orgId, userId } = await actor();
   const id = String(fd.get("id") || "");
-  const action = String(fd.get("action") || "");
-  const def = CATALOGUE_BY_KEY[action];
-  if (!def) return fail("Unknown action.");
+  /* The rank required is the STORED proposal's, not the form's — see storedAction(). */
+  const action = await ledger.storedAction(id, orgId);
+  const def = action ? CATALOGUE_BY_KEY[action] : undefined;
+  if (!def) return fail("That proposal was not found in this workspace.");
   await assertRole(def.minRank);
   const r = await ledger.approve(id, orgId, userId);
   bump();
@@ -66,9 +69,10 @@ export async function approveProposal(fd: FormData): Promise<ActionResult> {
 export async function rejectProposal(fd: FormData): Promise<ActionResult> {
   const { orgId, userId } = await actor();
   const id = String(fd.get("id") || "");
-  const action = String(fd.get("action") || "");
-  const def = CATALOGUE_BY_KEY[action];
-  if (!def) return fail("Unknown action.");
+  /* The rank required is the STORED proposal's, not the form's — see storedAction(). */
+  const action = await ledger.storedAction(id, orgId);
+  const def = action ? CATALOGUE_BY_KEY[action] : undefined;
+  if (!def) return fail("That proposal was not found in this workspace.");
   await assertRole(def.minRank);
   const r = await ledger.reject(id, orgId, userId, String(fd.get("note") || "").slice(0, 300) || undefined);
   bump();
@@ -78,9 +82,10 @@ export async function rejectProposal(fd: FormData): Promise<ActionResult> {
 export async function undoProposal(fd: FormData): Promise<ActionResult> {
   const { orgId, userId } = await actor();
   const id = String(fd.get("id") || "");
-  const action = String(fd.get("action") || "");
-  const def = CATALOGUE_BY_KEY[action];
-  if (!def) return fail("Unknown action.");
+  /* The rank required is the STORED proposal's, not the form's — see storedAction(). */
+  const action = await ledger.storedAction(id, orgId);
+  const def = action ? CATALOGUE_BY_KEY[action] : undefined;
+  if (!def) return fail("That proposal was not found in this workspace.");
   await assertRole(def.minRank);
   const r = await ledger.undo(id, orgId, userId);
   bump();

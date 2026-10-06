@@ -68,12 +68,12 @@ export async function sendDecisionDigests(origin: string, budget?: Budget): Prom
     try {
       const { data: upd } = await svc.from("action_proposals")
         .update({ notified_at: stamp })
-        .in("id", ids).is("notified_at", null).eq("status", "proposed").select("id");
+        .eq("org_id", orgId).in("id", ids).is("notified_at", null).eq("status", "proposed").select("id");
       claimed = ((upd as any[]) || []).map((u) => u.id);
     } catch { claimed = []; }
     if (!claimed.length) continue;
     const release = async () => {
-      try { await svc.from("action_proposals").update({ notified_at: null }).in("id", claimed); } catch { /* ages out */ }
+      try { await svc.from("action_proposals").update({ notified_at: null }).eq("org_id", orgId).in("id", claimed); } catch { /* ages out */ }
     };
 
     // One digest per workspace per 20h, measured against the org's own last send.

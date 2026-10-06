@@ -221,11 +221,31 @@ export function parseExpr(src: string, columns: string[]): { ok: true; node: Nod
   } catch (e: any) { return { ok: false, error: `${e.message}.` }; }
 }
 
+/**
+ * A cell as a number, the way an Indian spreadsheet writes one: "1,20,000",
+ * "₹ 45,000.50", "Rs. 900", "(1,200)" for a negative, "5,000/-". CSV cells
+ * are always text, and Number("1,20,000") is NaN — so a filter "Amount >
+ * 50000" silently compared as text and subtotals summed to zero.
+ * Returns NaN for anything that is not a number (including dates).
+ */
+export function toNum(v: Cell | undefined): number {
+  if (typeof v === "number") return v;
+  if (typeof v !== "string") return NaN;
+  let t = v.trim();
+  if (!t) return NaN;
+  let neg = false;
+  if (/^\(.*\)$/.test(t)) { neg = true; t = t.slice(1, -1); }
+  t = t.replace(/^(₹|rs\.?|inr)\s*/i, "").replace(/\/-$/, "").replace(/[,\s]/g, "");
+  if (!/^[-+]?\d*\.?\d+$/.test(t)) return NaN;
+  const n = Number(t);
+  return neg ? -n : n;
+}
+
 /** Evaluate against a row (for the preview and for the stored value). */
 export function evalExpr(node: Node, row: Row): number | null {
   switch (node.t) {
     case "num": return node.v;
-    case "col": { const v = row[node.name]; const n = typeof v === "number" ? v : Number(v); return Number.isFinite(n) ? n : null; }
+    case "col": { const n = toNum(row[node.name]); return Number.isFinite(n) ? n : null; }
     case "neg": { const v = evalExpr(node.v, row); return v === null ? null : -v; }
     case "round": { const v = evalExpr(node.v, row); return v === null ? null : Number(v.toFixed(node.d)); }
     case "bin": {
@@ -272,8 +292,8 @@ export function applyPlan(table: Table, ops: Op[]): { table: Table; subtotalShee
     if (cmp === "empty") return blank;
     if (cmp === "not_empty") return !blank;
     if (blank) return false;
-    const an = typeof a === "number" ? a : Number(a);
-    const bn = typeof b === "number" ? b : Number(b);
+    const an = a instanceof Date ? NaN : toNum(a as Cell);
+    const bn = typeof b === "number" ? b : toNum(b ?? null);
     const bothNum = Number.isFinite(an) && Number.isFinite(bn) && !(a instanceof Date);
     const as = a instanceof Date ? a.toISOString().slice(0, 10) : String(a).toLowerCase();
     const bs = String(b ?? "").toLowerCase();
@@ -299,7 +319,7 @@ export function applyPlan(table: Table, ops: Op[]): { table: Table; subtotalShee
           const x = a[op.column], y = b[op.column];
           if (x === null || x === undefined || x === "") return 1;
           if (y === null || y === undefined || y === "") return -1;
-          const xn = typeof x === "number" ? x : Number(x), yn = typeof y === "number" ? y : Number(y);
+          const xn = x instanceof Date ? x.getTime() : toNum(x), yn = y instanceof Date ? y.getTime() : toNum(y);
           if (Number.isFinite(xn) && Number.isFinite(yn)) return (xn - yn) * dir;
           return String(x).localeCompare(String(y)) * dir;
         });
@@ -342,7 +362,7 @@ export function applyPlan(table: Table, ops: Op[]): { table: Table; subtotalShee
       }
       case "subtotal": {
         const groups = new Map<string, number>();
-        for (const r of rows) { const g = String(r[op.group_by] ?? "(blank)"); const v = Number(r[op.sum]); groups.set(g, (groups.get(g) || 0) + (Number.isFinite(v) ? v : 0)); }
+        for (const r of rows) { const g = String(r[op.group_by] ?? "(blank)"); const v = toNum(r[op.sum]); groups.set(g, (groups.get(g) || 0) + (Number.isFinite(v) ? v : 0)); }
         const srows = [...groups.entries()].sort((a, b) => b[1] - a[1]).map(([g, v]) => ({ [op.group_by]: g, [`Total ${op.sum}`]: v }));
         subtotalSheets.push({ name: "Subtotals", columns: [op.group_by, `Total ${op.sum}`], rows: srows });
         subtotals.push({ group: op.group_by, sum: op.sum, groups: groups.size });
@@ -381,7 +401,7 @@ export function colLetterFor(index: number): string {
 export function summarise(table: Table): string {
   const types = table.columns.map((c) => {
     const vals = table.rows.slice(0, 50).map((r) => r[c]).filter((v) => v !== null && v !== undefined && v !== "");
-    const nums = vals.filter((v) => typeof v === "number" || (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)))).length;
+    const nums = vals.filter((v) => typeof v === "number" || (typeof v === "string" && Number.isFinite(toNum(v)))).length;
     const dates = vals.filter((v) => v instanceof Date).length;
     const t = vals.length === 0 ? "empty" : dates > vals.length / 2 ? "date" : nums > vals.length / 2 ? "number" : "text";
     return `${c} (${t})`;

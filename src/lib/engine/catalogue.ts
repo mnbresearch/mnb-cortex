@@ -294,7 +294,10 @@ export function validateArgs(def: ActionDef, raw: unknown): { ok: true; args: Re
       }
       case "date": {
         const s = String(v);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(Date.parse(s))) problems.push(`${name} must be a date like 2026-10-31`);
+        /* Round-trip, not just Date.parse: JS rolls 2026-02-31 to 3 March and
+           Postgres would then reject it at run time, after approval. */
+        const real = /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
+        if (!real) problems.push(`${name} must be a real date like 2026-10-31`);
         else out[name] = s;
         break;
       }

@@ -88,7 +88,17 @@ export default function Chat() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: outgoing }),
       });
-      if (r.body) {
+      /*
+        A platform timeout or crash answers with an HTML error page; showing it
+        as Cortex's reply is worse than saying what happened. Our own refusals
+        (credits, sign-in) come back as text/plain and are shown as written.
+      */
+      if (!r.ok && !/text\/plain/i.test(r.headers.get("content-type") || "")) {
+        const say = r.status === 504
+          ? "That took longer than the server allows, so no answer came back. Try a narrower question. If I was asked to do something, check Approvals before asking again."
+          : `Cortex hit a server error (HTTP ${r.status}). Nothing on your side was lost — try again.`;
+        setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", content: say }; return c; });
+      } else if (r.body) {
         const reader = r.body.getReader(); const dec = new TextDecoder(); let acc = "";
         while (true) {
           const { done, value } = await reader.read();
@@ -96,6 +106,7 @@ export default function Chat() {
           acc += dec.decode(value, { stream: true });
           setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", content: acc }; return c; });
         }
+        if (!acc.trim()) setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", content: "No answer came back. Try again in a moment." }; return c; });
       } else {
         const t = await r.text();
         setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: "assistant", content: t }; return c; });

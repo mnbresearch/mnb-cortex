@@ -18,7 +18,9 @@ export function Copilot() {
     setMessages([...base, { role: "assistant", content: "" }]); setInput(""); setLoading(true);
     try {
       const r = await fetch("/api/chat/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: base }) });
-      if (r.body) { const rd = r.body.getReader(); const dec = new TextDecoder(); let acc = "";
+      if (!r.ok && !/text\/plain/i.test(r.headers.get("content-type") || "")) {
+        setMessages((p) => { const c = [...p]; c[c.length - 1] = { role: "assistant", content: r.status === 504 ? "That took too long and no answer came back. Try a narrower question." : `Server error (HTTP ${r.status}). Try again.` }; return c; });
+      } else if (r.body) { const rd = r.body.getReader(); const dec = new TextDecoder(); let acc = "";
         while (true) { const { done, value } = await rd.read(); if (done) break; acc += dec.decode(value, { stream: true });
           setMessages((p) => { const c = [...p]; c[c.length - 1] = { role: "assistant", content: acc }; return c; }); }
       } else { const t = await r.text(); setMessages((p) => { const c = [...p]; c[c.length - 1] = { role: "assistant", content: t }; return c; }); }

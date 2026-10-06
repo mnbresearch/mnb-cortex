@@ -70,6 +70,12 @@ async function markInvoicePaid(args: Record<string, unknown>, ctx: Ctx): Promise
     return { ok: false, error: `${(before as any).invoice_no || "This invoice"} is already marked paid.` };
   }
 
+  /* The collections thread as it was BEFORE — the paid trigger marks it
+     recovered, and an honest undo has to put it back, or the money stays
+     counted as "recovered by Cortex" and the invoice is never chased again. */
+  const { data: threadBefore } = await svc.from("collection_threads")
+    .select("id, status").eq("org_id", ctx.orgId).eq("invoice_id", String(args.invoice_id)).maybeSingle();
+
   const { data: rows, error } = await svc.from("invoices")
     .update({ status: "paid" })
     .eq("org_id", ctx.orgId).eq("id", String(args.invoice_id)).select("id");
@@ -86,7 +92,10 @@ async function markInvoicePaid(args: Record<string, unknown>, ctx: Ctx): Promise
     ok: true,
     summary: `${(before as any).invoice_no || "Invoice"} (₹${Math.round(Number((before as any).amount) || 0).toLocaleString("en-IN")}, ${(before as any).party}) marked paid${args.paid_on ? ` on ${args.paid_on}` : ""}.`,
     result: { invoice_id: (before as any).id, amount: (before as any).amount, paid_on: args.paid_on ?? null, previous_status: (before as any).status },
-    undo: { kind: "set_status", invoice_id: (before as any).id, status: (before as any).status || "pending" },
+    undo: {
+      kind: "set_status", invoice_id: (before as any).id, status: (before as any).status || "pending",
+      thread: threadBefore && ["open", "paused"].includes(String((threadBefore as any).status)) ? { id: (threadBefore as any).id, status: (threadBefore as any).status } : null,
+    },
   };
 }
 
@@ -317,6 +326,15 @@ export async function undoHandler(undo: Record<string, unknown>, ctx: Ctx): Prom
         .eq("org_id", ctx.orgId).eq("id", String(undo.invoice_id)).select("id");
       if (error) return { ok: false, error: error.message };
       if (!data || data.length !== 1) return { ok: false, error: "The invoice no longer exists." };
+      const th = undo.thread as { id?: string; status?: string } | null | undefined;
+      if (th?.id) {
+        /* Only a thread the paid trigger closed — never one that has moved on since. */
+        const { data: reopened, error: thErr } = await svc.from("collection_threads")
+          .update({ status: th.status || "open", recovered_at: null, recovered_amount: null })
+          .eq("org_id", ctx.orgId).eq("id", th.id).eq("status", "recovered").select("id");
+        if (thErr) return { ok: true, summary: `Invoice status restored to ${undo.status}, but its reminder thread could not be reopened: ${thErr.message}. Reopen it in Collections.` };
+        if (reopened && reopened.length === 1) return { ok: true, summary: `Invoice status restored to ${undo.status}, and its reminder thread reopened (${th.status}). Cancelled drafts are re-drafted on the next collections run.` };
+      }
       return { ok: true, summary: `Invoice status restored to ${undo.status}.` };
     }
     case "remove_dnc": {

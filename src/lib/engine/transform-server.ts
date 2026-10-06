@@ -29,22 +29,57 @@ export async function parseUpload(buffer: Buffer, filename: string): Promise<{ o
       return gridToTable(grid, "Sheet1");
     }
     if (!lower.endsWith(".xlsx") && !lower.endsWith(".xlsm")) return { ok: false, error: "Upload a .xlsx or .csv file." };
+    /*
+      ZIP-BOMB GUARD. An .xlsx is a zip, and exceljs inflates the whole thing
+      in memory: 5 MB on the wire can be gigabytes of sharedStrings. The
+      central directory states every entry's uncompressed size, so read it
+      before inflating anything and refuse what would not fit.
+    */
+    const inflated = zipUncompressedTotal(buffer);
+    if (inflated === null) return { ok: false, error: "That file is not a valid .xlsx (it is not a readable zip)." };
+    if (inflated > MAX_INFLATED_BYTES) return { ok: false, error: `That workbook expands to ${(inflated / 1_048_576).toFixed(0)} MB when opened; the limit is ${MAX_INFLATED_BYTES / 1_048_576} MB. Save just the sheet you need, or export it as .csv.` };
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as any);
     const ws = wb.worksheets.find((w) => w.rowCount > 0) || wb.worksheets[0];
     if (!ws) return { ok: false, error: "The workbook has no sheets." };
     const grid: Cell[][] = [];
     ws.eachRow({ includeEmpty: false }, (row) => {
+      if (grid.length > MAX_ROWS + 1) return; // eachRow cannot be broken out of; stop collecting
       const cells: Cell[] = [];
       const vals = row.values as any[];
       for (let c = 1; c < Math.min(vals.length, MAX_COLUMNS + 1); c++) cells.push(cellValue(vals[c]));
       grid.push(cells);
-      if (grid.length > MAX_ROWS + 1) return;
     });
     return gridToTable(grid, ws.name);
   } catch (e: any) {
     return { ok: false, error: `Could not read the file: ${e?.message || "unknown error"}` };
   }
+}
+
+export const MAX_INFLATED_BYTES = 60 * 1_048_576;
+
+/**
+ * Sum of uncompressed sizes from a zip's central directory, without inflating.
+ * Null when the buffer is not a zip we can read. Zip64 sizes (0xFFFFFFFF) are
+ * treated as over the limit — no legitimate 5 MB upload needs them.
+ */
+export function zipUncompressedTotal(buf: Buffer): number | null {
+  const EOCD = 0x06054b50, CEN = 0x02014b50;
+  const min = Math.max(0, buf.length - 22 - 0xffff);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= min; i--) { if (buf.readUInt32LE(i) === EOCD) { eocd = i; break; } }
+  if (eocd < 0) return null;
+  const entries = buf.readUInt16LE(eocd + 10);
+  let off = buf.readUInt32LE(eocd + 16);
+  let total = 0;
+  for (let n = 0; n < entries; n++) {
+    if (off + 46 > buf.length || buf.readUInt32LE(off) !== CEN) return null;
+    const size = buf.readUInt32LE(off + 24);
+    if (size === 0xffffffff) return Number.MAX_SAFE_INTEGER;
+    total += size;
+    off += 46 + buf.readUInt16LE(off + 28) + buf.readUInt16LE(off + 30) + buf.readUInt16LE(off + 32);
+  }
+  return total;
 }
 
 function cellValue(v: any): Cell {
@@ -167,6 +202,10 @@ export async function buildTransformed(
 
   const letter = (name: string) => colLetterFor(table.columns.indexOf(name));
   const formulaCols = ops.filter((o): o is Extract<Op, { op: "add_column" }> => o.op === "add_column")
+    /* Only formula columns still in the final table, whose inputs are still
+       there too. A column added then dropped would otherwise address
+       colLetterFor(-1); one whose inputs were dropped keeps its computed value. */
+    .filter((o) => table.columns.includes(o.name))
     .map((o) => ({ name: o.name, node: parseExpr(o.expr, table.columns) }))
     .filter((f) => f.node.ok) as Array<{ name: string; node: { ok: true; node: any } }>;
 
@@ -185,8 +224,16 @@ export async function buildTransformed(
     }
   });
 
+  /* Sheet names must be unique (and ≤31 chars) or exceljs throws: two
+     subtotal steps, or a source sheet already called "Subtotals"/"Cortex". */
+  const uniqueSheet = (base: string) => {
+    const taken = new Set(wb.worksheets.map((w) => w.name.toLowerCase()));
+    let name = base.slice(0, 31), n = 2;
+    while (taken.has(name.toLowerCase())) { const suf = ` (${n++})`; name = base.slice(0, 31 - suf.length) + suf; }
+    return name;
+  };
   for (const st of subtotalSheets) {
-    const sws = wb.addWorksheet(st.name);
+    const sws = wb.addWorksheet(uniqueSheet(st.name));
     sws.columns = st.columns.map((c) => ({ header: c, key: c, width: 24 }));
     sws.getRow(1).font = { bold: true };
     st.rows.forEach((r) => sws.addRow(Object.fromEntries(st.columns.map((c) => [c, typeof r[c] === "string" ? safeText(r[c]) : r[c]]))));
@@ -195,10 +242,10 @@ export async function buildTransformed(
     sws.getCell(`B${n}`).value = { formula: st.rows.length ? `SUM(B2:B${n - 1})` : "0", result: undefined as any }; sws.getCell(`B${n}`).numFmt = INR; sws.getCell(`B${n}`).font = { bold: true };
   }
 
-  const about = wb.addWorksheet("Cortex");
+  const about = wb.addWorksheet(uniqueSheet("Cortex"));
   about.getColumn(1).width = 100;
   about.getCell("A1").value = "Transformed by MNB Cortex"; about.getCell("A1").font = { bold: true, size: 14 };
-  about.getCell("A2").value = `Source: ${safeText(sourceFilename)} · ${new Date().toLocaleString("en-IN")}`;
+  about.getCell("A2").value = `Source: ${safeText(sourceFilename)} · ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`;
   about.getCell("A4").value = "Steps applied:"; about.getCell("A4").font = { bold: true };
   const v = validatePlan(ops, original.columns);
   (v.ok ? v.describe : []).forEach((d, i) => { about.getCell(`A${5 + i}`).value = `${i + 1}. ${d}`; });

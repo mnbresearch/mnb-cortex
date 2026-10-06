@@ -157,6 +157,7 @@ export default async function CustomerPage({ params }: { params: { id: string } 
           </Section>
         </div>
 
+        {c.incomplete && <p className="text-xs text-warning">This workspace has more records than this page reads at once (20,000), so the totals above may be incomplete.</p>}
         <p className="text-xs text-muted-foreground flex items-center gap-1.5"><ShoppingCart className="h-3.5 w-3.5" aria-hidden="true" /> Invoices and unlinked orders are matched to this customer by normalised name — the same rule the importer uses — so spelling variants of the same party land here.</p>
       </PageShell>
     </>

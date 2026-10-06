@@ -3,6 +3,9 @@ import { headers } from "next/headers";
 import { verifyDecision } from "@/lib/engine/decision-links";
 import { approve, reject } from "@/lib/engine/ledger";
 import { enforce } from "@/lib/ratelimit";
+import { serviceClient } from "@/lib/supabase/server";
+import { CATALOGUE_BY_KEY } from "@/lib/engine/catalogue";
+import { RANK } from "@/lib/engine/policy";
 
 /*
   The POST behind the two buttons on /decide/[token].
@@ -23,6 +26,28 @@ export async function decideByToken(token: string, verb: "approve" | "reject"): 
   const p = verifyDecision(String(token || ""));
   if (!p) return { ok: false, error: "This link is invalid or has expired. Open the Approvals page to decide there." };
   if (verb !== "approve" && verb !== "reject") return { ok: false, error: "Unknown decision." };
+
+  /*
+    The link is a bearer credential for one person's decision. Re-check, at the
+    moment of deciding, that this person is still a member of the workspace and
+    still holds the rank the action needs — a removed or demoted admin's
+    7-day-old email must not keep its power.
+  */
+  try {
+    const svc = serviceClient();
+    if (!svc) return { ok: false, error: "The server cannot record decisions right now." };
+    const [{ data: mem }, { data: prop }] = await Promise.all([
+      svc.from("memberships").select("role").eq("org_id", p.o).eq("user_id", p.u).maybeSingle(),
+      svc.from("action_proposals").select("action").eq("id", p.p).eq("org_id", p.o).maybeSingle(),
+    ]);
+    const def = prop ? CATALOGUE_BY_KEY[(prop as any).action] : undefined;
+    if (!def) return { ok: false, error: "That proposal no longer exists." };
+    if (!mem || (RANK[String((mem as any).role)] || 0) < (RANK[def.minRank] || 0)) {
+      return { ok: false, error: `This link was sent to someone who no longer has ${def.minRank} rights in this workspace. Decide on the Approvals page instead.` };
+    }
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Could not check your access." };
+  }
 
   try {
     if (verb === "approve") {

@@ -6,6 +6,8 @@ import { CATALOGUE_BY_KEY } from "@/lib/engine/catalogue";
 import { DecideButtons } from "./decide-buttons";
 
 export const dynamic = "force-dynamic";
+/* The URL is a bearer link: never send it onward as a Referer, never index it. */
+export const metadata = { referrer: "no-referrer" as const, robots: { index: false, follow: false } };
 
 /*
   /decide/<token> — one proposal, two buttons.
@@ -16,7 +18,9 @@ export const dynamic = "force-dynamic";
   app, or has expired shows the current state instead of buttons.
 */
 export default async function DecidePage({ params }: { params: { token: string } }) {
-  const p = verifyDecision(decodeURIComponent(params.token || ""));
+  /* A malformed %-escape must read as an invalid link, not a 500. */
+  const token = (() => { try { return decodeURIComponent(params.token || ""); } catch { return ""; } })();
+  const p = verifyDecision(token);
   let proposal: any = null;
   if (p) {
     const svc = serviceClient();
@@ -56,7 +60,7 @@ export default async function DecidePage({ params }: { params: { token: string }
               {proposal.policy_reason ? ` · ${proposal.policy_reason}` : ""}
             </div>
             {waiting ? (
-              <DecideButtons token={decodeURIComponent(params.token)} />
+              <DecideButtons token={token} />
             ) : (
               <div className="rounded-lg bg-muted/50 p-3 text-sm">
                 {proposal.status === "done" && <>Already approved and run{proposal.decided_at ? ` on ${new Date(proposal.decided_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}` : ""}.</>}

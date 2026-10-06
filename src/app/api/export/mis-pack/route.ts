@@ -27,13 +27,19 @@ export async function GET() {
   /* Each download is its own ledger row — the default idempotency key folds a
      day's identical proposals into one, which is right for a cron and wrong
      for a person pressing Download twice. */
+  const { currentRole } = await import("@/lib/roles");
+  const { role } = await currentRole();
   const r = await propose({
+    actorRole: role,
     orgId, action: "export_xlsx", args: { dataset: "mis_pack" }, source: "user", proposedBy: user.id,
     rationale: "MIS pack downloaded from Reports.", idempotencyKey: `mis_pack:${orgId}:${Date.now()}:${user.id.slice(0, 8)}`,
   });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+  if (r.executed && !r.executed.ok) {
+    return NextResponse.json({ error: `The export was recorded but failed: ${r.executed.error || "unknown error"}` }, { status: 500 });
+  }
   if (!r.executed) {
-    const msg = r.verdict.verdict === "blocked" ? `Exports are blocked in this workspace: ${r.verdict.reason}` : "Your Approvals rule requires exports to be approved first — this one is now waiting on the Approvals page.";
+    const msg = r.verdict.verdict === "blocked" ? `Exports are blocked in this workspace: ${r.verdict.reason}` : `${r.verdict.reason} It is now waiting on the Approvals page.`;
     return NextResponse.json({ error: msg, proposalId: r.proposal.id }, { status: 409 });
   }
 

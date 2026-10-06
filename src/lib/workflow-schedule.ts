@@ -55,6 +55,9 @@ export async function runScheduledWorkflows(budget?: Budget): Promise<ScheduleRe
       .select("id, org_id, name, steps, last_run, trigger, is_active")
       .eq("trigger", "schedule")
       .eq("is_active", true)
+      /* Longest-waiting first. Unordered, the same 50 rows could come back every
+         night and a workspace's workflow past the 50th might never run. */
+      .order("last_run", { ascending: true, nullsFirst: true })
       .limit(MAX_PER_RUN);
     rows = (data as any[]) || [];
   } catch { return { considered: 0, ran: 0, failed: 0 }; }

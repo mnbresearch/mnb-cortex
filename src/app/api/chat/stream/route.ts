@@ -41,7 +41,10 @@ export async function POST(req: Request) {
     const lastUser = Array.isArray(messages) ? [...messages].reverse().find((m: any) => m?.role === "user")?.content : "";
     const { orgId } = await getUserAndOrg();
     const mem = await recallContext(orgId, String(lastUser || ""), 8);
-    const stream = await streamCortex(messages, mem ? `${context}\n\n${mem}` : context);
+    const charged = gate;
+    const stream = await streamCortex(messages, mem ? `${context}\n\n${mem}` : context, {
+      onEngineFailure: async () => { await refundIfCharged(charged, "chat"); },
+    });
     return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache, no-transform" } });
   } catch (e: any) {
     await refundIfCharged(gate, "chat");

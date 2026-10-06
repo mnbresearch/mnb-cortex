@@ -217,11 +217,19 @@ export async function executeWorkflow(
           const day = istTodayISO();
           const r = await propose({
             orgId, action: actionKey, args, source: "workflow", proposedBy: null,
+            /* Workflows can only be created by analyst+ — act with that rank, no more. */
+            actorRole: "analyst",
             rationale: `Scheduled by the "${ctx.name}" workflow.`,
-            idempotencyKey: `workflow:${ctx.name}:${actionKey}:${day}:${JSON.stringify(args).slice(0, 80)}`,
+            /* orgId in the key: the column is unique across ALL workspaces, and two
+               workspaces with a "Daily ageing" workflow used to collide. */
+            idempotencyKey: `workflow:${orgId}:${ctx.name}:${actionKey}:${day}:${JSON.stringify(args).slice(0, 80)}`,
           });
           if (!r.ok) { results.push({ step: raw, ok: false, detail: r.problems?.length ? `${r.error} ${r.problems.join("; ")}.` : r.error }); break; }
-          if (r.executed) {
+          if (r.duplicate) {
+            const { describeExisting } = await import("@/lib/engine/ledger");
+            const d = describeExisting(r.proposal);
+            results.push({ step: raw, ok: d.ok, detail: d.message });
+          } else if (r.executed) {
             results.push({ step: raw, ok: r.executed.ok, detail: r.executed.ok ? `Ran on its own (your rule allows it): ${r.executed.summary}` : `Allowed, but failed: ${r.executed.error}` });
             if (r.executed.ok && r.executed.summary) facts.push(r.executed.summary);
           } else if (r.verdict.verdict === "blocked") {

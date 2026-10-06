@@ -533,8 +533,26 @@ async function proposeFromChat(args: any, orgId: string, userId: string | null):
     return { ok: false, error: `Cortex has already proposed ${CHAT_PROPOSALS_PER_DAY} actions from chat today. Review them on /approvals before proposing more.` };
   }
 
+  /*
+    Proposing is analyst-and-above everywhere else; chat was the exception.
+    The role is read for the signed-in user of THIS workspace and passed on, so
+    a proposer below the action's minRank can ask but never auto-run.
+  */
+  let role = "viewer";
+  try {
+    const { serviceClient } = await import("@/lib/supabase/server");
+    const svc = serviceClient();
+    if (svc && userId) {
+      const { data } = await svc.from("memberships").select("role").eq("org_id", orgId).eq("user_id", userId).maybeSingle();
+      role = String((data as any)?.role || "viewer");
+    }
+  } catch { role = "viewer"; }
+  if (!userId || role === "viewer") {
+    return { ok: false, error: "Only analysts and above can ask Cortex to take actions. Tell the person to ask a workspace admin." };
+  }
+
   const r = await propose({
-    orgId, action, args: args?.args ?? {}, source: "chat", proposedBy: userId,
+    orgId, action, args: args?.args ?? {}, source: "chat", proposedBy: userId, actorRole: role,
     rationale: String(args?.rationale || "").slice(0, 500) || null,
     evidence: Array.isArray(args?.evidence) ? args.evidence.slice(0, 5).map((e: unknown) => String(e).slice(0, 200)) : [],
   });
@@ -542,6 +560,11 @@ async function proposeFromChat(args: any, orgId: string, userId: string | null):
 
   const def = CATALOGUE_BY_KEY[action];
   const what = (() => { try { return def.describe(r.proposal.args); } catch { return def.title; } })();
+  if (r.duplicate) {
+    const { describeExisting } = await import("@/lib/engine/ledger");
+    const d = describeExisting(r.proposal);
+    return d.ok ? { ok: true, summary: `"${what}": ${d.message}` } : { ok: false, error: `"${what}": ${d.message}` };
+  }
   if (r.executed) {
     return r.executed.ok
       ? { ok: true, summary: `Done, within the owner's rule for this action: ${r.executed.summary}` }

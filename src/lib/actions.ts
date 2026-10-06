@@ -713,6 +713,8 @@ export async function createWorkflowFromPlan(input: { plan: unknown; activate?: 
 export async function toggleWorkflow(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg(); const sb = await createClient();
   const id = str(fd.get("id")); const active = str(fd.get("active")) === "true";
+  /* Pausing is always allowed; switching a schedule back on is the paid capability. */
+  if (active) { try { await requireCapability(orgId, "workflows", "Workflow automation"); } catch (e: any) { return { ok: false, error: e?.message || "Not on your plan." }; } }
   const { data, error } = await sb.from("workflows").update({ is_active: active }).eq("id", id).eq("org_id", orgId).select("id");
   if (error) return { ok: false, error: error.message };
   if (!data || data.length !== 1) return { ok: false, error: "That workflow was not found in this workspace." };
