@@ -5,7 +5,15 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "6.41.0", date: "Latest", items: [
+  { v: "6.42.0", date: "Latest", items: [
+    "Cortex earns autonomy — when you keep approving the same kind of action and never reject or undo it, Approvals offers to let Cortex do it on its own, with limits taken from what you actually approved",
+    "Your monthly MIS pack by email — schedule it under Reports and the workbook arrives as an .xlsx attachment, built from your own records",
+    "Safer actions — only people with the right role can run or approve an action, and things suggested in chat wait for your tap unless you have set a rule for them",
+    "Exports, customer pages and the MIS pack now read every row in large workspaces instead of stopping at the first thousand",
+    "Excel understands Indian number formats — amounts like 1,20,000 or ₹45,000 filter, sort and total correctly",
+    "Chat is steadier — it no longer gives up when a model cannot use tools, and you are not charged when no answer comes back",
+  ] },
+  { v: "6.41.0", date: "Earlier", items: [
     "Cortex can now act — ask in chat to mark an invoice paid, move a due date, send a reminder, stop chasing a party, note something on a customer, or export a workbook; each becomes a proposal on the new Approvals page that runs only when you approve it, or on its own within rules you set per action (daily count, rupee ceiling, known parties only)",
     "Needs your decision — anything still waiting is emailed to the workspace owner once a day with a one-tap link that opens that proposal; opening the link changes nothing, only the Approve button does",
     "Excel — upload a .xlsx or .csv, say what to change in plain English, read the plan and the before/after, approve, download; calculated columns are written as live formulas",
