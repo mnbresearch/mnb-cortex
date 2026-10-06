@@ -10,8 +10,8 @@ import { updateStatus } from "@/lib/actions";
 import { inr } from "@/lib/utils";
 import { Check, ShieldCheck, X, Undo2, Bot, User, Workflow, Clock, Download, Settings2 } from "lucide-react";
 import { CATALOGUE_BY_KEY } from "@/lib/engine/catalogue";
-import { listProposals, type Proposal } from "@/lib/engine/ledger";
-import { approveProposal, rejectProposal, undoProposal } from "@/lib/engine/server-actions";
+import { listProposals, autonomySuggestions, type Proposal } from "@/lib/engine/ledger";
+import { approveProposal, rejectProposal, undoProposal, acceptAutonomy } from "@/lib/engine/server-actions";
 import { hasRole } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
@@ -173,6 +173,8 @@ export default async function Approvals() {
         hasRole("admin"),
       ])
     : [[], [], false, false];
+  /* Earned autonomy: offered to admins only, since only they can grant it. */
+  const suggestions = orgId && isAdmin ? await autonomySuggestions(orgId).catch(() => []) : [];
   const canDecide = (p: Proposal) => {
     const def = CATALOGUE_BY_KEY[p.action];
     const need = def?.minRank ?? "manager";
@@ -205,6 +207,31 @@ export default async function Approvals() {
             ) : (
               <div className="space-y-3">{queue.map((p) => <ProposalCard key={p.id} p={p} canDecide={canDecide(p)} />)}</div>
             )}
+          </Section>
+        )}
+
+        {suggestions.length > 0 && (
+          <Section title="Cortex has earned these" desc="Actions you keep approving and have never rejected or undone. Let Cortex do them on its own, within limits taken from what you approved.">
+            <div className="space-y-2">
+              {suggestions.map((sg) => {
+                const def = CATALOGUE_BY_KEY[sg.action];
+                return (
+                  <Card key={sg.action} className="p-4 flex flex-wrap items-center justify-between gap-3 border-primary/30 bg-primary/5">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">{def?.title || sg.action}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {sg.why} Limits: up to {sg.caps.max_per_day} a day{sg.caps.max_amount_inr ? `, up to ${inr(sg.caps.max_amount_inr)} each` : ""}{sg.caps.known_parties_only ? ", only parties Cortex has dealt with before" : ""}.
+                        {def && !def.reversible ? " This action cannot be undone once it runs." : ""}
+                      </div>
+                    </div>
+                    <SafeForm action={acceptAutonomy}>
+                      <input type="hidden" name="action" value={sg.action} />
+                      <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-9 px-3 text-sm font-medium hover:opacity-90"><ShieldCheck className="h-4 w-4" aria-hidden="true" /> Let Cortex do this</button>
+                    </SafeForm>
+                  </Card>
+                );
+              })}
+            </div>
           </Section>
         )}
 

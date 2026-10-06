@@ -241,3 +241,69 @@ export function gateVerdict(
   }
   return verdict;
 }
+
+/* ------------------------------------------------------- earned autonomy */
+/*
+  "APPROVE-FIRST, EARN AUTONOMY" — the trust model the owner chose. The
+  approve-first half has existed since the ledger shipped; nothing ever
+  offered the earn-autonomy half. This reads the ledger and, for an action
+  the owner keeps approving and never rejects or undoes, suggests letting
+  Cortex do it on its own — with caps drawn from what the owner actually
+  approved, never looser.
+
+  Rules, all from the owner's own decisions in the last 60 days:
+    · at least MIN_APPROVALS human approvals of this action
+    · zero rejections and zero undos (one "no" resets the case)
+    · not already auto or blocked by an explicit rule
+    · daily cap = the busiest day they approved (1..10); amount cap = the
+      largest amount they approved — both only where the action has them
+  Suggestions only. Nothing changes until an admin presses the button, and
+  the existing setPolicy() constraint still refuses auto-without-cap.
+*/
+export const MIN_APPROVALS = 5;
+
+export type HistoryRow = { action: string; status: string; policy_verdict: string | null; decided_by: string | null; created_at: string; args: Record<string, unknown> | null };
+export type AutonomySuggestion = { action: string; approvals: number; caps: { max_per_day: number | null; max_amount_inr: number | null; known_parties_only: boolean }; why: string };
+
+export function suggestAutonomy(
+  history: HistoryRow[],
+  policies: Array<{ action: string; mode: Mode }>,
+  catalogue: Readonly<Record<string, ActionDef>>,
+  nowMs = Date.now(),
+): AutonomySuggestion[] {
+  const since = nowMs - 60 * 86_400_000;
+  const byAction = new Map<string, HistoryRow[]>();
+  for (const h of history) {
+    if (Date.parse(h.created_at) < since) continue;
+    if (!byAction.has(h.action)) byAction.set(h.action, []);
+    byAction.get(h.action)!.push(h);
+  }
+  const explicit = new Map(policies.map((p) => [p.action, p.mode]));
+  const out: AutonomySuggestion[] = [];
+  for (const [action, rows] of Array.from(byAction)) {
+    const def = catalogue[action];
+    if (!def) continue;
+    const mode = explicit.get(action);
+    if (mode === "auto" || mode === "blocked") continue;
+    if (def.defaultMode === "auto" && !mode) continue; // already autonomous by default
+    if (rows.some((r) => r.status === "rejected" || r.status === "undone")) continue;
+    const approved = rows.filter((r) => r.policy_verdict === "approve" && r.decided_by && ["approved", "executing", "done", "failed"].includes(r.status));
+    if (approved.length < MIN_APPROVALS) continue;
+
+    const perDay = new Map<string, number>();
+    for (const r of approved) { const d = new Date(Date.parse(r.created_at) + 5.5 * 3_600_000).toISOString().slice(0, 10); perDay.set(d, (perDay.get(d) || 0) + 1); }
+    const busiest = Math.max(...Array.from(perDay.values()));
+    const capped = CAPPED_EFFECTS.has(def.effect);
+    const amounts = approved.map((r) => rupeesOf(def, r.args || {})).filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+    const caps = {
+      max_per_day: Math.max(1, Math.min(10, busiest)),
+      max_amount_inr: def.blastRadius.rupees && amounts.length ? Math.max(...amounts) : null,
+      known_parties_only: capped,
+    };
+    out.push({
+      action, approvals: approved.length, caps,
+      why: `You approved this ${approved.length} times in the last 60 days and never rejected or undid it.`,
+    });
+  }
+  return out.sort((a, b) => b.approvals - a.approvals);
+}

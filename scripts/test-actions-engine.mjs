@@ -33,7 +33,7 @@ const fails = [];
 const check = (cond, name, detail = "") => { if (cond) pass++; else fails.push(detail ? `${name}\n      ${detail}` : name); };
 
 const { CATALOGUE, CATALOGUE_BY_KEY, validateArgs } = await import("../src/lib/engine/catalogue.ts");
-const { decide, gateVerdict, normaliseCaps, requiresCaps, rupeesOf, CAPPED_EFFECTS } = await import("../src/lib/engine/policy.ts");
+const { decide, gateVerdict, suggestAutonomy, MIN_APPROVALS, normaliseCaps, requiresCaps, rupeesOf, CAPPED_EFFECTS } = await import("../src/lib/engine/policy.ts");
 
 /* ===================================================================== */
 /* 1. THE CATALOGUE IS WELL-FORMED AND MATCHES ITS HANDLERS              */
@@ -345,6 +345,42 @@ const { decide, gateVerdict, normaliseCaps, requiresCaps, rupeesOf, CAPPED_EFFEC
   check(optIns === 1, `exactly one tools:true opt-in in cortex.ts (found ${optIns})`);
   const dec = strip(read("src/app/decide/[token]/actions.ts"));
   check(/from\("memberships"\)/.test(dec) && /RANK\[def\.minRank\]/.test(dec), "decide: membership and rank are re-checked at the moment of deciding");
+}
+
+/* ===================================================================== */
+/* 4d. EARNED AUTONOMY — suggested only from the owner's own decisions   */
+/* ===================================================================== */
+{
+  const now = Date.parse("2026-10-06T10:00:00Z");
+  const day = (d) => new Date(now - d * 86_400_000).toISOString();
+  const row = (action, status, d, args = {}, decided = "u1", verdict = "approve") => ({ action, status, policy_verdict: verdict, decided_by: decided, created_at: day(d), args });
+  const five = (action, extra = {}) => [0, 1, 2, 3, 4].map((d) => row(action, "done", d, extra));
+  const sug = (h, pol = []) => suggestAutonomy(h, pol, CATALOGUE_BY_KEY, now);
+
+  check(MIN_APPROVALS === 5, "five approvals is the bar");
+  check(sug(five("update_invoice_due_date")).length === 1, "five clean approvals → one suggestion");
+  check(sug(five("update_invoice_due_date").slice(0, 4)).length === 0, "four is not enough");
+  check(sug([...five("update_invoice_due_date"), row("update_invoice_due_date", "rejected", 1)]).length === 0, "one rejection resets the case");
+  check(sug([...five("update_invoice_due_date"), row("update_invoice_due_date", "undone", 1)]).length === 0, "one undo resets the case");
+  check(sug(five("update_invoice_due_date").map((r) => ({ ...r, decided_by: null }))).length === 0, "approvals without a human decider do not count");
+  check(sug(five("update_invoice_due_date").map((r) => ({ ...r, created_at: day(70) }))).length === 0, "only the last 60 days count");
+  check(sug(five("update_invoice_due_date"), [{ action: "update_invoice_due_date", mode: "blocked" }]).length === 0, "an explicit block is never second-guessed");
+  check(sug(five("update_invoice_due_date"), [{ action: "update_invoice_due_date", mode: "auto" }]).length === 0, "already auto → nothing to suggest");
+  check(sug(five("export_xlsx", { dataset: "payables" })).length === 0, "default-auto actions are not suggested");
+  check(sug(five("no_such_action")).length === 0, "unknown actions are ignored");
+
+  const money = [0, 0, 1, 2, 3].map((d, i) => row("mark_invoice_paid", "done", d, { invoice_id: "x", amount: [1000, 5000, 2500, 800, 4000][i] }));
+  const m = sug(money)[0];
+  check(m && m.caps.max_per_day === 2, `daily cap = busiest approved day (${m?.caps.max_per_day})`);
+  check(m && m.caps.max_amount_inr === 5000, `amount cap = largest approved amount (${m?.caps.max_amount_inr})`);
+  check(m && m.caps.known_parties_only === true, "money/outbound suggestions are known-parties-only");
+  const many = Array.from({ length: 30 }, () => row("update_invoice_due_date", "done", 0));
+  check(sug(many)[0].caps.max_per_day === 10, "daily cap never exceeds 10, however busy");
+
+  const sa = strip(read("src/lib/engine/server-actions.ts"));
+  const acc = sa.slice(sa.indexOf("export async function acceptAutonomy"));
+  check(/assertRole\("admin"\)/.test(acc), "accepting autonomy is admin-only");
+  check(/autonomySuggestions\(orgId\)/.test(acc) && /setPolicy\(orgId, action, "auto", s\.caps/.test(acc) && !/fd\.get\("max_/.test(acc), "caps are recomputed from the ledger, never taken from the form");
 }
 
 /* ===================================================================== */

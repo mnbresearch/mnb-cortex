@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "crypto";
 import { serviceClient } from "@/lib/supabase/server";
 import { CATALOGUE_BY_KEY, isActionKey, validateArgs, type ActionDef } from "./catalogue";
-import { decide, gateVerdict, normaliseCaps, requiresCaps, type Policy, type Usage, type Verdict } from "./policy";
+import { decide, gateVerdict, suggestAutonomy, normaliseCaps, requiresCaps, type Policy, type Usage, type Verdict } from "./policy";
 import { HANDLERS, undoHandler } from "./handlers";
 
 /*
@@ -360,4 +360,16 @@ export async function storedAction(id: string, orgId: string): Promise<string | 
   const svc = svcOrThrow();
   const { data } = await svc.from("action_proposals").select("action").eq("id", id).eq("org_id", orgId).maybeSingle();
   return (data as any)?.action ?? null;
+}
+
+/** Earned-autonomy suggestions for a workspace, computed from its own ledger. See policy.suggestAutonomy. */
+export async function autonomySuggestions(orgId: string) {
+  const svc = svcOrThrow();
+  const since = new Date(Date.now() - 60 * 86_400_000).toISOString();
+  const [{ data: hist }, policies] = await Promise.all([
+    svc.from("action_proposals").select("action, status, policy_verdict, decided_by, created_at, args")
+      .eq("org_id", orgId).gte("created_at", since).order("created_at", { ascending: false }).limit(1000),
+    listPolicies(orgId),
+  ]);
+  return suggestAutonomy((hist as any[]) || [], policies, CATALOGUE_BY_KEY);
 }

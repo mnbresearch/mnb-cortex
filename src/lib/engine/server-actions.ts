@@ -108,3 +108,20 @@ export async function savePolicy(fd: FormData): Promise<ActionResult> {
   revalidatePath("/approvals/rules"); revalidatePath("/approvals");
   return r.ok ? ok("Rule saved.") : fail(r.error);
 }
+
+/**
+ * Accept an earned-autonomy suggestion. Admin only, like any rule change.
+ * The caps are RECOMPUTED here from the ledger — the button carries only the
+ * action name — so a tampered form cannot grant looser caps than the owner's
+ * own history supports.
+ */
+export async function acceptAutonomy(fd: FormData): Promise<ActionResult> {
+  const { orgId, userId } = await actor();
+  await assertRole("admin");
+  const action = String(fd.get("action") || "");
+  const s = (await ledger.autonomySuggestions(orgId)).find((x) => x.action === action);
+  if (!s) return fail("That suggestion no longer applies — the history changed. Set a rule by hand under Rules if you still want it.");
+  const r = await ledger.setPolicy(orgId, action, "auto", s.caps, userId);
+  revalidatePath("/approvals/rules"); revalidatePath("/approvals");
+  return r.ok ? ok(`Done. ${CATALOGUE_BY_KEY[action]?.title || action} now runs on its own within: up to ${s.caps.max_per_day} a day${s.caps.max_amount_inr ? `, up to ₹${Math.round(s.caps.max_amount_inr).toLocaleString("en-IN")} each` : ""}${s.caps.known_parties_only ? ", known parties only" : ""}. Change or revoke it any time under Rules.`) : fail(r.error);
+}
