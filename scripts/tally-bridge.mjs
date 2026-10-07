@@ -10,6 +10,16 @@
  *
  * Usage:
  *   node scripts/tally-bridge.mjs --key=<CORTEX_API_KEY> [--tally=http://localhost:9000] [--watch]
+ *        [--from=2026-04-01] [--to=2027-03-31] [--credit-days=30]
+ *
+ * Safe to run repeatedly: Cortex upserts on the voucher number, so a re-run
+ * updates rows instead of duplicating them (this needs the 2026_zzzt
+ * migration on the Cortex side — before it, the second run failed).
+ *
+ * What it does NOT know: whether a sales invoice has been paid. Tally records
+ * that in Receipt vouchers against the bill, which this bridge does not read.
+ * Invoices arrive as pending with a due date of voucher date + --credit-days;
+ * mark them paid in Cortex (or re-import an outstanding-bills report).
  *
  * Get the API key from Cortex → Developers · API → Generate key.
  * See SETUP.md → Tally for the full walkthrough.
@@ -27,6 +37,12 @@ const TALLY = (args.tally || process.env.TALLY_URL || "http://localhost:9000").r
 const CORTEX = (args.cortex || process.env.CORTEX_URL || "https://cortex.mnbresearch.com").replace(/\/$/, "");
 const WATCH = Boolean(args.watch);
 const EVERY_MIN = Number(args.every || 30);
+const CREDIT_DAYS = Math.max(0, Math.min(365, Number(args["credit-days"] || 30)));
+/* Default window: the current Indian financial year (1 April → 31 March). */
+const fyStart = (() => { const d = new Date(); const y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; return `${y}-04-01`; })();
+const FROM = String(args.from || fyStart);
+const TO = String(args.to || new Date().toISOString().slice(0, 10));
+const tallyDate = (iso) => iso.replace(/-/g, "");
 
 if (!API_KEY) {
   console.error("Missing --key. Generate one in Cortex → Developers · API, then:\n  node scripts/tally-bridge.mjs --key=ck_xxx");
@@ -35,8 +51,11 @@ if (!API_KEY) {
 
 /** Ask Tally for a report as XML. */
 async function tallyRequest(reportName) {
-  const xml = `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>${reportName}</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`;
-  const r = await fetch(TALLY, { method: "POST", headers: { "Content-Type": "text/xml" }, body: xml });
+  /* "Voucher Register" is a REPORT, so it is exported as TYPE Data with a date
+     range — not as a Collection, and not unbounded (an unbounded register on a
+     multi-year company file is huge). */
+  const xml = `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>${reportName}</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>${tallyDate(FROM)}</SVFROMDATE><SVTODATE>${tallyDate(TO)}</SVTODATE></STATICVARIABLES></DESC></BODY></ENVELOPE>`;
+  const r = await fetch(TALLY, { method: "POST", headers: { "Content-Type": "text/xml" }, body: xml, signal: AbortSignal.timeout(120_000) });
   if (!r.ok) throw new Error(`Tally responded ${r.status}. Is Tally running with HTTP access enabled on ${TALLY}?`);
   return r.text();
 }
@@ -47,6 +66,7 @@ const pick = (block, tag) => {
   return m ? m[1].replace(/<[^>]+>/g, "").trim() : "";
 };
 const money = (v) => Math.abs(parseFloat(String(v).replace(/[^0-9.-]/g, "")) || 0);
+const addDays = (iso, n) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
 function parseVouchers(xml) {
   const blocks = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
@@ -61,11 +81,22 @@ function parseVouchers(xml) {
     const no = pick(b, "VOUCHERNUMBER");
     if (!amount) continue;
 
+    /*
+      KEYS MUST BE STABLE ACROSS RUNS — Cortex upserts on them. A voucher with
+      no number gets a key from its own content (date, party, amount), never
+      from its position in this run's list, which shifts as vouchers are added
+      and would re-key every row on the next run.
+      Tally numbers each voucher TYPE separately, so sales #12 and purchase #12
+      both exist: purchase keys are prefixed so they cannot overwrite a sale.
+    */
+    const fallback = `${iso || "nodate"}-${party || "noparty"}-${amount}`.replace(/\s+/g, "_").slice(0, 80);
+    const due = iso ? addDays(iso, CREDIT_DAYS) : undefined;
     if (type.includes("sales")) {
-      sales.push({ order_no: no || `TALLY-${sales.length + 1}`, customer_name: party, amount, status: "won", order_date: iso || undefined });
-      invoices.push({ invoice_no: no || `TALLY-${invoices.length + 1}`, party, amount, type: "receivable", status: "pending", due_date: iso || undefined });
+      const key = no || `TALLY-${fallback}`;
+      sales.push({ order_no: key, customer_name: party, amount, status: "won", order_date: iso || undefined });
+      invoices.push({ invoice_no: key, party, amount, type: "receivable", status: "pending", issue_date: iso || undefined, due_date: due });
     } else if (type.includes("purchase")) {
-      invoices.push({ invoice_no: no || `TALLYP-${invoices.length + 1}`, party, amount, type: "payable", status: "pending", due_date: iso || undefined });
+      invoices.push({ invoice_no: `PUR-${no || fallback}`, party, amount, type: "payable", status: "pending", issue_date: iso || undefined, due_date: due });
     }
   }
   return { sales, invoices };
@@ -84,7 +115,8 @@ async function pushToCortex(table, rows) {
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || j.ok === false) { out.ok = false; out.error = j.error || `HTTP ${r.status}`; break; }
-    out.inserted += chunk.length;
+    out.inserted += Number(j.written ?? chunk.length);
+    if (j.skipped_no_key) out.skipped = (out.skipped || 0) + Number(j.skipped_no_key);
   }
   return out;
 }
@@ -92,7 +124,7 @@ async function pushToCortex(table, rows) {
 async function syncOnce() {
   const stamp = new Date().toLocaleString("en-IN");
   try {
-    process.stdout.write(`[${stamp}] Reading Tally at ${TALLY} … `);
+    process.stdout.write(`[${stamp}] Reading Tally at ${TALLY} (${FROM} → ${TO}) … `);
     const xml = await tallyRequest("Voucher Register");
     const { sales, invoices } = parseVouchers(xml);
     console.log(`${sales.length} sales, ${invoices.length} invoices`);
@@ -101,7 +133,7 @@ async function syncOnce() {
     const b = await pushToCortex("invoices", invoices);
 
     if (a.ok && b.ok) {
-      console.log(`[${stamp}] Pushed ${a.inserted} sales orders and ${b.inserted} invoices. Your Cortex dashboard will refresh automatically.`);
+      console.log(`[${stamp}] Synced ${a.inserted} sales orders and ${b.inserted} invoices (new or updated). Your Cortex dashboard will refresh automatically.`);
     } else {
       console.error(`[${stamp}] Push failed: ${a.error || b.error}`);
     }

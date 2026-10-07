@@ -132,11 +132,21 @@ Keep it running and syncing every 30 minutes:
 node scripts/tally-bridge.mjs --key=ck_your_key_here --watch --every=30
 ```
 
-Options: `--tally=http://localhost:9000`, `--cortex=https://cortex.mnbresearch.com`.
+Options: `--tally=http://localhost:9000`, `--cortex=https://cortex.mnbresearch.com`,
+`--from=2026-04-01 --to=2027-03-31` (default: the current financial year to date),
+`--credit-days=30` (sets each invoice's due date from its voucher date).
 
-The bridge reads the Voucher Register, converts sales and purchase vouchers into
-sales orders and invoices, and pushes them through `/api/v1/ingest`. Your KPIs
-recompute automatically on arrival.
+The bridge reads the Voucher Register for that date range, converts sales and
+purchase vouchers into sales orders and invoices, and pushes them through
+`/api/v1/ingest`. Your KPIs recompute automatically on arrival.
+
+**Re-running is safe** (needs migration `2026_zzzt_api_ingest_upsert.sql`): rows
+are matched on the voucher number and updated, not duplicated. Purchase vouchers
+are keyed `PUR-<number>` so they never collide with a sale of the same number.
+
+**What it does not know:** whether an invoice has been paid — Tally records that
+in Receipt vouchers, which the bridge does not read. Mark invoices paid in Cortex,
+or import an outstanding-bills report.
 
 ---
 

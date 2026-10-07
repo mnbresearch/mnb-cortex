@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient, hasSupabase, serviceClient } from "@/lib/supabase/server";
+import { hasSupabase, serviceClient } from "@/lib/supabase/server";
 import { recomputeQuietly } from "@/lib/metrics";
 
 export const runtime = "nodejs";
@@ -66,8 +66,16 @@ export async function POST(req: Request) {
     }
   }
 
-  const sb = await createClient();
-  const { data, error } = await sb.rpc("api_ingest", { p_key: key, p_table: table, p_rows: rows });
+  /*
+    SERVICE CLIENT, AFTER THE LIMITS ABOVE. api_ingest is granted to
+    service_role only (2026_zzzt): when anon could call it, anyone with the
+    public anon key could hit /rest/v1/rpc/api_ingest directly and skip both
+    the row cap and the rate limit. The function still authenticates on the
+    API key hash and scopes every write to that key's workspace.
+  */
+  const svc = serviceClient();
+  if (!svc) return NextResponse.json({ ok: false, error: "The API is not configured on this deployment (service role missing)." }, { status: 503 });
+  const { data, error } = await svc.rpc("api_ingest", { p_key: key, p_table: table, p_rows: rows });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
 
   // An invalid key used to come back inside a 200, so integrators never noticed

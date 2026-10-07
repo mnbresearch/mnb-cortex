@@ -17,7 +17,16 @@ import { envKey } from "@/lib/env";
  * Everything below is complete and will work the moment the two env vars exist.
  */
 
-const GRAPH = "https://graph.facebook.com/v21.0";
+/*
+  Graph API versions live two years. v21.0 expires 21 January 2027, after which
+  Meta silently runs calls on the oldest supported version — behaviour changes
+  with no error. v26.0 (July 2026) is current. The /messages and
+  /{phone-number-id} endpoints used here are unchanged across these versions.
+  scripts/test-integrations-honesty.mjs fails once a pinned version is within
+  120 days of its published expiry.
+*/
+export const GRAPH_VERSION = "v26.0";
+const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 export type WhatsAppConfig = { token: string; phoneNumberId: string };
 
@@ -89,8 +98,13 @@ export function whatsappCustomerHint(): string {
 
 /** E.164 without the plus, which is what the Graph API wants. Assumes India when no country code. */
 export function normalisePhone(raw: string): string | null {
-  const d = String(raw || "").replace(/\D/g, "");
+  let d = String(raw || "").replace(/\D/g, "");
   if (!d) return null;
+  /* "00" is the international dialling prefix ("0091 98765…"), not part of the number. */
+  if (d.startsWith("00")) d = d.slice(2);
+  /* Indian trunk prefix: "09876543210" is a 10-digit mobile with a leading 0.
+     It used to pass as an 11-digit international number and fail at Meta. */
+  if (d.length === 11 && d.startsWith("0") && /^[6-9]/.test(d.slice(1))) d = d.slice(1);
   if (d.length === 10 && /^[6-9]/.test(d)) return "91" + d;
   if (d.length >= 11 && d.length <= 15) return d;
   return null;
@@ -130,6 +144,8 @@ async function post(cfg: WhatsAppConfig, body: any): Promise<SendResult> {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.token}` },
       body: JSON.stringify({ messaging_product: "whatsapp", ...body }),
+      /* A hung send must not hold a collections run; an unanswered send is reported, not assumed. */
+      signal: AbortSignal.timeout(20_000),
     });
     const j = await r.json().catch(() => ({} as any));
     if (!r.ok) {
@@ -192,19 +208,21 @@ export async function sendTemplate(
  * check THOSE — not read anything back, and certainly not test a different
  * account than the one being connected.
  */
-export async function verifyWhatsAppCreds(cfg: WhatsAppConfig): Promise<{ ok: boolean; detail: string }> {
+export async function verifyWhatsAppCreds(cfg: WhatsAppConfig): Promise<{ ok: boolean; detail: string; unreachable?: boolean }> {
   if (!cfg.token || !cfg.phoneNumberId) {
     return { ok: false, detail: "Both the permanent access token and the phone number ID are required." };
   }
   try {
     const r = await fetch(`${GRAPH}/${cfg.phoneNumberId}?fields=display_phone_number,verified_name`, {
-      headers: { Authorization: `Bearer ${cfg.token}` },
+      headers: { Authorization: `Bearer ${cfg.token}` }, signal: AbortSignal.timeout(15_000),
     });
     const j = await r.json().catch(() => ({} as any));
+    /* Meta's own outage or rate limit says nothing about the token. */
+    if (r.status === 429 || r.status >= 500) return { ok: false, unreachable: true, detail: `Meta is not answering properly right now (${r.status}) — this says nothing about your token.` };
     if (!r.ok) return { ok: false, detail: j?.error?.message || `HTTP ${r.status}` };
     return { ok: true, detail: `Connected to ${j?.verified_name || "your business"} (${j?.display_phone_number || cfg.phoneNumberId})` };
   } catch (e: any) {
-    return { ok: false, detail: e?.message || "Could not reach the Meta Graph API." };
+    return { ok: false, unreachable: true, detail: e?.message || "Could not reach the Meta Graph API." };
   }
 }
 

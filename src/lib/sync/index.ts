@@ -75,6 +75,8 @@ type Connector = {
 };
 
 const money = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+/** Pages per provider per run — bounds one large account's share of the nightly cron. */
+const MAX_PAGES = 20;
 const day = (iso?: string) => (iso ? String(iso).slice(0, 10) : undefined);
 
 /* ------------------------------------------------------------------ Shopify */
@@ -92,11 +94,26 @@ const shopify: Connector = {
       A real Shopify domain is *.myshopify.com or a custom storefront domain;
       either way it is public, so assertPublicUrl costs nothing legitimate.
     */
-    const url = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/orders.json?status=any&limit=250&created_at_min=${encodeURIComponent(since)}`;
-    const r = await safeFetch(url, { headers: { "X-Shopify-Access-Token": c.api_key } });
-    if (!r.ok) throw new Error(`Shopify returned ${r.status}`);
-    const j = await r.json();
-    const orders: any[] = Array.isArray(j?.orders) ? j.orders : [];
+    /*
+      EVERY PAGE, NOT THE FIRST 250. Shopify paginates with a cursor in the Link
+      header; reading one page silently dropped everything after the 250th
+      order in the window and still reported success. Capped at MAX_PAGES so
+      one enormous store cannot eat the cron, and the cap is reported.
+    */
+    let url: string | null = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/orders.json?status=any&limit=250&created_at_min=${encodeURIComponent(since)}`;
+    const orders: any[] = [];
+    let pages = 0;
+    while (url && pages < MAX_PAGES) {
+      const r = await safeFetch(url, { headers: { "X-Shopify-Access-Token": c.api_key } });
+      if (!r.ok) throw new Error(`Shopify returned ${r.status}`);
+      const j = await r.json();
+      if (Array.isArray(j?.orders)) orders.push(...j.orders);
+      pages++;
+      const link = r.headers.get("link") || "";
+      const next = link.split(",").find((part) => /rel="next"/.test(part));
+      url = next ? (next.match(/<([^>]+)>/)?.[1] ?? null) : null;
+    }
+    const truncated = Boolean(url);
 
     return {
       sales: orders.map((o: any) => ({
@@ -104,7 +121,10 @@ const shopify: Connector = {
         customer_name: [o?.customer?.first_name, o?.customer?.last_name].filter(Boolean).join(" ") || o?.email || "Shopify customer",
         product: (o?.line_items || []).map((li: any) => li.title).slice(0, 3).join(", ") || null,
         amount: money(o.total_price),
-        status: o.cancelled_at ? "lost" : "won",
+        /* Won means paid. An unpaid or refunded order is not revenue: it was
+           all "won" before, so pending COD orders and refunds inflated sales. */
+        status: o.cancelled_at || ["refunded", "voided"].includes(String(o.financial_status)) ? "lost"
+          : ["paid", "partially_paid", "partially_refunded"].includes(String(o.financial_status)) ? "won" : "open",
         order_date: day(o.created_at),
       })),
       customers: orders
@@ -116,8 +136,10 @@ const shopify: Connector = {
           email: o.email || null,
           company: o?.customer?.default_address?.company || null,
           status: "active",
-          value: money(o.total_price),
+          /* No `value`: it was overwritten with the LAST order's total on every
+             sync. Customer value is the owner's figure; orders carry the money. */
         })),
+      note: truncated ? `Shopify has more than ${MAX_PAGES * 250} orders in this window; the oldest beyond that were not read this run and will be picked up as the window moves.` : undefined,
     };
   },
 };
@@ -130,12 +152,20 @@ const razorpay: Connector = {
     if (!c.key_id || !c.key_secret) throw new Error("Razorpay needs a key id and secret.");
     const from = Math.floor(new Date(since).getTime() / 1000);
     const auth = Buffer.from(`${c.key_id}:${c.key_secret}`).toString("base64");
-    const r = await fetch(`https://api.razorpay.com/v1/payments?count=100&from=${from}`, {
-      headers: { Authorization: `Basic ${auth}` },
-    });
-    if (!r.ok) throw new Error(`Razorpay returned ${r.status}`);
-    const j = await r.json();
-    const items: any[] = Array.isArray(j?.items) ? j.items : [];
+    /* Every page: Razorpay returns at most 100 per call; `skip` walks the rest. */
+    const items: any[] = [];
+    let skip = 0, pages = 0, more = true;
+    while (more && pages < MAX_PAGES) {
+      const r = await fetch(`https://api.razorpay.com/v1/payments?count=100&skip=${skip}&from=${from}`, {
+        headers: { Authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(20_000),
+      });
+      if (!r.ok) throw new Error(`Razorpay returned ${r.status}`);
+      const j = await r.json();
+      const got: any[] = Array.isArray(j?.items) ? j.items : [];
+      items.push(...got); pages++; skip += got.length;
+      more = got.length === 100;
+    }
+    const truncated = more;
 
     /*
       Razorpay reports amounts in paise — in the payment's own currency. It is
@@ -164,9 +194,10 @@ const razorpay: Connector = {
 
     return {
       invoices,
-      note: foreign.size
-        ? `Skipped payments in ${[...foreign].join(", ")} — Cortex books in INR only, and converting at a guessed rate would put a wrong number in your ledger.`
-        : undefined,
+      note: [
+        foreign.size ? `Skipped payments in ${[...foreign].join(", ")} — Cortex books in INR only, and converting at a guessed rate would put a wrong number in your ledger.` : "",
+        truncated ? `More than ${MAX_PAGES * 100} payments in this window; the rest are picked up on the next runs.` : "",
+      ].filter(Boolean).join(" ") || undefined,
     };
   },
 };
@@ -178,12 +209,21 @@ const stripe: Connector = {
   async pull(c, since) {
     if (!c.api_key) throw new Error("Stripe needs a secret key.");
     const from = Math.floor(new Date(since).getTime() / 1000);
-    const r = await fetch(`https://api.stripe.com/v1/charges?limit=100&created[gte]=${from}`, {
-      headers: { Authorization: `Bearer ${c.api_key}` },
-    });
-    if (!r.ok) throw new Error(`Stripe returned ${r.status}`);
-    const j = await r.json();
-    const items: any[] = Array.isArray(j?.data) ? j.data : [];
+    /* Every page: Stripe says has_more and pages with starting_after. */
+    const items: any[] = [];
+    let after = "", pages = 0, more = true;
+    while (more && pages < MAX_PAGES) {
+      const r = await fetch(`https://api.stripe.com/v1/charges?limit=100&created[gte]=${from}${after ? `&starting_after=${encodeURIComponent(after)}` : ""}`, {
+        headers: { Authorization: `Bearer ${c.api_key}` }, signal: AbortSignal.timeout(20_000),
+      });
+      if (!r.ok) throw new Error(`Stripe returned ${r.status}`);
+      const j = await r.json();
+      const got: any[] = Array.isArray(j?.data) ? j.data : [];
+      items.push(...got); pages++;
+      more = Boolean(j?.has_more) && got.length > 0;
+      after = got.length ? String(got[got.length - 1].id) : "";
+    }
+    const truncated = more;
 
     /*
       CURRENCY. Stripe reports minor units in the charge's OWN currency, and
@@ -199,7 +239,8 @@ const stripe: Connector = {
     */
     const foreign = new Set<string>();
     const invoices = items
-      .filter((p: any) => p.paid && !p.refunded)
+      /* Fully refunded → not revenue. Partly refunded → book what was kept, not the original amount. */
+      .filter((p: any) => p.paid && !p.refunded && money(p.amount) - money(p.amount_refunded) > 0)
       .filter((p: any) => {
         const cur = String(p.currency || "inr").toLowerCase();
         if (cur === "inr") return true;
@@ -209,7 +250,7 @@ const stripe: Connector = {
       .map((p: any) => ({
         invoice_no: `STR-${p.id}`,
         party: p.billing_details?.name || p.receipt_email || "Stripe payment",
-        amount: money(p.amount) / 100,
+        amount: (money(p.amount) - money(p.amount_refunded)) / 100,
         type: "receivable",
         status: "paid",
         due_date: day(new Date((p.created || 0) * 1000).toISOString()),
@@ -217,9 +258,10 @@ const stripe: Connector = {
 
     return {
       invoices,
-      note: foreign.size
-        ? `Skipped charges in ${[...foreign].join(", ")} — Cortex books in INR only, and converting at a guessed rate would put a wrong number in your ledger.`
-        : undefined,
+      note: [
+        foreign.size ? `Skipped charges in ${[...foreign].join(", ")} — Cortex books in INR only, and converting at a guessed rate would put a wrong number in your ledger.` : "",
+        truncated ? `More than ${MAX_PAGES * 100} charges in this window; the rest are picked up on the next runs.` : "",
+      ].filter(Boolean).join(" ") || undefined,
     };
   },
 };
@@ -240,7 +282,8 @@ const googleSheets: Connector = {
     */
     const r = await safeFetch(toCsvUrl(url), { headers: { "User-Agent": "MNBCortex" } });
     if (!r.ok) throw new Error(`Could not read the sheet (${r.status}). Make sure it's shared publicly.`);
-    const rows = parseCsv(await r.text()).slice(0, 1000);
+    const all = parseCsv(await r.text());
+    const rows = all.slice(0, 10_000);
 
     // Match on header name so the customer's own column titles work.
     const pick = (row: any, ...names: string[]) => {
@@ -251,12 +294,17 @@ const googleSheets: Connector = {
       return undefined;
     };
 
-    const sales = rows.map((row: any, i: number) => {
+    const sales = rows.map((row: any) => {
       const amount = money(String(pick(row, "amount", "total", "value") ?? "").replace(/[^0-9.-]/g, ""));
       if (!amount) return null;
+      /* A row with no order number is keyed by its CONTENT, not its position:
+         a row-number key overwrote the wrong order whenever the sheet was
+         sorted or a row inserted above. */
+      const cust = String(pick(row, "customer", "customername", "name", "party") ?? "Sheet row");
+      const dt = day(String(pick(row, "date", "orderdate") ?? "")) || "";
       return {
-        order_no: String(pick(row, "orderno", "order", "id") ?? `SHEET-${i + 1}`),
-        customer_name: String(pick(row, "customer", "customername", "name", "party") ?? "Sheet row"),
+        order_no: String(pick(row, "orderno", "order", "id") ?? `SHEET-${dt || "nodate"}-${cust}-${amount}`.replace(/\s+/g, "_").slice(0, 80)),
+        customer_name: cust,
         product: pick(row, "product", "item", "description") ?? null,
         amount,
         status: "won",
@@ -264,7 +312,7 @@ const googleSheets: Connector = {
       };
     });
 
-    return { sales: sales.filter(Boolean) as any[] };
+    return { sales: sales.filter(Boolean) as any[], note: all.length > rows.length ? `The sheet has ${all.length} rows; the first 10,000 were read.` : undefined };
   },
 };
 
@@ -370,7 +418,7 @@ async function upsert(svc: any, table: string, conflict: string, orgId: string, 
       const { error } = await svc.from(table).upsert(chunk, { onConflict: `org_id,${conflict}` });
       if (error) {
         const hint = error.code === "42P10"
-          ? ` — run the 2026_sync_conflict_fix.sql migration`
+          ? ` — run the 2026_upsert_arbiter_fix.sql migration`
           : "";
         throw new Error(`Writing ${table}: ${error.message}${hint}`);
       }
@@ -461,7 +509,10 @@ export async function syncAll(limit = 100, budget?: Budget): Promise<{ ran: numb
   if (!svc) return { ran: 0, ok: 0 };
   let ran = 0, ok = 0;
   try {
-    const { data } = await svc.from("integrations").select("org_id, provider").in("provider", SYNCABLE).limit(limit);
+    /* Longest-unsynced first: unordered, the same 100 rows could come back every
+       night and workspace 101 would never sync. */
+    const { data } = await svc.from("integrations").select("org_id, provider").in("provider", SYNCABLE)
+      .order("last_sync", { ascending: true, nullsFirst: true }).limit(limit);
     for (const row of ((data as any[]) || [])) {
       // A provider pull is an external HTTP call with no timeout of its own:
       // budget generously and stop rather than risk the whole run.

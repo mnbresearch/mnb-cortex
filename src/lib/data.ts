@@ -74,14 +74,16 @@ export async function getIntegrationState() {
   try {
     const sb = await createClient();
     const [{ data: rows }, { data: org }, { data: mem }] = await Promise.all([
-      sb.from("integrations").select("provider,status,config").eq("org_id", orgId),
+      /* last_sync / last_error: the sync writes both, and without reading them a
+         sync failing every night, or a skip note, never reached the page. */
+      sb.from("integrations").select("provider,status,config,last_sync,last_error").eq("org_id", orgId),
       sb.from("organizations").select("plan").eq("id", orgId).single(),
       sb.from("memberships").select("role").eq("user_id", user.id).eq("org_id", orgId).single(),
     ]);
     const RANK: Record<string, number> = { viewer: 1, analyst: 2, manager: 3, admin: 4, owner: 5 };
     const canManage = (RANK[(mem as any)?.role] || 0) >= RANK.admin;
     return {
-      connections: ((rows as any[]) || []).map((r) => ({ provider: r.provider, status: r.status, config: r.config || {} })),
+      connections: ((rows as any[]) || []).map((r) => ({ provider: r.provider, status: r.status, config: r.config || {}, lastSync: r.last_sync ?? null, lastError: r.last_error ?? null })),
       plan: ((org as any)?.plan || "starter").toLowerCase(),
       canManage, live: true, encryption,
     };

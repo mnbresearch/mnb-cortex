@@ -9,7 +9,7 @@ import { badgeFor } from "@/lib/integration-status";
 import { Plug, Check, Lock, Loader2, X, ExternalLink, ShieldCheck, Search, Zap } from "lucide-react";
 import Link from "next/link";
 
-type Conn = { provider: string; status: string; config: any };
+type Conn = { provider: string; status: string; config: any; lastSync?: string | null; lastError?: string | null };
 
 async function call(op: string, id: string, credentials?: Record<string, string>) {
   const r = await fetch("/api/integrations", {
@@ -247,6 +247,14 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
                     )}
                     <Button variant="ghost" size="sm" onClick={() => disconnect(i.id)}>Disconnect</Button>
                   </div>
+                  {/* What the last sync did. Written by lib/sync on every run and
+                      never shown before — a sync failing every night looked healthy. */}
+                  {SYNCABLE.includes(i.id) && (
+                    <p className={`text-[11px] ${conn.lastError ? "text-warning" : "text-muted-foreground"}`} role={conn.lastError ? "status" : undefined}>
+                      {conn.lastSync ? `Last synced ${new Date(conn.lastSync).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}` : "Not synced yet — it runs nightly, or press Sync now."}
+                      {conn.lastError ? ` · ${conn.lastError}` : ""}
+                    </p>
+                  )}
                   {SYNCABLE.includes(i.id) ? (
                     <Button size="sm" className="w-full" onClick={() => syncNow(i.id)} disabled={syncing === i.id}>
                       {syncing === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />} Sync data now

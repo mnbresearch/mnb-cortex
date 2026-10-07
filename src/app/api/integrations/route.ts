@@ -66,15 +66,37 @@ async function guard() {
  * recorded the second as the first. See lib/integration-status.ts.
  */
 async function testCredentials(id: string, c: Record<string, string>): Promise<{ ok: boolean; verified: boolean; message: string; unreachable?: boolean }> {
-  const j = (r: Response, okMsg: string) => r.ok
-    ? { ok: true, verified: true, message: okMsg }
-    : { ok: false, verified: true, message: `Provider rejected the credentials (${r.status})` };
+  /*
+    WHAT A STATUS CODE ACTUALLY SAYS ABOUT A CREDENTIAL.
+      2xx            → accepted
+      401 / 403      → rejected: the key is wrong, revoked or lacks scope
+      429 / 5xx      → we learned NOTHING about the key (rate limit, outage);
+                       reported as unreachable so the last real verdict stands
+      anything else  → rejected, with the code shown
+    Every non-2xx used to read "Provider rejected the credentials", so a
+    provider's bad afternoon told the customer to go and regenerate a good key.
+  */
+  const j = (r: Response, okMsg: string) => {
+    if (r.ok) return { ok: true, verified: true, message: okMsg };
+    if (r.status === 429 || r.status >= 500) return { ok: false, verified: false, unreachable: true, message: `The provider is not answering properly right now (${r.status}). This says nothing about your credentials — try again shortly.` };
+    return { ok: false, verified: true, message: `Provider rejected the credentials (${r.status})` };
+  };
+  /* Every probe is bounded: an unanswered provider must not hold the request until the platform kills it. */
+  const fetch = (u: string, init: RequestInit = {}) => globalThis.fetch(u, { ...init, signal: AbortSignal.timeout(15_000) });
   try {
     switch (id) {
       case "stripe": return j(await fetch("https://api.stripe.com/v1/balance", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Stripe");
-      case "resend": return j(await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Resend");
+      case "resend": {
+        /* /domains needs a full-access key. A sending-only key — the kind Resend
+           recommends for exactly this use — answers 401 "restricted_api_key",
+           which means the key IS valid, just scoped to sending. */
+        const r = await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${c.api_key}` } });
+        if (r.status === 401 && /restricted_api_key/i.test(await r.clone().text().catch(() => ""))) return { ok: true, verified: true, message: "Connected to Resend (sending-only key)" };
+        return j(r, "Connected to Resend");
+      }
       case "hubspot": return j(await fetch("https://api.hubapi.com/crm/v3/objects/contacts?limit=1", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to HubSpot");
-      case "pipedrive": return j(await fetch(`https://api.pipedrive.com/v1/users/me?api_token=${encodeURIComponent(c.api_key)}`), "Connected to Pipedrive");
+      /* Header, not query string: a token in a URL ends up in proxy and provider logs. */
+      case "pipedrive": return j(await fetch("https://api.pipedrive.com/v1/users/me", { headers: { "x-api-token": c.api_key } }), "Connected to Pipedrive");
       case "notion": return j(await fetch("https://api.notion.com/v1/users/me", { headers: { Authorization: `Bearer ${c.api_key}`, "Notion-Version": "2022-06-28" } }), "Connected to Notion");
       case "airtable": return j(await fetch("https://api.airtable.com/v0/meta/bases", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Airtable");
       case "telegram": return j(await fetch(`https://api.telegram.org/bot${c.bot_token}/getMe`), "Connected to Telegram");
@@ -90,7 +112,8 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
          same API version, or "Connected to Shopify" can pass against a version
          the sync does not use. Both were independently pinned to 2024-01, which
          Shopify stopped serving in early 2025. */
-      case "shopify": return j(await safeFetch(`https://${c.shop}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, { headers: { "X-Shopify-Access-Token": c.api_key } }), "Connected to Shopify");
+      /* Same normalisation as the sync: people paste "https://acme.myshopify.com/". */
+      case "shopify": return j(await safeFetch(`https://${String(c.shop || "").replace(/^https?:\/\//i, "").replace(/\/.*$/, "")}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, { headers: { "X-Shopify-Access-Token": c.api_key } }), "Connected to Shopify");
       case "razorpay": {
         const auth = Buffer.from(`${c.key_id}:${c.key_secret}`).toString("base64");
         return j(await fetch("https://api.razorpay.com/v1/payments?count=1", { headers: { Authorization: `Basic ${auth}` } }), "Connected to Razorpay");
@@ -104,7 +127,11 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
           throw e;
         }
       }
-      case "zoho_books": return j(await fetch(`https://www.zohoapis.in/books/v3/organizations`, { headers: { Authorization: `Zoho-oauthtoken ${c.api_key}` } }), "Connected to Zoho Books");
+      /* Zoho runs separate data centres; a .com or .eu account is not a bad key just because India was asked. */
+      case "zoho_books": {
+        const dc = ["in", "com", "eu", "com.au", "jp", "ca", "sa"].includes(String(c.data_center || "in")) ? String(c.data_center || "in") : "in";
+        return j(await fetch(`https://www.zohoapis.${dc}/books/v3/organizations`, { headers: { Authorization: `Zoho-oauthtoken ${c.api_key}` } }), `Connected to Zoho Books (zohoapis.${dc})`);
+      }
       case "sendgrid": return j(await fetch("https://api.sendgrid.com/v3/user/profile", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to SendGrid");
       case "brevo": return j(await fetch("https://api.brevo.com/v3/account", { headers: { "api-key": c.api_key } }), "Connected to Brevo");
       case "calendly": return j(await fetch("https://api.calendly.com/users/me", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to Calendly");
@@ -131,7 +158,7 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
           token: String(c.api_key || c.token || "").trim(),
           phoneNumberId: String(c.phone_number_id || "").trim(),
         });
-        return { ok: r.ok, verified: true, message: r.detail };
+        return r.unreachable ? { ok: false, verified: false, unreachable: true, message: r.detail } : { ok: r.ok, verified: true, message: r.detail };
       }
       /*
         BYO AI keys. Tests each key the workspace supplied with ONE real,
@@ -267,6 +294,17 @@ export async function POST(req: Request) {
 
       // Verify before saving so we never store known-bad credentials.
       const test = await testCredentials(id, creds);
+      /*
+        …AND ACTUALLY DON'T. This used to save the credential anyway and return
+        ok:true, so the UI showed "Provider rejected the credentials" in GREEN
+        and reloaded into a connected card — while the page promised bad keys
+        are rejected rather than silently stored. A real "no" from the provider
+        now stores nothing. An outage (unreachable) still saves, marked
+        unverified, because that tells us nothing about the key.
+      */
+      if (test.verified && !test.ok) {
+        return NextResponse.json({ ok: false, error: `${test.message}. Nothing was saved — check the value and try again.` }, { status: 200 });
+      }
 
       const encrypted = encryptSecret(JSON.stringify(creds));
       // Only non-secret fields are kept readable, for display.

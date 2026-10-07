@@ -12,6 +12,10 @@ export const RELEASES: Release[] = [
     "Exports, customer pages and the MIS pack now read every row in large workspaces instead of stopping at the first thousand",
     "Excel understands Indian number formats — amounts like 1,20,000 or ₹45,000 filter, sort and total correctly",
     "Chat is steadier — it no longer gives up when a model cannot use tools, and you are not charged when no answer comes back",
+    "Integrations tell the truth — a key the provider rejects is no longer saved, a provider outage is no longer reported as a bad key, and each connector says exactly what it does",
+    "Shopify, Razorpay and Stripe syncs now read every page instead of the first 100–250 records, only paid Shopify orders count as sales, and each card shows when it last synced and any problem",
+    "The Tally bridge and the public API can safely re-send data — rows update instead of failing as duplicates, and order dates are kept",
+    "Send collections reminders from your own domain through Resend, and WhatsApp numbers written with a leading 0 now work",
   ] },
   { v: "6.41.0", date: "Earlier", items: [
     "Cortex can now act — ask in chat to mark an invoice paid, move a due date, send a reminder, stop chasing a party, note something on a customer, or export a workbook; each becomes a proposal on the new Approvals page that runs only when you approve it, or on its own within rules you set per action (daily count, rupee ceiling, known parties only)",

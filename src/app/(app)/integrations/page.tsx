@@ -42,7 +42,7 @@ export default async function Integrations() {
             <p className="flex items-start gap-2"><ShieldCheck className="h-4 w-4 text-success mt-0.5 shrink-0" /><span><b className="text-foreground">Encrypted at rest.</b> Every secret is encrypted with AES-256-GCM before it reaches the database. The database never sees a plaintext key.</span></p>
             <p className="flex items-start gap-2"><ShieldCheck className="h-4 w-4 text-success mt-0.5 shrink-0" /><span><b className="text-foreground">Never returned to the browser.</b> After saving, only a masked hint (e.g. <span className="font-mono">sk_••••••a4f2</span>) is shown. Decryption happens server-side, only when calling that provider.</span></p>
             <p className="flex items-start gap-2"><ShieldCheck className="h-4 w-4 text-success mt-0.5 shrink-0" /><span><b className="text-foreground">Admin-only and workspace-isolated.</b> Only workspace admins and owners can add or remove integrations, and row-level security keeps each workspace's credentials separate.</span></p>
-            <p className="flex items-start gap-2"><ShieldCheck className="h-4 w-4 text-success mt-0.5 shrink-0" /><span><b className="text-foreground">Verified before saving.</b> We call the provider first — bad keys are rejected rather than silently stored.</span></p>
+            <p className="flex items-start gap-2"><ShieldCheck className="h-4 w-4 text-success mt-0.5 shrink-0" /><span><b className="text-foreground">Verified before saving, where the provider allows it.</b> For providers with a live check, we call the provider first — a key it rejects is not stored. Providers without a check are stored and marked "Saved", not "Live".</span></p>
           </div>
         </Section>
 
@@ -62,7 +62,7 @@ export default async function Integrations() {
               </Card>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground mt-3">Need something not listed? <Link href="/pricing" className="text-primary">Talk to us</Link> — custom connectors are available on Enterprise.</p>
+          <p className="text-xs text-muted-foreground mt-3">Connecting a tool stores its credential securely. Today Cortex pulls data in from Shopify, Razorpay, Stripe and Google Sheets every night, sends through WhatsApp Business and your own AI provider, and can email from your Resend domain; the rest are stored for the connectors that follow. Need something not listed? <Link href="/pricing" className="text-primary">Talk to us</Link> — custom connectors are available on Enterprise.</p>
         </Section>
       </PageShell>
     </>

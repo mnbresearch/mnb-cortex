@@ -151,9 +151,10 @@ export const INTEGRATIONS: Integration[] = [
     ] },
 
   // ---- Accounting & Finance ----
-  { id: "zoho_books", name: "Zoho Books", category: "Accounting & Finance", desc: "Store your Zoho Books OAuth token", minPlan: "growth", testable: true,
+  { id: "zoho_books", name: "Zoho Books", category: "Accounting & Finance", desc: "Verifies and stores your Zoho Books token. Not synced yet — Zoho tokens expire in about an hour", minPlan: "growth", testable: true,
     docs: "https://www.zoho.com/books/api/v3/",
-    fields: [KEY("OAuth token", "1000.xxxx"), { key: "organization_id", label: "Organization ID", type: "text", placeholder: "60xxxxxxx", required: true }] },
+    fields: [KEY("OAuth token", "1000.xxxx"), { key: "organization_id", label: "Organization ID", type: "text", placeholder: "60xxxxxxx", required: true },
+      { key: "data_center", label: "Data centre (in, com, eu, com.au, jp, ca, sa)", type: "text", placeholder: "in" }] },
   { id: "tally", name: "Tally", category: "Accounting & Finance", desc: "Endpoint for the Tally bridge — pushes from your PC", minPlan: "growth",
     fields: [{ key: "endpoint", label: "Tally endpoint URL", type: "text", placeholder: "http://localhost:9000", required: true, help: "Enable ODBC/HTTP in Tally Prime" }] },
   { id: "quickbooks", name: "QuickBooks", category: "Accounting & Finance", desc: "Store your QuickBooks access token", minPlan: "premium",
@@ -184,17 +185,20 @@ export const INTEGRATIONS: Integration[] = [
     docs: "https://developers.pipedrive.com/docs/api/v1", fields: [KEY("API token")] },
 
   // ---- Communication ----
-  { id: "slack", name: "Slack", category: "Communication", desc: "Alerts and daily briefs to a channel", minPlan: "starter", testable: true,
+  { id: "slack", name: "Slack", category: "Communication", desc: "Verifies a channel webhook with a test message and stores it. Alerts are delivered by email today", minPlan: "starter", testable: true,
     docs: "https://api.slack.com/messaging/webhooks",
     fields: [{ key: "webhook_url", label: "Incoming webhook URL", type: "password", placeholder: "https://hooks.slack.com/services/…", required: true }] },
   { id: "whatsapp", name: "WhatsApp Business", category: "Communication", desc: "Campaigns, reminders and broadcasts", minPlan: "growth", testable: true,
     docs: "https://developers.facebook.com/docs/whatsapp/cloud-api",
     fields: [KEY("Permanent access token"), { key: "phone_number_id", label: "Phone number ID", type: "text", required: true }] },
-  { id: "resend", name: "Resend", category: "Communication", desc: "Transactional email delivery", minPlan: "starter", testable: true,
-    docs: "https://resend.com/docs", fields: [KEY("API key", "re_…")] },
+  { id: "resend", name: "Resend", category: "Communication", desc: "Send collections reminders from your own domain", minPlan: "starter", testable: true,
+    docs: "https://resend.com/docs", fields: [KEY("API key", "re_…"),
+      /* Collections reads this (lib/collections) — without the field the setup
+         guide's instruction to enter it could never be followed. */
+      { key: "from_email", label: "Send from (an address on a domain verified in Resend)", type: "text", placeholder: "accounts@yourcompany.com" }] },
   { id: "twilio", name: "Twilio", category: "Communication", desc: "SMS and voice notifications", minPlan: "premium",
     fields: [{ key: "account_sid", label: "Account SID", type: "text", required: true }, { key: "auth_token", label: "Auth token", type: "password", required: true }] },
-  { id: "telegram", name: "Telegram", category: "Communication", desc: "Bot alerts to a chat or group", minPlan: "starter", testable: true,
+  { id: "telegram", name: "Telegram", category: "Communication", desc: "Verifies and stores a bot token and chat. Alerts are delivered by email today", minPlan: "starter", testable: true,
     docs: "https://core.telegram.org/bots/api",
     fields: [{ key: "bot_token", label: "Bot token", type: "password", required: true }, { key: "chat_id", label: "Chat ID", type: "text", required: true }] },
 
@@ -218,11 +222,11 @@ export const INTEGRATIONS: Integration[] = [
     fields: [KEY("Developer token"), { key: "customer_id", label: "Customer ID", type: "text", required: true }] },
 
   // ---- Data & Automation ----
-  { id: "webhook", name: "Custom Webhook", category: "Data & Automation", desc: "Push Cortex events to any URL", minPlan: "growth",
+  { id: "webhook", name: "Custom Webhook", category: "Data & Automation", desc: "Stores a URL. For live Cortex events, add it under Developers → Webhooks", minPlan: "growth",
     fields: [{ key: "url", label: "Destination URL", type: "text", placeholder: "https://your-app.com/hook", required: true }, { key: "secret", label: "Signing secret (optional)", type: "password" }] },
-  { id: "zapier", name: "Zapier", category: "Data & Automation", desc: "Connect 6,000+ apps", minPlan: "growth",
+  { id: "zapier", name: "Zapier", category: "Data & Automation", desc: "Stores your hook URL. To trigger Zaps from Cortex events, add it under Developers → Webhooks", minPlan: "growth",
     fields: [{ key: "webhook_url", label: "Zapier hook URL", type: "password", required: true }] },
-  { id: "openai", name: "OpenAI", category: "Data & Automation", desc: "Use your own model key for AI features", minPlan: "premium", testable: true,
+  { id: "openai", name: "OpenAI", category: "Data & Automation", desc: "Verifies and stores a key. To run Cortex's AI on your own key, use “Your own AI provider”", minPlan: "premium", testable: true,
     docs: "https://platform.openai.com/docs/api-reference", fields: [KEY("API key", "sk-…")] },
   { id: "postgres", name: "External Postgres", category: "Data & Automation", desc: "Read from your own database", minPlan: "enterprise",
     fields: [{ key: "connection_string", label: "Connection string", type: "password", placeholder: "postgres://user:pass@host/db", required: true }] },
@@ -275,8 +279,8 @@ export const INTEGRATIONS: Integration[] = [
   { id: "x_twitter", name: "X (Twitter)", category: "Social & Content", desc: "Posts & analytics", minPlan: "premium", fields: [KEY("Bearer token")] },
 
   // ---- Automation ----
-  { id: "make", name: "Make (Integromat)", category: "Data & Automation", desc: "Visual automation flows", minPlan: "growth", fields: [{ key: "webhook_url", label: "Webhook URL", type: "password", required: true }] },
-  { id: "n8n", name: "n8n", category: "Data & Automation", desc: "Open-source workflow automation", minPlan: "growth", fields: [{ key: "webhook_url", label: "Webhook URL", type: "password", required: true }] },
+  { id: "make", name: "Make (Integromat)", category: "Data & Automation", desc: "Stores your webhook URL. To trigger scenarios from Cortex events, add it under Developers → Webhooks", minPlan: "growth", fields: [{ key: "webhook_url", label: "Webhook URL", type: "password", required: true }] },
+  { id: "n8n", name: "n8n", category: "Data & Automation", desc: "Stores your webhook URL. To trigger workflows from Cortex events, add it under Developers → Webhooks", minPlan: "growth", fields: [{ key: "webhook_url", label: "Webhook URL", type: "password", required: true }] },
 
   // ---- Catch-all: store a key for ANY tool ----
   { id: "custom", name: "Custom API key", category: "Data & Automation", desc: "Securely store a key for any other tool", minPlan: "starter",
