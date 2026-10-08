@@ -1,4 +1,4 @@
-export const APP_VERSION = "6.42.0";
+export const APP_VERSION = "6.43.0";
 /*
   …88480. The public footer, the contact page, the privacy, terms and refund
   pages all publish …88480; this default was …88481, so the pricing modal's

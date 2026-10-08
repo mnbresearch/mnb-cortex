@@ -5,7 +5,17 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "6.42.0", date: "Latest", items: [
+  { v: "6.43.0", date: "Latest", items: [
+    "Two-step sign-in — turn on an authenticator app under Settings → Security; approving anything that changes money records or messages a customer, letting such actions run on their own, issuing API keys, adding webhooks and connecting integrations then need your 6-digit code",
+    "Every approval is signed over exactly what you approved — if the details change before it runs, it does not run",
+    "Emailed decision links can still reject anything, but actions that touch money or contact someone outside your team are approved in the app",
+    "The assistant never moves money or messages anyone on its own — even under an auto rule, anything it suggests of that kind waits for your tap",
+    "Protection against planted instructions — text in bank statements, invoices, store data or imports that tries to instruct the AI is withheld from it, flagged to you, and can never make an action run unasked",
+    "Bank statement and GST figures must be printed in the document and add up — a statement that does not reconcile to its closing balance is shown but not saved to your dashboard, and you are not charged",
+    "AI privacy — customer, supplier and employee names, phone numbers, emails, PAN, GSTIN, Aadhaar and account numbers are replaced with placeholders before anything is sent to an AI provider, and put back in the answer; Strict mode hides amounts too",
+    "Read-only connections — Stripe now takes a restricted read-only key and Shopify a read-only token; keys that could refund, pay out or edit your store are refused",
+  ] },
+  { v: "6.42.0", date: "Earlier", items: [
     "Cortex earns autonomy — when you keep approving the same kind of action and never reject or undo it, Approvals offers to let Cortex do it on its own, with limits taken from what you actually approved",
     "Your monthly MIS pack by email — schedule it under Reports and the workbook arrives as an .xlsx attachment, built from your own records",
     "Safer actions — only people with the right role can run or approve an action, and things suggested in chat wait for your tap unless you have set a rule for them",

@@ -133,7 +133,7 @@ check("generateFor passes a per-mode profile", /runCortex\(\[\{ role: "user", co
   unrelated parameter appears next to it.
 */
 check("runOnce receives it", /runOnce\(provider: string, messages: Msg\[\], context: string, profile: GenProfile/.test(CORTEX));
-check("…and the profile is still passed at the call site", /runOnce\(provider, messages, context2, profile/.test(CORTEX));
+check("…and the profile is still passed at the call site", /runOnce\(provider, (?:messages|outbound), context2, profile/.test(CORTEX));   // outbound = the DLP-redacted messages
 check("the Gemini body uses it", /generationConfig\(profile, \{ temperature/.test(CORTEX));
 check("thinkingConfig carries the profile's budget", /thinkingBudget: profile\.thinkingBudget/.test(SRC));
 
