@@ -620,7 +620,16 @@ async function generationGate(kind: "image" | "video"): Promise<ImageGate> {
       .select("id", { count: "exact", head: true })
       .eq("org_id", counterOrgId).like("reason", `ai:agent_${kind}%`).gte("created_at", since);
     if (cErr) throw cErr;
-    const used = count || 0;
+    /*
+      A REFUNDED ATTEMPT IS NOT A USE. A video Veo refused (and that was
+      refunded) still counted against the weekly allowance, so two failures
+      could cost a Watch Pro workspace a tenth of its week. Refunds are written
+      as refund:agent_<kind>[...]; subtract them in the same window.
+    */
+    const { count: refunds } = await svc.from("credit_ledger")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", counterOrgId).like("reason", `refund:agent_${kind}%`).gte("created_at", since);
+    const used = Math.max(0, (count || 0) - (refunds || 0));
     if (used >= limit) {
       return {
         allowed: false, used, limit, plan, active: true,

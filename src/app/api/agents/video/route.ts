@@ -4,6 +4,8 @@ import { creditDenial, requireWorkspace } from "@/lib/api-guard";
 import { chargeForMode, refundIfCharged, videoGenGate } from "@/lib/credits";
 import { startVideo, pollVideo, fetchVideo, hasVideoProvider } from "@/lib/ai/video";
 import { buildVideoPrompt } from "@/lib/ai/visual-prompts";
+import { usingOwnKey, loadOrgAiKeys, enterOrgAiKeys } from "@/lib/ai/byo";
+import { createMedia, jobByOperation, settleVideoJob } from "@/lib/media";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,15 +75,19 @@ export async function POST(req: Request) {
     brief into a directed single-take shot, styled by the workspace's industry.
   */
   const aspect: "16:9" | "9:16" = b.aspect === "9:16" ? "9:16" : "16:9";
+  /* A reference photo is optional; anything that is not a small image data URL is ignored rather than sent. */
+  const image = typeof b.image === "string" && /^data:image\/(png|jpe?g|webp);base64,/.test(b.image) && b.image.length < 5_000_000 ? b.image : undefined;
+  const style: "film" | "ugc" = b.style === "ugc" ? "ugc" : "film";
   const orgProfile = await getOrgProfile().catch(() => null);
   const directed = buildVideoPrompt({
     brief: prompt,
     industry: (orgProfile as any)?.industry,
     aspect,
-    hasInputImage: Boolean(b.image),
+    hasInputImage: Boolean(image),
+    style,
   });
 
-  const started = await startVideo(directed, b.image ? String(b.image) : undefined, aspect);
+  const started = await startVideo(directed, image, aspect);
 
   if (!started.ok) {
     // Nothing was generated — never bill for it.
@@ -89,9 +95,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: started.error }, { status: 200 });
   }
 
+  /*
+    THE JOB IS RECORDED, so it can be settled — and refunded if Veo fails
+    later — whether or not this browser tab is still open. Before 2026_zzzv the
+    table is missing and the job is browser-only, as it was before.
+  */
+  const job = await createMedia({
+    org_id: auth.orgId, user_id: auth.userId ?? null, kind: "video",
+    agent_id: typeof b.agentId === "string" ? b.agentId.slice(0, 80) : null,
+    title: typeof b.title === "string" ? b.title.slice(0, 120) : null,
+    prompt: prompt.slice(0, 2000), aspect, status: "running", operation: started.operation,
+    cost: gate.enforced ? gate.cost : 0, charged: Boolean(gate.ok && gate.enforced), byo: usingOwnKey(),
+  });
+
   return NextResponse.json({
     ok: true,
     operation: started.operation,
+    mediaId: job.id,
     model: started.model,
     charged: gate.enforced ? gate.cost : 0,
     balance: gate.balance,
@@ -106,12 +126,27 @@ export async function GET(req: Request) {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return NextResponse.json({ ok: false, error: "Sign in to use this feature." }, { status: 401 });
 
+  /*
+    THE WORKSPACE'S OWN KEY. A job submitted on a workspace's Google key lives
+    in that Google project; polling or downloading it with ours fails. The
+    keys are loaded here exactly as chargeForMode loads them for the submit.
+  */
+  enterOrgAiKeys(await loadOrgAiKeys(orgId));   // both never throw: on any failure this is the platform key
+
   const url = new URL(req.url);
   const file = url.searchParams.get("file");
   const op = url.searchParams.get("op");
 
   // Proxy the finished file so the API key never reaches the browser.
   if (file) {
+    /* Only a file this workspace's own job produced. */
+    const svc = (await import("@/lib/supabase/server")).serviceClient();
+    if (svc) {
+      const { data, error } = await svc.from("media_assets").select("id").eq("org_id", orgId).eq("result_uri", file).limit(1);
+      const { isMissingTable } = await import("@/lib/media");
+      if (!error && !(data as any[])?.length) return NextResponse.json({ ok: false, error: "Not found." }, { status: 404 });
+      if (error && !isMissingTable(error)) return NextResponse.json({ ok: false, error: "Could not check access." }, { status: 500 });
+    }
     const upstream = await fetchVideo(file);
     if (!upstream || !upstream.ok || !upstream.body) {
       return NextResponse.json({ ok: false, error: "Could not fetch the video." }, { status: 502 });
@@ -125,6 +160,16 @@ export async function GET(req: Request) {
   }
 
   if (!op) return NextResponse.json({ ok: false, error: "Missing operation id." }, { status: 400 });
+
+  const job = await jobByOperation(orgId, op);
+  if (job.row) {
+    const s = await settleVideoJob(job.row, pollVideo, fetchVideo);
+    if (s.state === "running") return NextResponse.json({ ok: true, state: "running" });
+    if (s.state === "done") return NextResponse.json({ ok: true, state: "done", url: s.url, mediaId: s.mediaId });
+    return NextResponse.json({ ok: false, state: "error", error: `${s.error}${s.refunded ? " Your credits have been refunded." : ""}`, refunded: s.refunded });
+  }
+  /* Not this workspace's job. Only before the migration (no table) do we fall back to polling blind. */
+  if (!job.missing) return NextResponse.json({ ok: false, state: "error", error: "That video job was not found in this workspace." }, { status: 404 });
 
   const status = await pollVideo(op);
   if (status.state === "done") {

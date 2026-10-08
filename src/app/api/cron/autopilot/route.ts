@@ -80,6 +80,15 @@ export async function GET(req: Request) {
     proposalsExpired = await expireStale();
   } catch { /* 2026_zzzr_actions.sql not applied yet — the health probe reports it */ }
 
+  // 1a-ii. Video jobs nobody waited for: finish them into the library, or
+  //        refund them. Cheap (a status GET each) and placed early because a
+  //        refund owed is money the customer is waiting for.
+  let media: any = null;
+  try {
+    const { sweepVideoJobs } = await import("@/lib/media-sweep");
+    media = await sweepVideoJobs(budget.slice(SHARE.media));
+  } catch (e: any) { media = { error: e?.message }; }
+
   // 1b. Renewal reminders. Runs AFTER the expiry sweep so a plan that lapsed
   //     today gets its "your plan has ended" note on the same run. Each notice
   //     is claimed in renewal_notices before sending, so it goes out exactly
@@ -632,7 +641,7 @@ export async function GET(req: Request) {
     console.error("[cron] coverage alert —", e?.message);
   }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, proposalsExpired, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, decisionsEmailed, collectionsSent, coverage,
+  return NextResponse.json({ ok: true, ran, skipped, expired, proposalsExpired, media, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, decisionsEmailed, collectionsSent, coverage,
     /*
       How long the run took and whether it finished with room to spare. If
       `budget_left_ms` trends towards zero, the caps in lib/cron-budget.ts need

@@ -67,8 +67,10 @@ export async function startVideo(prompt: string, imageDataUrl?: string, aspect: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instances: [instance],
-          parameters: veoParameters(aspect),
+          parameters: veoParameters(aspect, Boolean(instance.image)),
         }),
+        // Bounded: the route has 60s, and a refund only runs if we live to reach it.
+        signal: AbortSignal.timeout(45_000),
       });
       const j = await r.json().catch(() => ({}));
       if (r.ok && j?.name) return { ok: true, operation: j.name, model };
@@ -104,7 +106,7 @@ export async function pollVideo(operation: string): Promise<VideoStatus> {
   }
 
   try {
-    const r = await fetch(`${API}/${operation}?key=${encodeURIComponent(k)}`);
+    const r = await fetch(`${API}/${operation}?key=${encodeURIComponent(k)}`, { signal: AbortSignal.timeout(20_000) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) return { state: "error", error: j?.error?.message || `HTTP ${r.status}` };
     if (!j?.done) return { state: "running" };
@@ -144,7 +146,7 @@ export async function fetchVideo(uri: string): Promise<Response | null> {
   if (!/^https:\/\/generativelanguage\.googleapis\.com\/v1(?:beta)?\/files\/[A-Za-z0-9_.:%-]+(?:\/[A-Za-z0-9_.:%-]+)?(?::download)?(?:\?|$)/.test(uri)) return null;
   const sep = uri.includes("?") ? "&" : "?";
   try {
-    return await fetch(`${uri}${sep}key=${encodeURIComponent(k)}`);
+    return await fetch(`${uri}${sep}key=${encodeURIComponent(k)}`, { signal: AbortSignal.timeout(45_000) });
   } catch {
     return null;
   }

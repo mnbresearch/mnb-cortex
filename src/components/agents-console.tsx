@@ -3,7 +3,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { INDUSTRIES, DEPARTMENTS, agentsForIndustry, agentsForDepartment, findAgent, type Agent } from "@/lib/agents/catalog";
-import { Sparkles, Play, Download, Copy, Check, Loader2, RefreshCw, ChevronLeft, WandSparkles, Image as ImageIcon, Video, Upload, ArrowRight } from "lucide-react";
+import { Sparkles, Play, Download, Copy, Check, Loader2, RefreshCw, ChevronLeft, WandSparkles, Image as ImageIcon, Video, Upload, ArrowRight, Trash2 } from "lucide-react";
+
+type MediaItem = { id: string; kind: "image" | "video"; status: "running" | "done" | "failed"; title: string | null; agentId: string | null; aspect: string | null; createdAt: string; operation: string | null; url: string | null; mime: string | null };
+const VIDEO_ASPECTS = [{ v: "16:9", label: "Landscape 16:9" }, { v: "9:16", label: "Vertical 9:16 (Reels, Shorts)" }] as const;
+const IMAGE_ASPECTS = [{ v: "1:1", label: "Square 1:1" }, { v: "4:5", label: "Portrait 4:5 (feed)" }, { v: "9:16", label: "Story 9:16" }, { v: "16:9", label: "Banner 16:9" }] as const;
+const MAX_UPLOAD = 3_500_000;
 
 const kindBadge: Record<string, { label: string; cls: string }> = {
   reasoning: { label: "Text", cls: "bg-primary/10 text-primary" },
@@ -48,6 +53,30 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
   */
   const [improved, setImproved] = useState("");
   const [improveKey, setImproveKey] = useState("");
+  /* Shape of the output — sent to the model as a setting, not as words. */
+  const [aspect, setAspect] = useState<string>("16:9");
+  /* The workspace's library: every image and video it has generated, kept. */
+  const [library, setLibrary] = useState<MediaItem[]>([]);
+  const [libraryReady, setLibraryReady] = useState<boolean | null>(null);
+
+  async function loadLibrary(settle = true) {
+    const j = await api("/api/media");
+    if (!j?.ok) { setLibraryReady(false); return; }
+    const items: MediaItem[] = j.items || [];
+    setLibrary(items); setLibraryReady(Boolean(j.migrated));
+    /* A video left generating when its tab closed: one status check settles it (finished → kept, failed → refunded). */
+    const running = items.filter((m) => m.status === "running" && m.operation);
+    if (settle && running.length) {
+      await Promise.all(running.slice(0, 5).map((m) => api(`/api/agents/video?op=${encodeURIComponent(String(m.operation))}`)));
+      void loadLibrary(false);
+    }
+  }
+  async function removeMedia(id: string) {
+    if (!confirm("Delete this from your library? This cannot be undone.")) return;
+    const r = await fetch(`/api/media/${id}`, { method: "DELETE" });
+    const j = await r.json().catch(() => ({}));
+    if (j?.ok) setLibrary((l) => l.filter((m) => m.id !== id)); else setMsg(j?.error || "Could not delete it.");
+  }
 
   useEffect(() => {
     api("/api/agents").then((j) => { setCustom(j.custom || []); setQuota(j.imageQuota || null); });
@@ -74,12 +103,16 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
 
   function open(a: Agent) {
     setSel(a); setOutput(""); setImages([]); setImgIn(""); setVersion(0); setRevise(""); setMsg("");
-    setVideoUrl(""); setVideoNote("");
+    setVideoUrl(""); setVideoNote(""); setImproved("");
+    setAspect(a.kind === "video" ? (/ugc|reel|story|short/i.test(a.id + a.name) ? "9:16" : "16:9") : "1:1");
+    if (a.kind === "image" || a.kind === "video") void loadLibrary();
     const seed: Record<string, string> = {}; a.inputs.forEach((i) => (seed[i.key] = ""));
     setInputs(seed);
   }
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f) return;
+    if (!/^image\/(png|jpe?g|webp)$/.test(f.type)) { setMsg("Use a PNG, JPG or WebP photo."); return; }
+    if (f.size > MAX_UPLOAD) { setMsg("That photo is over 3.5 MB — use a smaller one (a phone screenshot works)."); return; }
     const r = new FileReader(); r.onload = () => setImgIn(String(r.result)); r.readAsDataURL(f);
   }
 
@@ -90,7 +123,10 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     const brief = [Object.values(inputs).filter(Boolean).join(". "), reviseNote ? `Revision: ${reviseNote}` : ""].filter(Boolean).join(" ");
     const j = await api("/api/agents/video", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: `${sel.desc}. ${brief}`, image: imgIn || undefined }),
+      body: JSON.stringify({
+        prompt: `${sel.desc}. ${brief}`, image: imgIn || undefined, aspect,
+        style: /ugc/i.test(sel.id) ? "ugc" : "film", agentId: sel.id, title: sel.name,
+      }),
     });
     if (j.needsProvider || j.limited) { setBusy(""); setMsg(j.error || j.message); setUpgrade(Boolean(j.limited)); return; }
     if (!j.ok) { setBusy(""); setMsg(j.error || "Could not start the video."); return; }
@@ -103,12 +139,17 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
       const st = await api(`/api/agents/video?op=${encodeURIComponent(j.operation)}`);
       if (st.state === "done" && st.url) {
         setVideoUrl(st.url); setVideoNote(""); setVersion((v) => v + 1); setRevise(""); setBusy("");
+        void loadLibrary();
         return;
       }
-      if (st.state === "error") { setBusy(""); setVideoNote(""); setMsg(st.error || "Video generation failed."); return; }
+      if (st.state === "error") { setBusy(""); setVideoNote(""); setMsg(st.error || "Video generation failed."); void loadLibrary(); return; }
     }
     setBusy(""); setVideoNote("");
-    setMsg("Still generating after 6 minutes — it may finish shortly. Try running it again if nothing appears.");
+    /* With a recorded job the clip is not lost: the nightly sweep finishes it (or refunds it). Without one (before the update), say what is true then. */
+    setMsg(j.mediaId
+      ? "Still being made after 6 minutes. You can leave this page — it will appear in your library below when it finishes, and if it fails your credits are refunded automatically."
+      : "Still generating after 6 minutes — it may finish shortly. Try running it again if nothing appears.");
+    void loadLibrary();
   }
 
   /*
@@ -131,7 +172,13 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
 
   async function improvePrompt() {
     if (!sel) return;
-    const field = briefField();
+    /*
+      An empty box is fine: Cortex starts from the agent's purpose and the
+      products in this workspace's own records, and writes the brief itself.
+    */
+    const typed = briefField();
+    const firstKey = (sel.inputs.find((f) => f.type === "textarea") || sel.inputs[0])?.key;
+    const field = typed || (firstKey ? { key: firstKey, value: "" } : null);
     if (!field) { setMsg("Write a few words about what you want first."); return; }
     setBusy("improve"); setMsg(""); setImproved("");
     try {
@@ -139,7 +186,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
         method: "POST", headers: { "Content-Type": "application/json" },
         // sel.kind, not the render-scoped isVideo — that is declared further
         // down and is not in scope here.
-        body: JSON.stringify({ brief: field.value, kind: sel.kind === "video" ? "video" : "image" }),
+        body: JSON.stringify({ brief: field.value, kind: sel.kind === "video" ? "video" : "image", task: sel.desc }),
       });
       const j = await r.json().catch(() => ({} as any));
       if (!r.ok || j?.ok === false || !j?.improved) {
@@ -161,12 +208,12 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     if (sel.kind === "video") return runVideo(reviseNote);
     setBusy("run"); setMsg(""); setUpgrade(false);
     const j = await api("/api/agents/run", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentId: sel.id, inputs, reviseNote, prior: reviseNote ? output : undefined, version, image: imgIn || undefined }) });
+      body: JSON.stringify({ agentId: sel.id, inputs, reviseNote, prior: reviseNote ? output : undefined, version, image: imgIn || undefined, aspect: sel.kind === "image" ? aspect : undefined }) });
     setBusy("");
     if (j.needsProvider) { setMsg(j.message); return; }
     if (j.limited) { setMsg(j.message); setUpgrade(true); return; }
     if (!j.ok) { setMsg(j.error || "Run failed."); return; }
-    if (j.images) { setImages(j.images); setVersion(j.version); setRevise(""); if (j.quota) setQuota((q) => q ? { ...q, left: j.quota.left, limit: j.quota.limit } : q); return; }
+    if (j.images) { setImages(j.images); setVersion(j.version); setRevise(""); if (j.quota) setQuota((q) => q ? { ...q, left: j.quota.left, limit: j.quota.limit } : q); void loadLibrary(); return; }
     setOutput(j.output); setVersion(j.version); setRevise("");
   }
 
@@ -200,7 +247,10 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
     const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); }
   }
   function exportMd() { if (!sel) return; const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([`# ${sel.name}\n\n${output}`], { type: "text/markdown" })); a.download = `${sel.id.replace(/\./g, "-")}.md`; a.click(); }
-  function dlImg(src: string, i: number) { const a = document.createElement("a"); a.href = src; a.download = `${sel?.id.replace(/\./g, "-")}-${i + 1}.png`; a.click(); }
+  function dlImg(src: string, i: number) {
+    const ext = (src.match(/^data:image\/(\w+)/)?.[1] || "png").replace("jpeg", "jpg");
+    const a = document.createElement("a"); a.href = src; a.download = `${sel?.id.replace(/\./g, "-")}-${i + 1}.${ext}`; a.click();
+  }
   function copy() { navigator.clipboard?.writeText(output); setCopied(true); setTimeout(() => setCopied(false), 1500); }
 
   // ---------- RUNNER (an agent is open) ----------
@@ -230,9 +280,22 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
                   )}
                 </label>
               ))}
-              {isImage && (
+              {(isImage || isVideo) && (
+                <fieldset>
+                  <legend className="text-sm text-muted-foreground">Shape</legend>
+                  <div className="mt-1 flex flex-wrap gap-2" role="radiogroup" aria-label="Output shape">
+                    {(isVideo ? VIDEO_ASPECTS : IMAGE_ASPECTS).map((o) => (
+                      <button key={o.v} type="button" role="radio" aria-checked={aspect === o.v} onClick={() => setAspect(o.v)}
+                        className={`rounded-lg border h-9 px-3 text-sm ${aspect === o.v ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-accent"}`}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+              {(isImage || isVideo) && (
                 <div>
-                  <span className="text-sm text-muted-foreground">Reference image (sketch or photo — optional)</span>
+                  <span className="text-sm text-muted-foreground">{isVideo ? "Product photo to animate (optional — keeps your real product in the video)" : "Reference image (sketch or photo — optional)"}</span>
                   <div className="mt-1 flex items-center gap-2">
                     <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
                     <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4" /> {imgIn ? "Change image" : "Upload image"}</Button>
@@ -257,7 +320,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm">
                       <span className="font-medium">Not sure how to describe it?</span>
-                      <span className="text-muted-foreground"> Write it roughly and let Cortex fill in the detail.</span>
+                      <span className="text-muted-foreground"> Write it roughly — or leave it empty and Cortex writes it from your products.</span>
                     </div>
                     <Button size="sm" variant="outline" onClick={improvePrompt} disabled={busy === "improve"}>
                       {busy === "improve" ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Sparkles aria-hidden="true" className="h-4 w-4" />}
@@ -347,6 +410,40 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
                 <Button variant="outline" disabled={busy === "run" || !revise.trim()} onClick={() => run(revise)}><RefreshCw className="h-4 w-4" /> Revise</Button>
               </div>
             </div>
+          </Card>
+        )}
+
+        {(isImage || isVideo) && (
+          <Card className="p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="font-semibold">Your library</div>
+              <button type="button" onClick={() => void loadLibrary()} className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Refresh</button>
+            </div>
+            {libraryReady === false && <p className="text-xs text-muted-foreground">Saving to a library needs a one-time database update on this workspace; until then, download what you want to keep.</p>}
+            {libraryReady && library.length === 0 && <p className="text-sm text-muted-foreground">Everything you generate is kept here, so you can download it again later.</p>}
+            {library.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {library.map((m) => (
+                  <div key={m.id} className="rounded-lg border p-2 space-y-1.5">
+                    {m.status === "running" ? (
+                      <div className="aspect-video grid place-items-center text-xs text-muted-foreground"><span className="inline-flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Still being made</span></div>
+                    ) : m.kind === "video" ? (
+                      <video src={m.url || undefined} controls playsInline preload="metadata" className="w-full rounded bg-black/5" />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.url || undefined} alt={m.title || "Generated image"} loading="lazy" className="w-full rounded bg-black/5" />
+                    )}
+                    <div className="text-[11px] text-muted-foreground truncate" title={m.title || ""}>{m.title || m.kind} · {new Date(m.createdAt).toLocaleDateString("en-IN")}{m.aspect ? ` · ${m.aspect}` : ""}</div>
+                    {m.status === "done" && (
+                      <div className="flex items-center gap-2">
+                        {m.url && <a href={m.url.startsWith("/api/media/") ? `${m.url}?download=1` : m.url} className="text-xs text-primary underline inline-flex items-center gap-1"><Download className="h-3 w-3" aria-hidden="true" /> Download</a>}
+                        <button type="button" onClick={() => removeMedia(m.id)} className="text-xs text-muted-foreground hover:text-danger inline-flex items-center gap-1 ml-auto" aria-label="Delete from library"><Trash2 className="h-3 w-3" aria-hidden="true" /></button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         )}
 

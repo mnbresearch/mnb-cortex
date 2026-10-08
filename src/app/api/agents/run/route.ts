@@ -4,7 +4,8 @@ import { resolveAgent, fillPrompt, runReasoning, saveRun } from "@/lib/agents/ru
 import { recallContext } from "@/lib/memory";
 import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, imageGenGate, refundIfCharged } from "@/lib/credits";
-import { hasImageProvider, generateImages } from "@/lib/ai/image";
+import { hasImageProvider, generateImages, IMAGE_ASPECTS, type ImageAspect } from "@/lib/ai/image";
+import { createMedia, storeBytes, fromDataUrl } from "@/lib/media";
 import { buildImagePrompt } from "@/lib/ai/visual-prompts";
 
 export const runtime = "nodejs";
@@ -28,7 +29,7 @@ export const maxDuration = 60;
   treatments. The four one-line templates that used to live here produced the
   model's default look: a flatly lit object on grey.
 */
-function imagePrompt(agentId: string, inputs: Record<string, string>, hasInput: boolean, industry?: string | null, revision?: string): string {
+function imagePrompt(agentId: string, inputs: Record<string, string>, hasInput: boolean, industry?: string | null, revision?: string, use?: string, business?: string | null): string {
   const brief = Object.values(inputs).filter(Boolean).join(". ");
   return buildImagePrompt({
     kind: agentId.split(".").pop() || "",
@@ -36,8 +37,13 @@ function imagePrompt(agentId: string, inputs: Record<string, string>, hasInput: 
     industry,
     hasInputImage: hasInput,
     revision,
+    use: use as any,
+    business: business || undefined,
   });
 }
+
+/* Which framing preset an aspect ratio implies (visual-prompts USE_FRAMING). */
+const USE_FOR_ASPECT: Record<string, string> = { "1:1": "catalogue", "4:5": "social", "9:16": "story", "16:9": "banner" };
 
 export async function POST(req: Request) {
   const { user, orgId } = await getUserAndOrg();
@@ -81,16 +87,42 @@ export async function POST(req: Request) {
     try {
       // The workspace's industry decides the lighting and styling direction.
       const orgProfile = await getOrgProfile().catch(() => null);
-      const prompt = imagePrompt(agent.id, inputs, Boolean(b.image), (orgProfile as any)?.industry, b.reviseNote ? String(b.reviseNote) : undefined);
-      const { images, note } = await generateImages(prompt, b.image ? String(b.image) : undefined);
+      const aspect: ImageAspect | undefined = (IMAGE_ASPECTS as readonly string[]).includes(String(b.aspect)) ? (b.aspect as ImageAspect) : undefined;
+      const prompt = imagePrompt(agent.id, inputs, Boolean(b.image), (orgProfile as any)?.industry, b.reviseNote ? String(b.reviseNote) : undefined,
+        aspect ? USE_FOR_ASPECT[aspect] : undefined, (orgProfile as any)?.name);
+      const { images, note } = await generateImages(prompt, b.image ? String(b.image) : undefined, aspect);
       if (!images.length) {
         await refundIfCharged(gate, "agent_image");
         return NextResponse.json({ ok: false, error: (note === "empty" ? "The image model returned no image — try a clearer brief, or set GEMINI_IMAGE_MODEL to a valid image model." : `Image provider error: ${note}`) + " Your credits have not been used." }, { status: 200 });
       }
       const version = Number(b.version || 0) + 1;
-      if (orgId) await saveRun(orgId, user?.id ?? null, agent, inputs, "[image generated]", version);
+      /*
+        KEPT, not just shown. Each image goes to the workspace's private media
+        library so it survives a reload and can be downloaded again. Best
+        effort: a storage hiccup must not take away an image already paid for —
+        the browser still gets it in this response.
+      */
+      const mediaIds: string[] = [];
+      if (orgId) {
+        for (const img of images.slice(0, 4)) {
+          const dec = fromDataUrl(img);
+          if (!dec) continue;
+          const m = await createMedia({ org_id: orgId, user_id: user?.id ?? null, kind: "image", agent_id: agent.id, title: agent.name, prompt: Object.values(inputs).filter(Boolean).join(". ").slice(0, 2000), aspect: aspect || null, status: "done", mime: dec.mime, finished_at: new Date().toISOString() });
+          if (!m.id) break;   // table missing (pre-migration) or write failed — stop trying
+          const path = await storeBytes(orgId, m.id, dec.bytes, dec.mime);
+          if (path) {
+            const { serviceClient } = await import("@/lib/supabase/server");
+            await serviceClient()?.from("media_assets").update({ storage_path: path }).eq("id", m.id).eq("org_id", orgId);
+            mediaIds.push(m.id);
+          } else {
+            const { deleteMedia } = await import("@/lib/media");
+            await deleteMedia(orgId, m.id);
+          }
+        }
+        await saveRun(orgId, user?.id ?? null, agent, inputs, mediaIds.length ? `[${mediaIds.length} image(s) saved to your library]` : "[image generated]", version);
+      }
       const left = ig.limit < 0 ? -1 : Math.max(0, ig.limit - ig.used - 1);
-      return NextResponse.json({ ok: true, images, version, quota: { limit: ig.limit, left }, agent: { id: agent.id, name: agent.name } });
+      return NextResponse.json({ ok: true, images, mediaIds, version, quota: { limit: ig.limit, left }, agent: { id: agent.id, name: agent.name } });
     } catch (e: any) {
       await refundIfCharged(gate, "agent_image");
       return NextResponse.json({ ok: false, error: (e?.message || "The image agent could not finish.") + " Your credits have not been used." }, { status: 200 });

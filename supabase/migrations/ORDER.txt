@@ -125,3 +125,4 @@
 2026_zzzs_proposal_notify.sql
 2026_zzzt_api_ingest_upsert.sql
 2026_zzzu_security_controls.sql
+2026_zzzv_media_sales_watch.sql

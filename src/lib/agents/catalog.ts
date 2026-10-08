@@ -318,7 +318,7 @@ function visualAgents(ind: Industry): Agent[] {
   const base: Agent[] = [
     v("mockup3d", "3D Mockup Studio", "Turn a sketch or photo into a 3D product mockup.", [{ key: "brief", label: "Describe the product / upload sketch", type: "textarea" }], "image"),
     v("materialswap", "Material Swap", "Swap metals, colours or materials in a product image.", [{ key: "brief", label: "What to swap", type: "text" }], "image"),
-    v("enhance", "Sharpen & Upscale", "Deblur and upscale a phone-shot product photo.", [{ key: "brief", label: "Notes (optional)", type: "text" }], "image"),
+    v("enhance", "Sharpen & Clean Up", "Sharpen, light and clean up a phone-shot product photo (same size as the original).", [{ key: "brief", label: "Notes (optional)", type: "text" }], "image"),
     v("cleanup", "Catalogue Photo Cleanup", "Auto background removal & clean catalogue shots.", [{ key: "brief", label: "Background style", type: "text" }], "image"),
     /*
       Posters are the thing a shop owner asks for most often and had no agent

@@ -29,7 +29,10 @@ export async function POST(req: Request) {
       without calling a model, so charging first would bill for pressing the
       button on an empty box — the same mistake found in four other routes.
     */
-    if (brief.length < 3) {
+    /* The business's own products, so an empty box still gets a real brief. */
+    const products = await topProducts(orgId);
+    const task = typeof (b as any).task === "string" ? String((b as any).task).slice(0, 200) : "";
+    if (brief.length < 3 && !products.length && !task) {
       return NextResponse.json({
         ok: false,
         error: "Write a few words about what you want first — even 'gold ring on marble' is enough to work with.",
@@ -43,7 +46,7 @@ export async function POST(req: Request) {
     }
 
     const profile = await getOrgProfile().catch(() => null);
-    const improved = await improveVisualBrief(brief, kind, (profile as any)?.industry);
+    const improved = await improveVisualBrief(brief, kind, (profile as any)?.industry, { business: (profile as any)?.name, products, task });
 
     /*
       "" means the model returned nothing usable, or returned something no
@@ -66,4 +69,21 @@ export async function POST(req: Request) {
       error: (e?.message || "Could not improve that prompt.") + " Your credits have not been used.",
     }, { status: 200 });
   }
+}
+
+/** The workspace's best-selling products (else its stock lines), read under RLS. Best effort. */
+async function topProducts(orgId: string): Promise<string[]> {
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const sb = await createClient();
+    const { data } = await sb.from("sales_orders").select("product, amount").eq("org_id", orgId).not("product", "is", null).order("order_date", { ascending: false }).limit(500);
+    const tally = new Map<string, number>();
+    for (const r of (data as any[]) || []) { const k = String(r.product || "").trim(); if (k) tally.set(k, (tally.get(k) || 0) + (Number(r.amount) || 0)); }
+    let list = [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+    if (!list.length) {
+      const { data: inv } = await sb.from("inventory_items").select("name").eq("org_id", orgId).limit(20);
+      list = ((inv as any[]) || []).map((r) => String(r.name || "").trim()).filter(Boolean);
+    }
+    return list.slice(0, 6);
+  } catch { return []; }
 }

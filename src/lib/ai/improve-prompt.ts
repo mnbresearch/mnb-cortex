@@ -51,16 +51,40 @@ export type ImproveKind = "image" | "video";
  * Rewrite a user's rough brief into a fuller description of the subject.
  * Returns "" when the model gives nothing usable, so the caller can refund.
  */
+export type BusinessContext = {
+  /** The workspace's business name. */
+  business?: string | null;
+  /** What it actually sells, from its own records (top products / stock lines). */
+  products?: string[];
+  /** What this agent is for, e.g. "Turn a product into a short UGC video ad". */
+  task?: string | null;
+};
+
 export async function improveVisualBrief(
   brief: string,
   kind: ImproveKind,
   industry?: string | null,
+  biz: BusinessContext = {},
 ): Promise<string> {
-  const raw = String(brief || "").trim();
+  const typed = String(brief || "").trim();
+  const products = (biz.products || []).map((p) => String(p).trim()).filter(Boolean).slice(0, 6);
+  /*
+    NOTHING TYPED IS NOT NOTHING TO GO ON. The wizard used to refuse an empty
+    box. With the business's own products and the agent's purpose there is a
+    perfectly good starting brief, so it writes one — the owner still sees it
+    as a suggestion and decides.
+  */
+  const raw = typed || (products.length || biz.task
+    ? `${biz.task ? `${biz.task}. ` : ""}${products.length ? `Feature: ${products[0]}.` : ""}`.trim()
+    : "");
   if (!raw) return "";
 
   const trade = String(industry || "").trim();
-  const context = trade ? `The business is in: ${trade}. Use vocabulary a ${trade} buyer would recognise.` : "";
+  const context = [
+    trade ? `The business is in: ${trade}. Use vocabulary a ${trade} buyer would recognise.` : "",
+    biz.business ? `The business is called "${String(biz.business).slice(0, 80)}" — do not put the name on the product unless asked.` : "",
+    products.length ? `What it sells (from its own records): ${products.join("; ")}. Prefer one of these as the subject when the brief is vague.` : "",
+  ].filter(Boolean).join(" ");
 
   const system = kind === "video"
     ? `You improve short briefs for an AI video generator. The user has described what they want filmed.

@@ -126,7 +126,9 @@ export const SHARE = {
     was told about expires unseen in seven days.
   */
   decisions: 10_000,
-  analysis: 20_000,
+  /* Settling video jobs whose tab closed: one status GET each, refunds included. Taken from analysis. */
+  media: 5_000,
+  analysis: 15_000,
 } as const;
 
 /*

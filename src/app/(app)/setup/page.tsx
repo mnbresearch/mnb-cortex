@@ -39,7 +39,7 @@ export default async function Setup() {
       how: "Same Gemini key as the AI engine. Nothing extra to do." },
     { name: "Video agents", on: hasVideoProvider(), env: "GEMINI_API_KEY",
       what: "14 video agents via Google Veo.",
-      how: "Same Gemini key. Veo access is included on current Gemini API keys." },
+      how: "Same Gemini key, on a Google project with billing enabled — Veo is a paid Gemini API model." },
     { name: "Email (Resend)", on: Boolean(envKey("RESEND_API_KEY")), env: "RESEND_API_KEY",
       what: "Renewal reminders, scheduled reports, invites, outreach, daily briefs.",
       how: "resend.com/api-keys, then verify your sending domain." },

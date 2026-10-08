@@ -174,6 +174,8 @@ export type VideoPromptInput = {
   industry?: string | null;
   aspect?: "16:9" | "9:16";
   hasInputImage?: boolean;
+  /** "ugc" = handheld, person-to-camera social ad; default = polished product film. */
+  style?: "film" | "ugc";
 };
 
 /**
@@ -185,6 +187,28 @@ export function buildVideoPrompt(v: VideoPromptInput): string {
   const style = styleFor(v.industry);
   const vertical = v.aspect === "9:16";
   const brief = v.brief.trim() || "the product";
+
+  /*
+    UGC IS THE OPPOSITE BRIEF. The UGC agent promises a social ad: a real
+    person, handheld, talking to camera. The film template forbids exactly
+    that (gimbal, no people unless asked, no text), so a UGC request used to
+    come back as a glossy product film.
+  */
+  if (v.style === "ugc") {
+    return [
+      v.hasInputImage
+        ? `A creator holds and shows the product from the provided still. Keep the product's shape, colour and branding identical to the still.`
+        : `Authentic user-generated social video ad.`,
+      `Subject: ${brief}.`,
+      `A friendly Indian creator in their 20s or 30s speaks directly to the camera in a natural home or shop setting, enthusiastic but believable, showing the product up close in their hands.`,
+      `Camera: handheld smartphone feel with gentle natural shake, eye-level, front-facing, as if self-filmed. Natural window light.`,
+      vertical
+        ? `Framing: vertical 9:16 for Reels and Shorts, face and product in the upper two-thirds.`
+        : `Framing: horizontal 16:9, creator on a third, product clearly visible.`,
+      `Pacing: an opening hook in the first two seconds, then the product in use.`,
+      `Avoid: watermarks, logos that are not on the product, warped or duplicated hands, morphing product edges, flicker, and garbled text.`,
+    ].join(" ");
+  }
 
   return [
     v.hasInputImage
@@ -215,14 +239,20 @@ export function buildVideoPrompt(v: VideoPromptInput): string {
  * resolution and the bill. It is therefore opt-in through VEO_RESOLUTION rather
  * than a silent default.
  */
-export function veoParameters(aspect: "16:9" | "9:16") {
+export function veoParameters(aspect: "16:9" | "9:16", hasInputImage = false) {
   const want = (process.env.VEO_RESOLUTION || "720p").trim().toLowerCase();
   const resolution = want === "1080p" ? "1080p" : "720p";
   return {
     aspectRatio: aspect,
-    personGeneration: "allow_adult",
+    /*
+      PER MODE, NOT ONE VALUE. Veo 3.x accepts personGeneration "allow_all"
+      for text-to-video and "allow_adult" for image-to-video, and rejects the
+      other combination with a 400. The UI only ever sent text, and this always
+      said "allow_adult" — so text-only clips could be refused outright.
+    */
+    personGeneration: hasInputImage ? "allow_adult" : "allow_all",
     resolution,
-    // The API rejects 1080p at any other length.
-    ...(resolution === "1080p" ? { durationSeconds: "8" } : {}),
+    // The API rejects 1080p at any other length. A number, not the string "8".
+    ...(resolution === "1080p" ? { durationSeconds: 8 } : {}),
   };
 }
