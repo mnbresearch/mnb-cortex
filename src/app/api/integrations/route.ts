@@ -5,6 +5,7 @@ import { integrationById, planAllows, limitForPlan } from "@/lib/integrations";
 import { safeFetch, BlockedUrlError } from "@/lib/net-guard";
 import { statusFor, statusForAttempt, lastTestOk, shouldPersistResult } from "@/lib/integration-status";
 import { SHOPIFY_API_VERSION } from "@/lib/sync";
+import { stripeKeyVerdict, shopifyScopesVerdict } from "@/lib/least-privilege";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,6 +66,17 @@ async function guard() {
  * caller could not tell "the provider accepted this" from "nobody asked" — and
  * recorded the second as the first. See lib/integration-status.ts.
  */
+/** The access scopes Shopify reports for this token; null when it could not be read. */
+async function shopifyScopes(c: Record<string, string>): Promise<string[] | null> {
+  try {
+    const shop = String(c.shop || "").replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+    const r = await safeFetch(`https://${shop}/admin/oauth/access_scopes.json`, { headers: { "X-Shopify-Access-Token": c.api_key }, timeoutMs: 15_000 });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return Array.isArray(j?.access_scopes) ? j.access_scopes.map((s: any) => String(s?.handle || "")) : null;
+  } catch { return null; }
+}
+
 async function testCredentials(id: string, c: Record<string, string>): Promise<{ ok: boolean; verified: boolean; message: string; unreachable?: boolean }> {
   /*
     WHAT A STATUS CODE ACTUALLY SAYS ABOUT A CREDENTIAL.
@@ -298,8 +310,27 @@ export async function POST(req: Request) {
         }, { status: 200 });
       }
 
+      /*
+        LEAST PRIVILEGE (lib/least-privilege.ts). Cortex only reads from these
+        systems, so it refuses a key that could also refund, pay out or edit —
+        before the key is ever tested or stored.
+      */
+      if (id === "stripe") {
+        const pv = stripeKeyVerdict(creds.api_key || "");
+        if (!pv.ok) return NextResponse.json({ ok: false, error: `${pv.error} Nothing was saved.` }, { status: 200 });
+      }
+
       // Verify before saving so we never store known-bad credentials.
       const test = await testCredentials(id, creds);
+
+      if (id === "shopify" && test.ok && test.verified) {
+        const scopes = await shopifyScopes(creds);
+        if (scopes === null) {
+          return NextResponse.json({ ok: false, error: "Cortex could not read this token's permissions from Shopify, so it cannot confirm the token is read-only. Nothing was saved — try again shortly." }, { status: 200 });
+        }
+        const pv = shopifyScopesVerdict(scopes);
+        if (!pv.ok) return NextResponse.json({ ok: false, error: `${pv.error} Nothing was saved.` }, { status: 200 });
+      }
       /*
         …AND ACTUALLY DON'T. This used to save the credential anyway and return
         ok:true, so the UI showed "Provider rejected the credentials" in GREEN

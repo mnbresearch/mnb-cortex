@@ -98,6 +98,9 @@ export async function POST(req: Request) {
       const keyHash = createHash("sha256").update(key).digest("hex");
       const { data: k } = await svc.from("api_keys").select("org_id").eq("key_hash", keyHash).maybeSingle();
       await recomputeQuietly((k as any)?.org_id);
+      /* LLM01 tripwire: data pushed from outside is where an injection is planted. */
+      const { flagSuspiciousRows } = await import("@/lib/ingest-scan");
+      await flagSuspiciousRows((k as any)?.org_id, "the public API", rows);
     }
   } catch { /* swept nightly */ }
 

@@ -159,14 +159,14 @@ export const INTEGRATIONS: Integration[] = [
     fields: [{ key: "endpoint", label: "Tally endpoint URL", type: "text", placeholder: "http://localhost:9000", required: true, help: "Enable ODBC/HTTP in Tally Prime" }] },
   { id: "quickbooks", name: "QuickBooks", category: "Accounting & Finance", desc: "Store your QuickBooks access token", minPlan: "premium",
     fields: [KEY("Access token"), { key: "realm_id", label: "Realm ID", type: "text", required: true }] },
-  { id: "razorpay", name: "Razorpay", category: "Commerce & Payments", desc: "Payments, settlements and payouts", minPlan: "growth", testable: true,
+  { id: "razorpay", name: "Razorpay", category: "Commerce & Payments", desc: "Payments and settlements, read-only. Razorpay keys cannot be limited to read-only; Cortex only calls GET endpoints — use a separate key you can revoke", minPlan: "growth", testable: true,
     docs: "https://razorpay.com/docs/api/",
     fields: [{ key: "key_id", label: "Key ID", type: "text", placeholder: "rzp_live_…", required: true }, { key: "key_secret", label: "Key secret", type: "password", required: true }] },
-  { id: "stripe", name: "Stripe", category: "Commerce & Payments", desc: "Global payments and subscriptions", minPlan: "growth", testable: true,
-    docs: "https://stripe.com/docs/api", fields: [KEY("Secret key", "sk_live_…")] },
+  { id: "stripe", name: "Stripe", category: "Commerce & Payments", desc: "Global payments and subscriptions — read-only: use a restricted key (rk_…) with Charges: Read and Balance: Read", minPlan: "growth", testable: true,
+    docs: "https://docs.stripe.com/keys#create-restricted-api-secret-key", fields: [KEY("Restricted key (read-only)", "rk_live_…")] },
 
   // ---- Commerce ----
-  { id: "shopify", name: "Shopify", category: "Commerce & Payments", desc: "Orders, products and customers", minPlan: "growth", testable: true,
+  { id: "shopify", name: "Shopify", category: "Commerce & Payments", desc: "Orders, read-only: a custom-app token with read_orders only (write scopes are refused)", minPlan: "growth", testable: true,
     docs: "https://shopify.dev/docs/api/admin-rest",
     fields: [{ key: "shop", label: "Shop domain", type: "text", placeholder: "my-store.myshopify.com", required: true }, KEY("Admin API access token", "shpat_…")] },
   { id: "woocommerce", name: "WooCommerce", category: "Commerce & Payments", desc: "WordPress store orders", minPlan: "premium",

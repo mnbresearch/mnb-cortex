@@ -989,6 +989,8 @@ export async function importRows(fd: FormData): Promise<ImportOutcome> {
     }
     const analysis = await recomputeAndReport(orgId);
     await logActivity(orgId, "import", `Imported ${wrote.written} rows into ${table} (CSV)`);
+    /* LLM01 tripwire: tell the owner if the file carried instruction-like text. */
+    try { const { flagSuspiciousRows } = await import("@/lib/ingest-scan"); await flagSuspiciousRows(orgId, "an imported file", rows); } catch { /* best-effort */ }
     REVALIDATE_AFTER_IMPORT.forEach((p) => revalidatePath(p));
     return {
       inserted: wrote.written,

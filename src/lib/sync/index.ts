@@ -207,7 +207,7 @@ const stripe: Connector = {
   id: "stripe",
   label: "Stripe",
   async pull(c, since) {
-    if (!c.api_key) throw new Error("Stripe needs a secret key.");
+    if (!c.api_key) throw new Error("Stripe needs a restricted (read-only) key.");
     const from = Math.floor(new Date(since).getTime() / 1000);
     /* Every page: Stripe says has_more and pages with starting_after. */
     const items: any[] = [];
@@ -444,6 +444,8 @@ export async function syncProvider(orgId: string, provider: string, days = 90): 
 
     const since = new Date(Date.now() - days * 86_400_000).toISOString();
     const pulled = await conn.pull(creds, since);
+    /* LLM01 tripwire: a store's customer names and notes are written by the public. */
+    try { const { flagSuspiciousRows } = await import("@/lib/ingest-scan"); await flagSuspiciousRows(orgId, conn.label, [...(pulled.sales || []), ...(pulled.invoices || []), ...(pulled.customers || [])]); } catch { /* best-effort */ }
 
     // Each of these can throw. Whatever landed before the throw is real data
     // that must still reach the dashboard, so the counts are assigned as we go

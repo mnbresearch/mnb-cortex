@@ -266,10 +266,15 @@ Cortex today:
 
 | Provider | What comes in | Credentials |
 |---|---|---|
-| **Shopify** | Orders → sales orders, customers | Shop domain + Admin API access token |
-| **Razorpay** | Captured payments → paid receivables | Key id + key secret |
-| **Stripe** | Paid charges → paid receivables | Secret key |
+| **Shopify** | Orders → sales orders, customers | Shop domain + custom-app Admin API token with **read_orders** only (tokens with any `write_*` scope are refused) |
+| **Razorpay** | Captured payments → paid receivables | Key id + key secret (Razorpay cannot scope keys; Cortex only calls GET endpoints — use a dedicated, revocable key) |
+| **Stripe** | Paid charges → paid receivables | **Restricted key** (`rk_…`) with Charges: Read and Balance: Read. The account secret key (`sk_…`) is refused — it can refund and pay out |
 | **Google Sheets** | Any sheet with amount + customer columns → sales orders | Published sheet URL |
+
+**Least privilege.** Cortex only reads from these systems, so it refuses a key
+that could also move money or change the store, and no credential is
+reachable from the AI assistant or the action handlers
+(`scripts/test-least-privilege.mjs` pins both).
 
 Connect one under *Integrations*, then press **Sync data now**. The nightly cron
 also syncs every connected provider automatically, before the KPI recompute, so

@@ -217,6 +217,10 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
               )}
 
               {conn?.config?.hint && <div className="text-xs text-muted-foreground font-mono">{conn.config.hint}</div>}
+              {/* Least privilege: a Stripe connection made before restricted keys were required still holds the account secret key. */}
+              {conn && i.id === "stripe" && /^sk_/.test(String(conn.config?.hint || "")) && (
+                <p className="text-xs text-warning" role="status">This connection uses your full Stripe secret key, which can refund and pay out. Cortex only reads — disconnect and reconnect with a restricted key (rk_…, Charges: Read, Balance: Read).</p>
+              )}
 
               {!canManage ? (
                 <p className="text-xs text-muted-foreground">Workspace admins can manage integrations.</p>
