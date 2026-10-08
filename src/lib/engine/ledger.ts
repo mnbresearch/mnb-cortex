@@ -2,6 +2,7 @@ import "server-only";
 import { createHash } from "crypto";
 import { serviceClient } from "@/lib/supabase/server";
 import { CATALOGUE_BY_KEY, isActionKey, validateArgs, type ActionDef } from "./catalogue";
+import { scanForInjection } from "@/lib/ai/untrusted";
 import { decide, gateVerdict, suggestAutonomy, normaliseCaps, requiresCaps, type Policy, type Usage, type Verdict } from "./policy";
 import { HANDLERS, undoHandler } from "./handlers";
 
@@ -126,6 +127,10 @@ export type ProposeInput = {
    * Omit only for system sources with no person behind them.
    */
   actorRole?: string | null;
+  /** The proposer read third-party data first (chat tool results, synced rows). Money/outbound then never auto-runs. */
+  tainted?: boolean;
+  /** Instruction-shaped text the proposer saw (ai/untrusted.ts). Anything non-empty → a human decides. */
+  suspicious?: string[];
   /** Stable key so a retried cron or double-click cannot create two. Defaults to a hash of (org, action, args, day). */
   idempotencyKey?: string;
 };
@@ -149,7 +154,13 @@ export async function propose(input: ProposeInput): Promise<ProposeOutcome> {
   const key = input.idempotencyKey || defaultKey(input.orgId, def.key, v.args);
 
   const [policy, usage] = await Promise.all([getPolicy(input.orgId, def.key), getUsage(input.orgId, def, v.args)]);
-  const verdict = gateVerdict(decide(def, v.args, policy, usage), def, policy, { source: input.source, actorRole: input.actorRole });
+  /* LLM01: the proposal's own words are scanned too — an argument such as a
+     customer note is stored and later read back into prompts. */
+  const ownScan = scanForInjection([v.args, input.rationale ?? null, input.evidence ?? []]);
+  const suspicious = Array.from(new Set([...(input.suspicious || []), ...ownScan.hits]));
+  const verdict = gateVerdict(decide(def, v.args, policy, usage), def, policy, {
+    source: input.source, actorRole: input.actorRole, tainted: input.tainted === true, suspicious,
+  });
 
   const row = {
     org_id: input.orgId, action: def.key, args: v.args,

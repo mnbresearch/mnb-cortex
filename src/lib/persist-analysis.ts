@@ -51,7 +51,20 @@ export type PersistResult = {
   ok: boolean;
   /** Present only when ok is false; safe to show a customer. */
   error?: string;
+  /**
+   * Present when the integrity checks (ai/extraction-integrity.ts) refused to
+   * let these figures reach the ledger: instruction-shaped text in the
+   * document, figures not printed in it, or a statement that does not
+   * reconcile. ok stays true — nothing failed — and the caller refunds.
+   */
+  held?: string;
 };
+
+/** LLM01 / KPI-falsification guard: an analysis the integrity checks put on hold is never written. */
+function heldReason(analysis: any): string | null {
+  const h = analysis?.integrity?.hold;
+  return typeof h === "string" && h.trim() ? h : null;
+}
 
 const CONFIG_ERROR =
   "Your analysis ran, but Cortex could not save it to your workspace — the server is missing its database credentials. "
@@ -65,6 +78,8 @@ const CONFIG_ERROR =
  */
 export async function persistBankAnalysis(orgId: string | null | undefined, analysis: any): Promise<PersistResult> {
   if (!analysis) return { saved: 0, ok: true };
+  const heldBank = heldReason(analysis);
+  if (heldBank) return { saved: 0, ok: true, held: heldBank };
 
   // Signed out, or a workspace that never finished being created. Nothing to
   // write to, and not a failure of ours to store something.
@@ -121,6 +136,8 @@ export async function persistBankAnalysis(orgId: string | null | undefined, anal
  */
 export async function persistGstAnalysis(orgId: string | null | undefined, analysis: any): Promise<PersistResult> {
   if (!analysis) return { saved: 0, ok: true };
+  const heldGst = heldReason(analysis);
+  if (heldGst) return { saved: 0, ok: true, held: heldGst };
   if (!orgId) return { saved: 0, ok: true };
 
   const svc = serviceClient();

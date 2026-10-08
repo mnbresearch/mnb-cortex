@@ -218,6 +218,21 @@ function fmt(n: number): string {
      chat waits for a tap unless the owner has set an explicit rule for that
      action. Exports change no data and stay automatic.
 
+  3. SUSPICIOUS TEXT (LLM01). The proposal — its arguments, rationale or
+     evidence, or anything a tool returned during the run that produced it —
+     contained instruction-shaped text (ai/untrusted.ts). Whatever the rules
+     say, a human looks first, and the reason names what was found.
+
+  4. THE ASSISTANT NEVER MOVES MONEY OR CONTACTS ANYONE ON ITS OWN. A money or
+     outbound action proposed from chat waits for a tap even when the owner
+     has an explicit auto rule for it. The rule still governs workflows and
+     autopilot, which act on rows, not on a model's reading of text someone
+     else wrote. This is the confused-deputy line: the agent's suggestion is
+     never the same thing as the owner's authority.
+
+  5. TAINT. Any other source that read third-party data before proposing
+     (`tainted`) gets the same treatment for money and outbound effects.
+
   Pure, like decide(), so the suite executes it.
 */
 export const RANK: Readonly<Record<string, number>> = Object.freeze({ viewer: 1, analyst: 2, manager: 3, admin: 4, owner: 5 });
@@ -226,15 +241,24 @@ export function gateVerdict(
   verdict: Verdict,
   def: ActionDef,
   policy: Policy | null,
-  who: { source: string; actorRole?: string | null },
+  who: { source: string; actorRole?: string | null; tainted?: boolean; suspicious?: readonly string[] },
 ): Verdict {
   if (verdict.verdict !== "auto") return verdict;
+  if (who.suspicious && who.suspicious.length) {
+    return { verdict: "approve", reason: `Cortex read text that looks like instructions to an AI (${who.suspicious.slice(0, 3).join("; ")}) before proposing this, so it waits for you. Check it is what you want.` };
+  }
   if (who.actorRole !== undefined) {
     const have = RANK[String(who.actorRole || "")] || 0;
     const need = RANK[def.minRank] || 0;
     if (have < need) {
       return { verdict: "approve", reason: `Your role can ask for this but not run it on its own — someone with ${def.minRank} rights needs to approve it.` };
     }
+  }
+  if (who.source === "chat" && CAPPED_EFFECTS.has(def.effect)) {
+    return { verdict: "approve", reason: `Suggested by the assistant, and it ${def.effect === "money" ? "changes money records" : "contacts someone outside your team"} — the assistant never does that on its own, whatever the rule. It waits for your tap.` };
+  }
+  if (who.tainted && CAPPED_EFFECTS.has(def.effect)) {
+    return { verdict: "approve", reason: "Proposed after reading data written outside your team, and it moves money or contacts someone — it waits for your tap." };
   }
   if (who.source === "chat" && !policy && def.effect !== "export") {
     return { verdict: "approve", reason: "Suggested in chat. Chat can draw on text written outside your team, so actions it proposes wait for you unless you set a rule for this action." };

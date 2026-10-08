@@ -42,6 +42,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: persisted.error, analysis }, { status: 200 });
     }
 
+    // Held by the integrity checks (instructions in the document, figures not
+    // printed in it, or a statement that does not reconcile): shown, not saved,
+    // and not billed — the owner did not get the dashboard update they paid for.
+    if (persisted.held) {
+      await refundIfCharged(gate, "gst");
+      return NextResponse.json({ ok: true, analysis, saved: 0, held: persisted.held, charged: 0 });
+    }
+
     return NextResponse.json({ ok: true, analysis, saved: persisted.saved, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
     await refundIfCharged(gate, "gst");
