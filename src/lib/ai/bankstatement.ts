@@ -9,6 +9,7 @@ import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
 import { groqModel } from "@/lib/ai/model-defaults";
 import { neutraliseLines, cleanInsights, fence, UNTRUSTED_RULE } from "@/lib/ai/untrusted";
 import { groundBank, type Integrity } from "@/lib/ai/extraction-integrity";
+import { vaultFor } from "@/lib/ai/dlp-server";
 
 export type Txn = { date: string; desc: string; amount: number; direction: "in" | "out"; category: string };
 export type MonthPoint = { key: string; label: string; inflow: number; outflow: number; net: number };
@@ -154,7 +155,11 @@ export async function analyzeBankStatement(text: string): Promise<BankAnalysis |
      returns must be printed in what it was shown and must reconcile — see
      extraction-integrity.ts. */
   const scan = neutraliseLines(text);
-  const raw = await callJson(buildPrompt(scan.text));
+  /* DLP: names and identifiers tokenised before the statement leaves; the
+     figures must stay (they are what is being read) and are grounded below
+     against the original text, never the redacted one. */
+  const vault = await vaultFor(null, { keepAmounts: true });
+  const raw = vault.restoreDeep(await callJson(buildPrompt(vault.redact(scan.text))));
   if (!raw || !Array.isArray(raw.transactions)) return null;
 
   const grounded = groundBank(raw, scan.text.slice(0, 18000), scan);

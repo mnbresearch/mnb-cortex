@@ -12,6 +12,7 @@ import { generationConfig, profileFor, STANDARD, type GenProfile } from "@/lib/a
 // output can become a (human- or policy-gated) action.
 import { TOOL_DECLARATIONS, TOOL_NAMES, runTool, forModel, newRunGuard, type RunGuard } from "@/lib/ai/tools";
 import { fence, UNTRUSTED_RULE } from "@/lib/ai/untrusted";
+import { NO_REDACTION, type Vault } from "@/lib/ai/dlp";
 import { anthropicModel, groqModel, openaiModel } from "@/lib/ai/model-defaults";
 
 export const COO_SYSTEM = `You are MNB Cortex — the AI Chief Operating Officer for an SME owner.
@@ -133,20 +134,33 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
   let context2 = context;
   let toolOrg: string | null = null;
   let toolUser: string | null = null;
+  let sessionOrg: string | null = null;
+  let extra = "";
   try {
     const { getUserAndOrg } = await import("@/lib/data");
     const { getInstructions, instructionBlock } = await import("@/lib/ai-instructions");
     const { orgId, user } = await getUserAndOrg();
+    sessionOrg = orgId || null;
     toolUser = user?.id || null;
     // Also used to scope every tool lookup below. No session -> no tools.
     toolOrg = opts.tools === true ? (orgId || null) : null;
-    const extra = instructionBlock(await getInstructions(orgId));
-    /* The snapshot is fenced as third-party data (it carries synced names,
-       notes and reviews); the workspace's own instructions are the owner's
-       words and sit outside the fence. */
-    context2 = `${fence("business snapshot", context)}${extra || ""}`;
+    extra = instructionBlock(await getInstructions(orgId)) || "";
   } catch { /* no session or no table — carry on with defaults */ }
-  if (context2 === context) context2 = fence("business snapshot", context);
+
+  /*
+    DLP (ai/dlp.ts): names, contact details, tax and bank identifiers — and on
+    "strict", every amount — are tokenised before anything leaves for a
+    vendor, and restored in the answer. The workspace is the session's, or
+    the one a cron path scoped through withOrgAiKeys().
+  */
+  let vault: Vault = NO_REDACTION;
+  try { const { vaultFor } = await import("@/lib/ai/dlp-server"); vault = await vaultFor(sessionOrg); } catch { vault = NO_REDACTION; }
+
+  /* The snapshot is fenced as third-party data (it carries synced names,
+     notes and reviews); the workspace's own instructions are the owner's
+     words and sit outside the fence. */
+  context2 = `${fence("business snapshot", vault.redact(context))}${vault.redact(extra)}`;
+  const outbound: Msg[] = messages.map((m) => ({ ...m, content: vault.redact(m.content) }));
 
   for (const provider of providerChain()) {
     // Retry the SAME provider only for genuinely transient trouble. A 429 is not
@@ -157,8 +171,8 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
     // three cases the right move is to hand over to the next provider at once.
     const attempts = 3;
     for (let i = 0; i < attempts; i++) {
-      const out = await runOnce(provider, messages, context2, profile, toolOrg, toolUser);
-      if (out !== null) return out;
+      const out = await runOnce(provider, outbound, context2, profile, toolOrg, toolUser, vault);
+      if (out !== null) return vault.restore(out);
 
       const st = lastFailure?.status;
       const worthRetrying = !st || st >= 500;   // network blip or provider 5xx
@@ -172,7 +186,7 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
 }
 
 /** One model call. Returns null on a transient/failed call so the caller can retry. */
-async function runOnce(provider: string, messages: Msg[], context: string, profile: GenProfile, toolOrg?: string | null, toolUser?: string | null): Promise<string | null> {
+async function runOnce(provider: string, messages: Msg[], context: string, profile: GenProfile, toolOrg?: string | null, toolUser?: string | null, vault: Vault = NO_REDACTION): Promise<string | null> {
   const sys = systemPrompt(context);
   /* One guard per answer: what this run read, and whether any of it looked like instructions. */
   const guard = newRunGuard();
@@ -263,10 +277,11 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
               const fname = String(c.functionCall.name);
               // Only names we declared. A model asking for anything else gets a
               // refusal rather than a lookup.
+              /* Tokens in the model's arguments become real values before the lookup; real values in the result become tokens before the model sees them. */
               const result = TOOL_NAMES.has(fname)
-                ? await runTool(fname, c.functionCall.args || {}, toolOrg!, toolUser ?? null, guard)
+                ? await runTool(fname, vault.restoreDeep(c.functionCall.args || {}), toolOrg!, toolUser ?? null, guard)
                 : { ok: false, error: `Unknown tool: ${fname}` };
-              responses.push({ functionResponse: { name: fname, response: forModel(result, guard) } });
+              responses.push({ functionResponse: { name: fname, response: vault.redactDeep(forModel(result, guard)) } });
             }
             contents = [...contents, { role: "user", parts: responses }];
 
@@ -324,11 +339,11 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
     }
     // ---- Groq (FREE: console.groq.com) — OpenAI-compatible ----
     if (provider === "groq" && aiKey("GROQ_API_KEY")) {
-      return await openaiCompatible("groq", "https://api.groq.com/openai/v1/chat/completions", aiKey("GROQ_API_KEY")!, groqModel(), sys, messages, toolOrg, toolUser, guard);
+      return await openaiCompatible("groq", "https://api.groq.com/openai/v1/chat/completions", aiKey("GROQ_API_KEY")!, groqModel(), sys, messages, toolOrg, toolUser, guard, vault);
     }
     // ---- OpenAI ----
     if (provider === "openai" && aiKey("OPENAI_API_KEY")) {
-      return await openaiCompatible("openai", "https://api.openai.com/v1/chat/completions", aiKey("OPENAI_API_KEY")!, openaiModel(), sys, messages, toolOrg, toolUser, guard);
+      return await openaiCompatible("openai", "https://api.openai.com/v1/chat/completions", aiKey("OPENAI_API_KEY")!, openaiModel(), sys, messages, toolOrg, toolUser, guard, vault);
     }
     // ---- Anthropic ----
     if (provider === "anthropic" && aiKey("ANTHROPIC_API_KEY")) {
@@ -365,7 +380,7 @@ const TOOLS_UNSUPPORTED = new Set<string>();
 
 async function openaiCompatible(
   label: string, url: string, key: string, model: string, sys: string, messages: Msg[],
-  toolOrg?: string | null, toolUser?: string | null, guard: RunGuard = newRunGuard(),
+  toolOrg?: string | null, toolUser?: string | null, guard: RunGuard = newRunGuard(), vault: Vault = NO_REDACTION,
 ): Promise<string | null> {
   const useTools = Boolean(toolOrg);
   let convo: any[] = [{ role: "system", content: sys }, ...messages];
@@ -408,9 +423,9 @@ async function openaiCompatible(
       let args: any = {};
       try { args = c?.function?.arguments ? JSON.parse(c.function.arguments) : {}; } catch { args = {}; }
       const result = TOOL_NAMES.has(fname)
-        ? await runTool(fname, args, toolOrg!, toolUser ?? null, guard)
+        ? await runTool(fname, vault.restoreDeep(args), toolOrg!, toolUser ?? null, guard)
         : { ok: false, error: `Unknown tool: ${fname}` };
-      convo.push({ role: "tool", tool_call_id: c.id, content: JSON.stringify(forModel(result, guard)) });
+      convo.push({ role: "tool", tool_call_id: c.id, content: JSON.stringify(vault.redactDeep(forModel(result, guard))) });
     }
   }
   return null;

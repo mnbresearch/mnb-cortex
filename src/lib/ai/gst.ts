@@ -7,6 +7,7 @@ import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
 import { groqModel } from "@/lib/ai/model-defaults";
 import { neutraliseLines, cleanInsights, fence, UNTRUSTED_RULE } from "@/lib/ai/untrusted";
 import { groundGst, type Integrity } from "@/lib/ai/extraction-integrity";
+import { vaultFor } from "@/lib/ai/dlp-server";
 
 export type GstCheck = { label: string; ok: boolean };
 export type GstSignal = { label: string; tone: "good" | "warn" | "bad" | "info"; detail: string };
@@ -111,7 +112,9 @@ const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 :
 export async function analyzeGst(text: string): Promise<GstAnalysis | null> {
   // LLM01: withhold instruction-shaped lines; every saved figure must be printed in the return.
   const scan = neutraliseLines(text);
-  const raw = await callJson(buildPrompt(scan.text));
+  /* DLP: GSTIN/PAN and names tokenised; figures kept and grounded against the original. */
+  const vault = await vaultFor(null, { keepAmounts: true });
+  const raw = vault.restoreDeep(await callJson(buildPrompt(vault.redact(scan.text))));
   if (!raw) return null;
 
   const g = groundGst(raw, scan.text.slice(0, 16000), scan);

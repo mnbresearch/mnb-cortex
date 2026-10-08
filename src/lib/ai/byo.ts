@@ -172,7 +172,9 @@ export function aiKey(envName: string): string | undefined {
  */
 export async function withOrgAiKeys<T>(orgId: string | null | undefined, fn: () => Promise<T>): Promise<T> {
   const keys = await loadOrgAiKeys(orgId);
-  return store.run(keys, fn);
+  /* Cron paths enter here, not through chargeForMode: scope the redaction vault to the same workspace. */
+  const { runWithDlp } = await import("@/lib/ai/dlp-server");
+  return store.run(keys, () => runWithDlp(orgId, fn));
 }
 
 /** True when this request is running on the workspace's OWN key. */

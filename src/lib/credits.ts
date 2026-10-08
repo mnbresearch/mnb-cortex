@@ -244,6 +244,8 @@ export async function chargeOrgForMode(
   const { loadOrgAiKeys, enterOrgAiKeys } = await import("@/lib/ai/byo");
   const byo = await loadOrgAiKeys(orgId);
   enterOrgAiKeys(byo);
+  /* The same choke point tells the redaction layer whose data this request carries (ai/dlp-server.ts). */
+  try { (await import("@/lib/ai/dlp-server")).enterDlp(orgId); } catch { /* redaction falls back to the session's workspace */ }
 
   const svc = serviceClient();
   if (!svc) return { ok: true, enforced: false, cost, balance: 0 };

@@ -183,7 +183,7 @@ const bank = read("src/lib/ai/bankstatement.ts");
 const gst = read("src/lib/ai/gst.ts");
 const persist = read("src/lib/persist-analysis.ts");
 for (const [name, s] of [["bankstatement", bank], ["gst", gst]]) {
-  check(/neutraliseLines\(text\)/.test(s) && /callJson\(buildPrompt\(scan\.text\)\)/.test(s), `E: ${name} sends only the neutralised text to the model`);
+  check(/neutraliseLines\(text\)/.test(s) && /callJson\(buildPrompt\(vault\.redact\(scan\.text\)\)\)/.test(s), `E: ${name} sends only the neutralised (and redacted) text to the model`);
   check(/fence\(/.test(s) && /UNTRUSTED_RULE/.test(s), `E: ${name} fences the document and states the rule`);
   check(/cleanInsights\(raw\.insights\)/.test(s), `E: ${name} drops instruction-carrying insights`);
   check(/integrity,\s*\n\s*};/.test(s), `E: ${name} returns the integrity record`);
@@ -288,11 +288,15 @@ const { CATALOGUE_BY_KEY: CAT } = await import("../src/lib/engine/catalogue.ts")
   const cx = read("src/lib/ai/cortex.ts");
   const led = read("src/lib/engine/ledger.ts");
   const tl = read("src/lib/ai/tools.ts");
-  check((cx.match(/runTool\([^)]*guard\)/g) || []).length === 2, "F: both tool loops pass the run guard to runTool");
+  check((cx.match(/toolUser \?\? null, guard\)/g) || []).length === 2, "F: both tool loops pass the run guard to runTool");
   check((cx.match(/forModel\(result, guard\)/g) || []).length === 2, "F: both tool loops show the model results marked as data");
   check(/const guard = newRunGuard\(\);/.test(cx.slice(cx.indexOf("async function runOnce"))), "F: each answer gets its own guard");
-  check(/context2 = `\$\{fence\("business snapshot", context\)\}\$\{extra/.test(cx), "F: the snapshot is fenced and the owner's instructions sit outside the fence");
-  check(/if \(context2 === context\) context2 = fence\("business snapshot", context\)/.test(cx), "F: no session → snapshot still fenced");
+  check(/context2 = `\$\{fence\("business snapshot", vault\.redact\(context\)\)\}\$\{vault\.redact\(extra\)\}`/.test(cx), "F: the snapshot is fenced and the owner's instructions sit outside the fence");
+  {
+    const rc = cx.slice(cx.indexOf("export async function runCortex"), cx.indexOf("async function runOnce"));
+    const tryEnd = rc.indexOf("} catch { /* no session or no table");
+    check(tryEnd > 0 && rc.indexOf('context2 = `${fence("business snapshot"') > tryEnd, "F: no session → snapshot still fenced (fencing happens after, not inside, the session lookup)");
+  }
   check(/const sys = systemPrompt\(fence\("business snapshot", context\)\)/.test(cx), "F: the session-less stream path fences too");
   check(!/--- BUSINESS SNAPSHOT ---\\n\$\{context\}`;\s*\n\s*(const openaiLike|try)/.test(cx), "F: no unfenced snapshot prompt remains");
   check(/\$\{UNTRUSTED_RULE\}/.test(cx.slice(0, cx.indexOf("function systemPrompt"))), "F: the system prompt states the rule");

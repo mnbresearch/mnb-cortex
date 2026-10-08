@@ -1,4 +1,5 @@
 import "server-only";
+import { vaultFor } from "@/lib/ai/dlp-server";
 import { geminiTextModels } from "@/lib/ai/models";
 import { aiKey } from "@/lib/ai/byo";
 import { generationConfig, FAST } from "@/lib/ai/generation";
@@ -47,7 +48,9 @@ export type PlanOutcome =
   | { ok: false; problems: string[]; note: string; error: string };
 
 export async function planWorkflowWithModel(instruction: string): Promise<PlanOutcome> {
-  const raw = await askJson(`REQUEST\n${instruction.slice(0, 600)}`);
+  /* DLP: a party named in the request is tokenised; the plan's arguments get the real name back. */
+  const vault = await vaultFor();
+  const raw = vault.restoreDeep(await askJson(vault.redact(`REQUEST\n${instruction.slice(0, 600)}`)));
   if (!raw) return { ok: false, error: "Cortex could not plan that right now — the AI provider did not answer. Try again in a moment.", problems: [], note: "" };
   const note = String((raw as any)?.note || "").slice(0, 300);
   const steps = (raw as any)?.steps;

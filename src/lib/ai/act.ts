@@ -1,5 +1,6 @@
 // Act-on-your-behalf — Cortex drafts a ready-to-send message; the user approves & sends.
 import "server-only";
+import { vaultFor } from "@/lib/ai/dlp-server";
 import { geminiTextModels } from "@/lib/ai/models";
 import { aiKey } from "@/lib/ai/byo";
 import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
@@ -28,6 +29,13 @@ function safeJson(t: string): any | null {
 }
 
 export async function draftOutreach(kind: string, brief: string, context: string): Promise<Draft | null> {
+  /* DLP: the draft is written about [CUSTOMER_1]; the real name goes back in afterwards. */
+  const vault = await vaultFor();
+  const d = await draftOutreachRaw(kind, vault.redact(brief), vault.redact(context));
+  return d ? vault.restoreDeep(d) : null;
+}
+
+async function draftOutreachRaw(kind: string, brief: string, context: string): Promise<Draft | null> {
   const what = KINDS[kind] || KINDS.custom;
   const prompt = `Write ${what}.
 

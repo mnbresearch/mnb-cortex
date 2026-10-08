@@ -1,4 +1,5 @@
 import "server-only";
+import { vaultFor } from "@/lib/ai/dlp-server";
 import { geminiTextModels } from "@/lib/ai/models";
 import { aiKey } from "@/lib/ai/byo";
 import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
@@ -118,7 +119,9 @@ Rules: pick the tool that best helps do each action; do not invent tools; base e
 BUSINESS DATA:
 ${context.slice(0, 6000)}`;
 
-  const raw = await callJson(prompt, sys);
+  /* DLP: the business data is tokenised before it leaves; the priorities come back with real names. */
+  const vault = await vaultFor();
+  const raw = vault.restoreDeep(await callJson(vault.redact(prompt), sys));
   if (!raw || !raw.length) return { priorities: RULES, mode: "rules" };
 
   const out: Priority[] = [];

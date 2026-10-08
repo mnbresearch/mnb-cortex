@@ -1,4 +1,5 @@
 import "server-only";
+import { vaultFor } from "@/lib/ai/dlp-server";
 import ExcelJS from "exceljs";
 import { geminiTextModels } from "@/lib/ai/models";
 import { aiKey } from "@/lib/ai/byo";
@@ -128,8 +129,10 @@ export type PlanResult =
   | { ok: false; error: string; problems?: string[]; note?: string };
 
 export async function planWithModel(table: Table, instruction: string): Promise<PlanResult> {
+  /* DLP: sample cells are tokenised (names, IDs); figures stay so the plan can reason about them. Values in the plan are restored. */
+  const vault = await vaultFor(null, { keepAmounts: true });
   const prompt = `SPREADSHEET\n${summarise(table)}\n\nREQUEST\n${instruction.slice(0, 600)}`;
-  const raw = await askJson(prompt);
+  const raw = vault.restoreDeep(await askJson(vault.redact(prompt)));
   if (!raw) return { ok: false, error: "Cortex could not plan that right now — the AI provider did not answer. Try again in a moment." };
   const plan = (raw as any)?.plan;
   const note = String((raw as any)?.note || "").slice(0, 300);
