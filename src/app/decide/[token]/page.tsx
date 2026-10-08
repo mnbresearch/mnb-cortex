@@ -4,6 +4,7 @@ import { verifyDecision } from "@/lib/engine/decision-links";
 import { serviceClient } from "@/lib/supabase/server";
 import { CATALOGUE_BY_KEY } from "@/lib/engine/catalogue";
 import { DecideButtons } from "./decide-buttons";
+import { isHighImpact } from "@/lib/engine/policy";
 
 export const dynamic = "force-dynamic";
 /* The URL is a bearer link: never send it onward as a Referer, never index it. */
@@ -60,7 +61,7 @@ export default async function DecidePage({ params }: { params: { token: string }
               {proposal.policy_reason ? ` · ${proposal.policy_reason}` : ""}
             </div>
             {waiting ? (
-              <DecideButtons token={token} />
+              <DecideButtons token={token} canApprove={!(def && isHighImpact(def))} />
             ) : (
               <div className="rounded-lg bg-muted/50 p-3 text-sm">
                 {proposal.status === "done" && <>Already approved and run{proposal.decided_at ? ` on ${new Date(proposal.decided_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}` : ""}.</>}

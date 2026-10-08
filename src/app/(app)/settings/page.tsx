@@ -16,7 +16,8 @@ import { isSuperAdmin } from "@/lib/superadmin";
 import { ACCENT_NAMES } from "@/lib/utils";
 import { INDUSTRIES as AGENT_INDUSTRIES, SECTORS } from "@/lib/agents/catalog";
 import { BackupButton } from "@/components/backup-button";
-import { Database, LogOut, Building2 } from "lucide-react";
+import { Database, LogOut, Building2, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +136,10 @@ export default async function Settings() {
                   </p>
                 )}
               </div>
+            </Section>
+
+            <Section title="Security" desc="Two-step sign-in for high-impact actions, and what Cortex hides from AI vendors">
+              <Link href="/settings/security" className="inline-flex items-center gap-2 rounded-lg border h-9 px-3 text-sm font-medium hover:bg-accent"><ShieldCheck className="h-4 w-4" aria-hidden="true" /> Open security settings</Link>
             </Section>
 
             <Section title="Account">

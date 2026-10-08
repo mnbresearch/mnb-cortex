@@ -3,7 +3,13 @@ import { useState } from "react";
 import { Check, X, Loader2 } from "lucide-react";
 import { decideByToken, type DecideResult } from "./actions";
 
-export function DecideButtons({ token }: { token: string }) {
+/*
+  canApprove=false for actions that move money or contact someone outside the
+  team: an email link carries no second factor, so those are approved in the
+  app. Rejecting stays available — doing less is always safe. The server
+  action enforces the same rule; this only keeps the page honest.
+*/
+export function DecideButtons({ token, canApprove = true }: { token: string; canApprove?: boolean }) {
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
   const [result, setResult] = useState<DecideResult | null>(null);
 
@@ -23,11 +29,17 @@ export function DecideButtons({ token }: { token: string }) {
     );
   }
   return (
-    <div className="flex items-center gap-2 pt-1">
+    <div className="flex flex-wrap items-center gap-2 pt-1">
+      {canApprove ? (
       <button type="button" onClick={() => go("approve")} disabled={busy !== null}
         className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-11 px-5 text-sm font-medium disabled:opacity-60">
         {busy === "approve" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />} Approve & run
       </button>
+      ) : (
+        <a href="/approvals" className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-11 px-5 text-sm font-medium">
+          <Check className="h-4 w-4" aria-hidden="true" /> Approve in the app
+        </a>
+      )}
       <button type="button" onClick={() => go("reject")} disabled={busy !== null}
         className="inline-flex items-center gap-2 rounded-lg border h-11 px-5 text-sm font-medium hover:bg-accent disabled:opacity-60">
         {busy === "reject" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <X className="h-4 w-4" aria-hidden="true" />} Reject

@@ -81,6 +81,15 @@ export type Usage = {
 
 export type Verdict = { verdict: "auto" | "approve" | "blocked"; reason: string };
 
+/**
+ * High impact = moves money or contacts someone outside the team. Approving,
+ * undoing or automating one requires a second factor (lib/strong-auth.ts),
+ * and an emailed decision link cannot approve one.
+ */
+export function isHighImpact(def: Pick<ActionDef, "effect">): boolean {
+  return CAPPED_EFFECTS.has(def.effect);
+}
+
 /** Which actions the schema and this engine insist have caps before 'auto'. */
 export function requiresCaps(def: ActionDef): boolean {
   return CAPPED_EFFECTS.has(def.effect);

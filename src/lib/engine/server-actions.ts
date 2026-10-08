@@ -5,6 +5,8 @@ import { getUserAndOrg } from "@/lib/data";
 import { ok, fail, type ActionResult } from "@/lib/action-result";
 import { CATALOGUE_BY_KEY, isActionKey } from "./catalogue";
 import * as ledger from "./ledger";
+import { isHighImpact } from "./policy";
+import { requireStrongAuth, currentAal } from "@/lib/strong-auth";
 
 /*
   SERVER ACTIONS FOR THE ENGINE.
@@ -61,7 +63,16 @@ export async function approveProposal(fd: FormData): Promise<ActionResult> {
   const def = action ? CATALOGUE_BY_KEY[action] : undefined;
   if (!def) return fail("That proposal was not found in this workspace.");
   await assertRole(def.minRank);
-  const r = await ledger.approve(id, orgId, userId);
+  /* Money and outbound need a second factor; the level is signed into the approval. */
+  let aal: "aal1" | "aal2" = "aal1";
+  if (isHighImpact(def)) {
+    const sa = await requireStrongAuth(orgId, `approve "${def.title}"`);
+    if (!sa.ok) return fail(sa.message);
+    aal = sa.aal;
+  } else {
+    aal = await currentAal();
+  }
+  const r = await ledger.approve(id, orgId, userId, aal);
   bump();
   return r.ok ? ok(r.summary) : fail(r.error);
 }
@@ -87,6 +98,10 @@ export async function undoProposal(fd: FormData): Promise<ActionResult> {
   const def = action ? CATALOGUE_BY_KEY[action] : undefined;
   if (!def) return fail("That proposal was not found in this workspace.");
   await assertRole(def.minRank);
+  if (isHighImpact(def)) {
+    const sa = await requireStrongAuth(orgId, `undo "${def.title}"`);
+    if (!sa.ok) return fail(sa.message);
+  }
   const r = await ledger.undo(id, orgId, userId);
   bump();
   return r.ok ? ok(r.summary) : fail(r.error);
@@ -104,6 +119,12 @@ export async function savePolicy(fd: FormData): Promise<ActionResult> {
     max_amount_inr: num("max_amount_inr"),
     known_parties_only: String(fd.get("known_parties_only") || "") === "on",
   };
+  /* Letting Cortex move money or message people on its own is itself high impact. */
+  const pdef = isActionKey(action) ? CATALOGUE_BY_KEY[action] : undefined;
+  if (mode === "auto" && pdef && isHighImpact(pdef)) {
+    const sa = await requireStrongAuth(orgId, `let "${pdef.title}" run on its own`);
+    if (!sa.ok) return fail(sa.message);
+  }
   const r = await ledger.setPolicy(orgId, action, mode as any, caps, userId);
   revalidatePath("/approvals/rules"); revalidatePath("/approvals");
   return r.ok ? ok("Rule saved.") : fail(r.error);
@@ -121,6 +142,11 @@ export async function acceptAutonomy(fd: FormData): Promise<ActionResult> {
   const action = String(fd.get("action") || "");
   const s = (await ledger.autonomySuggestions(orgId)).find((x) => x.action === action);
   if (!s) return fail("That suggestion no longer applies — the history changed. Set a rule by hand under Rules if you still want it.");
+  const adef = CATALOGUE_BY_KEY[action];
+  if (adef && isHighImpact(adef)) {
+    const sa = await requireStrongAuth(orgId, `let "${adef.title}" run on its own`);
+    if (!sa.ok) return fail(sa.message);
+  }
   const r = await ledger.setPolicy(orgId, action, "auto", s.caps, userId);
   revalidatePath("/approvals/rules"); revalidatePath("/approvals");
   return r.ok ? ok(`Done. ${CATALOGUE_BY_KEY[action]?.title || action} now runs on its own within: up to ${s.caps.max_per_day} a day${s.caps.max_amount_inr ? `, up to ₹${Math.round(s.caps.max_amount_inr).toLocaleString("en-IN")} each` : ""}${s.caps.known_parties_only ? ", known parties only" : ""}. Change or revoke it any time under Rules.`) : fail(r.error);

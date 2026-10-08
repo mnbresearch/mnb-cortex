@@ -1419,6 +1419,13 @@ async function requireCapability(orgId: string, cap: Parameters<typeof planInclu
 
 export async function generateApiKey(fd: FormData) {
   const { orgId } = await requireRole("admin"); const sb = await createClient();
+  /* An API key reads the whole workspace from outside: issuing one needs a second factor. */
+  {
+    const { requireStrongAuth } = await import("@/lib/strong-auth");
+    const sa = await requireStrongAuth(orgId, "issue an API key");
+    /* Returned, not thrown: Next replaces a thrown server-action message with a generic one in production. */
+    if (!sa.ok) return { key: null as string | null, error: sa.message };
+  }
 
   /*
     ENTITLEMENT. "Public API + outbound webhooks" is a Watch Pro bullet at
@@ -1430,10 +1437,11 @@ export async function generateApiKey(fd: FormData) {
   const { data: org } = await sb.from("organizations").select("plan").eq("id", orgId).single();
   const plan = String((org as any)?.plan || "");
   if (!planIncludes(plan, "api")) {
-    throw new Error(
-      `The public API is part of ${lowestPlanWith("api")} and above. Your existing keys keep working — ` +
-      `upgrade under Billing to issue new ones.`,
-    );
+    return {
+      key: null as string | null,
+      error: `The public API is part of ${lowestPlanWith("api")} and above. Your existing keys keep working — ` +
+        `upgrade under Billing to issue new ones.`,
+    };
   }
 
   /*
@@ -1564,6 +1572,12 @@ export async function revokeReportLink(fd: FormData) {
 export async function addWebhook(fd: FormData): Promise<ActionResult | void> {
   const { orgId } = await requireRole("admin");
   await requireCapability(orgId, "webhooks", "Outbound webhooks");
+  /* A webhook sends workspace events to a URL outside: adding one needs a second factor. */
+  {
+    const { requireStrongAuth } = await import("@/lib/strong-auth");
+    const sa = await requireStrongAuth(orgId, "send events to an outside address");
+    if (!sa.ok) return fail(sa.message);
+  }
   const url = str(fd.get("url"));
   if (!/^https:\/\/.+/i.test(url)) return fail("Enter an https:// URL — plain http isn't accepted for webhooks.");
   const label = str(fd.get("label"));
@@ -1886,6 +1900,12 @@ export async function approveMessage(fd: FormData): Promise<{ ok: boolean; error
   let orgId: string;
   try { orgId = await requireWriteOrg(); }
   catch { return { ok: false, error: "Sign in to approve." }; }
+  /* Approving a message means it goes to a customer: a second factor first. */
+  {
+    const { requireStrongAuth } = await import("@/lib/strong-auth");
+    const sa = await requireStrongAuth(orgId, "approve a message to a customer");
+    if (!sa.ok) return { ok: false, error: sa.message };
+  }
   const id = str(fd.get("id"));
   const sb = await createClient();
   /*

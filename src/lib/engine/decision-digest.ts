@@ -4,6 +4,7 @@ import { sendEmail } from "@/lib/email";
 import { brandFrom, renderBrandedEmail } from "@/lib/branded-email";
 import { ownerContact } from "@/lib/alert-delivery";
 import { CATALOGUE_BY_KEY } from "@/lib/engine/catalogue";
+import { isHighImpact } from "@/lib/engine/policy";
 import { signDecision, decisionUrl } from "@/lib/engine/decision-links";
 import type { Budget } from "@/lib/cron-budget";
 
@@ -98,7 +99,9 @@ export async function sendDecisionDigests(origin: string, budget?: Budget): Prom
       const why = p.rationale ? `\nWhy: ${String(p.rationale).slice(0, 240)}` : "";
       const ev = Array.isArray(p.evidence) && p.evidence.length ? `\nLooked at: ${p.evidence.slice(0, 3).map((e: unknown) => String(e).slice(0, 80)).join("; ")}` : "";
       const token = signDecision({ p: p.id, o: orgId, u: to.userId, expiresAt: p.expires_at });
-      const link = token ? `\nDecide: ${decisionUrl(origin, token)}` : "";
+      /* Money and outbound need a second factor, which an email link cannot carry: it opens the proposal and can reject; approving happens in the app. */
+      const high = def ? isHighImpact(def) : true;
+      const link = token ? (high ? `\nReview (approve in the app with your second factor, or reject here): ${decisionUrl(origin, token)}` : `\nDecide: ${decisionUrl(origin, token)}`) : "";
       if (token) linked++;
       lines.push(`${what}${why}${ev}\nProposed by ${p.source === "chat" ? "you, in chat" : p.source}${def?.reversible ? " · reversible" : " · cannot be undone once run"}${link}`);
     }

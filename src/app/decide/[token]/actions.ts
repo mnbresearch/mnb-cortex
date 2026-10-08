@@ -5,7 +5,7 @@ import { approve, reject } from "@/lib/engine/ledger";
 import { enforce } from "@/lib/ratelimit";
 import { serviceClient } from "@/lib/supabase/server";
 import { CATALOGUE_BY_KEY } from "@/lib/engine/catalogue";
-import { RANK } from "@/lib/engine/policy";
+import { RANK, isHighImpact } from "@/lib/engine/policy";
 
 /*
   The POST behind the two buttons on /decide/[token].
@@ -44,6 +44,16 @@ export async function decideByToken(token: string, verb: "approve" | "reject"): 
     if (!def) return { ok: false, error: "That proposal no longer exists." };
     if (!mem || (RANK[String((mem as any).role)] || 0) < (RANK[def.minRank] || 0)) {
       return { ok: false, error: `This link was sent to someone who no longer has ${def.minRank} rights in this workspace. Decide on the Approvals page instead.` };
+    }
+    /*
+      An email link proves who it was sent to, not who is holding it, and it
+      carries no second factor. So it can REJECT anything (doing less is always
+      safe) but cannot APPROVE an action that moves money or contacts someone
+      outside the team — that needs the app, where the approver confirms with
+      their authenticator and the level is signed into the approval.
+    */
+    if (verb === "approve" && isHighImpact(def)) {
+      return { ok: false, error: `"${def.title}" ${def.effect === "money" ? "changes money records" : "contacts someone outside your team"}, so it can only be approved in the app with your second factor. Open the Approvals page to approve it — or reject it here.` };
     }
   } catch (e: any) {
     return { ok: false, error: e?.message || "Could not check your access." };

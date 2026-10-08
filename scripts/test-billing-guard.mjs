@@ -49,7 +49,11 @@ const widenSql = readFileSync(WIDENING, "utf8")
   /* Strip the trailing verify SELECT; PGlite's exec is fine with it but the
      result is noise and cortex_has_billing_guard may not exist yet. */
   .replace(/\/\* -+ verify -+[\s\S]*$/, "");
-const sql = `${baseSql}\n${widenSql}`;
+/* 2026_zzzu widens it again for the two security settings (require_mfa_high_impact,
+   ai_redaction): a password-only session must not be able to switch them off. */
+const SECURITY = "supabase/migrations/2026_zzzu_security_controls.sql";
+const securitySql = readFileSync(SECURITY, "utf8").replace(/\/\* -+ verify -+[\s\S]*$/, "");
+const sql = `${baseSql}\n${widenSql}\n${securitySql}`;
 
 /* The migration must actually be the thing under test. */
 check(/create trigger cortex_org_billing_guard/i.test(sql),
@@ -109,6 +113,7 @@ async function main() {
       statutory_profile jsonb,
       billing_phone text
     );
+    create table action_proposals (id uuid primary key default gen_random_uuid());
     grant select, update on organizations to authenticated, anon, service_role;
   `);
 

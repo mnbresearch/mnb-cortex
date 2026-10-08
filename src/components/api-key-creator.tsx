@@ -37,7 +37,8 @@ export function ApiKeyCreator() {
       try {
         const fd = new FormData();
         fd.set("label", label.trim() || "API key");
-        const r = await generateApiKey(fd);
+        const r: { key?: string | null; error?: string } | undefined = await generateApiKey(fd);
+        if (r?.error) { setErr(r.error); return; }
         setKey(r?.key || null);
         setLabel("");
       } catch (e: any) {

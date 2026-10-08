@@ -725,6 +725,13 @@ async function checkSchema(): Promise<Check> {
     /* Without this the "needs your decision" email never goes out — by design,
        since it has nowhere to record that it did. */
     ["action_proposals", "notified_at", "2026_zzzs_proposal_notify"],
+    /* Signed approvals and the security settings. Without them approvals run
+       unsigned and the MFA / redaction settings cannot be saved (the code
+       falls back to the strict defaults, so nothing is LOOSER — but the owner
+       cannot change anything on /settings/security). */
+    ["action_proposals", "approval_sig", "2026_zzzu_security_controls"],
+    ["organizations", "require_mfa_high_impact", "2026_zzzu_security_controls"],
+    ["organizations", "ai_redaction", "2026_zzzu_security_controls"],
     /*
       BOTH COLUMNS, because one of them is load-bearing for the most important
       path in the product.

@@ -249,6 +249,12 @@ export async function POST(req: Request) {
 
     if (op === "connect") {
       if (!meta) return NextResponse.json({ ok: false, error: "Unknown integration" }, { status: 400 });
+      /* Handing Cortex a credential to an outside system needs a second factor. */
+      {
+        const { requireStrongAuth } = await import("@/lib/strong-auth");
+        const sa = await requireStrongAuth(orgId, `connect ${meta.name}`);
+        if (!sa.ok) return NextResponse.json({ ok: false, error: sa.message, needsMfa: sa.reason }, { status: 200 });
+      }
       // Plan gate
       if (!planAllows(plan, meta)) {
         return NextResponse.json({ ok: false, error: `${meta.name} requires the ${meta.minPlan} plan or higher.`, upgrade: meta.minPlan }, { status: 200 });

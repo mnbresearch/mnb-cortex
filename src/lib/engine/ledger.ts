@@ -5,6 +5,7 @@ import { CATALOGUE_BY_KEY, isActionKey, validateArgs, type ActionDef } from "./c
 import { scanForInjection } from "@/lib/ai/untrusted";
 import { decide, gateVerdict, suggestAutonomy, normaliseCaps, requiresCaps, type Policy, type Usage, type Verdict } from "./policy";
 import { HANDLERS, undoHandler } from "./handlers";
+import { signApproval, verifyApproval } from "./approval-sig";
 
 /*
   THE LEDGER — the only way an action gets from "Cortex wants to" to "done".
@@ -61,6 +62,28 @@ async function mark(id: string, orgId: string, patch: Record<string, unknown>): 
   if (error) { console.error(`[engine] could not update proposal ${id}: ${error.message}`); return false; }
   if (!data || data.length !== 1) { console.error(`[engine] proposal ${id} vanished mid-flight (status write touched ${data?.length ?? 0} rows)`); return false; }
   return true;
+}
+
+/*
+  Sign an approval over the exact arguments being approved (approval-sig.ts).
+  "no-column" = 2026_zzzu not applied yet: the ledger runs as before, unsigned,
+  and execute() skips the check because the row has no signature column at all.
+  Any other failure is reported, never ignored.
+*/
+type SigWrite = "ok" | "no-column" | "no-key" | "failed";
+async function writeSignature(id: string, orgId: string, action: string, args: unknown, approver: string, aal: string): Promise<SigWrite> {
+  const s = signApproval({ id, orgId, action, args, approver, aal });
+  if (!s) return "no-key";
+  const svc = svcOrThrow();
+  const { data, error } = await svc.from("action_proposals")
+    .update({ approval_sig: s.sig, approval_args_hash: s.argsHash, approved_aal: aal })
+    .eq("id", id).eq("org_id", orgId).eq("status", "approved").select("id");
+  if (error) {
+    const m = `${(error as any).code || ""} ${error.message || ""}`;
+    if (/PGRST204|42703|approval_sig|approved_aal|approval_args_hash/.test(m)) return "no-column";
+    return "failed";
+  }
+  return data && data.length === 1 ? "ok" : "failed";
 }
 
 /** Start of today in IST, as an ISO string — every customer is in India. */
@@ -186,6 +209,12 @@ export async function propose(input: ProposeInput): Promise<ProposeOutcome> {
   if (!data) return { ok: false, error: "The proposal was not recorded." };
 
   if (verdict.verdict === "auto") {
+    /* The owner's rule is the approver; sign it as such before anything runs. */
+    const signed = await writeSignature((data as any).id, input.orgId, def.key, v.args, "policy", "policy");
+    if (signed === "no-key" || signed === "failed") {
+      await mark((data as any).id, input.orgId, { status: "proposed", policy_verdict: "approve", policy_reason: "Allowed by your rule, but the approval could not be signed, so it waits for you.", decided_at: null });
+      return { ok: true, proposal: { ...(data as any), status: "proposed" } as Proposal, verdict: { verdict: "approve", reason: "The approval could not be signed, so it waits for you." } };
+    }
     const r = await execute((data as any).id, input.orgId, input.proposedBy ?? null, { recheckPolicy: true });
     const executed = r.ok ? { ok: true, summary: r.summary } : { ok: false, error: r.error };
     const { data: fresh } = await svc.from("action_proposals").select("*").eq("id", (data as any).id).maybeSingle();
@@ -201,14 +230,30 @@ function defaultKey(orgId: string, action: string, args: Record<string, unknown>
 }
 
 /** A human says yes. Moves proposed → approved, then executes. */
-export async function approve(id: string, orgId: string, actorId: string): Promise<{ ok: true; summary: string } | { ok: false; error: string }> {
+/**
+ * A human says yes. Moves proposed → approved, signs the approval over the
+ * arguments as they stand (approval-sig.ts), then executes.
+ *
+ * `aal` is the assurance level of the approver's session: "aal2" when they
+ * confirmed with a second factor. It is part of what is signed, so a record
+ * cannot later be made to claim a stronger approval than was given.
+ */
+export async function approve(id: string, orgId: string, actorId: string, aal: "aal1" | "aal2" = "aal1"): Promise<{ ok: true; summary: string } | { ok: false; error: string }> {
   const svc = svcOrThrow();
   const { data: rows, error } = await svc.from("action_proposals")
     .update({ status: "approved", decided_by: actorId, decided_at: new Date().toISOString() })
     .eq("id", id).eq("org_id", orgId).eq("status", "proposed").gt("expires_at", new Date().toISOString())
-    .select("id");
+    .select("id, action, args");
   if (error) return { ok: false, error: error.message };
   if (!rows || rows.length !== 1) return { ok: false, error: "This proposal is no longer waiting — it may have been decided already, or expired." };
+  const row = rows[0] as any;
+  const signed = await writeSignature(id, orgId, row.action, row.args, actorId, aal);
+  if (signed === "no-key" || signed === "failed") {
+    await mark(id, orgId, { status: "proposed", decided_by: null, decided_at: null });
+    return { ok: false, error: signed === "no-key"
+      ? "This server has no signing key, so approvals cannot be signed and nothing was run. Set APPROVAL_SIGNING_SECRET."
+      : "The approval could not be signed, so nothing was run. Try again." };
+  }
   return execute(id, orgId, actorId, { recheckPolicy: false });
 }
 
@@ -244,6 +289,23 @@ export async function execute(id: string, orgId: string, actorId: string | null,
   if (!def) {
     await mark(id, orgId, { status: "failed", error: "Unknown action." });
     return { ok: false, error: "Unknown action." };
+  }
+
+  /*
+    THE SIGNATURE CHECK. Once 2026_zzzu is applied every row has the column;
+    an approved row then runs only if its signature verifies against the
+    arguments it is about to act on. A missing or wrong signature fails closed.
+    Before the migration the column does not exist on the row at all and this
+    is skipped — the behaviour every workspace had yesterday.
+  */
+  if (Object.prototype.hasOwnProperty.call(p, "approval_sig")) {
+    const r = p as any;
+    const valid = verifyApproval({ id, orgId, action: r.action, args: r.args, approver: r.decided_by || "policy", aal: String(r.approved_aal || "") }, r.approval_sig);
+    if (!valid) {
+      const why = "Not run: the approval does not match these details (they changed after approval, or the approval was never signed). Propose it again and approve the new one.";
+      await mark(id, orgId, { status: "failed", error: why, executed_at: new Date().toISOString() });
+      return { ok: false, error: why };
+    }
   }
 
   if (opts.recheckPolicy) {
