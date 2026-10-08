@@ -6,7 +6,7 @@ import { withOrgAiKeys } from "@/lib/ai/byo";
 import { recomputeMetrics } from "@/lib/metrics";
 import { statusOf, isLapsed } from "@/lib/entitlement";
 import { rotate } from "@/lib/cron-rotation";
-import { capFor, createBudget, SHARE } from "@/lib/cron-budget";
+import { capFor, createBudget, inWaves, SHARE } from "@/lib/cron-budget";
 import { nightsForFullCycle, COVERAGE_KEY } from "@/lib/cron-coverage";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +34,17 @@ function entitled(o: any): boolean {
   will never touch, and keeps the rotation's head short enough to reason about.
 */
 const COLLECTIONS_PER_MS = 17_000;
-const COLLECTIONS_CAP = capFor(SHARE.collections, COLLECTIONS_PER_MS);
+/* Five workspaces at a time (inWaves): the work is waiting on the database
+   and the mail/WhatsApp APIs, not on CPU, so the same 40s reaches five times
+   as many workspaces. The cap is what the waves can actually finish. */
+const COLLECTIONS_WIDTH = 5;
+const COLLECTIONS_CAP = capFor(SHARE.collections, COLLECTIONS_PER_MS) * COLLECTIONS_WIDTH;
+/* The nightly watch: ~3s per workspace, ten at a time. */
+const WATCH_PER_MS = 3_000;
+const WATCH_WIDTH = 10;
+const WATCH_CAP = capFor(SHARE.watch, WATCH_PER_MS) * WATCH_WIDTH;
+/* Daily analysis: one model call per workspace, six at a time. */
+const ANALYSIS_WIDTH = 6;
 
 export async function GET(req: Request) {
   let scheduledWorkflows = 0;
@@ -197,11 +207,10 @@ export async function GET(req: Request) {
             .select("org_id", { count: "exact", head: true }).eq("enabled", true);
           collectionsEnabled = Number(count ?? 0);
         } catch { /* leave at 0; the lane simply reports nothing */ }
-        for (const row of (on || [])) {
-          // ~17s worst case per workspace (drafting plus sends). Stopping
-          // before starting one we cannot finish is what keeps the rotation
-          // honest: an unswept workspace stays at the head of the queue.
-          if (!cBudget.ok(COLLECTIONS_PER_MS)) break;
+        await inWaves(on || [], COLLECTIONS_WIDTH, cBudget, COLLECTIONS_PER_MS, async (row: any) => {
+          // ~17s worst case per workspace (drafting plus sends). A wave starts
+          // only if the budget can finish it, so an unswept workspace stays at
+          // the head of the queue.
           const oid = String(row.org_id);
           try {
             const { data: o } = await svcC.from("organizations").select("name").eq("id", oid).single();
@@ -220,7 +229,7 @@ export async function GET(req: Request) {
             await svcC.from("collection_policies")
               .update({ last_swept_at: new Date().toISOString() }).eq("org_id", oid);
           } catch { /* column not migrated yet — rotation is best-effort */ }
-        }
+        });
       }
     } catch { /* never let this take the cron down */ }
 
@@ -411,9 +420,31 @@ export async function GET(req: Request) {
     by position in a list mostly made of lapsed accounts.
   */
   /* Derived from the share and the 9,000ms guard the loop enforces. */
-  const ANALYSIS_CAP = capFor(SHARE.analysis, 9_000);
+  const ANALYSIS_CAP = capFor(SHARE.analysis, 9_000) * ANALYSIS_WIDTH;
   const entitledOrgs = ((orgs as any[]) || []).filter(entitled);
   const skipped = (((orgs as any[]) || []).length) - entitledOrgs.length;
+
+  /*
+    THE NIGHTLY WATCH (lib/watch.ts) — Cortex acting on each workspace's own
+    records without being asked: reminders for the costliest overdue invoices,
+    MSME 45-day warnings, cold deals, hanging quotes — each a proposal on the
+    Approvals ledger, where the owner's rules decide (reminders wait for a tap
+    by default; alerts just appear). Before this, nothing proposed anything
+    unattended unless the owner had hand-written a workflow, so Approvals, the
+    decision digest and earned autonomy were empty for almost everyone.
+    Rotated over entitled workspaces, ten at a time.
+  */
+  const watch = await rotate("watch", entitledOrgs, WATCH_CAP);
+  let watched = 0, watchProposed = 0;
+  try {
+    const { runWatch } = await import("@/lib/watch");
+    watched = await inWaves(watch.batch, WATCH_WIDTH, budget.slice(SHARE.watch), WATCH_PER_MS, async (o: any) => {
+      const r = await runWatch(String(o.id));
+      watchProposed += r.proposed;
+    });
+  } catch (e: any) { console.error("[cron] watch step failed:", e?.message); }
+  await watch.commit(watched);
+
   const analysis = await rotate("daily_analysis", entitledOrgs, ANALYSIS_CAP);
 
   /*
@@ -427,12 +458,16 @@ export async function GET(req: Request) {
   */
   const aBudget = budget.slice(SHARE.analysis);
   let ran = 0;
-  for (const o of analysis.batch) {
-    // One analysis is a model call: 4-8s. Do not start a tenth one with five
-    // seconds left — the alert and activity writes after it would be lost.
-    if (ran >= ANALYSIS_CAP || !aBudget.ok(9_000)) break;
+  /*
+    Six at a time, and written as the workspace's AI insight — not as an
+    alert. As an alert it filled the bell daily, arrived a day late in the
+    alert email (delivery runs before this step), and was introduced there as
+    "crossed a line you set", which it never had. One `autopilot` insight per
+    workspace, replaced each night; recomputeMetrics leaves it alone.
+  */
+  const analysed = await inWaves(analysis.batch, ANALYSIS_WIDTH, aBudget, 9_000, async (o: any) => {
     const { data: m } = await sb.from("health_metrics").select("label,value,unit,delta_pct,status").eq("org_id", o.id);
-    if (!m?.length) continue;
+    if (!m?.length) return;
     // Same null-delta guard as getBusinessContext(): "null%" is not a change.
     const ctx = "KEY METRICS:\n" + m.map((x: any) => {
       const d = typeof x.delta_pct === "number" && Number.isFinite(x.delta_pct)
@@ -446,12 +481,20 @@ export async function GET(req: Request) {
       precisely so that would not happen.
     */
     let text = "";
-    try { text = await withOrgAiKeys(o.id, () => generateFor("pulse", "", ctx)); } catch { continue; }
-    await sb.from("alerts").insert({ org_id: o.id, severity: "yellow", module: "autopilot", title: "Autopilot daily analysis", body: text.slice(0, 400) });
+    try { text = await withOrgAiKeys(o.id, () => generateFor("pulse", "", ctx)); } catch { return; }
+    if (!text.trim() || text.startsWith("I couldn't reach the AI engine")) return;
+    const stamp = new Date().toISOString();
+    const { error: insErr } = await sb.from("ai_insights").insert({
+      org_id: o.id, module: "autopilot", severity: "yellow", title: "Tonight's read of your numbers",
+      detail: text.slice(0, 2000), confidence: 0.7, recommended_actions: [], created_at: stamp,
+    });
+    if (insErr) return;
+    await sb.from("ai_insights").delete().eq("org_id", o.id).eq("module", "autopilot").lt("created_at", stamp);
     await sb.from("activity").insert({ org_id: o.id, type: "ai", message: "Autopilot ran the daily business analysis" });
     ran++;
-  }
-  await analysis.commit(ran);
+  });
+  /* Commit what the waves reached (a prefix of the batch), including workspaces with no metrics yet. */
+  await analysis.commit(analysed);
 
   // Heartbeat. /api/health reads this rather than inferring liveness from a
   // side effect that only happens when a workspace has data — a healthy cron
@@ -532,7 +575,8 @@ export async function GET(req: Request) {
     so it is the same figure the rotation itself believes.
   */
   const sweepRecord = { total: sweep.total, done: swept, cap: SWEEP_CAP };
-  const analysisRecord = { total: analysis.total, done: ran, cap: ANALYSIS_CAP };
+  const analysisRecord = { total: analysis.total, done: analysed, cap: ANALYSIS_CAP };
+  const watchRecord = { total: watch.total, done: watched, cap: WATCH_CAP };
   const collectionsRecord = { total: collectionsEnabled, done: collectionsSwept, cap: COLLECTIONS_CAP };
   const coverage = {
     metrics_sweep: {
@@ -562,6 +606,12 @@ export async function GET(req: Request) {
       this_run: collectionsSwept,
       nights_for_full_cycle: nightsForFullCycle(collectionsRecord),
     },
+    watch: {
+      entitled: watch.total,
+      this_run: watched,
+      proposed: watchProposed,
+      nights_for_full_cycle: nightsForFullCycle(watchRecord),
+    },
   };
 
   /*
@@ -588,6 +638,7 @@ export async function GET(req: Request) {
         metrics_sweep: sweepRecord,
         daily_analysis: analysisRecord,
         collections: collectionsRecord,
+        watch: watchRecord,
         budget_left_ms: budget.remaining(),
       }),
       updated_at: now,

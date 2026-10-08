@@ -19,7 +19,7 @@
   on create — the browser is never trusted to have kept the plan intact.
 */
 
-export const WORKFLOW_VERBS = ["recompute", "receivables", "reorder", "alert", "email", "ai", "note", "propose"] as const;
+export const WORKFLOW_VERBS = ["recompute", "receivables", "reorder", "alert", "email", "ai", "note", "propose", "agent"] as const;
 export type WorkflowVerb = typeof WORKFLOW_VERBS[number];
 export const MAX_STEPS = 8;
 
@@ -28,6 +28,8 @@ export type ValidateDeps = {
   modes: readonly string[];
   /** The catalogue check for `propose <action> <json>`; returns problems when refused. */
   checkAction: (action: string, args: unknown) => { ok: true } | { ok: false; problems: string[] };
+  /** Whether `agent <id>` names a ready-made TEXT agent. Omitted → any well-formed id is accepted (the executor re-checks). */
+  checkAgent?: (id: string) => boolean;
 };
 
 export type WorkflowPlan = { name: string; trigger: "schedule" | "manual"; steps: string[]; describe: string[] };
@@ -41,6 +43,7 @@ const VERB_WORDS: Record<WorkflowVerb, (rest: string) => string> = {
   email: (r) => `Email the workspace owner a summary titled "${r}".`,
   note: (r) => `Record in the run log: "${r}".`,
   ai: (r) => { const [mode, ...tail] = r.split(/\s+/); return `Run the "${mode}" analysis${tail.length ? ` on: ${tail.join(" ")}` : ""} and save the output.`; },
+  agent: (r) => { const sp = r.indexOf(" "); const id = sp === -1 ? r : r.slice(0, sp); const brief = sp === -1 ? "" : r.slice(sp + 1).trim(); return `Run the "${id}" agent on this workspace's numbers${brief ? ` — ${brief}` : ""} — and save its output.`; },
   propose: (r) => { const sp = r.indexOf(" "); const action = sp === -1 ? r : r.slice(0, sp); return `Ask Cortex to ${action.replace(/_/g, " ")} — runs if your rule allows it, otherwise waits on Approvals.`; },
 };
 
@@ -86,6 +89,12 @@ export function validateWorkflowPlan(raw: unknown, deps: ValidateDeps): Validate
         if (!deps.modes.includes(mode)) { problems.push(`Step ${n}: "${mode}" is not an AI mode. Available: ${deps.modes.join(", ")}.`); return; }
         break;
       }
+      case "agent": {
+        const id = (rest.split(/\s+/)[0] || "").trim();
+        if (!/^[a-z0-9_.-]{3,80}$/i.test(id)) { problems.push(`Step ${n}: agent needs an agent id, e.g. "agent d_sales.winback".`); return; }
+        if (deps.checkAgent && !deps.checkAgent(id)) { problems.push(`Step ${n}: "${id}" is not a ready-made text agent.`); return; }
+        break;
+      }
       case "propose": {
         const sp = rest.indexOf(" ");
         const action = (sp === -1 ? rest : rest.slice(0, sp)).trim();
@@ -119,6 +128,7 @@ export function grammarForModel(modes: readonly string[], actions: Array<{ key: 
     `  ai <mode> <prompt>            — modes: ${modes.join(", ")}`,
     "  note <text>                   — write to the run log",
     "  propose <action> <json-args>  — ask Cortex to act; runs only if the owner's rule allows, else waits for approval",
+    "  agent <agent-id> <brief>      — run a ready-made text agent on this workspace's own numbers and save its output",
     "Actions for propose and their JSON arguments:",
     ...actions.map((a) => `  ${a.key} ${a.args}`),
     "Put lookups (recompute, receivables, reorder) BEFORE the email so the email has something to say.",

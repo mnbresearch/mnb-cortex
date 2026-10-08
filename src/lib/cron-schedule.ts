@@ -67,7 +67,7 @@ export function cronToIst(schedule: string): string | null {
  * pulling it into the client bundle to render one sentence is the wrong
  * trade. The test is what keeps the mirror honest.
  */
-export const AUTOPILOT_CRON = "30 4 * * *";
+export const AUTOPILOT_CRON = "30 20 * * *";   // 02:00 IST — genuinely overnight, so the morning email reads tonight's numbers
 
 /** "10:00 AM IST" — what /autopilot shows the owner. */
 export const AUTOPILOT_TIME_IST = cronToIst(AUTOPILOT_CRON) ?? "overnight";

@@ -51,7 +51,7 @@ console.log("\n1. verbs");
   ok(!v({ ...good, steps: ["", "recompute"] }).ok, "an empty step is refused");
   ok(!v({ ...good, steps: ["note " + "x".repeat(400)] }).ok, "a 400+ character step is refused");
   for (const verb of A.WORKFLOW_VERBS) {
-    const sample = { recompute: "recompute", receivables: "receivables", reorder: "reorder", alert: "alert Stock is low", email: "email Daily", note: "note ran", ai: "ai brief", propose: 'propose raise_alert {"message":"hi"}' }[verb];
+    const sample = { recompute: "recompute", receivables: "receivables", reorder: "reorder", alert: "alert Stock is low", email: "email Daily", note: "note ran", ai: "ai brief", propose: 'propose raise_alert {"message":"hi"}', agent: "agent d_sales.winback lapsed buyers" }[verb];
     ok(v({ ...good, steps: [sample] }).ok, `verb "${verb}" validates with a well-formed step`);
   }
 }
@@ -68,6 +68,17 @@ console.log("\n2. arguments");
   ok(v({ ...good, steps: ['propose export_xlsx {"dataset":"receivables_ageing"}'] }).ok, "propose with a valid action and args validates");
   ok(!v({ ...good, steps: ["email"] }).ok && !v({ ...good, steps: ["alert"] }).ok && !v({ ...good, steps: ["note"] }).ok, "email/alert/note need text");
   ok(!v({ ...good, steps: ["email ab"] }).ok, "two characters is not text");
+}
+
+{
+  ok(!v({ ...good, steps: ["agent"] }).ok, "agent without an id is refused");
+  ok(!A.validateWorkflowPlan({ ...good, steps: ["agent nope.nothing"] }, { ...deps, checkAgent: (id) => id === "d_sales.winback" }).ok, "agent with an unknown id is refused when the catalogue is known");
+  ok(A.validateWorkflowPlan({ ...good, steps: ["agent d_sales.winback weekly"] }, { ...deps, checkAgent: (id) => id === "d_sales.winback" }).ok, "agent with a real id validates");
+  const wf = read("src/lib/workflows.ts");
+  const agentCase = wf.slice(wf.indexOf('case "agent":'), wf.indexOf('case "note":'));
+  ok(/chargeOrgForMode\(orgId, "document"\)/.test(agentCase) && /grantCredits\(orgId, gate\.cost, "refund:document"\)/.test(agentCase), "agent step is metered and refunded when it produces nothing");
+  ok(/agent\.kind !== "reasoning"/.test(agentCase) && /health_metrics/.test(agentCase), "agent step runs text agents only, on the workspace's own numbers");
+  ok(/saveRun\(orgId, null, agent/.test(agentCase), "agent step saves to the agent's history");
 }
 
 console.log("\n3. bounds");

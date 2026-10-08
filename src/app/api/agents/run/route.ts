@@ -136,6 +136,19 @@ export async function POST(req: Request) {
     const mem = orgId ? await recallContext(orgId, Object.values(inputs).join(" ").slice(0, 400), 5) : "";
     let prompt = fillPrompt(agent.prompt, inputs, b.reviseNote ? String(b.reviseNote) : undefined, b.prior ? String(b.prior) : undefined);
     if (mem) prompt = `${prompt}\n\n---\nUse this remembered business context where relevant:\n${mem}`;
+    /*
+      THE AGENT READS THE BUSINESS, not just the form. Agents used to see only
+      what was typed, so "Win-back campaign" knew nothing about which customers
+      had lapsed. The workspace's own KPIs and named worst cases go in; on an
+      empty workspace this says so, and the agent is told not to invent.
+    */
+    if (orgId) {
+      try {
+        const { getBusinessContext } = await import("@/lib/data");
+        const ctx = await getBusinessContext();
+        if (ctx && ctx.trim()) prompt = `${prompt}\n\n---\nThis business's own current numbers (use them where relevant; never invent others):\n${ctx.slice(0, 4000)}`;
+      } catch { /* the agent still runs on what was typed */ }
+    }
     const output = await runReasoning(prompt);
 
     // An agent that returns an empty document has not run, whatever the

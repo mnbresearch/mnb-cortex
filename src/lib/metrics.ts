@@ -770,7 +770,7 @@ export async function recomputeMetrics(orgId: string): Promise<{
     // Clear the previous generation whether or not there are new ones — a
     // workspace that fixed everything should end up with an empty panel, not
     // last week's warnings.
-    await svc.from("ai_insights").delete().eq("org_id", orgId).lt("created_at", istamp).eq("is_demo", false);
+    await svc.from("ai_insights").delete().eq("org_id", orgId).lt("created_at", istamp).eq("is_demo", false).neq("module", "autopilot");   // the nightly AI read is replaced by the cron, not by every save
   } catch { /* insights are advisory; never fail a save over them */ }
 
   // ---- Write finance_ledger ----------------------------------------------------

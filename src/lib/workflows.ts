@@ -43,6 +43,14 @@ export const ACTIONS: { verb: string; arg: string; does: string }[] = [
     the owner still decides WHETHER it may act. See lib/engine.
   */
   { verb: "propose", arg: "<action> <json-args>", does: "Ask Cortex to take an action — runs if your rule allows it, otherwise waits for approval" },
+  /*
+    AGENTS ON A SCHEDULE. The catalogue agents only ever ran when someone
+    pressed Run, and read only what was typed. This verb runs one from a
+    workflow — weekly, say — with the workspace's own KPIs and the findings of
+    earlier steps in its prompt, metered like any AI step, and saves the
+    output to the agent's history.
+  */
+  { verb: "agent", arg: "<agent-id> <brief>", does: "Run a ready-made text agent on your own numbers and save its output" },
 ];
 
 function parse(step: string): { verb: string; rest: string } {
@@ -165,6 +173,8 @@ export async function executeWorkflow(
           }
           const text = await withOrgAiKeys(orgId, () => generateFor(mode.toLowerCase(), tail.join(" "), context));
           const okAi = Boolean(text) && !/^I couldn't reach the AI engine/.test(text);
+          /* No answer, no bill — the same rule every interactive AI route follows. */
+          if (!okAi && gate.enforced) { try { const { grantCredits } = await import("@/lib/credits"); await grantCredits(orgId, gate.cost, `refund:${mode.toLowerCase()}`); } catch { /* ledger shows the charge */ } }
           let saved = false;
           if (okAi) {
             // strategy_docs is (framework, question, content jsonb) — an insert
@@ -185,6 +195,44 @@ export async function executeWorkflow(
             ok: okAi,
             detail: okAi ? (saved ? `Generated and saved "${mode}" output` : `Generated "${mode}" output (could not save it)`) : "AI unavailable",
           });
+          break;
+        }
+
+        case "agent": {
+          const sp = rest.indexOf(" ");
+          const agentId = (sp === -1 ? rest : rest.slice(0, sp)).trim();
+          const brief = sp === -1 ? "" : rest.slice(sp + 1).trim();
+          const { resolveAgent, fillPrompt, runReasoning, saveRun } = await import("@/lib/agents/runtime");
+          const agent = await resolveAgent(orgId, agentId);
+          if (!agent || agent.kind !== "reasoning") {
+            results.push({ step: raw, ok: false, detail: `"${agentId}" is not a text agent this workspace can run.` });
+            break;
+          }
+          const { chargeOrgForMode, grantCredits } = await import("@/lib/credits");
+          const gate = await chargeOrgForMode(orgId, "document");
+          if (!gate.ok) {
+            results.push({ step: raw, ok: false, detail: gate.reason === "lapsed" ? "Skipped: this workspace has no active plan or credits." : `Skipped: not enough credits (needs ${gate.cost}).` });
+            break;
+          }
+          /* The brief fills the agent's main field; the workspace's own KPIs and this run's findings are appended. */
+          const main = (agent.inputs.find((f) => f.type === "textarea") || agent.inputs[0])?.key;
+          const inputs: Record<string, string> = main ? { [main]: brief || ctx.name } : {};
+          const { data: m } = await svc.from("health_metrics").select("label,value,unit,status").eq("org_id", orgId).limit(40);
+          const numbers = ((m as any[]) || []).map((x) => `- ${x.label}: ${x.value}${x.unit === "INR" ? " INR" : x.unit ? " " + x.unit : ""} (${x.status})`).join("\n");
+          const prompt = fillPrompt(agent.prompt, inputs)
+            + (numbers ? `\n\n---\nThis business's own numbers (use them; do not invent others):\n${numbers}` : "")
+            + (facts.length ? `\n\nFindings from earlier steps of this workflow:\n${facts.map((f) => `- ${f}`).join("\n")}` : "");
+          const text = await withOrgAiKeys(orgId, () => runReasoning(prompt));
+          const okAgent = Boolean(text && text.trim()) && !/^I couldn't reach the AI engine/.test(text);
+          if (!okAgent) {
+            /* Nothing produced, nothing billed. */
+            if (gate.enforced) { try { await grantCredits(orgId, gate.cost, "refund:document"); } catch { /* ledger shows the charge */ } }
+            results.push({ step: raw, ok: false, detail: "The agent could not produce anything — not charged." });
+            break;
+          }
+          const runId = await saveRun(orgId, null, agent, inputs, text, 1);
+          facts.push(`${agent.name}: ${text.slice(0, 160)}…`);
+          results.push({ step: raw, ok: true, detail: runId ? `Ran "${agent.name}" and saved it to the agent's history` : `Ran "${agent.name}" (could not save it)` });
           break;
         }
 

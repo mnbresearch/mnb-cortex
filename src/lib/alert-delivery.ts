@@ -182,12 +182,14 @@ export async function deliverAlerts(origin?: string, budget?: Budget): Promise<D
     });
 
     const lines = ordered.slice(0, 12).map((a) =>
-      `${SEVERITY_LABEL[a.severity] || "Alert"} — ${a.title}${a.body ? `\n${String(a.body).slice(0, 240)}` : ""}`
+      `${SEVERITY_LABEL[a.severity] || "Alert"} — ${a.title}${a.body && a.body !== a.title ? `\n${String(a.body).slice(0, 400)}` : ""}`
     );
     const more = ordered.length > 12 ? `\n\n…and ${ordered.length - 12} more in the app.` : "";
 
     const body =
-      `${ordered.length === 1 ? "One thing" : `${ordered.length} things`} crossed a line you set.\n\n` +
+      /* Not every alert is a threshold the owner set — the nightly watch raises
+         them too (MSME window, cold deals, hanging quotes) — so do not claim one. */
+      `${ordered.length === 1 ? "One thing needs" : `${ordered.length} things need`} your attention.\n\n` +
       lines.join("\n\n") + more +
       `\n\nOpen Cortex to see the numbers behind these and mark them handled.`;
 

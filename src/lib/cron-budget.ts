@@ -102,14 +102,14 @@ export function createBudget(totalMs: number, startedAt = Date.now()): Budget {
 */
 export const SHARE = {
   renewals: 15_000,
-  reports: 25_000,
+  reports: 20_000,
   workflows: 25_000,
   collections: 40_000,
   alerts: 20_000,
   webhooks: 20_000,   // was uncapped at 200 × 8s = 1,600s
   sync: 25_000,
   weeklyUpdate: 15_000,
-  weeklyPlan: 35_000,
+  weeklyPlan: 25_000,
   sweep: 15_000,
   /*
     Onboarding nudges. Small: this only ever scans workspaces created in the
@@ -128,6 +128,13 @@ export const SHARE = {
   decisions: 10_000,
   /* Settling video jobs whose tab closed: one status GET each, refunds included. Taken from analysis. */
   media: 5_000,
+  /*
+    The nightly watch (lib/watch.ts): reads each workspace's records and puts
+    reminders and alerts on its Approvals ledger. ~3s per workspace, run ten
+    at a time. Taken from reports (-5s) and the weekly plan (-10s), which only
+    does work on Mondays.
+  */
+  watch: 15_000,
   analysis: 15_000,
 } as const;
 
@@ -182,6 +189,29 @@ export const SHARE = {
 export function capFor(shareMs: number, perItemMs: number, itemsPerUnit = 1): number {
   if (perItemMs <= 0) return 0;
   return Math.max(1, Math.floor(shareMs / perItemMs) * itemsPerUnit);
+}
+
+/**
+ * Run `fn` over `items` in waves of `width` at a time, starting a wave only
+ * while the budget can afford `perItemMs` more. Waves go in order, so what was
+ * done is always a PREFIX of `items` — which is what lets a rotation cursor
+ * commit exactly the work that happened.
+ *
+ * WHY WAVES. The per-workspace steps (collections, the nightly watch, the
+ * daily analysis) are waiting on the database and on model APIs, not on CPU.
+ * Run one after another, a 40-second share reached TWO workspaces a night;
+ * run five at a time, the same share reaches ten. Same function, same clock.
+ */
+export async function inWaves<T>(items: T[], width: number, budget: Budget, perItemMs: number, fn: (item: T) => Promise<void>): Promise<number> {
+  let done = 0;
+  const w = Math.max(1, Math.floor(width));
+  for (let i = 0; i < items.length; i += w) {
+    if (!budget.ok(perItemMs)) break;
+    const wave = items.slice(i, i + w);
+    await Promise.all(wave.map((t) => fn(t).catch(() => { /* one workspace must not stop the wave */ })));
+    done += wave.length;
+  }
+  return done;
 }
 
 export const SHARE_TOTAL_MS = Object.values(SHARE).reduce((a, b) => a + b, 0);

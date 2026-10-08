@@ -1,3 +1,4 @@
+import { findAgent } from "@/lib/agents/catalog";
 import "server-only";
 import { vaultFor } from "@/lib/ai/dlp-server";
 import { geminiTextModels } from "@/lib/ai/models";
@@ -28,6 +29,7 @@ export function automationDeps(): ValidateDeps {
       const v = validateArgs(def, args);
       return v.ok ? { ok: true } : { ok: false, problems: v.problems };
     },
+    checkAgent: (id) => findAgent(id)?.kind === "reasoning",
   };
 }
 
