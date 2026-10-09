@@ -1358,7 +1358,7 @@ export async function moveDeal(fd: FormData): Promise<ActionResult | void> {
   */
   const { data: moved, error } = await sb.from("sales_pipeline")
     .update({ stage, probability: STAGE_WEIGHT[stage] ?? null }).eq("id", id).eq("org_id", orgId).select("id");
-  if (error) return fail(error.message);
+  if (error) throw new Error(error.message);
   if (!moved || moved.length !== 1) return fail("The deal did not move — your role may not allow editing the pipeline.");
 
   /*
@@ -1406,7 +1406,7 @@ export async function moveDeal(fd: FormData): Promise<ActionResult | void> {
     // ever, so the pipeline and the revenue figure permanently disagreed and
     // nothing recomputed to reveal it.
     const { error: unwinErr } = await sb.from("sales_orders").update({ status: "open" }).eq("org_id", orgId).eq("source_deal_id", id);
-    if (unwinErr) return fail(`Deal moved, but its sales order could not be reopened: ${unwinErr.message}. Revenue may still count it — check Sales.`);
+    if (unwinErr) { console.error(`[moveDeal] reopen sales order failed: ${unwinErr.message}`); return fail("The deal moved, but its sales order could not be reopened, so revenue may still count it — check Sales."); }
     await recomputeQuietly(orgId);
     revalidatePath("/dashboard");
     revalidatePath("/sales");
@@ -1738,7 +1738,10 @@ export async function convertLead(fd: FormData): Promise<ActionResult | void> {
     status: "active",
     value: 0,
   }).select("id").maybeSingle();
-  if (error) return fail(/duplicate key|unique/i.test(error.message) ? "A customer with this name already exists." : error.message);
+  if (error) {
+    if (/duplicate key|unique/i.test(error.message)) return fail("A customer with this name already exists.");
+    throw new Error(error.message);
+  }
 
   /* Mark it converted; on a database without 2026_zzzv the link column is absent, so fall back to the source tag. */
   const tag = { source: `${(lead as any).source || "lead"} · converted` };

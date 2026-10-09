@@ -3,9 +3,9 @@
   "generated_from": "src/app/(app)/**/page.tsx, one hop through imports and /api route handlers",
   "totals": {
     "modules": 136,
-    "reads-only": 25,
+    "reads-only": 24,
     "reference": 19,
-    "data-backed": 91,
+    "data-backed": 92,
     "browser-only": 1
   },
   "modules": {
@@ -110,9 +110,9 @@
     },
     "agents": {
       "route": "agents",
-      "depth": "reads-only",
+      "depth": "data-backed",
       "reads": true,
-      "writes": false,
+      "writes": true,
       "ai": false,
       "seeded": false,
       "saves": false,

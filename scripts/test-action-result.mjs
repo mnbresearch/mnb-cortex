@@ -259,7 +259,11 @@ t("A4 the database throws were left alone", () => {
 t("G1 requireRole throws and never returns a failure", () => {
   const i = ACTIONS.indexOf("async function requireRole");
   assert.ok(i > 0, "requireRole is gone");
-  const body = ACTIONS.slice(i, ACTIONS.indexOf("\nasync function", i + 10));
+  /* End at the NEXT function of either kind — the old slice ran on through
+     every exported action until a non-exported one, so it judged requireRole
+     by the bodies of addDeal and moveDeal. */
+  const ends = [ACTIONS.indexOf("\nasync function", i + 10), ACTIONS.indexOf("\nexport async function", i + 10)].filter((x) => x > 0);
+  const body = ACTIONS.slice(i, Math.min(...ends));
   assert.ok(/throw new Error\(`This action requires/.test(body),
     "requireRole no longer throws on an insufficient role");
   assert.ok(!/return fail\(/.test(body),

@@ -41,7 +41,7 @@ const acts = read("src/lib/actions.ts");
   const mv = fn(acts, "moveDeal");
   check(/DEAL_STAGES as readonly string\[\]\)\.includes\(stage\)/.test(mv), "moveDeal: only real stages");
   check(/probability: STAGE_WEIGHT\[stage\] \?\? null/.test(mv), "moveDeal: the deal takes its new stage's probability");
-  check(/\.select\("id"\);\s*if \(error\) return fail\(error\.message\);\s*if \(!moved \|\| moved\.length !== 1\)/.test(mv), "moveDeal: a move that changed no row is not a success");
+  check(/\.select\("id"\);\s*if \(error\) throw new Error\(error\.message\);\s*if \(!moved \|\| moved\.length !== 1\)/.test(mv), "moveDeal: a move that changed no row is not a success");
   check(/unwinErr/.test(mv), "moveDeal: reopening the sales order on un-win is checked");
 }
 
