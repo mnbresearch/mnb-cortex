@@ -287,7 +287,25 @@ export async function sendWeeklyPlans(opts?: { test?: boolean; now?: Date; budge
 
     const { data: m } = await sb.from("health_metrics").select("label,value,unit,delta_pct,status").eq("org_id", o.id);
     if (!m?.length) continue;                       // only workspaces with real data
-    const { priorities } = await buildPriorities(ctxFromMetrics(m as any[]), true);
+    /*
+      "EVERYTHING ABOVE" HAS TO BE IN THE INPUT. The Monday plan is sold as the
+      week's playbooks together, but it was built from KPI aggregates alone —
+      no named overdue customer, no MSME window, no stock, no cold deals. The
+      week's open alerts (the nightly watch writes MSME, stock, quotes and deals
+      there) and the current insights (which name the worst overdue invoice)
+      now go in with the KPIs.
+    */
+    const since = new Date(Date.now() - 8 * 86_400_000).toISOString();
+    const [{ data: al }, { data: ins }] = await Promise.all([
+      sb.from("alerts").select("title, body, severity").eq("org_id", o.id).gte("created_at", since).order("created_at", { ascending: false }).limit(8),
+      sb.from("ai_insights").select("title, detail, module").eq("org_id", o.id).order("created_at", { ascending: false }).limit(6),
+    ]);
+    const extra = [
+      ...((ins as any[]) || []).map((x) => `- Insight: ${x.title}`),
+      ...((al as any[]) || []).map((x) => `- Alert (${x.severity}): ${String(x.body || x.title).slice(0, 220)}`),
+    ];
+    const ctx = ctxFromMetrics(m as any[]) + (extra.length ? `\n\nTHIS WEEK'S FINDINGS:\n${extra.join("\n")}` : "");
+    const { priorities } = await buildPriorities(ctx, true);
     if (!priorities.length) continue;
     considered++;
     processed++;

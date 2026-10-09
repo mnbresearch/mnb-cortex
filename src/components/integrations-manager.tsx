@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { INTEGRATIONS, CATEGORIES, planAllows, limitForPlan, type Integration } from "@/lib/integrations";
+import { INTEGRATIONS, CATEGORIES, planAllows, limitForPlan, type Integration, planLabel } from "@/lib/integrations";
 import { badgeFor } from "@/lib/integration-status";
 import { Plug, Check, Lock, Loader2, X, ExternalLink, ShieldCheck, Search, Zap } from "lucide-react";
 import Link from "next/link";
@@ -175,7 +175,7 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
                     </Badge>
                   );
                 })() : !allowed ? (
-                  <Badge className="bg-warning/10 text-warning border-warning/20"><Lock className="h-3 w-3 mr-1" />{i.minPlan}</Badge>
+                  <Badge className="bg-warning/10 text-warning border-warning/20"><Lock className="h-3 w-3 mr-1" />{planLabel(i.minPlan)}</Badge>
                 ) : SYNCABLE.includes(i.id) ? (
                   <Badge className="bg-success/10 text-success border-success/20">Syncs</Badge>
                 ) : (
@@ -272,7 +272,7 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
               ) : allowed ? (
                 <Button size="sm" onClick={() => openModal(i)}>Connect</Button>
               ) : (
-                <Link href="/pricing"><Button variant="outline" size="sm" className="w-full">Upgrade to {i.minPlan}</Button></Link>
+                <Link href="/pricing"><Button variant="outline" size="sm" className="w-full">Upgrade to {planLabel(i.minPlan)}</Button></Link>
               )}
             </Card>
           );

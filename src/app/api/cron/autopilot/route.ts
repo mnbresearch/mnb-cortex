@@ -376,7 +376,7 @@ export async function GET(req: Request) {
     console.error("[cron] organizations hit the 20,000 read cap — the sweep is no longer covering every workspace; paginate this query.");
   }
 
-  const BATCH = 5;
+  const BATCH = 15;   // recomputes wait on the database, not the CPU — fifteen at a time
   /* Derived, not asserted — see capFor(). 3,000ms is the per-batch guard
      used by the loop below, and a batch is BATCH workspaces. */
   const SWEEP_CAP = capFor(SHARE.sweep, 3_000, BATCH);

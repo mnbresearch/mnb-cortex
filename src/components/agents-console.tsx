@@ -437,7 +437,7 @@ export function AgentsConsole({ initialIndustry }: { initialIndustry: string }) 
                     {m.status === "done" && (
                       <div className="flex items-center gap-2">
                         {m.url && <a href={m.url.startsWith("/api/media/") ? `${m.url}?download=1` : m.url} className="text-xs text-primary underline inline-flex items-center gap-1"><Download className="h-3 w-3" aria-hidden="true" /> Download</a>}
-                        <button type="button" onClick={() => removeMedia(m.id)} className="text-xs text-muted-foreground hover:text-danger inline-flex items-center gap-1 ml-auto" aria-label="Delete from library"><Trash2 className="h-3 w-3" aria-hidden="true" /></button>
+                        <button type="button" onClick={() => removeMedia(m.id)} className="text-xs text-muted-foreground hover:text-danger inline-flex items-center justify-center ml-auto min-h-11 min-w-11 rounded-md hover:bg-danger/10" aria-label="Delete from library"><Trash2 className="h-3 w-3" aria-hidden="true" /></button>
                       </div>
                     )}
                   </div>

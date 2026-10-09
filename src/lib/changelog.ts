@@ -5,14 +5,24 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "6.43.0", date: "Latest", items: [
+  { v: "6.44.0", date: "Latest", items: [
+    "Cortex works overnight on its own — every night it reads your records and puts the costliest overdue reminders in front of you to approve, and alerts you to MSME suppliers past 45 days, stock at reorder level, deals going cold and quotes left hanging",
+    "Agents on a schedule — any text agent can run as a workflow step, on your own numbers, and every agent now reads your business figures, not just what you type",
+    "Your image and video library — everything you generate is kept, ready to download again; videos that fail after starting are refunded automatically, even if you closed the tab",
+    "Choose the shape — 16:9 or 9:16 video for Reels and Shorts, square, portrait, story or banner images — and animate your own product photo",
+    "Improve my prompt can now write the brief for you from the products you actually sell",
+    "Leads are scored by a clear rule with the reasons shown, sorted hottest first, and can arrive by API from your website's server or Zapier",
+    "Truer sales numbers — 'Won' in any capitalisation counts as revenue, won deals leave the open pipeline, the forecast follows each deal's stage, and sales KPIs read every order",
+    "Quotes turned into invoices are due after your payment terms, not on the quote's expiry date",
+  ] },
+  { v: "6.43.0", date: "Earlier", items: [
     "Two-step sign-in — turn on an authenticator app under Settings → Security; approving anything that changes money records or messages a customer, letting such actions run on their own, issuing API keys, adding webhooks and connecting integrations then need your 6-digit code",
     "Every approval is signed over exactly what you approved — if the details change before it runs, it does not run",
     "Emailed decision links can still reject anything, but actions that touch money or contact someone outside your team are approved in the app",
     "The assistant never moves money or messages anyone on its own — even under an auto rule, anything it suggests of that kind waits for your tap",
     "Protection against planted instructions — text in bank statements, invoices, store data or imports that tries to instruct the AI is withheld from it, flagged to you, and can never make an action run unasked",
     "Bank statement and GST figures must be printed in the document and add up — a statement that does not reconcile to its closing balance is shown but not saved to your dashboard, and you are not charged",
-    "AI privacy — customer, supplier and employee names, phone numbers, emails, PAN, GSTIN, Aadhaar and account numbers are replaced with placeholders before anything is sent to an AI provider, and put back in the answer; Strict mode hides amounts too",
+    "AI privacy — customer, supplier and employee names, phone numbers, emails, PAN, GSTIN, Aadhaar and account numbers are replaced with placeholders before your business data is sent to an AI provider, and put back in the answer; Strict mode hides amounts too (prompts you write for images and video are sent as written)",
     "Read-only connections — Stripe now takes a restricted read-only key and Shopify a read-only token; keys that could refund, pay out or edit your store are refused",
   ] },
   { v: "6.42.0", date: "Earlier", items: [

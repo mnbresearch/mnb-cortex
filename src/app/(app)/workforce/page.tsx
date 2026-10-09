@@ -22,7 +22,7 @@ export default async function Workforce() {
       <PageShell>
         <Card className="p-4 border-primary/20 bg-primary/5 text-sm flex items-start gap-2">
           <Network className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-          <span>Every business runs on the same {DEPARTMENTS.length} functions. Cortex maps working AI agents to each — {agentCount()}+ in all, every one plugged into your second brain. Pick a team to see and run its agents.</span>
+          <span>Every business runs on the same {DEPARTMENTS.length} functions. Cortex maps ready-made agents to each — {agentCount()} in all (text agents use your own numbers and memory; image and video agents come with Watch Pro). Pick a team to see and run its agents.</span>
         </Card>
 
         {/* The living map — every agent connected to the central brain; activated ones light up. */}

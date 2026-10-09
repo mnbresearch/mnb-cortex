@@ -1,4 +1,4 @@
-export const APP_VERSION = "6.43.0";
+export const APP_VERSION = "6.44.0";
 /*
   …88480. The public footer, the contact page, the privacy, terms and refund
   pages all publish …88480; this default was …88481, so the pricing modal's
@@ -596,7 +596,7 @@ export const PLANS: Plan[] = [
     tagline: "For companies where a missed number costs real money.", highlight: true,
     cta: "Choose Watch Pro",
     features: [
-      "Up to 20 users · multi-workspace",
+      "Up to 20 users",
       "13,850 AI credits / month",
       "Everything in Watch",
       "Ask Cortex anything about your own rows",
@@ -604,6 +604,7 @@ export const PLANS: Plan[] = [
       "Workflow automation on a schedule",
       "Public API + outbound webhooks",
       "Cortex Memory — permanent business context",
+      "Image & video generation — 500 images and 20 videos a week",
     ] },
   { id: "practice", name: "Practice", monthly: 29999, annual: 299990, usdMonthly: 359, usdAnnual: 3599,
     tagline: "For CAs and advisory firms. Every client, one screen.",
@@ -622,10 +623,10 @@ export const PLANS: Plan[] = [
     tagline: "Cortex acts, not just warns.",
     cta: "Choose Command",
     features: [
-      "Up to 75 users · multi-workspace",
+      "Up to 75 users",
       "37,000 AI credits / month",
       "Everything in Watch Pro",
-      "WhatsApp execution (your Meta account)",
+      "WhatsApp reminders from your own number (also on Watch)",
       "AI agents across every department",
       /*
         SCOPED TO THE WORKSPACE, deliberately.
@@ -638,7 +639,7 @@ export const PLANS: Plan[] = [
         says where the branding stops.
       */
       "Custom accent colour & logo in your workspace",
-      "Image & video generation",
+      "Image & video generation — 2,000 images and 60 videos a week",
       "Guided onboarding · priority support",
     ] },
   { id: "enterprise", name: "Enterprise", monthly: 0, annual: 0,

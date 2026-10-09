@@ -240,7 +240,7 @@ export const INDUSTRIES: Industry[] = [
       { tool: "Reorder Optimizer", href: "/reorder" },
       { tool: "Inventory ABC analysis", href: "/abc" },
     ],
-    outcome: "Cut expiry losses, protect margin, and stay effortlessly compliant.",
+    outcome: "Keep fast movers in stock, protect margin, and never miss a GST date.",
   },
   {
     slug: "electronics", name: "Electronics & Appliances", icon: Cpu,
@@ -308,11 +308,11 @@ export const INDUSTRIES: Industry[] = [
     pains: ["Repeat visits slip without nudges", "Retail & service mix is unoptimised", "Slow days hurt"],
     fixes: [
       { tool: "Churn / repeat predictor", href: "/churn" },
-      { tool: "WhatsApp Broadcast reminders", href: "/broadcast" },
+      { tool: "WhatsApp broadcast drafts", href: "/broadcast" },
       { tool: "Service pricing & bundles", href: "/markup" },
       { tool: "Customer LTV", href: "/ltv" },
     ],
-    outcome: "Bring pets back on schedule and grow the value of every client.",
+    outcome: "Know which clients are due back, and grow the value of every client.",
   },
   {
     slug: "interior", name: "Interior Design", icon: LampDesk,

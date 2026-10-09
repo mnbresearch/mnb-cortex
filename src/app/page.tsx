@@ -29,7 +29,7 @@ import { HealthCheckClient } from "@/components/health-check-client";
 */
 const FAQS = [
   { q: "How long does setup take?", a: "Minutes, not weeks. Create the workspace, drop in a CSV export from Tally, Vyapar, Busy or your spreadsheet, and the first finding appears on that same screen. There is no column mapping, no configuration and nobody to book a call with. If you'd rather not use your own file yet, load a sample dataset in one click." },
-  { q: "What do I have to do every day?", a: "Nothing. Cortex re-reads your numbers overnight on its own. You get one planned email a week — the three things worth your attention — and beyond that it only writes to you when something has actually gone wrong. You don't have to log in to keep it working." },
+  { q: "What do I have to do every day?", a: "Nothing. Cortex re-reads your numbers overnight on its own. You get two short planned emails a week — your weekly brief and the three things worth your attention — and beyond that it only writes to you when something needs a decision or has gone wrong. You don't have to log in to keep it working." },
   { q: "Do I have to stop using Tally or my accountant?", a: "No. Keep both. Cortex never becomes your books and never writes to them — it reads an export and sits on top. Your accountant carries on exactly as before, and most of them prefer a client who spots the 45-day MSME problem before year end." },
   { q: "Will it contact my customers on its own?", a: "Not unless you let it. Chasing ships switched off. When you turn it on, Cortex writes each message in your business's name and holds it for your approval — and stops the moment the invoice is marked paid. There is a setting to let it send unattended, off by default, and it's yours to decide." },
   { q: "Do I need to be technical?", a: "No. You ask questions in plain language — English or Hinglish — the way you'd ask your accountant, and Cortex looks up your actual invoices and orders to answer. Nothing to install, nothing to code." },
@@ -75,7 +75,7 @@ const FAQS = [
 const STATS = [
   { to: 45, suffix: "-day", label: "MSME clock, watched" },
   { to: STATUTORY_CATALOGUE.length, suffix: "", label: "statutory deadlines tracked" },
-  { to: 1, suffix: "", label: "planned email a week — the rest only when something breaks" },
+  { to: 2, suffix: "", label: "short planned emails a week — the rest only when something needs you" },
   { to: 3, suffix: " min", label: "from your first import to your first warning" },
 ];
 
@@ -154,8 +154,8 @@ const OLD_NEW = [
     past due" — but it is rendered in the app, which is where the honest
     version of this sentence now points.
   */
-  { old: "You find out a customer hasn't paid when you need the cash.", now: "Your overdue list is ranked worst-first and names who to chase — and Cortex emails you when the total crosses the line you set." },
-  { old: "You pay a small supplier late and lose the deduction at year end.", now: "It watches the MSME 45-day clock (43B(h)) and tells you which bills to clear first." },
+  { old: "You find out a customer hasn't paid when you need the cash.", now: "Your overdue list is ranked worst-first and names who to chase — Cortex emails you when overdue money crosses ₹5 lakh (or your own line on Watch Pro), and puts reminders for the costliest bills in front of you to approve." },
+  { old: "You pay a small supplier late and lose the deduction at year end.", now: "It watches the MSME 45-day clock (43B(h)) every night and alerts you to the micro and small suppliers past it, oldest first." },
   { old: "A GST or TDS date passes and you find out from a notice.", now: "Every statutory deadline that applies to you, warned before — not after." },
   { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Vyapar and Busy files as they come." },
   { old: "You're too busy running the business to sit and analyse it.", now: "One email on Monday: the three things worth your attention this week." },
@@ -371,7 +371,7 @@ export default function Home() {
           <span>It watches for <RotatingWord words={["deductions at risk under 43B(h).", "invoices past their due date.", "the next statutory deadline.", "stock about to run out."]} /></span>
         </div>
         <div className="max-w-6xl mx-auto mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs text-muted-foreground">
-          <span>★ Shark Tank India featured</span>
+          <span>★ From the makers of AbroBot (featured on Shark Tank India)</span>
           <span>◆ DPIIT-recognised startup</span>
           {/*
             WAS "10,000+ businesses served", against MNB Research's own published
@@ -443,8 +443,8 @@ export default function Home() {
               <span className="text-primary">nothing.</span>
             </div>
             <p className="mt-4 text-muted-foreground max-w-2xl leading-7">
-              Cortex re-reads your numbers overnight. One planned email a week — the three things worth your
-              attention — and beyond that it only writes to you when something has actually gone wrong.
+              Cortex re-reads your numbers overnight. Two short planned emails a week — your brief, and the three
+              things worth your attention — and beyond that it only writes to you when something needs a decision or has gone wrong.
               You don&rsquo;t log in to keep it running. You log in because it told you to.
             </p>
           </div>
@@ -554,9 +554,6 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <p className="mt-7 text-xs text-muted-foreground">
-              Used by owners across manufacturing, retail, distribution and services.
-            </p>
           </div>
           <HealthCheckClient />
         </div>
@@ -716,7 +713,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border border rounded-2xl overflow-hidden hairline">
           {[
             { k: "Built by", v: "MNB Research", d: "India's business growth & consultancy specialists" },
-            { k: "Featured on", v: "Shark Tank India", d: "and 160+ press outlets, 60M+ reach" },
+            { k: "Our team, featured on", v: "Shark Tank India", d: "for AbroBot — and 160+ press outlets, 60M+ reach" },
             { k: "Recognised", v: "DPIIT startup", d: "Government of India recognised" },
             { k: "From the makers of", v: "AbroBot", d: "India's AI study-abroad platform" },
           ].map((p) => (

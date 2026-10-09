@@ -24,6 +24,8 @@
        moved in 14 days.
     4. Quotes left hanging → an alert for open quotes older than 7 days, and
        those already past their validity.
+    5. Stock at or below its reorder level → an alert naming the items that
+       are out first, with their suppliers.
 
   Each proposal carries an idempotency key that includes the ISO week, so a
   second run the same week — or the cron firing twice — creates nothing new.
@@ -32,6 +34,7 @@
 export type WatchInvoice = { id: string; invoice_no: string | null; party: string | null; amount: number; due_date: string | null; status: string | null; type: string | null };
 export type WatchMsme = { party: string; udyam_category: string; total_amount: number; oldest_days: number; past_window: boolean; invoice_count: number };
 export type WatchDeal = { id: string; deal_name: string | null; customer_name: string | null; value: number; stage: string | null; updated_at: string | null; created_at: string | null };
+export type WatchStock = { id: string; name: string | null; on_hand: number; reorder_level: number; supplier: string | null };
 export type WatchQuote = { id: string; quote_no: string | null; party: string | null; amount: number; status: string | null; valid_until: string | null; created_at: string | null };
 
 export type WatchInput = {
@@ -46,6 +49,8 @@ export type WatchInput = {
   msme: WatchMsme[];
   deals: WatchDeal[];
   quotes: WatchQuote[];
+  /** Stock lines with a reorder level set. Optional so older callers keep compiling. */
+  stock?: WatchStock[];
   /** Same normalisation the rest of the product uses for party names. */
   normalise: (s: string | null | undefined) => string | null;
 };
@@ -160,6 +165,21 @@ export function planWatch(i: WatchInput): WatchProposal[] {
       rationale: "Quotes not answered within a week rarely close without a nudge.",
       evidence: hanging.slice(0, 3).map((q) => `${q.quote_no || q.id.slice(0, 8)} ${q.party || ""} ${inr(Number(q.amount) || 0)}`),
       key: `watch:${i.orgId}:quotes:${wk}`,
+    });
+  }
+
+  /* 5. Stock */
+  const low = (i.stock || [])
+    .filter((it) => Number(it.reorder_level) > 0 && Number(it.on_hand) <= Number(it.reorder_level))
+    .sort((a, b) => (Number(a.on_hand) / Number(a.reorder_level)) - (Number(b.on_hand) / Number(b.reorder_level)));
+  if (low.length) {
+    const out0 = low.filter((it) => Number(it.on_hand) <= 0).length;
+    out.push({
+      action: "raise_alert",
+      args: { severity: out0 ? "critical" : "warning", message: `${low.length} stock item${low.length === 1 ? " is" : "s are"} at or below reorder level${out0 ? ` (${out0} already out)` : ""}: ${low.slice(0, 4).map((it) => `${it.name || it.id.slice(0, 8)} — ${Number(it.on_hand)} left, reorder at ${Number(it.reorder_level)}${it.supplier ? ` (${it.supplier})` : ""}`).join("; ")}. Raise the purchase orders before you lose sales.` },
+      rationale: "Items at or below the reorder level you set.",
+      evidence: low.slice(0, 3).map((it) => `${it.name}: ${it.on_hand}/${it.reorder_level}`),
+      key: `watch:${i.orgId}:stock:${wk}`,
     });
   }
 

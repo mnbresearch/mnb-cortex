@@ -161,7 +161,7 @@ export function OnboardingWizard({
 
           <div className="mt-4 space-y-2 text-sm">
             {[
-              ["Every day", "It checks who has gone past their due date, what is about to run out, and which supplier bills are nearing the MSME 45-day window."],
+              ["Every night", "It checks who has gone past their due date, what is at or below its reorder level, and which micro and small supplier bills have passed the MSME 45-day window."],
               /*
                 WAS "The moment something crosses a line".
 

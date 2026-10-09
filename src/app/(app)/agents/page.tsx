@@ -24,7 +24,7 @@ export default async function Agents() {
       <PageShell>
         <Card className="p-4 border-primary/20 bg-primary/5 text-sm flex items-start gap-2">
           <Bot className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-          <span>Cortex ships <b>{agentCount()}+ ready agents</b> across {INDUSTRIES.length} industries — catalogue writers, ad scripts, merchandising briefs, and more — each grounded in your business memory. Pick your industry, run an agent, revise, and export. Or have Cortex <b>build brand-new agents</b> for your exact business in the Custom tab.</span>
+          <span>Cortex ships <b>{agentCount()} ready agents</b> across {INDUSTRIES.length} industries — catalogue writers, ad scripts, merchandising briefs, and more. Text agents read your own numbers and business memory; any of them can run on a schedule as a workflow step. Pick your industry, run an agent, revise, and export. Or have Cortex <b>build brand-new agents</b> for your exact business in the Custom tab.</span>
         </Card>
         <AgentsConsole initialIndustry={initial} />
       </PageShell>

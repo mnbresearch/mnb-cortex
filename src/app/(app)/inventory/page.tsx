@@ -46,7 +46,7 @@ export default async function Inventory() {
           </div>
         )}
 
-        <Section title="AI actions" desc="The COO executes — drafts a real purchase order">
+        <Section title="AI actions" desc="Cortex drafts a real purchase order for you to review">
           <div className="flex flex-wrap gap-2">
             {/* Was labelled "Generate PO for RM-204" for everyone. generatePO()
                 now picks whichever of YOUR items is furthest below its reorder

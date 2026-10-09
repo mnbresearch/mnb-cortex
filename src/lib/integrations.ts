@@ -188,7 +188,7 @@ export const INTEGRATIONS: Integration[] = [
   { id: "slack", name: "Slack", category: "Communication", desc: "Verifies a channel webhook with a test message and stores it. Alerts are delivered by email today", minPlan: "starter", testable: true,
     docs: "https://api.slack.com/messaging/webhooks",
     fields: [{ key: "webhook_url", label: "Incoming webhook URL", type: "password", placeholder: "https://hooks.slack.com/services/…", required: true }] },
-  { id: "whatsapp", name: "WhatsApp Business", category: "Communication", desc: "Campaigns, reminders and broadcasts", minPlan: "growth", testable: true,
+  { id: "whatsapp", name: "WhatsApp Business", category: "Communication", desc: "Payment reminders from your own number (Cloud API); broadcasts are drafted for you to send", minPlan: "growth", testable: true,
     docs: "https://developers.facebook.com/docs/whatsapp/cloud-api",
     fields: [KEY("Permanent access token"), { key: "phone_number_id", label: "Phone number ID", type: "text", required: true }] },
   { id: "resend", name: "Resend", category: "Communication", desc: "Send collections reminders from your own domain", minPlan: "starter", testable: true,
@@ -288,6 +288,12 @@ export const INTEGRATIONS: Integration[] = [
 ];
 
 export const CATEGORIES = Array.from(new Set(INTEGRATIONS.map((i) => i.category)));
+
+/** The plan a customer can actually buy at this rank — never a retired id like "growth" or "premium". */
+export function planLabel(minPlan: string | null | undefined): string {
+  const r = PLAN_RANK[String(minPlan || "").toLowerCase()] ?? 1;
+  return ["Try", "Try", "Watch", "Watch Pro", "Command", "Enterprise"][Math.max(0, Math.min(5, r))];
+}
 
 export function planAllows(plan: string | null | undefined, integration: Integration): boolean {
   const p = (plan || "starter").toLowerCase() as PlanId;

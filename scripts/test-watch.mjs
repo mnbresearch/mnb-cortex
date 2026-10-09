@@ -96,6 +96,16 @@ check(W.isoWeek("2026-01-01") === "2026-W01" && W.isoWeek("2027-01-01") === "202
   const q = p.find((x) => x.key.includes(":quotes:"));
   check(q && /2 quotes worth ₹3,00,000/.test(q.args.message) && /1 already past validity/.test(q.args.message) && /Buyer A/.test(q.args.message), "quotes: open quotes over a week old, with the expired ones called out", q?.args.message);
 }
+{
+  const p = W.planWatch({ ...base, invoices: [], stock: [
+    { id: "s1", name: "TMT 12mm", on_hand: 0, reorder_level: 50, supplier: "Shree Balaji" },
+    { id: "s2", name: "Cement", on_hand: 40, reorder_level: 50, supplier: null },
+    { id: "s3", name: "Paint", on_hand: 90, reorder_level: 50, supplier: null },
+    { id: "s4", name: "No level", on_hand: 0, reorder_level: 0, supplier: null },
+  ] });
+  const st = p.find((x) => x.key.includes(":stock:"));
+  check(st && st.args.severity === "critical" && /2 stock items/.test(st.args.message) && /1 already out/.test(st.args.message) && st.args.message.indexOf("TMT 12mm") < st.args.message.indexOf("Cement") && !/Paint|No level/.test(st.args.message), "stock: items at or below reorder level, emptiest first, critical when one is out", st?.args.message);
+}
 check(W.planWatch({ ...base, invoices: [] }).length === 0, "an empty workspace gets nothing (no invented work)");
 check(W.planWatch(base).every((x) => /^watch:org-1:/.test(x.key) && x.key.endsWith(W.isoWeek(today))), "every proposal is keyed to this workspace and this week");
 

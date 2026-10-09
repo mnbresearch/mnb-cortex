@@ -48,8 +48,8 @@ const LOOP = [
 ];
 
 const DOMAINS: { n: string; name: string; blurb: string; tools: string[] }[] = [
-  { n: "01", name: "Cortex Workforce", blurb: "A complete AI org chart you can actually run — like hiring a whole team on day one.",
-    tools: ["7 departments, one brain", "326 runnable text agents", "Sales → Back Office coverage", "Industry packs (e.g. jewellery sketch → spec)", "Ask Cortex and Deep Dive use your memory", "Audit engine marks a deploy-first roadmap", "Cortex builds custom agents for you", "Image agents via your Gemini key"] },
+  { n: "01", name: "Cortex Workforce", blurb: "Ready-made agents for every department — run one on demand, or schedule it in a workflow.",
+    tools: ["7 departments, one brain", "326 runnable text agents", "Sales → Back Office coverage", "Industry packs (e.g. jewellery sketch → spec)", "Ask Cortex and Deep Dive use your memory", "Audit engine marks a deploy-first roadmap", "Cortex builds custom agents for you", "Image & video agents (Watch Pro and up)"] },
   { n: "02", name: "Cortex Memory", blurb: "A living, permanent memory of your business that grounds every answer.",
     tools: ["Long-term business memory", "Grounds every AI response", "Knowledge graph of people, customers & vendors", "A self-updating company profile", "Extract memories from any pasted text", "Teach Cortex from your real data", "Export your memory anytime (JSON / Markdown)"] },
   { n: "03", name: "Finance & Money", blurb: "A CFO-grade financial cockpit, tuned for Indian businesses.",
@@ -57,14 +57,14 @@ const DOMAINS: { n: string; name: string; blurb: string; tools: string[] }[] = [
   { n: "04", name: "Strategy & Advisory", blurb: "A McKinsey-in-your-pocket that knows your numbers.",
     tools: ["Ask Cortex", "Strategy Consultant", "Forecasting & Scenarios", "Business Valuation", "AI Playbooks", "Decision Journal", "Board Deck Generator", "Investor Updates", "Industry Benchmarks", "Risk Radar"] },
   { n: "05", name: "Sales & Growth", blurb: "Fill the pipeline, price it right, keep customers longer.",
-    tools: ["Deals Pipeline", "AI Lead Scoring", "Sales Targets", "Marketing Funnel", "Ad Budget & ROAS", "Churn Predictor", "Customer LTV & RFM", "Pricing Optimizer", "Competitor Intel", "Marketing Studio"] },
+    tools: ["Deals Pipeline", "Lead Scoring (rule-based, with reasons)", "Sales Targets", "Marketing Funnel", "Ad Budget & ROAS", "Churn Predictor", "Customer LTV & RFM", "Pricing Optimizer", "Competitor Intel", "Marketing Studio"] },
   { n: "06", name: "People & Operations", blurb: "Run the back half of the business without spreadsheets.",
     tools: ["HR Analytics", "Hiring Advisor", "Team Capacity", "Reorder Optimizer", "Vendor Scorecard", "SOP Builder", "Workflows", "Approvals", "Action Board", "KPI Alerts"] },
   { n: "07", name: "Legal & Compliance", blurb: "Stay compliant and catch risky clauses before you sign.",
     tools: ["GST & Compliance", "Compliance Calendar", "Contract Review", "Document Intelligence"] },
-  { n: "08", name: "Communications", blurb: "Reach customers and your team, on autopilot.",
-    tools: ["Email Campaigns + tracking", "WhatsApp Broadcast", "Daily CEO Brief", "Meeting Assistant", "Negotiation Coach"] },
-  { n: "09", name: "Automation", blurb: "Set it once; Cortex keeps working while you sleep.",
+  { n: "08", name: "Communications", blurb: "Reach customers and your team — drafted for you, sent when you approve.",
+    tools: ["Email Campaigns + tracking", "WhatsApp Broadcast", "Weekly CEO Brief", "Meeting Assistant", "Negotiation Coach"] },
+  { n: "09", name: "Automation", blurb: "Set it once: the nightly watch, scheduled workflows and reports keep running while you sleep.",
     tools: ["AI Autopilot (daily)", "Scheduled reports", "Public API & Webhooks", "Data Explorer", "CSV / Sheets / PDF import"] },
   /*
     WAS: "Tally, Zoho, Odoo" / "HubSpot, Salesforce" / "WhatsApp, Slack,
@@ -114,7 +114,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
     items: [
       { icon: Megaphone, name: "AI Outreach", d: "Drafts reminders & follow-ups; you approve, it sends." },
       { icon: Sparkles, name: "Marketing Studio", d: "Full campaign kits — copy, posts and emails in one click." },
-      { icon: Bot, name: "438 AI Agents", d: "A 7-department AI workforce across 27 Indian industries." },
+      { icon: Bot, name: "326 text agents", d: "Plus image and video agents — across 7 departments and 27 Indian industries." },
       { icon: Workflow, name: "Workflows & Approvals", d: "Automate the busywork with a human in the loop." },
       { icon: Radio, name: "WhatsApp Broadcast", d: "Personalised messages, ready for you to send." },
       /*
@@ -124,7 +124,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
         cron already computes nights_for_full_cycle and nothing acts on it.
         Worded so it stays true either way.
       */
-      { icon: Cpu, name: "AI Autopilot", d: "Runs a nightly sweep and writes up what changed." },
+      { icon: Cpu, name: "AI Autopilot", d: "Every night: re-reads your numbers, proposes reminders and alerts on your Approvals page, and writes up what changed." },
     ],
   },
   {
@@ -195,7 +195,7 @@ const SECURITY = [
   { i: Lock, t: "Encrypted everywhere", d: "TLS in transit; sensitive keys encrypted with AES-256-GCM at rest." },
   { i: Network, t: "Workspace isolation", d: "Postgres row-level security means one workspace can never read another's data." },
   { i: KeyRound, t: "Role-based access", d: "Viewer → Analyst → Manager → Admin → Owner, enforced on every action." },
-  { i: ScrollText, t: "Audit logs", d: "Every meaningful action is recorded; export your entire workspace anytime." },
+  { i: ScrollText, t: "Audit logs", d: "Every Cortex action is in the Approvals ledger — who proposed it, who approved it, what ran; export your entire workspace anytime." },
 ];
 
 export default function Features() {
@@ -213,7 +213,7 @@ export default function Features() {
           <div className="mt-6 grid lg:grid-cols-[1.2fr_1fr] gap-8 items-end">
             <p className="text-lg text-muted-foreground max-w-2xl">
               Most tools give you a dashboard and leave the thinking to you. MNB Cortex is an AI operating system:
-              a runnable workforce, a permanent memory, and 100+ tools that monitor, predict, recommend and act — together.
+              a runnable workforce, a permanent memory, and 100+ tools — and a nightly watch that proposes the actions, which run when you approve.
             </p>
             <div className="flex gap-3 lg:justify-end">
               <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>

@@ -25,7 +25,7 @@
   of phrases that were each removed for a stated reason and must not come back.
 */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -441,11 +441,17 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
 
   /* "one planned email a week". The scheduled cadence, not a cap — and it is
      only honest while the weekly plan is the only SCHEDULED mail. */
-  if (/one planned email a week/i.test(landing)) {
+  /* It said "one" while every workspace got TWO scheduled weekly emails (the
+     default weekly brief and the weekly plan). The copy now says two; both
+     must still be scheduled for it to stay true, and "one" must not return. */
+  check(!/one planned email a week/i.test(landing), "the landing page no longer claims ONE planned email (there are two)");
+  if (/two short planned emails a week/i.test(landing)) {
     const autopilot = read("src/app/api/cron/autopilot/route.ts");
     check(/weekly[-_]?[Pp]lan/.test(autopilot),
       "the weekly plan the page promises is still actually scheduled",
       "nothing in the autopilot cron sends a weekly plan any more");
+    check(/runScheduledReports/.test(autopilot) && existsSync("supabase/migrations/2026_default_weekly_brief.sql"),
+      "the weekly brief the page promises is still scheduled by default");
   }
 
   /*

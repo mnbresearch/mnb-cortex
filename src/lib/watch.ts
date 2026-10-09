@@ -28,7 +28,7 @@ export async function runWatch(orgId: string): Promise<WatchResult> {
     try { const { data, error } = await p; return error ? fallback : map(data); } catch { return fallback; }
   };
 
-  const [invoices, policy, recent, msme, deals, quotes] = await Promise.all([
+  const [invoices, policy, recent, msme, deals, quotes, stock] = await Promise.all([
     safe(svc.from("invoices").select("id, invoice_no, party, amount, due_date, status, type")
       .eq("org_id", orgId).eq("type", "receivable").or("status.is.null,status.not.ilike.paid")
       .order("due_date", { ascending: true }).limit(1000), (d) => (d as any[]) || [], [] as any[]),
@@ -44,6 +44,8 @@ export async function runWatch(orgId: string): Promise<WatchResult> {
       (d) => (d as any[]) || [], [] as any[]),
     safe(svc.from("quotes").select("id, quote_no, party, amount, status, valid_until, created_at").eq("org_id", orgId).eq("status", "open").limit(500),
       (d) => (d as any[]) || [], [] as any[]),
+    safe(svc.from("inventory_items").select("id, name, on_hand, reorder_level, supplier").eq("org_id", orgId).gt("reorder_level", 0).limit(2000),
+      (d) => ((d as any[]) || []).map((r) => ({ ...r, on_hand: Number(r.on_hand) || 0, reorder_level: Number(r.reorder_level) || 0 })), [] as any[]),
   ]);
 
   let plan: WatchProposal[] = [];
@@ -56,6 +58,7 @@ export async function runWatch(orgId: string): Promise<WatchResult> {
       recentlyReminded: recent,
       msme, deals: deals.map((d: any) => ({ ...d, value: Number(d.value) || 0 })),
       quotes: quotes.map((q: any) => ({ ...q, amount: Number(q.amount) || 0 })),
+      stock,
       normalise: normalizeCustomerName,
     });
   } catch { out.errors++; return out; }
