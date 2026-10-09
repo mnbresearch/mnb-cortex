@@ -90,7 +90,7 @@ export async function getCustomer360(orgId: string, customerId: string): Promise
   const dnc = ((policyRes.data as any)?.do_not_contact as string[] | undefined) || [];
   const doNotContact = Boolean(norm) && dnc.some((p) => normalizeCustomerName(p) === norm);
 
-  const won = orders.filter((o) => (o.status || "won") === "won");
+  const won = orders.filter((o) => String(o.status || "won").trim().toLowerCase() === "won");
   const lifetime = won.reduce((s, o) => s + o.amount, 0);
   const lastOrder = orders.map((o) => o.order_date).filter(Boolean).sort().reverse()[0] || null;
   const firstSeen = [...orders.map((o) => o.order_date), ...invoices.map((i) => i.issue_date), (c as any).created_at?.slice(0, 10)].filter(Boolean).sort()[0] || null;

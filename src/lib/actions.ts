@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { fail, type ActionResult } from "@/lib/action-result";
 import { istTodayISO, daysPastDueIST } from "@/lib/statutory";
+import { DEAL_STAGES, STAGE_WEIGHT } from "@/lib/lead-score";
 
 async function requireOrg() {
   const { orgId } = await getUserAndOrg();
@@ -1324,23 +1325,41 @@ async function requireRole(min: string) {
 // ---- Deals / pipeline ----
 export async function addDeal(fd: FormData) {
   const orgId = await requireWriteOrg(); const sb = await createClient();
+  const stage = (DEAL_STAGES as readonly string[]).includes(str(fd.get("stage")).toLowerCase()) ? str(fd.get("stage")).toLowerCase() : "lead";
+  /*
+    A blank probability is "use the stage's weight", not 30%. Storing 0.3 for
+    every deal froze the weighted forecast at value × 30% whatever the stage —
+    a deal in negotiation counted the same as a cold lead.
+  */
+  const typed = String(fd.get("probability") ?? "").trim();
+  const prob = typed === "" ? null : Math.min(1, Math.max(0, num(typed) / 100));
   const { error } = await sb.from("sales_pipeline").insert({
-    org_id: orgId, stage: str(fd.get("stage")) || "lead", deal_name: str(fd.get("deal_name")),
+    org_id: orgId, stage, deal_name: str(fd.get("deal_name")),
     customer_name: str(fd.get("customer_name")), value: num(fd.get("value")),
-    probability: (num(fd.get("probability")) || 30) / 100 });
+    probability: prob });
   if (error) throw new Error(error.message);
   await logActivity(orgId, "crud", `Added deal ${str(fd.get("deal_name"))}`);
   revalidatePath("/pipeline");
 }
-export async function moveDeal(fd: FormData) {
+export async function moveDeal(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg(); const sb = await createClient();
   const id = str(fd.get("id"));
-  const stage = str(fd.get("stage"));
+  const stage = str(fd.get("stage")).toLowerCase();
+  if (!(DEAL_STAGES as readonly string[]).includes(stage)) return fail(`"${stage}" is not a pipeline stage.`);
 
   const { data: before } = await sb.from("sales_pipeline").select("*").eq("id", id).eq("org_id", orgId).maybeSingle();
+  if (!before) return fail("That deal no longer exists — reload the board.");
 
-  const { error } = await sb.from("sales_pipeline").update({ stage }).eq("id", id).eq("org_id", orgId);
-  if (error) throw new Error(error.message);
+  /*
+    Moving a deal takes its new stage's probability (the forecast follows the
+    deal), and the row-count is checked: a zero-row update — someone deleted
+    it, or the role cannot write — used to report a successful move.
+    updated_at is set by a trigger (2026_zzzv), which is what "going cold" reads.
+  */
+  const { data: moved, error } = await sb.from("sales_pipeline")
+    .update({ stage, probability: STAGE_WEIGHT[stage] ?? null }).eq("id", id).eq("org_id", orgId).select("id");
+  if (error) return fail(error.message);
+  if (!moved || moved.length !== 1) return fail("The deal did not move — your role may not allow editing the pipeline.");
 
   /*
     Winning a deal used to change one word in one table and nothing else. The
@@ -1386,7 +1405,8 @@ export async function moveDeal(fd: FormData) {
     // Dragged back OUT of won. Without this the sales order stayed "won" for
     // ever, so the pipeline and the revenue figure permanently disagreed and
     // nothing recomputed to reveal it.
-    await sb.from("sales_orders").update({ status: "open" }).eq("org_id", orgId).eq("source_deal_id", id);
+    const { error: unwinErr } = await sb.from("sales_orders").update({ status: "open" }).eq("org_id", orgId).eq("source_deal_id", id);
+    if (unwinErr) return fail(`Deal moved, but its sales order could not be reopened: ${unwinErr.message}. Revenue may still count it — check Sales.`);
     await recomputeQuietly(orgId);
     revalidatePath("/dashboard");
     revalidatePath("/sales");
@@ -1703,18 +1723,27 @@ export async function convertLead(fd: FormData): Promise<ActionResult | void> {
     .select("*").eq("id", id).eq("org_id", orgId).maybeSingle();
   if (readErr) throw new Error(readErr.message);
   if (!lead) return fail("That lead no longer exists — it may have been converted or removed already.");
+  /* ONCE. A second click used to create a second customer. */
+  if ((lead as any).converted_customer_id || /· converted$/.test(String((lead as any).source || ""))) {
+    return fail("This lead is already a customer.");
+  }
 
-  const { error } = await sb.from("customers").insert({
+  const { data: made, error } = await sb.from("customers").insert({
     org_id: orgId,
     name: (lead as any).name || (lead as any).email || "Unnamed",
+    company: (lead as any).company || null,
     email: (lead as any).email || null,
     phone: (lead as any).phone || null,
+    notes: (lead as any).note || null,
     status: "active",
     value: 0,
-  });
-  if (error) throw new Error(error.message);
+  }).select("id").maybeSingle();
+  if (error) return fail(/duplicate key|unique/i.test(error.message) ? "A customer with this name already exists." : error.message);
 
-  await sb.from("leads").update({ source: `${(lead as any).source || "lead"} · converted` }).eq("id", id).eq("org_id", orgId);
+  /* Mark it converted; on a database without 2026_zzzv the link column is absent, so fall back to the source tag. */
+  const tag = { source: `${(lead as any).source || "lead"} · converted` };
+  const { error: linkErr } = await sb.from("leads").update({ ...tag, converted_customer_id: (made as any)?.id ?? null }).eq("id", id).eq("org_id", orgId);
+  if (linkErr) await sb.from("leads").update(tag).eq("id", id).eq("org_id", orgId);
   await logActivity(orgId, "crud", `Converted lead ${(lead as any).name || (lead as any).email} to a customer`);
   await recomputeQuietly(orgId);
   revalidatePath("/leads");
@@ -2344,7 +2373,15 @@ export async function convertQuoteToInvoice(fd: FormData): Promise<ActionResult 
   /* Derived from the quote number, so the invoices unique index catches a
      double conversion even if the meta check somehow did not. */
   const invoiceNo = `INV-${String(q.quote_no || "Q").replace(/^Q-?/i, "")}`;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istTodayISO();
+  /*
+    DUE = TODAY + PAYMENT TERMS, not the quote's expiry. valid_until is when
+    the OFFER lapses — usually already past by the time it is accepted — so a
+    brand-new invoice showed as overdue and the collections engine could chase
+    it on day one. Terms come from the quote (meta.payment_terms_days) or 30.
+  */
+  const terms = Math.min(180, Math.max(0, Math.round(Number((meta as any)?.payment_terms_days) || 30)));
+  const due = new Date(Date.parse(`${today}T00:00:00Z`) + terms * 86_400_000).toISOString().slice(0, 10);
 
   const { data: created, error: insErr } = await sb
     .from("invoices")
@@ -2362,7 +2399,7 @@ export async function convertQuoteToInvoice(fd: FormData): Promise<ActionResult 
         statutory warning about a payment that is not late.
       */
       issue_date: today,
-      due_date: q.valid_until || null,
+      due_date: due,
     })
     .select("id")
     .limit(1);
@@ -2395,8 +2432,9 @@ export async function convertQuoteToInvoice(fd: FormData): Promise<ActionResult 
   }
 
   await logActivity(orgId, "crud", `Converted quote ${q.quote_no} to invoice ${invoiceNo} · ${q.party}`);
-  ["/quote", "/invoices", "/receivables", "/finance"].forEach((p) => revalidatePath(p));
-  return { ok: true, message: `Invoice ${invoiceNo} created in Receivables.` };
+  await recomputeQuietly(orgId);
+  ["/quote", "/invoice", "/receivables", "/finance", "/dashboard"].forEach((p) => revalidatePath(p));
+  return { ok: true, message: `Invoice ${invoiceNo} created in Receivables, due ${due} (${terms}-day terms).` };
 }
 
 // ---- Action board -----------------------------------------------------------

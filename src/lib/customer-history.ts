@@ -1,6 +1,7 @@
 import { getUserAndOrg } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeCustomerName, indexCustomers } from "@/lib/customer-match";
+import { pageAll } from "@/lib/page-all";
 
 /**
  * Roll each customer's won orders into recency / frequency / value.
@@ -77,17 +78,26 @@ export async function getCustomerHistory(): Promise<CustomerHistory> {
     Fall back to the pre-migration shape and keep working on names alone.
   */
   const orderCols = "customer_id,customer_name,amount,status,order_date,created_at";
-  const [{ data: custData }, ordersRes] = await Promise.all([
-    sb.from("customers").select("id,name,value,created_at").eq("org_id", orgId).limit(2000),
-    sb.from("sales_orders").select(orderCols).eq("org_id", orgId).eq("status", "won").limit(CAP),
+  /*
+    PAGED. `.limit(2000)` / `.limit(20000)` were silently cut to 1,000 by
+    PostgREST, so a workspace past a thousand won orders scored its customers
+    on whichever thousand came back — unordered — and `capped` could never
+    become true, so the page never said so.
+  */
+  const [custRes, ordersRes] = await Promise.all([
+    pageAll<any>((a, b) => sb.from("customers").select("id,name,value,created_at").eq("org_id", orgId).order("id").range(a, b), { max: CAP }),
+    pageAll<any>((a, b) => sb.from("sales_orders").select(orderCols).eq("org_id", orgId).ilike("status", "won").order("order_date", { ascending: false }).order("id").range(a, b), { max: CAP }),
   ]);
+  const custData = custRes.rows;
 
-  let orderRows = (ordersRes.data as any[]) || [];
+  let orderRows = ordersRes.rows;
+  let truncated = ordersRes.truncated || custRes.truncated;
   if (ordersRes.error) {
-    const legacy = await sb.from("sales_orders")
+    const legacy = await pageAll<any>((a, b) => sb.from("sales_orders")
       .select("customer_name,amount,status,order_date,created_at")
-      .eq("org_id", orgId).eq("status", "won").limit(CAP);
-    orderRows = (legacy.data as any[]) || [];
+      .eq("org_id", orgId).ilike("status", "won").order("order_date", { ascending: false }).range(a, b), { max: CAP });
+    orderRows = legacy.rows;
+    truncated = legacy.truncated || custRes.truncated;
     if (!legacy.error) {
       console.warn("[customer-history] sales_orders.customer_id is missing — apply 2026_sales_order_customer_link.sql. Matching by name only until then.");
     }
@@ -157,7 +167,7 @@ export async function getCustomerHistory(): Promise<CustomerHistory> {
     rows,
     matched,
     unmatched: customers.length - matched,
-    capped: orders.length >= CAP,
+    capped: truncated,
     ambiguousNames: [...new Set(ambiguousNames)],
     orphanOrders,
   };

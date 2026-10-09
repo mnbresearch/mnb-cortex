@@ -93,8 +93,8 @@ export default async function Developers() {
               <div className="flex items-center gap-2 mb-2"><Terminal className="h-4 w-4 text-primary" /><b>POST /api/v1/ingest</b> — push records</div>
               <pre className="text-xs bg-background/60 border rounded-lg p-3 overflow-x-auto">{`curl -X POST https://mnb-cortex.vercel.app/api/v1/ingest \\
   -H "x-api-key: YOUR_KEY" -H "Content-Type: application/json" \\
-  -d '{"table":"sales_orders","rows":[{"customer_name":"Acme","product":"Alpha-100","amount":250000}]}'`}</pre>
-              <p className="text-xs text-muted-foreground mt-2">Tables: sales_orders · invoices · inventory_items · customers</p>
+  -d '{"table":"sales_orders","rows":[{"order_no":"SO-1001","customer_name":"Acme","product":"Alpha-100","amount":250000,"order_date":"2026-10-01"}]}'`}</pre>
+              <p className="text-xs text-muted-foreground mt-2">Tables: sales_orders · invoices · inventory_items · customers · leads. Each row needs its key (order_no, invoice_no, name; email or phone for leads) — rows without one are counted in skipped_no_key, never invented. Sending the same row again updates it.</p>
             </Card>
             <Card className="p-4">
               <div className="flex items-center gap-2 mb-2"><Terminal className="h-4 w-4 text-primary" /><b>GET /api/v1/metrics</b> — read business KPIs</div>

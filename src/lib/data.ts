@@ -247,6 +247,22 @@ async function fetchRows(table: string, order = "created_at") {
   return { rows: (data as any[]) || [], live: true };
 }
 export const getSalesOrders = () => fetchRows("sales_orders", "order_date");
+
+/**
+ * EVERY order, for the Sales KPIs. The table shows the latest 200; the
+ * headline numbers ("Won revenue", win rate, AOV, repeat %) used to be computed
+ * from that same 200 while labelled as all-time. Paged past PostgREST's 1,000
+ * cap; `truncated` says when even 20,000 was not enough.
+ */
+export async function getSalesOrderStats(): Promise<{ rows: any[]; truncated: boolean }> {
+  const org = await currentOrg();
+  if (!org) return { rows: [], truncated: false };
+  const sb = await createClient();
+  const { pageAll } = await import("@/lib/page-all");
+  const r = await pageAll<any>((a, b) => sb.from("sales_orders").select("id, status, amount, customer_name, region, product")
+    .eq("org_id", org).order("order_date", { ascending: false }).order("id").range(a, b));
+  return { rows: r.rows, truncated: r.truncated };
+}
 export const getInvoices = () => fetchRows("invoices", "created_at");
 export const getInventory = () => fetchRows("inventory_items", "created_at");
 export const getEmployees = () => fetchRows("employees", "created_at");

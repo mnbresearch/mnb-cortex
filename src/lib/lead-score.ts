@@ -32,7 +32,11 @@ export type ScoredDeal = Deal & {
 };
 
 /** How far through the funnel each stage is. Unknown stages sit mid-table. */
-const STAGE_WEIGHT: Record<string, number> = {
+/** The stages the board offers, in funnel order. moveDeal accepts only these. */
+export const DEAL_STAGES = ["lead", "qualified", "proposal", "negotiation", "won", "lost"] as const;
+
+/** Win probability a stage implies — exported so a moved deal takes its new stage's weight. */
+export const STAGE_WEIGHT: Record<string, number> = {
   lead: 0.15, new: 0.15, prospect: 0.25, qualified: 0.4, contacted: 0.3,
   demo: 0.55, proposal: 0.7, quote: 0.7, negotiation: 0.85, won: 1, closed: 1, lost: 0,
 };
@@ -81,9 +85,15 @@ export function scoreDeal(d: Deal, maxExpected: number): ScoredDeal {
   return { ...d, score, band, expected, ageDays, why: bits.join(" · ") || "No value or stage set yet" };
 }
 
-/** Score and rank a pipeline, hottest first. Lost deals are dropped. */
+/**
+ * Score and rank the OPEN pipeline, hottest first. Lost deals are dropped —
+ * and so are won ones: a closed sale is revenue (moveDeal records it as a
+ * sales order), not pipeline. Counting it here put won deals at the top of
+ * "chase these first" and inside "Open deals", "Pipeline value" and the
+ * weighted forecast.
+ */
 export function scorePipeline(deals: Deal[]): ScoredDeal[] {
-  const live = (deals || []).filter((d) => String(d.stage || "").toLowerCase() !== "lost");
+  const live = (deals || []).filter((d) => !["lost", "won", "closed"].includes(String(d.stage || "").toLowerCase()));
   const expectations = live.map((d) => {
     const stageW = STAGE_WEIGHT[String(d.stage || "").toLowerCase()] ?? 0.35;
     const prob = d.probability ?? stageW;
@@ -104,4 +114,46 @@ export function pipelineSummary(scored: ScoredDeal[]) {
     hot: scored.filter((d) => d.band === "hot").length,
     stale: scored.filter((d) => d.ageDays > 45).length,
   };
+}
+
+
+/* ------------------------------------------------------------- leads */
+/*
+  LEAD SCORING — deterministic, explainable, and actually applied.
+
+  "AI Lead Scoring" was advertised while leads were never scored at all (the
+  score column existed, nothing wrote or showed it). This is a rule, not a
+  model, and the page says so: each point has a reason the owner can read.
+*/
+export type LeadLike = { name?: string | null; email?: string | null; phone?: string | null; company?: string | null; plan?: string | null; note?: string | null; source?: string | null; created_at?: string | null };
+export type ScoredLead = { score: number; band: "hot" | "warm" | "cold"; why: string };
+
+const FREE_MAIL = /@(gmail|yahoo|ymail|hotmail|outlook|live|rediffmail|rediff|icloud|aol|proton(mail)?)\./i;
+
+export function scoreLead(l: LeadLike, now = Date.now()): ScoredLead {
+  let s = 0; const why: string[] = [];
+  const email = String(l.email || "").trim();
+  const phone = String(l.phone || "").replace(/\D/g, "");
+  if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
+    s += 20; why.push("email");
+    if (!FREE_MAIL.test(email)) { s += 15; why.push("business email"); }
+  }
+  if (phone.length >= 10) { s += 20; why.push("phone"); }
+  if (String(l.company || "").trim()) { s += 10; why.push("company named"); }
+  if (String(l.plan || "").trim()) { s += 10; why.push("said what they want"); }
+  if (String(l.note || "").trim().length >= 15) { s += 5; why.push("left details"); }
+  const src = String(l.source || "").toLowerCase();
+  if (/referr/.test(src)) { s += 15; why.push("referral"); }
+  else if (/web|site|form|inquir|enquir|pricing|whatsapp|call/.test(src)) { s += 10; why.push("came to you"); }
+  else if (/trade|expo|show|event/.test(src)) { s += 8; why.push("met in person"); }
+  const t = l.created_at ? Date.parse(l.created_at) : NaN;
+  if (Number.isFinite(t)) {
+    const days = (now - t) / 86_400_000;
+    if (days <= 2) { s += 15; why.push("new — reply today"); }
+    else if (days <= 7) { s += 10; why.push("this week"); }
+    else if (days <= 30) { s += 5; }
+    else why.push(`${Math.round(days)} days old`);
+  }
+  const score = Math.min(100, s);
+  return { score, band: score >= 70 ? "hot" : score >= 40 ? "warm" : "cold", why: why.join(" · ") || "almost no details" };
 }

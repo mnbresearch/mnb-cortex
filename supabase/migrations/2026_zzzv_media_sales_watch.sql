@@ -102,6 +102,108 @@ create trigger sales_pipeline_touch before update on sales_pipeline
 */
 alter table leads add column if not exists converted_customer_id uuid;
 
+/*
+  d) api_ingest: statuses are lowercased on the way in (the same "Won" bug, by
+     the API door), invoice type is constrained, and a `leads` table is
+     accepted so a website form can reach the Leads inbox through the
+     customer's server or Zapier/Make — the Leads page told owners to do this
+     and the function refused the table. Same grants as 2026_zzzt.
+*/
+create or replace function public.api_ingest(p_key text, p_table text, p_rows jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_org uuid;
+  v_count int := 0;
+  v_total int := coalesce(jsonb_array_length(p_rows), 0);
+  v_skipped int := 0;
+begin
+  select org_id into v_org from api_keys
+   where key_hash = encode(sha256(convert_to(p_key, 'UTF8')), 'hex');
+  if v_org is null then return jsonb_build_object('ok', false, 'error', 'invalid api key'); end if;
+
+  if jsonb_typeof(p_rows) is distinct from 'array' then
+    return jsonb_build_object('ok', false, 'error', 'rows must be an array');
+  end if;
+  if v_total > 10000 then
+    return jsonb_build_object('ok', false, 'error', 'at most 10000 rows per call');
+  end if;
+
+  if p_table = 'sales_orders' then
+    select count(*) into v_skipped from jsonb_array_elements(p_rows) r where nullif(trim(r->>'order_no'), '') is null;
+    insert into sales_orders (org_id, order_no, customer_name, region, product, amount, status, order_date)
+      select distinct on (trim(r->>'order_no'))
+             v_org, trim(r->>'order_no'), r->>'customer_name', nullif(r->>'region', ''),
+             r->>'product', coalesce((r->>'amount')::numeric, 0), lower(trim(coalesce(nullif(r->>'status', ''), 'won'))),
+             coalesce((r->>'order_date')::date, current_date)
+        from jsonb_array_elements(p_rows) r
+       where nullif(trim(r->>'order_no'), '') is not null
+      on conflict (org_id, order_no) do update set
+        customer_name = excluded.customer_name, region = coalesce(excluded.region, sales_orders.region),
+        product = excluded.product, amount = excluded.amount, status = excluded.status, order_date = excluded.order_date;
+  elsif p_table = 'invoices' then
+    select count(*) into v_skipped from jsonb_array_elements(p_rows) r where nullif(trim(r->>'invoice_no'), '') is null;
+    insert into invoices (org_id, invoice_no, party, amount, status, type, issue_date, due_date)
+      select distinct on (trim(r->>'invoice_no'))
+             v_org, trim(r->>'invoice_no'), r->>'party',
+             coalesce((r->>'amount')::numeric, 0), lower(trim(coalesce(nullif(r->>'status', ''), 'pending'))),
+             case when lower(trim(coalesce(r->>'type', ''))) = 'payable' then 'payable' else 'receivable' end,
+             coalesce((r->>'issue_date')::date, ((r->>'due_date')::date - interval '30 days')::date),
+             coalesce((r->>'due_date')::date, coalesce((r->>'issue_date')::date, current_date) + 15)
+        from jsonb_array_elements(p_rows) r
+       where nullif(trim(r->>'invoice_no'), '') is not null
+      on conflict (org_id, invoice_no) do update set
+        party = excluded.party, amount = excluded.amount, status = excluded.status, type = excluded.type,
+        issue_date = excluded.issue_date, due_date = excluded.due_date;
+  elsif p_table = 'inventory_items' then
+    insert into inventory_items (org_id, sku, name, category, on_hand, reorder_level, unit_cost, supplier)
+      select v_org, r->>'sku', r->>'name', coalesce(r->>'category', 'raw'), coalesce((r->>'on_hand')::numeric, 0),
+             coalesce((r->>'reorder_level')::numeric, 0), coalesce((r->>'unit_cost')::numeric, 0), r->>'supplier'
+        from jsonb_array_elements(p_rows) r;
+  elsif p_table = 'customers' then
+    select count(*) into v_skipped from jsonb_array_elements(p_rows) r where nullif(trim(r->>'name'), '') is null;
+    insert into customers (org_id, name, company, email, phone, status, value)
+      select distinct on (trim(r->>'name'))
+             v_org, trim(r->>'name'), r->>'company', r->>'email', r->>'phone',
+             coalesce(nullif(r->>'status', ''), 'lead'), coalesce((r->>'value')::numeric, 0)
+        from jsonb_array_elements(p_rows) r
+       where nullif(trim(r->>'name'), '') is not null
+      on conflict (org_id, name) do update set
+        company = coalesce(excluded.company, customers.company), email = coalesce(excluded.email, customers.email),
+        phone = coalesce(excluded.phone, customers.phone), status = excluded.status, value = excluded.value;
+  elsif p_table = 'leads' then
+    /* Website enquiries pushed from the customer's server or Zapier/Make.
+       Keyed by email (else the last ten digits of the phone, so +91 and 0 prefixes match); a lead already on file is not duplicated. */
+    select count(*) into v_skipped from jsonb_array_elements(p_rows) r
+     where nullif(trim(r->>'email'), '') is null and nullif(right(regexp_replace(coalesce(r->>'phone', ''), '\D', '', 'g'), 10), '') is null;
+    insert into leads (org_id, name, email, phone, company, plan, note, source)
+      select distinct on (coalesce(lower(nullif(trim(r->>'email'), '')), right(regexp_replace(coalesce(r->>'phone', ''), '\D', '', 'g'), 10)))
+             v_org, nullif(trim(r->>'name'), ''), lower(nullif(trim(r->>'email'), '')), nullif(trim(r->>'phone'), ''),
+             nullif(trim(r->>'company'), ''), nullif(trim(r->>'plan'), ''), left(nullif(trim(r->>'note'), ''), 2000),
+             coalesce(nullif(trim(r->>'source'), ''), 'api')
+        from jsonb_array_elements(p_rows) r
+       where (nullif(trim(r->>'email'), '') is not null or nullif(right(regexp_replace(coalesce(r->>'phone', ''), '\D', '', 'g'), 10), '') is not null)
+         and not exists (
+           select 1 from leads l where l.org_id = v_org and (
+             (nullif(trim(r->>'email'), '') is not null and lower(l.email) = lower(trim(r->>'email')))
+             or (nullif(right(regexp_replace(coalesce(r->>'phone', ''), '\D', '', 'g'), 10), '') is not null
+                 and right(regexp_replace(coalesce(l.phone, ''), '\D', '', 'g'), 10) = right(regexp_replace(coalesce(r->>'phone', ''), '\D', '', 'g'), 10))));
+  else
+    return jsonb_build_object('ok', false, 'error', 'table not allowed');
+  end if;
+
+  get diagnostics v_count = row_count;
+  return jsonb_build_object('ok', true, 'written', v_count, 'inserted', v_count,
+    'skipped_no_key', v_skipped,
+    'note', case when v_skipped > 0 then v_skipped || ' row(s) had no ' ||
+      case p_table when 'sales_orders' then 'order_no' when 'invoices' then 'invoice_no' when 'leads' then 'email or phone' else 'name' end ||
+      ' and were not written' else null end);
+end $$;
+
+
+revoke all on function public.api_ingest(text, text, jsonb) from public;
+revoke all on function public.api_ingest(text, text, jsonb) from anon, authenticated;
+grant execute on function public.api_ingest(text, text, jsonb) to service_role;
+
 notify pgrst, 'reload schema';
 
 /* ---------- verify ---------- expect every row true */
@@ -115,4 +217,6 @@ select 'no mixed-case won', not exists (select 1 from sales_orders where status 
 union all
 select 'sales_pipeline.updated_at', exists (select 1 from information_schema.columns where table_name = 'sales_pipeline' and column_name = 'updated_at')
 union all
-select 'leads.converted_customer_id', exists (select 1 from information_schema.columns where table_name = 'leads' and column_name = 'converted_customer_id');
+select 'leads.converted_customer_id', exists (select 1 from information_schema.columns where table_name = 'leads' and column_name = 'converted_customer_id')
+union all
+select 'api_ingest accepts leads', position('''leads''' in pg_get_functiondef('public.api_ingest(text,text,jsonb)'::regprocedure)) > 0;

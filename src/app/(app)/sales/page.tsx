@@ -7,7 +7,7 @@ import { SimpleBar } from "@/components/charts/bar-chart";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { DataTable } from "@/components/data-table";
 import { CollapsibleForm, Field, SelectField } from "@/components/forms";
-import { getInsights, getSalesOrders, getUserAndOrg } from "@/lib/data";
+import { getInsights, getSalesOrders, getSalesOrderStats, getUserAndOrg } from "@/lib/data";
 import { inr } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { addSalesOrder } from "@/lib/actions";
@@ -25,13 +25,16 @@ export default async function Sales() {
   const { rows, live } = await getSalesOrders();
   const { orgId } = await getUserAndOrg();
   const signedIn = Boolean(orgId);
+  /* KPIs over EVERY order; the table below shows the latest 200. */
+  const stats = signedIn ? await getSalesOrderStats() : { rows, truncated: false };
+  const all = stats.rows.length ? stats.rows : rows;
 
   // Derived from this workspace's own orders — no fixtures.
   const n = (v: any) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
-  const won = rows.filter((r: any) => String(r.status || "").toLowerCase() === "won");
+  const won = all.filter((r: any) => String(r.status || "").trim().toLowerCase() === "won");
   const revenue = won.reduce((a: number, r: any) => a + n(r.amount), 0);
   const aov = won.length ? revenue / won.length : 0;
-  const conversion = rows.length ? (won.length / rows.length) * 100 : 0;
+  const conversion = all.length ? (won.length / all.length) * 100 : 0;
   const byName = new Map<string, number>();
   for (const r of won) byName.set(String(r.customer_name || "—"), (byName.get(String(r.customer_name || "—")) || 0) + 1);
   const repeat = Array.from(byName.values()).filter((c) => c > 1).length;
@@ -59,7 +62,7 @@ export default async function Sales() {
           rows.length ? (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <Stat label="Won revenue" value={inr(revenue)} hint={`${won.length} won of ${rows.length} orders`} tone="text-success" />
+                <Stat label="Won revenue" value={inr(revenue)} hint={`${won.length} won of ${all.length} orders${stats.truncated ? " (first 20,000 read)" : ""}`} tone="text-success" />
                 <Stat label="Win rate" value={`${conversion.toFixed(1)}%`} hint="won ÷ all orders" />
                 <Stat label="Avg order value" value={inr(aov)} hint="across won orders" />
                 <Stat label="Repeat customers" value={`${repeatPct.toFixed(0)}%`} hint={`${repeat} of ${byName.size} customers`} />

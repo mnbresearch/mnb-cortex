@@ -258,6 +258,8 @@ export function mapImportedRow(table: string, spec: { cols: string[]; nums: stri
     "Orders (MTD): 500" beside "Revenue (MTD): ₹0" and nothing explained why.
   */
   if (table === "sales_orders" && !o.status) o.status = "won";
+  /* "Won" from Tally/CSV must count: revenue is `status = 'won'` everywhere. */
+  if (table === "sales_orders" && o.status) o.status = String(o.status).trim().toLowerCase();
 
   /*
     Normalise the two columns that are COMPARED rather than displayed.

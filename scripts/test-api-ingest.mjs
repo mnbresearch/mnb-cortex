@@ -77,6 +77,28 @@ check(r.ok && await count("sales_orders", "22222222-2222-4222-8222-222222222222"
 r = await call("KEY-A", "employees", [{}]);
 check(r.ok === false && /not allowed/.test(r.error), "tables outside the list are refused");
 
+/* 4b. 2026_zzzv redefines it: lowercased status, constrained type, and leads */
+{
+  await db.exec(`create table if not exists leads (id uuid primary key default gen_random_uuid(), org_id uuid, name text, email text, phone text, company text, plan text, note text, source text, created_at timestamptz default now());`);
+  const zv = readFileSync("supabase/migrations/2026_zzzv_media_sales_watch.sql", "utf8");
+  const fnSql = zv.slice(zv.indexOf("create or replace function public.api_ingest"), zv.indexOf("notify pgrst", zv.indexOf("create or replace function public.api_ingest")));
+  await db.exec(fnSql);
+  let q = await call("KEY-A", "sales_orders", [{ order_no: "SO-CASE", amount: 100, status: " Won " }]);
+  const st = (await db.query(`select status from sales_orders where order_no = 'SO-CASE'`)).rows[0]?.status;
+  check(q.ok && st === "won", "zzzv: 'Won' arrives as 'won', so it counts as revenue", JSON.stringify({ q, st }));
+  q = await call("KEY-A", "invoices", [{ invoice_no: "INV-T", amount: 5, status: "PAID", type: "Purchase" }]);
+  const iv = (await db.query(`select status, type from invoices where invoice_no = 'INV-T'`)).rows[0];
+  check(iv?.status === "paid" && iv?.type === "receivable", "zzzv: invoice status lowercased, unknown type becomes receivable", JSON.stringify(iv));
+  q = await call("KEY-A", "leads", [{ name: "Ravi", email: "Ravi@Acme.in", phone: "98765 43210", source: "website" }, { name: "Dup", email: "ravi@acme.in" }, { name: "NoKey" }, { name: "Ph", phone: "+91-90000-11111" }]);
+  check(q.ok && q.skipped_no_key === 1 && await count("leads") === 2, "zzzv: leads accepted, keyed by email/phone, duplicates in a batch merged, keyless refused", JSON.stringify(q));
+  q = await call("KEY-A", "leads", [{ name: "Again", email: "RAVI@acme.in" }, { name: "Ph again", phone: "9000011111" }]);
+  check(q.ok && await count("leads") === 2, "zzzv: a lead already on file (same email or phone) is not duplicated");
+  check(await count("leads", "22222222-2222-4222-8222-222222222222") === 0, "zzzv: leads land only in the key's workspace");
+  q = await call("KEY-A", "employees", [{}]);
+  check(q.ok === false && /not allowed/.test(q.error), "zzzv: other tables are still refused");
+  await db.exec(readFileSync("supabase/migrations/2026_zzzv_media_sales_watch.sql", "utf8").match(/revoke all on function public\.api_ingest[\s\S]*?to service_role;/)[0]);
+}
+
 /* 5. Grants: service_role only */
 const acl = (await db.query(`select p.proname, r.rolname from pg_proc p cross join lateral aclexplode(p.proacl) a join pg_roles r on r.oid = a.grantee where p.proname in ('api_ingest','api_metrics')`)).rows;
 check(!acl.some((x) => ["anon", "authenticated", "public"].includes(x.rolname)), "anon/authenticated cannot call either API function directly", JSON.stringify(acl));
