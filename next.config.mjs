@@ -68,6 +68,25 @@ const securityHeaders = [
 ];
 const nextConfig = {
   reactStrictMode: true,
+  /*
+    BUILD MEMORY. Two production builds in a row (bd69b2b, ba5f798) were
+    SIGKILLed by Vercel's 8 GB build container during "Creating an optimized
+    production build", ~95 s in, on the cache restored from the last good
+    deployment. The webpack persistent cache in .next/cache/webpack is ~900 MB
+    on disk for this app; deserialising it, growing it with the new modules and
+    serialising it back all happen in the compiler's heap. Production builds
+    gain little from it on Vercel (the restored pack is invalidated by most
+    commits anyway), so it is turned off for non-dev builds. Dev keeps it.
+
+    The build worker is kept explicitly on: a custom `webpack` function would
+    otherwise switch Next 14 back to compiling in the main process, which
+    removes the isolation that lets the parent report the failure.
+  */
+  experimental: { webpackBuildWorker: true },
+  webpack: (config, { dev }) => {
+    if (!dev) config.cache = false;
+    return config;
+  },
   eslint: { ignoreDuringBuilds: true },
   images: {
     // hostname "**" made /_next/image an OPEN PROXY: anyone could pass any
