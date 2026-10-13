@@ -23,34 +23,53 @@ import { STORIES, STATIONS, ACTORS, STORY_TABS, storyFor, type ActorId, type Sta
   each desk and the owner steps through with "Next".
 */
 
-type Pos = { x: number; y: number };
+/*
+  A position is a desk plus a slot. Agents stand BESIDE the desk card — below
+  it on the top half of the floor, above it on the bottom half — so they never
+  cover its label. The px parts (card half-height, agent height, slot spread)
+  are CSS variables set per breakpoint on the stage, so spacing holds on a
+  phone and on a wide screen alike; the transition interpolates the calc().
+*/
+type Pos = { x: number; y: number; k: number };
 const PACE = 26; // ms per % of floor travelled
 const READ_MS = (s: string) => Math.min(4200, 1400 + s.length * 38);
+const below = (y: number) => y <= 50;
+const standAt = (p: Pos) => ({
+  left: `calc(${p.x}% + ${p.k} * var(--af-spread))`,
+  top: below(p.y)
+    ? `calc(${p.y}% + var(--af-card) + var(--af-agent) + 4px)`
+    : `calc(${p.y}% - var(--af-card) - 4px)`,
+});
 
 function Agent({ id, pos, walking, speaking, carry, dim }: { id: ActorId; pos: Pos; walking: number; speaking: string | null; carry?: string; dim?: boolean }) {
   const a = ACTORS[id];
+  /* Bubbles open sideways: never over a desk label, never off the edge. Edge desks open toward the middle;
+     middle desks open away from whoever else stands there (slot -1 opens left, +1 right). */
+  const right = pos.x > 35 && pos.x < 65 && pos.k !== 0 ? pos.k > 0 : pos.x < 50;
   return (
     <div
-      className="absolute z-20"
+      className="absolute"
       style={{
-        left: `${pos.x}%`, top: `${pos.y}%`,
+        ...standAt(pos),
         transform: "translate(-50%, -100%)",
         transition: walking ? `left ${walking}ms linear, top ${walking}ms linear` : "none",
-        opacity: dim ? 0.55 : 1,
+        opacity: dim ? 0.5 : 1,
+        zIndex: speaking ? 25 : 20,
       }}
       aria-hidden="true"
     >
       {speaking && (
-        <div className="agent-bubble absolute left-1/2 bottom-full mb-1 -translate-x-1/2 w-max max-w-[11rem] sm:max-w-[15rem] rounded-xl border bg-card px-2.5 py-1.5 text-[11px] sm:text-xs leading-snug shadow-lg">
+        <div className={`agent-bubble absolute top-1/2 -translate-y-1/2 ${right ? "left-full ml-2 origin-left" : "right-full mr-2 origin-right"} w-max max-w-[9.5rem] sm:max-w-[15rem] rounded-xl border bg-card px-2.5 py-1.5 text-[11px] sm:text-xs leading-snug shadow-lg`}>
           <span className="font-semibold" style={{ color: a.color }}>{a.name}: </span>{speaking}
-          <span className="absolute left-1/2 top-full -translate-x-1/2 border-x-[6px] border-t-[6px] border-x-transparent" style={{ borderTopColor: "hsl(var(--border))" }} />
+          <span className={`absolute top-1/2 -translate-y-1/2 border-y-[6px] border-y-transparent ${right ? "right-full border-r-[6px]" : "left-full border-l-[6px]"}`}
+            style={right ? { borderRightColor: "hsl(var(--border))" } : { borderLeftColor: "hsl(var(--border))" }} />
         </div>
       )}
       <div className={`relative ${walking ? "agent-walk" : "agent-idle"}`}>
         {carry && walking ? (
-          <span className="absolute -right-6 top-1 rounded-md bg-background border px-1 py-0.5 text-[9px] font-medium whitespace-nowrap shadow-sm">{carry}</span>
+          <span className="absolute -right-7 top-1 rounded-md bg-background border px-1 py-0.5 text-[9px] sm:text-[10px] font-medium whitespace-nowrap shadow-sm">{carry}</span>
         ) : null}
-        <svg width="30" height="40" viewBox="0 0 30 40">
+        <svg viewBox="0 0 30 40" className="block h-[var(--af-agent)] w-auto">
           <ellipse cx="15" cy="38.5" rx="9" ry="1.6" fill="currentColor" opacity="0.12" />
           <g className="agent-leg-l"><rect x="10" y="27" width="4" height="10" rx="2" fill={a.color} opacity="0.85" /></g>
           <g className="agent-leg-r"><rect x="16" y="27" width="4" height="10" rx="2" fill={a.color} opacity="0.85" /></g>
@@ -75,9 +94,10 @@ export function AgentFloor({ industry, compact = false, showTabs = true }: { ind
   const [inView, setInView] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  /* Positions: everyone starts at home. */
-  const home = (id: ActorId): Pos => { const s = STATIONS[ACTORS[id].home]; return { x: s.x, y: s.y + 4 }; };
+  /* Positions: everyone starts at home. Each agent keeps one slot, so two at the same desk stand side by side. */
   const actorsInStory = useMemo(() => Array.from(new Set(story.steps.map((s) => s.actor))), [story]);
+  const slot = (id: ActorId) => (id === "you" ? 0 : actorsInStory.indexOf(id) % 2 ? 1 : -1);
+  const home = (id: ActorId): Pos => { const s = STATIONS[ACTORS[id].home]; return { x: s.x, y: s.y, k: 0 }; };
   const [pos, setPos] = useState<Record<string, Pos>>({});
   const [walk, setWalk] = useState<Record<string, number>>({});
   const [speech, setSpeech] = useState<{ actor: ActorId; text: string } | null>(null);
@@ -110,9 +130,8 @@ export function AgentFloor({ industry, compact = false, showTabs = true }: { ind
     const s = story.steps[step];
     const from = pos[s.actor] || home(s.actor);
     const st = STATIONS[s.to];
-    const offset = s.actor === "you" ? 0 : (actorsInStory.indexOf(s.actor) % 2 ? 3.5 : -3.5);
-    const target = { x: st.x + offset, y: st.y + 4 };
-    const dist = Math.hypot(target.x - from.x, target.y - from.y);
+    const target: Pos = { x: st.x, y: st.y, k: slot(s.actor) };
+    const dist = Math.max(4, Math.hypot(target.x - from.x, (target.y - from.y) * 0.6));
     const ms = reduced ? 0 : Math.round(dist * PACE);
     setSpeech(null);
     setWalk((w) => ({ ...w, [s.actor]: ms }));
@@ -161,7 +180,7 @@ export function AgentFloor({ industry, compact = false, showTabs = true }: { ind
         </div>
       )}
 
-      <div className={`relative w-full overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-background to-card ${compact ? "aspect-[16/11] sm:aspect-[16/8]" : "aspect-[16/12] sm:aspect-[16/8.5]"}`}>
+      <div className={`relative w-full overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-background to-card [--af-card:15px] [--af-agent:38px] [--af-spread:28px] sm:[--af-card:21px] sm:[--af-agent:50px] sm:[--af-spread:40px] ${compact ? "aspect-[16/12] sm:aspect-[16/8] lg:aspect-[16/7]" : "aspect-[16/13] sm:aspect-[16/8.5] lg:aspect-[16/7.2]"}`}>
         {/* floor grid */}
         <div className="absolute inset-0 opacity-[0.35]" style={{ backgroundImage: "linear-gradient(hsl(var(--border)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border)) 1px, transparent 1px)", backgroundSize: "6% 9%" }} aria-hidden="true" />
         {/* hand-off paths */}

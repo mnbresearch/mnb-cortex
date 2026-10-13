@@ -67,7 +67,11 @@ check(/An illustration of what runs in your workspace/.test(C) && /names and amo
 check(/prefers-reduced-motion: reduce/.test(C) && /reduced \? 0 : Math\.round\(dist \* PACE\)/.test(C) && /if \(reduced \|\| !playing \|\| !inView\) return;/.test(C), "reduced motion: no walking, no auto-advance; nothing runs off-screen");
 check(!/localStorage|sessionStorage|fetch\(/.test(C), "stores nothing and calls nothing");
 check(/<Link href=\{s\.module\}/.test(C), "each step links to the page that does it");
+/* Seen live on 6.45: agents stood on the desk labels and the bubble was clipped at the floor's edge. */
+check(/var\(--af-card\) \+ var\(--af-agent\)/.test(C) && /% - var\(--af-card\)/.test(C), "agents stand beside a desk card, never on its label");
+check(!/agent-bubble[^"`]*bottom-full/.test(C) && /left-full ml-2/.test(C) && /right-full mr-2/.test(C) && /pos\.x < 50/.test(C), "bubbles open sideways toward the floor, not up over a desk or off the edge");
 const css = read("src/app/globals.css");
+check(!/@keyframes agent-pop[^}]*transform/.test(css), "the bubble's pop-in does not override its positioning transform");
 check(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.agent-walk/.test(css), "CSS animations are off under reduced motion");
 for (const [f, re] of [["src/app/page.tsx", /<AgentFloor \/>/], ["src/app/features/page.tsx", /<AgentFloor \/>/], ["src/app/industries/[slug]/page.tsx", /<AgentFloor industry=\{ind\.slug\} showTabs=\{false\} \/>/], ["src/app/(app)/workforce/page.tsx", /<AgentFloor industry=/]]) {
   check(re.test(read(f)), `${f} shows the floor`);

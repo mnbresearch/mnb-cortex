@@ -271,7 +271,7 @@ export default function Features() {
       </section>
 
       {/* Everything, by the job it does — searchable, with the plan that includes it. */}
-      <section id="explore" className="px-5 lg:px-10 py-20 border-t">
+      <section id="explore" className="px-5 lg:px-10 py-20 border-t scroll-mt-16">
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="◆">Find what you need</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-3 max-w-3xl">Search it by the job, not the menu.</h2>

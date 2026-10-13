@@ -470,7 +470,8 @@ button:active:not(:disabled), [role="button"]:active { transform: scale(.985); }
 @keyframes agent-leg-swing { 0%,100% { transform: rotate(18deg); } 50% { transform: rotate(-18deg); } }
 @keyframes agent-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
 @keyframes agent-step { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
-@keyframes agent-pop { from { opacity: 0; transform: translate(-50%, 4px) scale(.96); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+/* `scale`, not `transform`: the bubble's own translate positions it beside the agent. */
+@keyframes agent-pop { from { opacity: 0; scale: .94; } to { opacity: 1; scale: 1; } }
 @keyframes agent-dash { to { stroke-dashoffset: -24; } }
 .agent-walk { animation: agent-step .36s ease-in-out infinite; }
 .agent-walk .agent-leg-l { transform-box: fill-box; transform-origin: 50% 0; animation: agent-leg-swing .36s ease-in-out infinite; }
