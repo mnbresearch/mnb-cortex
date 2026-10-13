@@ -78,6 +78,8 @@ export async function sendEmail(
     from?: string; replyTo?: string | null; kind?: string; orgId?: string | null;
     /** Files to attach (Resend `attachments`). Capped at 10 MB total — Resend's own limit is 40 MB. */
     attachments?: Array<{ filename: string; content: Buffer }>;
+    /** Extra MIME headers — used for List-Unsubscribe on marketing-adjacent mail. Only the two unsubscribe headers are passed through. */
+    headers?: { "List-Unsubscribe"?: string; "List-Unsubscribe-Post"?: string };
   },
 ): Promise<SendResult> {
   const correlationId = `em_${crypto.randomUUID()}`;
@@ -94,6 +96,15 @@ export async function sendEmail(
   const replyTo = opts?.replyTo === null ? "" : (opts?.replyTo || brandReplyTo());
   const payload: any = { from, to: [to], subject, html };
   if (replyTo) payload.reply_to = replyTo;
+  if (opts?.headers) {
+    /* An allow-list, so a caller cannot smuggle arbitrary headers (or CR/LF) into the message. */
+    const h: Record<string, string> = {};
+    for (const k of ["List-Unsubscribe", "List-Unsubscribe-Post"] as const) {
+      const v = opts.headers[k];
+      if (typeof v === "string" && v && !/[\r\n]/.test(v)) h[k] = v.slice(0, 500);
+    }
+    if (Object.keys(h).length) payload.headers = h;
+  }
   if (opts?.attachments?.length) {
     const total = opts.attachments.reduce((n, a) => n + a.content.length, 0);
     if (total > 10 * 1_048_576) {

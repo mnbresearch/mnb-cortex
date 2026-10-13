@@ -312,6 +312,11 @@ export async function updateOrgProfile(fd: FormData): Promise<ActionResult | voi
   }
   const { error } = await sb.from("organizations").update(patch).eq("id", orgId);
   if (error) throw new Error(error.message);
+  /* The wizard's company step is "onboarding completed" — counted after the save landed, not on the click. */
+  if (str(fd.get("source")) === "onboarding") {
+    const { record } = await import("@/lib/funnel");
+    await record("onboarding_completed", { orgId, meta: { industry: String(patch.industry || "") } });
+  }
   revalidatePath("/settings");
 }
 
@@ -1517,6 +1522,7 @@ export async function generateApiKey(fd: FormData): Promise<KeyIssue> {
   }).select("id").single();
   if (error) return { key: null, error: isMissingCol(error) ? KEY_MIGRATION_MSG : "Could not create the key. Nothing was saved — try again." };
   await keyAudit(svc, { org_id: orgId, key_id: (ins as any).id, key_prefix: k.prefix, event: "created", actor: user?.id ?? null, detail: { scopes, expires_at } });
+  { const { record } = await import("@/lib/funnel"); await record("api_key_created", { orgId, meta: { scopes: scopes.length } }); }
   revalidatePath("/developers");
   /* Shown once. There is deliberately no way to ask for it again. */
   return { key: k.key, prefix: k.prefix };

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Track } from "@/components/track";
 import { PricingClient } from "@/components/pricing-client";
 import { RoiCalculator } from "@/components/roi-calculator";
 import { SmoothScroll, Cursor, Kinetic, SectionLabel } from "@/components/loco";
@@ -14,6 +15,7 @@ export default async function Pricing() {
   const { orgId } = await getUserAndOrg();
   return (
     <main className="min-h-screen overflow-x-hidden">
+      <Track event="pricing_view" />
       <SmoothScroll />
       <Cursor />
       <PublicHeader />

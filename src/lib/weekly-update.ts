@@ -48,7 +48,7 @@ export function verifyUnsub(email: string, token: string): boolean {
       crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
   } catch { return false; }
 }
-function unsubUrl(email: string): string {
+export function unsubUrl(email: string): string {
   return `${APP_URL}/api/unsub?e=${encodeURIComponent(email)}&t=${unsubToken(email)}`;
 }
 

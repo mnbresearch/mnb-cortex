@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Track } from "@/components/track";
 /* Two icons, down from thirty-two. The other thirty went to /features with the
    grid that used them — worth noticing as a proxy for how much of this page
    was inventory rather than argument. */
@@ -255,6 +256,7 @@ const OBJECTIONS = [
 export default function Home() {
   return (
     <main className="min-h-screen overflow-x-hidden">
+      <Track event="landing_view" />
       <SmoothScroll />
       <Cursor />
       <PublicHeader />

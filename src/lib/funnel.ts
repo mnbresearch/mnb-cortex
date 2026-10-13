@@ -45,7 +45,28 @@ export const FUNNEL_EVENTS = [
   "checkout_started",    // a Cashfree order was created
   "payment_succeeded",   // it settled and something was granted
   "payment_failed",      // it did not — worth counting separately
+
+  /* ---- added 2026-10 (master prompt §7). Same rules: fixed names, no PII. ---- */
+  "plan_selected",          // clicked a plan on /pricing (meta: plan, cycle) — intent, not payment
+  "login_succeeded",        // a sign-in completed (callback exchanged a code)
+  "login_failed",           // a sign-in attempt failed (meta: reason kind only, never the address)
+  "onboarding_completed",   // the company step of the wizard was saved
+  "checkout_abandoned",     // reconcile confirmed with Cashfree that an order was never paid
+  "subscription_activated", // first paid plan period granted, from a VERIFIED provider event
+  "subscription_renewed",   // a later period granted, from a verified provider event
+  "subscription_cancelled", // auto-renewal turned off and recorded
+  "feature_used",           // a metered AI feature ran (meta: feature = the credit mode)
+  "api_key_created",        // a workspace issued an API key (meta: scope count)
+  "checkout_followup_sent", // the abandoned-checkout email was accepted by the provider
 ] as const;
+
+/**
+ * The only events a BROWSER may report, through /api/t. Everything else is
+ * recorded server-side where it actually happens — a payment is never counted
+ * because a page said so.
+ */
+export const CLIENT_EVENTS = ["landing_view", "pricing_view", "calculator_view", "plan_selected", "signup_started", "healthcheck_start", "login_failed"] as const;
+export type ClientEvent = (typeof CLIENT_EVENTS)[number];
 
 export type FunnelEvent = (typeof FUNNEL_EVENTS)[number];
 

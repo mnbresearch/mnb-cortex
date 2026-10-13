@@ -159,7 +159,12 @@ export async function reconcilePayments(opts?: { dryRun?: boolean }): Promise<Re
     }
     if (!order.paid) {
       if (new Date(it.created_at).getTime() < new Date(abandonCutoff).getTime()) {
-        if (!dry) await closeIntent(svc, orderId, "abandoned");
+        if (!dry) {
+          await closeIntent(svc, orderId, "abandoned");
+          /* Confirmed unpaid AT CASHFREE, not inferred from a page that was closed. */
+          const { recordQuietly } = await import("@/lib/funnel");
+          recordQuietly("checkout_abandoned", { orgId: it.org_id ?? null, meta: { kind: String(it.kind || ""), ref: String(it.ref || "") } });
+        }
         report.abandoned++;
       } else {
         report.clean++;

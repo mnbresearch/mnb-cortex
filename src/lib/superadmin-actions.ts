@@ -41,6 +41,33 @@ export async function setCollectionsSwitch(fd: FormData): Promise<{ ok: boolean;
   } catch (e: any) { return { ok: false, error: e?.message || "Could not flip the switch." }; }
 }
 
+/**
+ * Abandoned-checkout follow-up: off / dry_run / live. Defaults to dry_run in
+ * the migration; going live is a deliberate operator act after reading the
+ * preview and sending themselves a test.
+ */
+export async function setCheckoutFollowupMode(mode: string): Promise<{ ok: boolean; mode?: string; error?: string }> {
+  await assertSuper();
+  if (!["off", "dry_run", "live"].includes(mode)) return { ok: false, error: "Mode must be off, dry_run or live." };
+  const sb = serviceClient();
+  if (!sb) return { ok: false, error: "Service role not configured." };
+  const { data, error } = await sb.from("platform_switches").update({ checkout_followup_mode: mode, updated_at: new Date().toISOString() }).eq("id", true).select("checkout_followup_mode");
+  if (error) return { ok: false, error: /checkout_followup_mode/.test(error.message) ? "Run supabase/migrations/2026_zzzx_checkout_followup.sql first." : error.message };
+  if (!data?.length) return { ok: false, error: "The platform_switches row is missing — run 2026_collections_safety.sql." };
+  return { ok: true, mode };
+}
+
+/** Sends the real template, with synthetic data, to the signed-in operator only. */
+export async function sendCheckoutFollowupTest(): Promise<{ ok: boolean; to?: string; error?: string }> {
+  await assertSuper();
+  const sb = await createClient();
+  const { data: { user } } = await sb.auth.getUser();
+  const to = String(user?.email || "");
+  const { sendFollowupTest } = await import("@/lib/checkout-followup");
+  const r = await sendFollowupTest(to);
+  return r.ok ? { ok: true, to } : { ok: false, error: r.error };
+}
+
 export async function provisionBusinesses() {
   await assertSuper();
   const sb = serviceClient();

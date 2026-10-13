@@ -117,6 +117,9 @@ export const BACKUP_TABLES = [
   // api_keys, which is earlier in this list. Until those migrations are run a
   // backup reports these three as read errors — run the SQL, don't drop them.
   "media_assets", "api_key_events", "api_usage_daily",
+  // 2026_zzzx: the abandoned-checkout send ledger — losing it would re-send
+  // the one reminder each customer was promised they would get only once.
+  "checkout_followups",
 ];
 
 /**

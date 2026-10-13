@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { isSuperAdmin, getAllOrgs, getPortfolioStatus, currentEmail } from "@/lib/superadmin";
 import { getPlatformEconomics } from "@/lib/admin-metrics";
 import { getFunnel } from "@/lib/funnel";
+import { FollowupPanel } from "@/components/followup-panel";
 import { statusOf, isLapsed } from "@/lib/entitlement";
 import { inr } from "@/lib/utils";
 import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager, ProvisionCustomerForm, BackupButton } from "@/components/superadmin-panel";
@@ -65,6 +66,28 @@ export default async function SuperAdmin() {
   const [{ rows, live, reason }, portfolio, econ, funnel] = await Promise.all([
     getAllOrgs(), getPortfolioStatus(), getPlatformEconomics(), getFunnel(30),
   ]);
+
+  /* Abandoned-checkout follow-up: stored mode, and a dry-run preview of what the next run would do. */
+  let followMode: "off" | "dry_run" | "live" = "off"; let followMigrated = false;
+  let followPreview: Awaited<ReturnType<typeof import("@/lib/checkout-followup")["runCheckoutFollowups"]>> | null = null;
+  try {
+    const { data, error } = await serviceClient()!.from("platform_switches").select("checkout_followup_mode").limit(1).maybeSingle();
+    followMigrated = !error;
+    const m = String((data as any)?.checkout_followup_mode || "");
+    followMode = m === "live" || m === "dry_run" ? m : "off";
+    if (followMigrated) followPreview = await (await import("@/lib/checkout-followup")).runCheckoutFollowups({ forceMode: "dry_run" });
+  } catch { /* panel says how to enable it */ }
+
+  /* API usage across all workspaces, last 30 days (2026_zzzw). */
+  let apiUsage: { calls: number; denied: number; keys: number } | null = null;
+  try {
+    const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    const { data, error } = await serviceClient()!.from("api_usage_daily").select("key_id, calls, denied").gte("day", since).limit(20_000);
+    if (!error) {
+      const rows = (data as any[]) || [];
+      apiUsage = { calls: rows.reduce((n, r) => n + (Number(r.calls) || 0), 0), denied: rows.reduce((n, r) => n + (Number(r.denied) || 0), 0), keys: new Set(rows.map((r) => r.key_id)).size };
+    }
+  } catch { /* not migrated */ }
 
   /*
     The collections switch. Read here rather than in the client component so the
@@ -273,6 +296,65 @@ export default async function SuperAdmin() {
                 </p>
               </>
             )}
+          </Card>
+        </Section>
+
+        <Section title="Conversion and API" desc="Step-to-step rates from the funnel above, and public API traffic — last 30 days">
+          <Card className="p-5 text-sm">
+            {(() => {
+              const n = (e: string) => funnel.rows.find((r) => r.event === e)?.total ?? 0;
+              const rate = (a: number, b: number) => (a > 0 ? `${Math.round((b / a) * 100)}%` : "—");
+              const pairs: [string, string, string][] = [
+                ["pricing_view", "plan_selected", "Pricing → chose a plan"],
+                ["plan_selected", "checkout_started", "Chose a plan → checkout"],
+                ["checkout_started", "payment_succeeded", "Checkout → paid (verified by Cashfree)"],
+                ["signup_started", "workspace_created", "Started sign-up → workspace"],
+                ["workspace_created", "onboarding_completed", "Workspace → onboarding done"],
+              ];
+              return (
+                <ul className="grid sm:grid-cols-2 gap-2">
+                  {pairs.map(([a, b, label]) => (
+                    <li key={label} className="flex justify-between rounded-lg border px-3 py-2">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className="tabular-nums font-medium">{rate(n(a), n(b))} <span className="text-xs text-muted-foreground">({n(b)}/{n(a)})</span></span>
+                    </li>
+                  ))}
+                  <li className="flex justify-between rounded-lg border px-3 py-2"><span className="text-muted-foreground">Checkouts abandoned (confirmed unpaid)</span><span className="tabular-nums font-medium">{n("checkout_abandoned")}</span></li>
+                  <li className="flex justify-between rounded-lg border px-3 py-2"><span className="text-muted-foreground">Activated · renewed · cancelled</span><span className="tabular-nums font-medium">{n("subscription_activated")} · {n("subscription_renewed")} · {n("subscription_cancelled")}</span></li>
+                  <li className="flex justify-between rounded-lg border px-3 py-2"><span className="text-muted-foreground">Sign-ins ok · failed</span><span className="tabular-nums font-medium">{n("login_succeeded")} · {n("login_failed")}</span></li>
+                  <li className="flex justify-between rounded-lg border px-3 py-2"><span className="text-muted-foreground">API calls · refused · keys used</span><span className="tabular-nums font-medium">{apiUsage ? `${apiUsage.calls.toLocaleString("en-IN")} · ${apiUsage.denied.toLocaleString("en-IN")} · ${apiUsage.keys}` : "run 2026_zzzw"}</span></li>
+                </ul>
+              );
+            })()}
+            <p className="text-xs text-muted-foreground mt-3">
+              Payments, activations and renewals are counted only from verified Cashfree events, never from a page redirect.
+              Browsers sending Global Privacy Control or Do Not Track are not counted at all.
+            </p>
+          </Card>
+        </Section>
+
+        <Section title="Abandoned-checkout follow-up" desc="One email to the owner when Cashfree confirms a checkout was never paid — opted-out, subscribed and recently-emailed workspaces excluded">
+          <Card className="p-5 text-sm space-y-3">
+            <FollowupPanel mode={followMode} migrated={followMigrated} />
+            {followPreview && (
+              <div>
+                <div className="text-xs text-muted-foreground">
+                  Next run would {followMode === "live" ? "send" : "(in dry run) select"} <b>{followPreview.queued}</b> of {followPreview.considered} abandoned checkouts.
+                  {followPreview.error ? ` Error: ${followPreview.error}` : ""}
+                </div>
+                {followPreview.preview.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-xs">
+                    {followPreview.preview.slice(0, 20).map((p) => (
+                      <li key={p.order_id} className="flex justify-between rounded border px-2 py-1"><span>{p.to} · {p.item}</span><span className="text-muted-foreground">{p.action}{p.amount ? ` · ₹${Math.round(p.amount).toLocaleString("en-IN")}` : ""}</span></li>
+                    ))}
+                  </ul>
+                )}
+                {Object.keys(followPreview.skipped).length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">Skipped: {Object.entries(followPreview.skipped).map(([k, v]) => `${k} ${v}`).join(" · ")}</p>
+                )}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">Runs after the daily reconcile (11:30 IST). Email only — WhatsApp would need an approved template and the customer&apos;s WhatsApp opt-in, which this message does not have.</p>
           </Card>
         </Section>
 

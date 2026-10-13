@@ -278,7 +278,8 @@ export default function Privacy() {
         are currently viewing, and — if you arrived through a referral link — the referral code, so the
         person who referred you is credited. We set no advertising cookies and load no third-party trackers.
         Usage analytics is first-party and recorded on our server without cookies, IP addresses or device
-        fingerprints. Clearing cookies in your browser will sign you out.
+        fingerprints. If your browser sends Global Privacy Control or Do Not Track, page-view analytics are not
+        recorded at all. Clearing cookies in your browser will sign you out.
       </P>
 
       <H2>11. Breach Response</H2>

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ensureWorkspace } from "@/lib/workspace";
+import { record } from "@/lib/funnel";
+
+/* Awaited by callers (record() never throws). Counted with a reason KIND only — never the address, never the provider's raw message. */
+const failed = async (reason: "oauth_cancelled" | "oauth_error" | "missing_code" | "expired_link" | "exchange_failed" | "workspace_failed") =>
+  record("login_failed", { path: "/auth/callback", meta: { reason } });
 
 /**
  * OAuth / magic-link return path.
@@ -29,11 +34,13 @@ export async function GET(request: Request) {
     const reason = /access_denied/i.test(oauthError)
       ? "Sign-in was cancelled. Please try again."
       : oauthError.slice(0, 200);
+    await failed(/access_denied/i.test(oauthError) ? "oauth_cancelled" : "oauth_error");
     return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(reason)}`);
   }
 
   const code = searchParams.get("code");
   if (!code) {
+    await failed("missing_code");
     return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent("That sign-in link is missing its code. Please request a new one.")}`);
   }
 
@@ -46,6 +53,7 @@ export async function GET(request: Request) {
     const reason = expired
       ? "That sign-in link has expired or was already used. Please request a new one."
       : (exchangeError.message || "Could not complete sign-in.");
+    await failed(expired ? "expired_link" : "exchange_failed");
     return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(reason)}`);
   }
 
@@ -53,10 +61,13 @@ export async function GET(request: Request) {
   try {
     const res = await ensureWorkspace();
     if (!res?.ok) {
+      await failed("workspace_failed");
       return NextResponse.redirect(
         `${origin}/login?error=${encodeURIComponent(res?.error || "Signed in, but your workspace could not be created. Please try again or contact support.")}`,
       );
     }
+    /* Awaited: a serverless function can be frozen the instant the redirect is sent. record() never throws. */
+    await record("login_succeeded", { path: "/auth/callback", orgId: (res as any).orgId ?? null, meta: { via: "link_or_oauth", new_workspace: Boolean(res.created) } });
     if (res.created && !searchParams.get("next")) {
       return NextResponse.redirect(`${origin}/onboarding`);
     }

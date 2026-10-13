@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isSuperAdmin } from "@/lib/superadmin";
-import { provisionBusinesses, grantOrgAccess, joinOrg, manageOrg, recomputeOrg, provisionCustomer, setCollectionsSwitch } from "@/lib/superadmin-actions";
+import { provisionBusinesses, grantOrgAccess, joinOrg, manageOrg, recomputeOrg, provisionCustomer, setCollectionsSwitch, setCheckoutFollowupMode, sendCheckoutFollowupTest } from "@/lib/superadmin-actions";
 
 const num = (v: any) => (typeof v === "number" && isFinite(v) ? v : undefined);
 
@@ -38,6 +38,8 @@ export async function POST(req: Request) {
       fd.set("reason", String(body.reason || ""));
       return NextResponse.json(await setCollectionsSwitch(fd));
     }
+    if (op === "followupMode") return NextResponse.json(await setCheckoutFollowupMode(String(body.mode || "")));
+    if (op === "followupTest") return NextResponse.json(await sendCheckoutFollowupTest());
     if (op === "manage") return NextResponse.json(await manageOrg(String(body.org_id || ""), {
       plan: body.plan ? String(body.plan) : undefined,
       subscription_status: body.subscription_status ? String(body.subscription_status) : undefined,

@@ -656,6 +656,16 @@ export async function settleOrder(orderId: string): Promise<SettleResult> {
 
     await emitQuietly(orgId, "payment.succeeded", { kind: "plan", plan: ref, cycle, amount: order.amount, order_id: orderId, ends_at: endsAt });
     recordFunnel("payment_succeeded", { orgId, meta: { kind: "plan", plan: ref, cycle, amount: order.amount } });
+    /*
+      ACTIVATED OR RENEWED — from this verified provider event only, never a
+      redirect. A renewal is a payment that continues a period that was live, or
+      lapsed under a week ago; anything else starts one. Once per payment: a
+      repair re-grant (alreadyGrantedAt) is not a second activation.
+    */
+    if (!alreadyGrantedAt) {
+      const continuing = existingEndsMs > 0 && existingEndsMs > Date.now() - 7 * 86_400_000;
+      recordFunnel(continuing ? "subscription_renewed" : "subscription_activated", { orgId, meta: { plan: ref, cycle, prior: priorPlan || "none" } });
+    }
     /* Our own receipt, in our own name. The gateway's confirmation carries
        the merchant ACCOUNT's identity, which is shared and is not the product
        the customer bought. Best-effort: the grant has already committed and

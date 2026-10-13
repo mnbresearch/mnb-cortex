@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { createClient } from "@/lib/supabase/client";
 import { GoogleSignIn } from "@/components/google-signin";
+import { beacon } from "@/components/track";
 import { Mail, ArrowRight, Loader2, CheckCircle2, Eye, EyeOff, Lock, Sparkles } from "lucide-react";
 
 type Mode = "signin" | "signup";
@@ -123,6 +124,7 @@ export default function Login() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(""); setNotice(""); setLoading(true);
+    if (mode === "signup") beacon("signup_started");
     const supabase = createClient();
     try {
       if (mode === "signup") {
@@ -146,6 +148,7 @@ export default function Login() {
       }
     } catch (e: any) {
       const m = String(e?.message || "");
+      beacon("login_failed", { reason: /invalid login credentials/i.test(m) ? "bad_credentials" : /already registered/i.test(m) ? "already_registered" : "other" });
       if (/already registered/i.test(m)) setErr("That email already has an account — sign in instead.");
       else if (/invalid login credentials/i.test(m)) setErr("Wrong email or password. Try again, or create an account.");
       else setErr(m || "Something went wrong. Please try again.");
@@ -154,6 +157,7 @@ export default function Login() {
 
   async function magicLink() {
     if (!email.trim()) { setErr("Enter your email first."); return; }
+    beacon("signup_started");
     setErr(""); setNotice(""); setLoading(true);
     try {
       const supabase = createClient();
@@ -166,6 +170,7 @@ export default function Login() {
 
   async function google() {
     setErr("");
+    beacon("signup_started");
     try {
       const supabase = createClient();
       await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/auth/callback` } });

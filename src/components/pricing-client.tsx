@@ -5,6 +5,7 @@ import { Check, Sparkles, X, MessageCircle } from "lucide-react";
 import { PLANS, PUBLIC_CREDIT_PACKS, WHATSAPP_NUMBER, CURRENCIES, formatMoney, planPrice, type CurrencyCode, ANNUAL_SAVING_PCT } from "@/lib/config";
 import { payCashfree } from "@/lib/pay/checkout-client";
 import Link from "next/link";
+import { beacon } from "@/components/track";
 
 /**
  * `signedIn` decides what a plan button does. A Cashfree order needs a workspace
@@ -34,6 +35,8 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
       says what it will do (see label below), so the currency switch is an
       informed choice rather than a surprise.
     */
+    /* Intent, not payment — payment is counted only from Cashfree's verified event. */
+    beacon("plan_selected", { plan: p.id, cycle: annual ? "annual" : "monthly" });
     if (p.monthly === 0 || cur === "USD") { openForm(p.name); return; }
     // Checkout lives on /billing, which collects the mobile number the payment
     // gateway requires. Keeping ONE checkout path means the phone step can't be

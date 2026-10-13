@@ -89,7 +89,8 @@ for (const rel of callers) {
   check("chargeForMode (session) is exported", /export async function chargeForMode/.test(credits));
   check("chargeOrgForMode (unattended) is exported", /export async function chargeOrgForMode/.test(credits));
   check("...and the session one delegates rather than duplicating the rules",
-    /return chargeOrgForMode\(/.test(credits),
+    /* It now also counts feature usage after the charge, so it awaits rather than returns directly — still one implementation. */
+    /(return|const r = await) chargeOrgForMode\(/.test(credits) && !/export async function chargeForMode[\s\S]{0,1200}PLAN_CREDITS/.test(credits),
     "two implementations of pooling, hard-stop and the BYO waiver will diverge");
 }
 

@@ -36,6 +36,22 @@ export async function GET(req: Request) {
   const dryRun = new URL(req.url).searchParams.get("dry") === "1";
   const report = await reconcilePayments({ dryRun });
 
+  /*
+    ABANDONED-CHECKOUT FOLLOW-UP runs HERE, straight after reconcile, because
+    it acts only on intents reconcile has just confirmed unpaid with Cashfree.
+    11:30 IST is a civil hour for an email. Its mode (off / dry_run / live) is
+    the operator's switch; on ?dry=1 it is always a dry run. A failure here
+    never changes the reconcile verdict — payments are the job, this is a nicety.
+  */
+  let followup: any = null;
+  try {
+    const { runCheckoutFollowups } = await import("@/lib/checkout-followup");
+    const { createBudget } = await import("@/lib/cron-budget");
+    const r = await runCheckoutFollowups({ budget: createBudget(60_000), ...(dryRun ? { forceMode: "dry_run" as const } : {}) });
+    /* Masked addresses only, and only counts in the cron log. */
+    followup = { mode: r.mode, considered: r.considered, queued: r.queued, sent: r.sent, failed: r.failed, uncertain: r.uncertain, skipped: r.skipped, error: r.error };
+  } catch (e: any) { followup = { error: String(e?.message || e) }; }
+
   const status = report.ok && report.unresolved.length === 0 ? 200 : (report.ok ? 409 : 500);
   return NextResponse.json({
     ok: report.ok,
@@ -46,5 +62,6 @@ export async function GET(req: Request) {
     abandoned: report.abandoned,
     clean: report.clean,
     error: report.error,
+    followup,
   }, { status });
 }

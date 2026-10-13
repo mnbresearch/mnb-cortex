@@ -224,6 +224,8 @@ export async function DELETE() {
 
   const res = await cancelSubscription(ref);
   if (!res.ok) return NextResponse.json(res);
+  /* Counted once Cashfree has confirmed the cancel — the debits have stopped either way. */
+  { const { recordQuietly } = await import("@/lib/funnel"); recordQuietly("subscription_cancelled", { orgId, meta: { via: "billing" } }); }
 
   /*
     THE CANCEL SUCCEEDED AT CASHFREE. SAYING SO BEFORE WE'VE RECORDED IT IS

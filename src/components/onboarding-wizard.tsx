@@ -55,7 +55,7 @@ export function OnboardingWizard({
     setErr("");
     try {
       const fd = new FormData();
-      fd.set("name", name); fd.set("industry", form.industry); fd.set("currency", form.currency);
+      fd.set("name", name); fd.set("industry", form.industry); fd.set("currency", form.currency); fd.set("source", "onboarding");
       await updateOrgProfile(fd);
       setStep(1);
     } catch (e: any) {

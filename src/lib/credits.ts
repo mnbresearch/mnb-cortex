@@ -196,7 +196,17 @@ export async function chargeForMode(mode: string): Promise<ChargeResult> {
   const cost = creditCost(mode);
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) return { ok: false, enforced: true, cost, balance: 0, reason: "anonymous" };
-  return chargeOrgForMode(orgId, mode, { userId: user.id, superAdmin: await isSuperAdmin() });
+  const r = await chargeOrgForMode(orgId, mode, { userId: user.id, superAdmin: await isSuperAdmin() });
+  /*
+    FEATURE USAGE, counted at the one choke point every signed-in AI feature
+    already passes through — so no feature can be added without being counted.
+    Only the mode name (a fixed internal id) is recorded; never the prompt.
+    Fire-and-forget: the AI work that follows keeps the function alive.
+  */
+  if (r.ok) {
+    try { const { recordQuietly } = await import("@/lib/funnel"); recordQuietly("feature_used", { orgId, meta: { feature: String(mode).slice(0, 40) } }); } catch { /* never block a charge */ }
+  }
+  return r;
 }
 
 /**

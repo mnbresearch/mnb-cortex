@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensureWorkspace } from "@/lib/workspace";
+import { record } from "@/lib/funnel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,5 +32,7 @@ export async function POST(req: Request) {
   // onboarding once — that page was previously unreachable, so the only flow
   // collecting company name, industry and currency together was dead code.
   const next = res.created ? "/onboarding" : "/dashboard";
+  /* The password / Google-one-tap paths land here with a live session (ensureWorkspace refuses otherwise). */
+  await record("login_succeeded", { path: "/api/workspace/bootstrap", orgId: (res as any).orgId ?? null, meta: { via: "password_or_onetap", new_workspace: Boolean(res.created) } });
   return NextResponse.json({ ...res, next });
 }

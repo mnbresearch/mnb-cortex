@@ -1,5 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { KeyRound, Copy, Check, AlertTriangle } from "lucide-react";
 import { generateApiKey, rotateApiKey } from "@/lib/actions";
 import { API_SCOPES, SCOPE_PRESETS, type ApiScope } from "@/lib/api-keys";
@@ -59,6 +60,7 @@ export function KeyReveal({ value, note }: { value: string; note?: string }) {
 const SCOPE_LIST = Object.entries(API_SCOPES) as [ApiScope, string][];
 
 export function ApiKeyCreator() {
+  const router = useRouter();
   const [label, setLabel] = useState("");
   /* Read-only by default: least privilege. Writing is a deliberate tick. */
   const [scopes, setScopes] = useState<ApiScope[]>([...SCOPE_PRESETS.read]);
@@ -83,6 +85,8 @@ export function ApiKeyCreator() {
         if (r?.error) { setErr(r.error); return; }
         setKey(r?.key || null);
         setLabel("");
+        /* The key list below is server-rendered: refresh it so the new key (status, scopes, expiry) appears. The reveal lives in state and survives. */
+        router.refresh();
       } catch (e: any) {
         setErr(e?.message || "Could not create a key.");
       }
@@ -152,6 +156,7 @@ export function ApiKeyCreator() {
  * dies now). Both ask for the second factor server-side and show the new key once.
  */
 export function ApiKeyRotate({ id }: { id: string }) {
+  const router = useRouter();
   const [key, setKey] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const [grace, setGrace] = useState("24");
@@ -165,6 +170,7 @@ export function ApiKeyRotate({ id }: { id: string }) {
         const r: Issued = await rotateApiKey(fd);
         if (r?.key) setKey(r.key);
         if (r?.error) setErr(r.error);
+        if (r?.key) router.refresh();
       } catch (e: any) { setErr(e?.message || "Could not rotate the key."); }
     });
   }
