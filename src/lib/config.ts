@@ -1,4 +1,4 @@
-export const APP_VERSION = "6.44.0";
+export const APP_VERSION = "6.45.0";
 /*
   …88480. The public footer, the contact page, the privacy, terms and refund
   pages all publish …88480; this default was …88481, so the pricing modal's
@@ -251,14 +251,21 @@ export const PLAN_CREDITS: Record<string, number> = {
     the floor every action in CREDIT_COSTS is priced against.
   */
   /*
-    735 = floor((7990 / 12) / 0.9059) — the annual price per month divided by
-    Watch's own worst-case credit rate. Derived from the tier above it rather
-    than picked, so the entry plan can never quietly become the cheapest way
-    to buy credits. npm run test:margins recomputes the floor and fails if it
-    moves.
+    PREMIUM REPRICE (2026-10, no customers on the old prices). Each allowance
+    keeps the worst-case rate at or above the ₹0.90 floor:
+
+      watch     ₹79,990/yr  → ₹6,665.83/mo ÷ 6,500  = ₹1.026 / credit
+      watchpro  ₹1,99,990   → ₹16,665.83 ÷ 17,500    = ₹0.952
+      practice  ₹3,99,990   → ₹33,332.50 ÷ 36,000    = ₹0.926
+      command   ₹5,99,990   → ₹49,999.17 ÷ 55,000    = ₹0.909
+
+    1218 = floor((14990 / 12) / 1.02551) — the entry plan's annual price per
+    month divided by Watch's own worst-case rate, so Try is a smaller plan,
+    never a cheaper way to buy credits. npm run test:margins and
+    test:entry-plan recompute both and fail if either moves.
   */
-  try: 735,
-  watch: 4600, watchpro: 13850, practice: 27750, command: 37000,
+  try: 1218,
+  watch: 6500, watchpro: 17500, practice: 36000, command: 55000,
 
   // Retired tiers, at the economics they were actually sold at.
   starter: 1350, growth: 4600, business: 13850, aicoo: 37000,
@@ -328,7 +335,7 @@ export const PLAN_SEATS: Record<string, number> = {
     Live tiers. Practice gets 25 seats because a firm puts its whole team in;
     the CLIENT WORKSPACES it manages are counted separately (PRACTICE_CLIENTS).
   */
-  try: 1, watch: 3, watchpro: 20, practice: 25, command: 75, enterprise: -1,
+  try: 1, watch: 5, watchpro: 20, practice: 25, command: 75, enterprise: -1,
   // Retired tiers — an existing workspace must keep the seats it paid for.
   starter: 1, growth: 5, business: 20, aicoo: 75,
   solo: 1, premium: 20,
@@ -403,7 +410,20 @@ export function seatLimit(plan: string | null | undefined): number {
  *     tier bought these capabilities and does not lose them because we renamed
  *     the plans.
  */
-export type Capability = "api" | "webhooks" | "whitelabel" | "workflows" | "alert_rules" | "memory";
+/*
+  HIGH-GROWTH-ONLY CAPABILITIES (2026-10 reprice). Each is enforced server-side
+  where the thing is created, never only in the UI:
+    api_write  push data IN through the API (the ingest:write scope) —
+               generateApiKey refuses that scope below Practice/Command.
+               Reading through the API stays on Watch Pro.
+    autonomy   let Cortex message customers or move money ON ITS OWN under a
+               rule (policy mode "auto" for a high-impact action) —
+               savePolicy / acceptAutonomy refuse it below Command.
+               Approve-first stays on every plan.
+  The deeper nightly watch (15 reminders a night instead of 5) follows the
+  same tiers via WATCH_REMINDERS below.
+*/
+export type Capability = "api" | "webhooks" | "whitelabel" | "workflows" | "alert_rules" | "memory" | "api_write" | "autonomy";
 
 /* Exported so scripts/test-capabilities.mjs can check it against PLAN_SEATS —
    two maps keyed by plan id that drift apart is how `premium` lost everything. */
@@ -413,9 +433,9 @@ export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
   try: [],
   watch: [],
   watchpro: ["api", "webhooks", "workflows", "alert_rules", "memory"],
-  practice: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
-  command: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
-  enterprise: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
+  practice: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write"],
+  command: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy"],
+  enterprise: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy"],
 
   /*
     Retired tiers. These workspaces PAID for these capabilities under the old
@@ -424,9 +444,10 @@ export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
     current equivalent, generously where it is ambiguous.
   */
   starter: [],
-  growth: ["api", "webhooks", "workflows", "alert_rules"],
-  business: ["api", "webhooks", "workflows", "alert_rules", "memory"],
-  aicoo: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel"],
+  /* api_write: every key these tiers issued could already push data, so they keep it. */
+  growth: ["api", "webhooks", "workflows", "alert_rules", "api_write"],
+  business: ["api", "webhooks", "workflows", "alert_rules", "memory", "api_write"],
+  aicoo: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy"],
 
   /*
     `solo` and `premium` are NOT in PLANS or LEGACY_PLANS, but they are real:
@@ -441,8 +462,15 @@ export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
     PLAN_SEATS, where premium sits at 20 seats alongside `business`.
   */
   solo: [],
-  premium: ["api", "webhooks", "workflows", "alert_rules", "memory"],
+  premium: ["api", "webhooks", "workflows", "alert_rules", "memory", "api_write"],
 };
+
+/** Payment reminders the nightly watch may propose per workspace per night. */
+export const WATCH_REMINDERS_DEFAULT = 5;
+export const WATCH_REMINDERS_HIGH = 15;
+export function watchRemindersFor(plan: string | null | undefined): number {
+  return planIncludes(plan, "autonomy") || planIncludes(plan, "api_write") ? WATCH_REMINDERS_HIGH : WATCH_REMINDERS_DEFAULT;
+}
 
 export function planIncludes(plan: string | null | undefined, cap: Capability): boolean {
   return (PLAN_CAPABILITIES[String(plan || "").toLowerCase()] ?? []).includes(cap);
@@ -481,10 +509,15 @@ export const CREDIT_PACKS: CreditPack[] = [
     silently deletes the margin on every action at once. npm run test:margins
     recomputes the floor from this list and the plans, and fails if it moves.
   */
-  { id: "pack_100", label: "Taster", credits: 100, price: 149, per: "₹1.49 / credit" },
-  { id: "pack_500", label: "Small", credits: 500, price: 599, per: "₹1.20 / credit" },
-  { id: "pack_2k", label: "Standard", credits: 2000, price: 1999, per: "₹1.00 / credit" },
-  { id: "pack_10k", label: "Bulk", credits: 10000, price: 8999, per: "₹0.90 / credit" },
+  /*
+    Premium reprice: a pack always costs more per credit than any plan, so a
+    plan is the better deal for anyone using Cortex every month and a pack is
+    for trying it or topping up.
+  */
+  { id: "pack_100", label: "Taster", credits: 100, price: 249, per: "₹2.49 / credit" },
+  { id: "pack_500", label: "Small", credits: 500, price: 999, per: "₹2.00 / credit" },
+  { id: "pack_2k", label: "Standard", credits: 2000, price: 2999, per: "₹1.50 / credit" },
+  { id: "pack_10k", label: "Bulk", credits: 10000, price: 12999, per: "₹1.30 / credit" },
 
   /*
     LIVE PAYMENT TEST. ₹1 for 1 credit.
@@ -529,9 +562,11 @@ export const PUBLIC_CREDIT_PACKS: CreditPack[] = CREDIT_PACKS.filter((p) => !p.h
   bar for adoption — nobody switches accounting packages, plenty will add
   something that reads their export and warns them.
 
-  Priced accordingly: the floor is ₹4,999. That is a deliberate choice to stop
-  competing on price and start competing on the one thing the incumbents
-  structurally do not do.
+  Priced accordingly. 2026-10: repriced up again, before the first customer —
+  Try ₹1,499 · Watch ₹7,999 · Watch Pro ₹19,999 · Practice ₹39,999 · Command
+  ₹59,999 — with three capabilities reserved for the top tiers (two-way API,
+  Autopilot, the deeper nightly watch). Competing on price against the
+  incumbents is the fight this product is built to avoid.
 
   LEGACY IDS ARE KEPT BELOW, HIDDEN. Existing workspaces carry `plan` values of
   'starter'/'growth'/'business'/'aicoo' in the database, and their allowances in
@@ -544,20 +579,20 @@ export const PLANS: Plan[] = [
   /*
     THE ENTRY TIER — priced at the same margin as everything else, deliberately.
 
-    ₹799/month, ₹7,990/year (the same ten-months-for-twelve as every other plan).
-    The credit allowance is DERIVED, not chosen:
+    ₹1,499/month, ₹14,990/year (the same ten-months-for-twelve as every other
+    plan). The credit allowance is DERIVED, not chosen:
 
-      worst monthly price = annual / 12 = 7990 / 12 = ₹665.83
-      credits             = 665.83 / ₹0.9059 per credit ≈ 735
+      worst monthly price = annual / 12 = 14990 / 12 = ₹1,249.17
+      credits             = 1,249.17 / ₹1.02551 per credit ≈ 1,218
 
-    ₹0.9059 is Watch's own worst-case rate, so this tier sells a credit for
+    ₹1.02551 is Watch's own worst-case rate, so this tier sells a credit for
     fractionally MORE than Watch does — it is a smaller plan, not a cheaper one.
     That distinction is the whole point. A trial tier that quietly undercuts the
     paid tiers on rate does not win a customer, it teaches the ones you already
     have to downgrade, and it does so invisibly because the per-credit number is
     never shown on the pricing page.
 
-    735 credits is a real month of watching, and the bullets below say exactly
+    1,218 credits is a real month of watching, and the bullets below say exactly
     what it buys rather than implying it is unlimited: the daily read is 14
     credits, a question is 19, a bank statement or GST return is 45.
 
@@ -566,66 +601,72 @@ export const PLANS: Plan[] = [
     zero there would create a ₹0 order. (That route is now also guarded against
     a non-positive amount, but the plan should not depend on the guard.)
   */
-  { id: "try", name: "Try Cortex", monthly: 799, annual: 7990, usdMonthly: 12, usdAnnual: 119,
+  { id: "try", name: "Try Cortex", monthly: 1499, annual: 14990, usdMonthly: 19, usdAnnual: 189,
     tagline: "See whether it finds anything in your numbers.",
     cta: "Try it for a month",
     features: [
       "1 business · 1 user",
-      "735 AI credits / month",
+      "1,218 AI credits / month",
       "Receivables & overdue payments — watched daily",
       "MSME 45-day (43B(h)) deduction exposure",
       "GST & statutory deadline warnings",
       "Reads your Tally, Vyapar & Busy exports",
-      "About 16 bank statement or GST reads, or 38 questions",
+      "About 27 bank statement or GST reads, or 64 questions",
       "Upgrade any time — your data stays exactly as it is",
     ] },
-  { id: "watch", name: "Watch", monthly: 4999, annual: 49990, usdMonthly: 59, usdAnnual: 599,
+  { id: "watch", name: "Watch", monthly: 7999, annual: 79990, usdMonthly: 95, usdAnnual: 949,
     tagline: "Know what is going wrong, before it costs you.",
     cta: "Start watching",
     features: [
-      "1 business · up to 3 users",
-      "4,600 AI credits / month",
+      "1 business · up to 5 users",
+      "6,500 AI credits / month",
       "Receivables, payables & cash — watched daily",
+      "Nightly watch drafts up to 5 payment reminders for your approval",
       "MSME 45-day (43B(h)) deduction exposure",
       "GST & statutory deadline warnings",
       "Weekly brief by email, automatically",
       "Reads your Tally, Vyapar & Busy exports",
       "Bank statement & GST return reader",
     ] },
-  { id: "watchpro", name: "Watch Pro", monthly: 14999, annual: 149990, usdMonthly: 179, usdAnnual: 1799,
+  { id: "watchpro", name: "Watch Pro", monthly: 19999, annual: 199990, usdMonthly: 239, usdAnnual: 2389,
     tagline: "For companies where a missed number costs real money.", highlight: true,
     cta: "Choose Watch Pro",
     features: [
       "Up to 20 users",
-      "13,850 AI credits / month",
+      "17,500 AI credits / month",
       "Everything in Watch",
       "Ask Cortex anything about your own rows",
       "Alert rules you set, delivered by email",
       "Workflow automation on a schedule",
-      "Public API + outbound webhooks",
+      "Read API with scoped, expiring keys + signed outbound webhooks",
       "Cortex Memory — permanent business context",
       "Image & video generation — 500 images and 20 videos a week",
     ] },
-  { id: "practice", name: "Practice", monthly: 29999, annual: 299990, usdMonthly: 359, usdAnnual: 3599,
+  { id: "practice", name: "Practice", monthly: 39999, annual: 399990, usdMonthly: 479, usdAnnual: 4789,
     tagline: "For CAs and advisory firms. Every client, one screen.",
     cta: "Talk to us about Practice",
     features: [
       "Up to 25 client workspaces",
-      "27,750 AI credits / month, shared across your clients",
+      "36,000 AI credits / month, shared across your clients",
       "Practice console — every client's exposure ranked",
       "Whose 43B(h) clock is running, client by client",
       "Whose receivables moved this week",
+      "Two-way API — push data in from your own systems",
+      "Nightly watch drafts up to 15 reminders per workspace",
       "Your accent colour across the workspace (outbound email is Cortex-branded)",
       "Everything in Watch Pro for your firm",
       "Named onboarding for your team",
     ] },
-  { id: "command", name: "Command", monthly: 39999, annual: 399990, usdMonthly: 469, usdAnnual: 4699,
+  { id: "command", name: "Command", monthly: 59999, annual: 599990, usdMonthly: 719, usdAnnual: 7189,
     tagline: "Cortex acts, not just warns.",
     cta: "Choose Command",
     features: [
       "Up to 75 users",
-      "37,000 AI credits / month",
+      "55,000 AI credits / month",
       "Everything in Watch Pro",
+      "Autopilot — let reminders and other actions run on their own, within limits you set",
+      "Two-way API — push data in from your own systems",
+      "Nightly watch drafts up to 15 payment reminders a night (5 on Watch)",
       "WhatsApp reminders from your own number (also on Watch)",
       "AI agents across every department",
       /*
@@ -671,6 +712,17 @@ export const LEGACY_PLANS: Plan[] = [
   { id: "aicoo", name: "AI COO (retired)", monthly: 39999, annual: 399990,
     tagline: "Retired tier — kept for existing workspaces.", cta: "", features: [] },
 ];
+
+/*
+  PRICE LABELS FOR COPY. Pages and emails that say "from ₹X" read these
+  instead of a typed number, so the next reprice cannot leave a stale price in
+  a FAQ, an email or the terms (which is what happened to "₹799" across eight
+  files). en-IN grouping: ₹1,49,990.
+*/
+export const inrLabel = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+export const ENTRY_PRICE_LABEL = inrLabel(PLANS.filter((p) => p.monthly > 0).reduce((m, p) => Math.min(m, p.monthly), Infinity));
+export const TOP_SELF_SERVE_PRICE_LABEL = inrLabel(PLANS.filter((p) => p.monthly > 0).reduce((m, p) => Math.max(m, p.monthly), 0));
+export const SMALLEST_PACK_LABEL = inrLabel(PUBLIC_CREDIT_PACKS.reduce((m, p) => Math.min(m, p.price), Infinity));
 
 /** Every plan the system must be able to resolve, live or retired. */
 export const ALL_PLANS: Plan[] = [...PLANS, ...LEGACY_PLANS];

@@ -107,6 +107,23 @@ export async function undoProposal(fd: FormData): Promise<ActionResult> {
   return r.ok ? ok(r.summary) : fail(r.error);
 }
 
+/*
+  AUTOPILOT IS A COMMAND CAPABILITY. Letting Cortex message a customer or move
+  money with no human tap is the most valuable thing the product does and the
+  most consequential, so it is reserved for the top tier ("autonomy" in
+  config.ts PLAN_CAPABILITIES). Approve-first stays on every plan, and
+  low-impact actions (an in-app alert) may run on their own anywhere.
+  Gates CREATION of the rule only: a rule set under a higher plan keeps working.
+*/
+async function autonomyGate(orgId: string): Promise<string | null> {
+  const { planIncludes, lowestPlanWith } = await import("@/lib/config");
+  const { createClient } = await import("@/lib/supabase/server");
+  const sb = await createClient();
+  const { data } = await sb.from("organizations").select("plan").eq("id", orgId).maybeSingle();
+  if (planIncludes(String((data as any)?.plan || ""), "autonomy")) return null;
+  return `Letting Cortex act on its own for customer messages and money is part of ${lowestPlanWith("autonomy")}. On your plan it drafts and waits for your tap — upgrade under Billing to turn on Autopilot.`;
+}
+
 export async function savePolicy(fd: FormData): Promise<ActionResult> {
   const { orgId, userId } = await actor();
   await assertRole("admin");
@@ -122,6 +139,8 @@ export async function savePolicy(fd: FormData): Promise<ActionResult> {
   /* Letting Cortex move money or message people on its own is itself high impact. */
   const pdef = isActionKey(action) ? CATALOGUE_BY_KEY[action] : undefined;
   if (mode === "auto" && pdef && isHighImpact(pdef)) {
+    const gate = await autonomyGate(orgId);
+    if (gate) return fail(gate);
     const sa = await requireStrongAuth(orgId, `let "${pdef.title}" run on its own`);
     if (!sa.ok) return fail(sa.message);
   }
@@ -144,6 +163,8 @@ export async function acceptAutonomy(fd: FormData): Promise<ActionResult> {
   if (!s) return fail("That suggestion no longer applies — the history changed. Set a rule by hand under Rules if you still want it.");
   const adef = CATALOGUE_BY_KEY[action];
   if (adef && isHighImpact(adef)) {
+    const gate = await autonomyGate(orgId);
+    if (gate) return fail(gate);
     const sa = await requireStrongAuth(orgId, `let "${adef.title}" run on its own`);
     if (!sa.ok) return fail(sa.message);
   }

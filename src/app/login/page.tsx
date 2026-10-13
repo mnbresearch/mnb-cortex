@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { SMALLEST_PACK_LABEL } from "@/lib/config";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { createClient } from "@/lib/supabase/client";
@@ -214,7 +215,7 @@ export default function Login() {
                 <span className="h-9 w-9 rounded-xl brand-gradient grid place-items-center text-white"><Sparkles className="h-4 w-4" /></span>
                 <div>
                   <h1 className="font-semibold leading-tight">{mode === "signin" ? "Welcome back" : "Create your workspace"}</h1>
-                  <p className="text-xs text-muted-foreground">{mode === "signin" ? "Sign in to your workspace." : "Free to create · credits from ₹149."}</p>
+                  <p className="text-xs text-muted-foreground">{mode === "signin" ? "Sign in to your workspace." : `Free to create · credits from ${SMALLEST_PACK_LABEL}.`}</p>
                 </div>
               </div>
 

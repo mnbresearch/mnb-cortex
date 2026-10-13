@@ -3,6 +3,7 @@ import { serviceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
 import type { Budget } from "@/lib/cron-budget";
+import { ENTRY_PRICE_LABEL, SMALLEST_PACK_LABEL } from "@/lib/config";
 
 /*
   THE FOUR EMAILS NOBODY WHO SIGNED UP HAS EVER RECEIVED.
@@ -97,7 +98,7 @@ past 45 days for section 43B(h).
 
 Two things worth knowing up front, because they are the questions people ask:
 
-  There is no free trial. A plan starts at ₹799/month, or you can buy ₹149 of
+  There is no free trial. A plan starts at ${ENTRY_PRICE_LABEL}/month, or you can buy ${SMALLEST_PACK_LABEL} of
   credits and use them with no subscription at all. Importing your data and
   looking at your own receivables costs nothing either way.
 

@@ -1502,6 +1502,10 @@ export async function generateApiKey(fd: FormData): Promise<KeyIssue> {
   const K = await import("@/lib/api-keys");
   const scopes = K.normaliseScopes(fd.getAll("scopes").length ? fd.getAll("scopes") : K.SCOPE_PRESETS[str(fd.get("preset")) || "read"] || K.SCOPE_PRESETS.read);
   if (!scopes.length) return { key: null, error: "Choose at least one permission for the key." };
+  /* Pushing data IN is a high-growth capability (Practice, Command). Reading stays on Watch Pro. */
+  if (scopes.includes("ingest:write") && !planIncludes(plan, "api_write")) {
+    return { key: null, error: `Pushing data in through the API (ingest:write) is part of ${lowestPlanWith("api_write")} and above. Untick it to create a read-only key, or upgrade under Billing.` };
+  }
   const expires_at = K.expiryFrom(fd.get("expiry"), Date.now());
 
   const svc = serviceClient();

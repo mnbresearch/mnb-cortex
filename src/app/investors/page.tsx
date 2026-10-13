@@ -7,6 +7,7 @@ import { PLAYBOOKS } from "@/lib/playbooks";
 import { INDUSTRIES } from "@/lib/industries";
 import { NAV } from "@/lib/nav";
 import { agentCount } from "@/lib/agents/catalog";
+import { ENTRY_PRICE_LABEL, SMALLEST_PACK_LABEL, TOP_SELF_SERVE_PRICE_LABEL } from "@/lib/config";
 
 export const metadata = {
   title: "Investors — MNB Cortex",
@@ -100,7 +101,7 @@ const WHY_NOW = [
   },
   {
     k: "Inference cost collapsed",
-    d: "A daily per-workspace analysis, plus drafting, plus a weekly plan, has to cost single-digit rupees for a ₹799 plan to work. Two years ago the unit economics of this product were negative by construction.",
+    d: `A daily per-workspace analysis, plus drafting, plus a weekly plan, has to cost single-digit rupees for a ${ENTRY_PRICE_LABEL} plan to work. Two years ago the unit economics of this product were negative by construction.`,
   },
   {
     k: "Discovery is moving to assistants",
@@ -112,7 +113,7 @@ const COMPETITIVE: [string, string, string][] = [
   ["Tally · Zoho Books · Vyapar", "Record what happened, correctly", "Do not tell you what is about to happen, or act"],
   ["A BI dashboard", "Shows a chart when you open it", "Notices nothing while you are not looking"],
   ["ChatGPT and general assistants", "Answer questions well, about text", "Do not know your rows, your dates or your customers"],
-  ["A consultant or your CA", "Judgement, monthly or yearly", "Not daily, and not at ₹799"],
+  ["A consultant or your CA", "Judgement, monthly or yearly", `Not daily, and not at ${ENTRY_PRICE_LABEL}`],
 ];
 
 /*
@@ -342,7 +343,7 @@ export default function Investors() {
           <div className="bg-card p-7 lg:p-9">
             <SectionLabel n="06">Business model</SectionLabel>
             <p className="mt-4 text-muted-foreground leading-7">
-              Usage-priced credits from a ₹149 pack with no subscription, plans from ₹799 to ₹39,999 a month with a
+              Usage-priced credits from a {SMALLEST_PACK_LABEL} pack with no subscription, plans from {ENTRY_PRICE_LABEL} to {TOP_SELF_SERVE_PRICE_LABEL} a month with a
               monthly allowance, and credit pooling so a firm can buy once and spend across client workspaces. Payments
               are live via Cashfree. The free health check needs no card.
             </p>

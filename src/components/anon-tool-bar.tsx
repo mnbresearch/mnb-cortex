@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { X, ArrowUpRight } from "lucide-react";
+import { ENTRY_PRICE_LABEL } from "@/lib/config";
 import { CALCULATOR_SEO } from "@/lib/calculator-seo";
 
 /*
@@ -82,7 +83,7 @@ export function AnonToolBar() {
             Check your own numbers
           </Link>
           <Link href="/pricing" className="rounded-full btn-ink h-8 px-3 inline-flex items-center gap-1 text-xs font-medium">
-            Plans from ₹799 <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            Plans from {ENTRY_PRICE_LABEL} <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
           </Link>
           {/*
             44px minimum target. A 16px icon with p-1.5 is a 28px tap area —

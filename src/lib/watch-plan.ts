@@ -13,7 +13,8 @@
 
   What it watches:
     1. Overdue receivables → a payment reminder per invoice, the costliest
-       first (amount × days late), at most five a night, never to a party on
+       first (amount × days late), at most five a night (fifteen on Practice and
+       Command — config.ts watchRemindersFor), never to a party on
        the do-not-contact list, never twice in a week for the same invoice,
        and not at all when the collections engine is switched on (it drafts
        its own and would double up).
@@ -53,6 +54,8 @@ export type WatchInput = {
   stock?: WatchStock[];
   /** Same normalisation the rest of the product uses for party names. */
   normalise: (s: string | null | undefined) => string | null;
+  /** Reminders allowed tonight — 5 by default, 15 on Practice/Command (config.ts watchRemindersFor). */
+  maxReminders?: number;
 };
 
 export type WatchProposal = {
@@ -99,7 +102,7 @@ export function planWatch(i: WatchInput): WatchProposal[] {
       .map((v) => ({ v, late: daysBetween(String(v.due_date), i.today) }))
       .filter(({ v, late }) => late >= MIN_DAYS_LATE && !recent.has(v.id) && !dnc.has(i.normalise(v.party) || "\u0000"))
       .sort((a, b) => b.v.amount * b.late - a.v.amount * a.late)
-      .slice(0, MAX_REMINDERS);
+      .slice(0, Math.max(0, Math.min(50, i.maxReminders ?? MAX_REMINDERS)));
     for (const { v, late } of candidates) {
       out.push({
         action: "send_payment_reminder",

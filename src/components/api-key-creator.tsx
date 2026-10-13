@@ -59,7 +59,7 @@ export function KeyReveal({ value, note }: { value: string; note?: string }) {
 
 const SCOPE_LIST = Object.entries(API_SCOPES) as [ApiScope, string][];
 
-export function ApiKeyCreator() {
+export function ApiKeyCreator({ canWrite = true, writePlan = "Practice" }: { canWrite?: boolean; writePlan?: string }) {
   const router = useRouter();
   const [label, setLabel] = useState("");
   /* Read-only by default: least privilege. Writing is a deliberate tick. */
@@ -131,14 +131,14 @@ export function ApiKeyCreator() {
           <legend className="px-1 text-xs text-muted-foreground">Permissions — a key can do only what is ticked</legend>
           <div className="flex flex-wrap gap-2 mb-2 text-xs">
             <button type="button" onClick={() => setScopes([...SCOPE_PRESETS.read])} className="rounded-md border px-2 min-h-8 hover:bg-accent">Read only</button>
-            <button type="button" onClick={() => setScopes([...SCOPE_PRESETS.ingest])} className="rounded-md border px-2 min-h-8 hover:bg-accent">Push data only</button>
-            <button type="button" onClick={() => setScopes([...SCOPE_PRESETS.full])} className="rounded-md border px-2 min-h-8 hover:bg-accent">Everything</button>
+            {canWrite && <button type="button" onClick={() => setScopes([...SCOPE_PRESETS.ingest])} className="rounded-md border px-2 min-h-8 hover:bg-accent">Push data only</button>}
+            <button type="button" onClick={() => setScopes(canWrite ? [...SCOPE_PRESETS.full] : [...SCOPE_PRESETS.read])} className="rounded-md border px-2 min-h-8 hover:bg-accent">Everything{canWrite ? "" : " you can"}</button>
           </div>
           <div className="grid sm:grid-cols-2 gap-1.5">
             {SCOPE_LIST.map(([s, desc]) => (
-              <label key={s} className="flex items-start gap-2 text-xs min-h-8">
-                <input type="checkbox" checked={scopes.includes(s)} onChange={() => toggle(s)} className="mt-0.5" />
-                <span><code className="bg-secondary px-1 rounded">{s}</code> <span className="text-muted-foreground">{desc}</span></span>
+              <label key={s} className={`flex items-start gap-2 text-xs min-h-8 ${s === "ingest:write" && !canWrite ? "opacity-60" : ""}`}>
+                <input type="checkbox" checked={scopes.includes(s)} onChange={() => toggle(s)} className="mt-0.5" disabled={s === "ingest:write" && !canWrite} />
+                <span><code className="bg-secondary px-1 rounded">{s}</code> <span className="text-muted-foreground">{desc}{s === "ingest:write" && !canWrite ? ` — ${writePlan} and above` : ""}</span></span>
               </label>
             ))}
           </div>

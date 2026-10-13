@@ -237,7 +237,9 @@ check(/early-warning/i.test(layout), "page metadata carries the new position");
     const src = readFileSync(f, "utf8");
     const name = f.replace("src/app/", "").replace("/page.tsx", "") || "home";
 
-    check(src.includes(`₹${inr(cheapest)}`),
+    /* Either the literal, or ENTRY_PRICE_LABEL — which config.ts derives from the
+       cheapest live plan (asserted equal to it in test-premium-tiers.mjs). */
+    check(src.includes(`₹${inr(cheapest)}`) || /\$?\{ENTRY_PRICE_LABEL\}/.test(src),
       `${name} quotes the cheapest live plan (₹${inr(cheapest)})`,
       "the public entry price must be one a visitor can actually buy");
 

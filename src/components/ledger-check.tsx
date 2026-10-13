@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Upload, Loader2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { ENTRY_PRICE_LABEL } from "@/lib/config";
 
 /*
   THE SECOND HALF OF THE FREE CHECK — REAL NUMBERS, NO ACCOUNT.
@@ -201,7 +202,7 @@ export function LedgerCheck() {
                 : <>Nothing is overdue today. Cortex runs exactly this every night and emails you the moment something crosses the line, so it stays that way.</>}
             </p>
             <Link href="/pricing" className="mt-4 inline-flex items-center gap-2 rounded-full btn-ink px-6 h-11 text-sm font-medium">
-              See plans — from ₹799/month <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+              See plans — from {ENTRY_PRICE_LABEL}/month <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </div>
         </div>

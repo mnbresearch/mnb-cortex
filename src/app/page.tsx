@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Track } from "@/components/track";
+import { ENTRY_PRICE_LABEL, SMALLEST_PACK_LABEL } from "@/lib/config";
 /* Two icons, down from thirty-two. The other thirty went to /features with the
    grid that used them — worth noticing as a proxy for how much of this page
    was inventory rather than argument. */
@@ -36,7 +37,7 @@ const FAQS = [
   { q: "Do I need to be technical?", a: "No. You ask questions in plain language — English or Hinglish — the way you'd ask your accountant, and Cortex looks up your actual invoices and orders to answer. Nothing to install, nothing to code." },
   { q: "How is this different from an ERP or CRM?", a: "Those record what already happened and wait for you to open them. Cortex reads across all of it every day, names the specific thing about to cost you money, and drafts the action. It doesn't replace them — it does the part they were never built to do." },
   { q: "Is my data safe?", a: "Yes. Every workspace is isolated with Postgres row-level security, traffic is encrypted with TLS, sensitive keys use AES-256-GCM, and you can export or delete your data anytime." },
-  { q: "How does billing work?", a: "Cortex runs on credits. Buy a ₹149 pack and use it with no subscription, or pick a plan from ₹799/mo for a monthly allowance — billed securely via Cashfree. Your free Business Health Check needs no card at all. Prices are in INR; international customers are onboarded by our team." },
+  { q: "How does billing work?", a: `Cortex runs on credits. Buy a ${SMALLEST_PACK_LABEL} pack and use it with no subscription, or pick a plan from ${ENTRY_PRICE_LABEL}/mo for a monthly allowance — billed securely via Cashfree. Your free Business Health Check needs no card at all. Prices are in INR; international customers are onboarded by our team.` },
 ];
 
 /*

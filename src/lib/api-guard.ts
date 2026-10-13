@@ -1,4 +1,5 @@
 import "server-only";
+import { SMALLEST_PACK_LABEL } from "@/lib/config";
 import { getUserAndOrg } from "@/lib/data";
 import type { ChargeResult } from "@/lib/credits";
 
@@ -43,7 +44,7 @@ export function creditDenial(gate: ChargeResult, action = "This action"): { stat
       status: 401,
       body: {
         ok: false, needsAuth: true, cost: gate.cost, balance: 0,
-        error: "Sign in to your workspace to use MNB Cortex AI — a ₹149 credit pack is enough to start.",
+        error: `Sign in to your workspace to use MNB Cortex AI — a ${SMALLEST_PACK_LABEL} credit pack is enough to start.`,
       },
     };
   }

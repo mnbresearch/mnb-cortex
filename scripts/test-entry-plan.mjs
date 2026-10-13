@@ -67,7 +67,7 @@ for (const m of creditsBlock.slice(0, creditsBlock.indexOf("};")).matchAll(/(\w+
 
 const tryPlan = plans.find((p) => p.id === "try");
 check("the ₹799 entry plan exists", Boolean(tryPlan));
-check("it is priced at ₹799/month", tryPlan?.monthly === 799, `monthly is ${tryPlan?.monthly}`);
+check("it is priced at ₹1,499/month (2026-10 premium reprice)", tryPlan?.monthly === 1499, `monthly is ${tryPlan?.monthly}`);
 
 /*
   A real annual price, not zero. /api/pay/cashfree/order computes

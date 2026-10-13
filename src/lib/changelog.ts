@@ -5,7 +5,13 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "6.44.0", date: "Latest", items: [
+  { v: "6.45.0", date: "Latest", items: [
+    "A real developer API — scoped keys that expire, rotate without downtime and can be revoked, read endpoints for invoices, customers, sales orders and leads, consistent errors, paging, and a published OpenAPI contract",
+    "Every API key now shows what it may do, when it expires, when it was last used and how many calls it made — and key changes are kept in a history",
+    "One reminder, once, if a checkout is confirmed unpaid — sent only once switched on, never to anyone who unsubscribed, already paid or is subscribed",
+    "New prices and three capabilities for the top plans: Autopilot (Command), the two-way API (Practice and Command) and a deeper nightly watch",
+  ] },
+  { v: "6.44.0", date: "Earlier", items: [
     "Cortex works overnight on its own — every night it reads your records and puts the costliest overdue reminders in front of you to approve, and alerts you to MSME suppliers past 45 days, stock at reorder level, deals going cold and quotes left hanging",
     "Agents on a schedule — any text agent can run as a workflow step, on your own numbers, and every agent now reads your business figures, not just what you type",
     "Your image and video library — everything you generate is kept, ready to download again; videos that fail after starting are refunded automatically, even if you closed the tab",

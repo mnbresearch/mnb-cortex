@@ -1,4 +1,5 @@
 import { Topbar } from "@/components/topbar";
+import { SMALLEST_PACK_LABEL } from "@/lib/config";
 import { SafeForm } from "@/components/safe-form";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -58,7 +59,7 @@ export default async function Billing() {
 
         {billing.status !== "active" && (
           <Card className="p-4 text-sm text-muted-foreground">
-            Cortex runs on credits. Start with a ₹149 credit pack to try it with no subscription, or pick a plan below for a monthly allowance. Either way your data stays yours — nothing is deleted if you pause.
+            Cortex runs on credits. Start with a {SMALLEST_PACK_LABEL} credit pack to try it with no subscription, or pick a plan below for a monthly allowance. Either way your data stays yours — nothing is deleted if you pause.
           </Card>
         )}
 

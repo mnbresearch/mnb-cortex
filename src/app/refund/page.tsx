@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SMALLEST_PACK_LABEL } from "@/lib/config";
 import { LegalShell, H2, P, UL } from "@/components/legal-shell";
 
 export const metadata = {
@@ -89,7 +90,7 @@ export default function Refund() {
 
       <H2>5. Trials and credit packs</H2>
       <P>
-        We do not currently offer a free trial. The public Business Health Check is free and needs no account, and credit packs start at ₹149 with no subscription. You are never auto-charged without explicitly
+        We do not currently offer a free trial. The public Business Health Check is free and needs no account, and credit packs start at {SMALLEST_PACK_LABEL} with no subscription. You are never auto-charged without explicitly
         purchasing a plan.
       </P>
 

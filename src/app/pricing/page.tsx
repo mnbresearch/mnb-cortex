@@ -6,6 +6,7 @@ import { SmoothScroll, Cursor, Kinetic, SectionLabel } from "@/components/loco";
 import { PublicHeader, PublicFooter } from "@/components/public-chrome";
 import { getUserAndOrg } from "@/lib/data";
 import { TRIAL_DAYS } from "@/lib/config";
+import { ENTRY_PRICE_LABEL } from "@/lib/config";
 
 export const metadata = { title: "Pricing — MNB Cortex" };
 
@@ -26,7 +27,7 @@ export default async function Pricing() {
           <Kinetic as="h1" text={"Find out first,\nnot last."} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
             Cortex watches your receivables, your MSME supplier deadlines and your stock every night, and emails you
-            when one of them needs you. From <span className="text-foreground font-medium">₹799/month</span>.
+            when one of them needs you. From <span className="text-foreground font-medium">{ENTRY_PRICE_LABEL}/month</span>.
             Keep Tally or Zoho — this is the part they were never built to do.
           </p>
           {/*

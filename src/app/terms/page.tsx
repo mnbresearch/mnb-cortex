@@ -47,11 +47,11 @@ export default function Terms() {
           neither their plan nor the price they had just agreed to pay. The
           paragraph below then told them their plan had been "retired".
         */}
-        <li><strong>Try Cortex</strong> — ₹799/month or ₹7,990/year · 735 AI credits/month</li>
-        <li><strong>Watch</strong> — ₹4,999/month or ₹49,990/year · 4,600 AI credits/month</li>
-        <li><strong>Watch Pro</strong> — ₹14,999/month or ₹1,49,990/year · 13,850 AI credits/month</li>
-        <li><strong>Practice</strong> — ₹29,999/month or ₹2,99,990/year · 27,750 AI credits/month, and access to up to 25 client workspaces from the Practice console</li>
-        <li><strong>Command</strong> — ₹39,999/month or ₹3,99,990/year · 37,000 AI credits/month</li>
+        <li><strong>Try Cortex</strong> — ₹1,499/month or ₹14,990/year · 1,218 AI credits/month</li>
+        <li><strong>Watch</strong> — ₹7,999/month or ₹79,990/year · 6,500 AI credits/month</li>
+        <li><strong>Watch Pro</strong> — ₹19,999/month or ₹1,99,990/year · 17,500 AI credits/month</li>
+        <li><strong>Practice</strong> — ₹39,999/month or ₹3,99,990/year · 36,000 AI credits/month, and access to up to 25 client workspaces from the Practice console</li>
+        <li><strong>Command</strong> — ₹59,999/month or ₹5,99,990/year · 55,000 AI credits/month</li>
         <li><strong>Enterprise</strong> — custom pricing · 1,50,000 AI credits/month on a fair-use basis (contact us)</li>
       </UL>
       <P>
