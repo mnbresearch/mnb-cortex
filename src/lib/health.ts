@@ -877,6 +877,15 @@ async function checkSchema(): Promise<Check> {
       equally idle.
     */
     ["health_metrics", "updated_at", "RUN-NOW-2026-09-08.sql"],
+    /* 6.44–6.45. Each feature degrades safely without its SQL (see the files),
+       so only this line says whether the SQL was actually run. */
+    ["media_assets", "kind, refunded", "2026_zzzv_media_sales_watch.sql"],
+    ["leads", "converted_customer_id", "2026_zzzv_media_sales_watch.sql"],
+    ["api_keys", "scopes, expires_at, revoked_at, last_used_at", "2026_zzzw_api_platform.sql"],
+    ["api_usage_daily", "calls, denied", "2026_zzzw_api_platform.sql"],
+    ["api_key_events", "event", "2026_zzzw_api_platform.sql"],
+    ["checkout_followups", "status, attempts", "2026_zzzx_checkout_followup.sql"],
+    ["platform_switches", "checkout_followup_mode", "2026_zzzx_checkout_followup.sql"],
   ];
   /*
     CONCURRENT, BECAUSE SEQUENTIAL WAS TIMING THE CHECK OUT.
