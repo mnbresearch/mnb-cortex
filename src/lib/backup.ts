@@ -111,6 +111,12 @@ export const BACKUP_TABLES = [
   // ends up outside the backup for months — it already happened once with
   // production_runs and chat_*, so it is now part of adding a table.
   "alert_rules", "goals",
+  // 2026_zzzv / 2026_zzzw. media_assets is the index of every paid image and
+  // video (the files are in Storage); api_key_events is the key audit trail;
+  // api_usage_daily is the per-key call history. Both api_* tables reference
+  // api_keys, which is earlier in this list. Until those migrations are run a
+  // backup reports these three as read errors — run the SQL, don't drop them.
+  "media_assets", "api_key_events", "api_usage_daily",
 ];
 
 /**

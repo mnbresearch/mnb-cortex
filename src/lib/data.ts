@@ -642,8 +642,23 @@ export async function getApiKeys() {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return { rows: [] as any[], live: false };
   const sb = await createClient();
+  /* Never key_hash: the page has no use for it, so it never leaves the server. */
   const { data } = await sb.from("api_keys").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
-  return { rows: (data as any[]) || [], live: true };
+  const rows = ((data as any[]) || []).map(({ key_hash, key, ...r }) => r);
+  return { rows, live: true };
+}
+
+/** Last 30 days of API calls per key, and the lifecycle trail — both admin-only by RLS (2026_zzzw). Empty before that migration. */
+export async function getApiActivity() {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return { usage: [] as any[], events: [] as any[] };
+  const sb = await createClient();
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+  const [u, e] = await Promise.all([
+    sb.from("api_usage_daily").select("key_id, day, endpoint, calls, denied").eq("org_id", orgId).gte("day", since).limit(2000),
+    sb.from("api_key_events").select("key_prefix, event, detail, created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(25),
+  ]);
+  return { usage: (u.error ? [] : (u.data as any[])) || [], events: (e.error ? [] : (e.data as any[])) || [] };
 }
 
 export async function getUsage() {

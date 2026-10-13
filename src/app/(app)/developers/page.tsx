@@ -7,11 +7,15 @@ import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Field, CollapsibleForm } from "@/components/forms";
-import { getApiKeys } from "@/lib/data";
-import { deleteApiKey } from "@/lib/actions";
-import { ApiKeyCreator } from "@/components/api-key-creator";
+import { getApiKeys, getApiActivity } from "@/lib/data";
+import { revokeApiKey } from "@/lib/actions";
+import { ApiKeyCreator, ApiKeyRotate } from "@/components/api-key-creator";
+import { keyStatus } from "@/lib/api-keys";
 import { KeyRound, Trash2, Terminal } from "lucide-react";
 import { hasRole } from "@/lib/roles";
+import { RESOURCES } from "@/lib/api/resources";
+
+const BASE = (process.env.NEXT_PUBLIC_APP_URL || "https://cortex.mnbresearch.com").replace(/\/$/, "");
 
 export const dynamic = "force-dynamic";
 export default async function Developers() {
@@ -50,13 +54,21 @@ export default async function Developers() {
   const hooks = await getWebhooks();
   const deliveries = await getWebhookDeliveries();
   const { rows, live } = await getApiKeys();
+  const activity = live ? await getApiActivity() : { usage: [] as any[], events: [] as any[] };
+  const now = Date.now();
+  const usageBy = new Map<string, { calls: number; denied: number }>();
+  for (const u of activity.usage) {
+    const t = usageBy.get(u.key_id) || { calls: 0, denied: 0 };
+    t.calls += Number(u.calls) || 0; t.denied += Number(u.denied) || 0; usageBy.set(u.key_id, t);
+  }
+  const d = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
   return (
     <>
       <Topbar title="Developers · API" subtitle="Push data in and pull insights out" />
       <PageShell>
         {!live && <Card className="p-5 bg-warning/10 border-warning/20 text-sm"><a href="/login" className="text-primary underline">Sign in</a> (admin/owner) to generate API keys.</Card>}
         {live && (
-          <Section title="API keys" desc="Use in the x-api-key header. Shown once when created — Cortex keeps only a hash.">
+          <Section title="API keys" desc="Send as Authorization: Bearer <key>. Shown once when created — Cortex keeps only a hash. Each key can do only what its permissions allow.">
             <ApiKeyCreator />
             {/*
               THIS LIST USED TO PRINT THE WHOLE KEY, every visit.
@@ -73,32 +85,73 @@ export default async function Developers() {
             */}
             <div className="space-y-2">
               {rows.length === 0 && <p className="text-sm text-muted-foreground">No keys yet.</p>}
-              {rows.map((k) => (
-                <div key={k.id} className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <div className="text-sm font-medium">{k.label}</div>
-                    <code className="text-xs text-muted-foreground break-all">
-                      {k.key_prefix ? `${k.key_prefix}…` : "key stored as a hash"}
-                    </code>
+              {rows.map((k) => {
+                const st = keyStatus(k, now);
+                const u = usageBy.get(k.id);
+                const tone = st.state === "active" ? "text-success" : st.state === "expiring" ? "text-warning" : "text-muted-foreground";
+                return (
+                  <div key={k.id} className={`rounded-lg border p-3 ${st.state === "revoked" || st.state === "expired" ? "opacity-60" : ""}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">{k.label} <span className={`text-xs font-normal ${tone}`}>· {st.label}</span></div>
+                        <code className="text-xs text-muted-foreground break-all">{k.key_prefix ? `${k.key_prefix}…` : "key stored as a hash"}</code>
+                        <div className="text-[11px] text-muted-foreground mt-1 leading-5">
+                          {Array.isArray(k.scopes) ? k.scopes.map((s: string) => <code key={s} className="bg-secondary px-1 rounded mr-1">{s}</code>) : <span>v1 key: metrics:read, ingest:write</span>}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Created {d(k.created_at)} · {k.expires_at ? `expires ${d(k.expires_at)}` : "no expiry"} · last used {k.last_used_at ? d(k.last_used_at) : "never"}
+                          {u ? ` · 30 days: ${u.calls.toLocaleString("en-IN")} calls${u.denied ? `, ${u.denied.toLocaleString("en-IN")} refused` : ""}` : ""}
+                        </div>
+                      </div>
+                      {st.usable && (
+                        <SafeForm action={revokeApiKey}><input type="hidden" name="id" value={k.id} />
+                          <button className="rounded-lg border min-h-11 px-3 text-xs text-danger hover:bg-danger/10" aria-label={`Revoke ${k.label}`}>Revoke</button></SafeForm>
+                      )}
+                    </div>
+                    {st.usable && <ApiKeyRotate id={k.id} />}
                   </div>
-                  <SafeForm action={deleteApiKey}><input type="hidden" name="id" value={k.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></SafeForm>
-                </div>
-              ))}
+                );
+              })}
             </div>
+            {activity.events.length > 0 && (
+              <details className="mt-3 text-xs">
+                <summary className="cursor-pointer text-muted-foreground min-h-8">Key history (last 25 changes)</summary>
+                <ul className="mt-2 space-y-1">
+                  {activity.events.map((e: any, i: number) => (
+                    <li key={i} className="flex justify-between gap-3 rounded border px-2 py-1">
+                      <span><b>{e.event}</b> <code>{e.key_prefix || "—"}</code>{e.detail?.replaces ? ` (replaces ${e.detail.replaces})` : ""}</span>
+                      <span className="text-muted-foreground">{new Date(e.created_at).toLocaleString("en-IN")}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
           </Section>
         )}
-        <Section title="Endpoints" desc="Base: https://mnb-cortex.vercel.app">
+        <Section title="Endpoints" desc={`Base: ${BASE} · versioned under /api/v1 · full contract: /api/v1/openapi.json`}>
           <div className="space-y-3 text-sm">
             <Card className="p-4">
-              <div className="flex items-center gap-2 mb-2"><Terminal className="h-4 w-4 text-primary" /><b>POST /api/v1/ingest</b> — push records</div>
-              <pre className="text-xs bg-background/60 border rounded-lg p-3 overflow-x-auto">{`curl -X POST https://mnb-cortex.vercel.app/api/v1/ingest \\
-  -H "x-api-key: YOUR_KEY" -H "Content-Type: application/json" \\
-  -d '{"table":"sales_orders","rows":[{"order_no":"SO-1001","customer_name":"Acme","product":"Alpha-100","amount":250000,"order_date":"2026-10-01"}]}'`}</pre>
-              <p className="text-xs text-muted-foreground mt-2">Tables: sales_orders · invoices · inventory_items · customers · leads. Each row needs its key (order_no, invoice_no, name; email or phone for leads) — rows without one are counted in skipped_no_key, never invented. Sending the same row again updates it.</p>
+              <div className="flex items-center gap-2 mb-2"><Terminal className="h-4 w-4 text-primary" /><b>GET /api/v1/whoami</b> — check a key</div>
+              <pre className="text-xs bg-background/60 border rounded-lg p-3 overflow-x-auto">{`curl ${BASE}/api/v1/whoami -H "Authorization: Bearer YOUR_KEY"`}</pre>
+              <p className="text-xs text-muted-foreground mt-2">Returns the key&apos;s workspace, scopes and expiry. Start here.</p>
             </Card>
             <Card className="p-4">
-              <div className="flex items-center gap-2 mb-2"><Terminal className="h-4 w-4 text-primary" /><b>GET /api/v1/metrics</b> — read business KPIs</div>
-              <pre className="text-xs bg-background/60 border rounded-lg p-3 overflow-x-auto">{`curl https://mnb-cortex.vercel.app/api/v1/metrics -H "x-api-key: YOUR_KEY"`}</pre>
+              <div className="flex items-center gap-2 mb-2"><Terminal className="h-4 w-4 text-primary" /><b>POST /api/v1/ingest</b> — push records <code className="text-xs bg-secondary px-1 rounded">ingest:write</code></div>
+              <pre className="text-xs bg-background/60 border rounded-lg p-3 overflow-x-auto">{`curl -X POST ${BASE}/api/v1/ingest \\
+  -H "Authorization: Bearer YOUR_KEY" -H "Content-Type: application/json" \\
+  -d '{"table":"sales_orders","rows":[{"order_no":"SO-1001","customer_name":"Acme","product":"Alpha-100","amount":250000,"order_date":"2026-10-01"}]}'`}</pre>
+              <p className="text-xs text-muted-foreground mt-2">Tables: sales_orders · invoices · inventory_items · customers · leads. Each row needs its key (order_no, invoice_no, name; email or phone for leads) — rows without one are counted in skipped_no_key, never invented. Sending the same row again updates it. At most 10,000 rows / 5 MB a call.</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-2"><Terminal className="h-4 w-4 text-primary" /><b>GET</b> — read records</div>
+              <ul className="text-xs space-y-1">
+                <li><code className="bg-secondary px-1 rounded">/api/v1/metrics</code> KPIs · <code>metrics:read</code></li>
+                {RESOURCES.map((r) => (
+                  <li key={r.path}><code className="bg-secondary px-1 rounded">{r.path}</code> · <code>{r.scope}</code>{r.filters.length ? <span className="text-muted-foreground"> · filters: {r.filters.map((f) => f.name).join(", ")}</span> : null}</li>
+                ))}
+              </ul>
+              <pre className="text-xs bg-background/60 border rounded-lg p-3 overflow-x-auto mt-2">{`curl "${BASE}/api/v1/invoices?type=receivable&status=pending&limit=100" -H "Authorization: Bearer YOUR_KEY"`}</pre>
+              <p className="text-xs text-muted-foreground mt-2">Newest first, up to 200 a page. Pass <code>page.next_cursor</code> back as <code>cursor</code> for the next page. Errors are <code>{"{ ok:false, error, code, request_id }"}</code>; quote the request_id if you contact us.</p>
             </Card>
           </div>
         </Section>

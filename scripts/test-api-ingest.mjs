@@ -99,16 +99,66 @@ check(r.ok === false && /not allowed/.test(r.error), "tables outside the list ar
   await db.exec(readFileSync("supabase/migrations/2026_zzzv_media_sales_watch.sql", "utf8").match(/revoke all on function public\.api_ingest[\s\S]*?to service_role;/)[0]);
 }
 
+/* 4c. 2026_zzzw: the WHOLE migration on real Postgres — scopes, revocation, expiry, usage, grants. */
+{
+  await db.exec(`
+    alter table api_keys add column id uuid primary key default gen_random_uuid();
+    alter table api_keys add column label text; alter table api_keys add column key_prefix text; alter table api_keys add column created_at timestamptz default now();
+    create table if not exists health_metrics (org_id uuid, metric_key text, label text, value numeric, unit text, delta_pct numeric, status text);
+    create or replace function user_org_rank(o uuid) returns int language sql as $$ select 0 $$;
+    grant select, insert, update, delete on api_keys to authenticated;
+  `);
+  const zw = readFileSync("supabase/migrations/2026_zzzw_api_platform.sql", "utf8").replace(/notify pgrst[^;]*;/g, "");
+  const verify = zw.slice(zw.indexOf("/* ---------- verify"));
+  await db.exec(zw.slice(0, zw.indexOf("/* ---------- verify")));
+  const vr = (await db.query(verify.replace(/^\/\*[\s\S]*?\*\//, ""))).rows;
+  check(vr.length >= 9 && vr.every((x) => x.ok === true), "zzzw: every verify row is true on real Postgres", JSON.stringify(vr.filter((x) => !x.ok)));
+  const sc = (await db.query(`select scopes from api_keys where org_id = '11111111-1111-4111-8111-111111111111'`)).rows[0].scopes;
+  check(JSON.stringify(sc) === JSON.stringify(["metrics:read", "ingest:write"]), "zzzw: an existing key keeps exactly its v1 powers", JSON.stringify(sc));
+  let q = await call("KEY-A", "sales_orders", [{ order_no: "SO-W1", amount: 1 }]);
+  check(q.ok === true, "zzzw: an existing key still writes after the migration (no outage)", JSON.stringify(q));
+  const base = await count("sales_orders");
+  await db.exec(`update api_keys set scopes = array['metrics:read'] where org_id = '11111111-1111-4111-8111-111111111111'`);
+  q = await call("KEY-A", "sales_orders", [{ order_no: "SO-W2", amount: 1 }]);
+  check(q.ok === false && await count("sales_orders") === base, "zzzw: without ingest:write the function writes nothing", JSON.stringify(q));
+  await db.exec(`update api_keys set scopes = array['ingest:write'], expires_at = now() - interval '1 second' where org_id = '11111111-1111-4111-8111-111111111111'`);
+  q = await call("KEY-A", "sales_orders", [{ order_no: "SO-W3", amount: 1 }]);
+  check(q.ok === false, "zzzw: an expired key writes nothing");
+  await db.exec(`update api_keys set expires_at = now() + interval '1 day', revoked_at = now() where org_id = '11111111-1111-4111-8111-111111111111'`);
+  q = await call("KEY-A", "sales_orders", [{ order_no: "SO-W4", amount: 1 }]);
+  check(q.ok === false && await count("sales_orders") === base, "zzzw: a revoked key writes nothing");
+  await db.exec(`update api_keys set revoked_at = null where org_id = '11111111-1111-4111-8111-111111111111'`);
+  q = await call("KEY-A", "sales_orders", [{ order_no: "SO-W5", amount: 1 }]);
+  check(q.ok === true, "zzzw: un-revoked by the server (not the browser), the key works again — the check is on the row, not a cache");
+  const m = (await db.query(`select api_metrics('KEY-B') as r`)).rows[0].r;
+  check(m.ok === true, "zzzw: api_metrics accepts a key with metrics:read");
+  const kid = (await db.query(`select id from api_keys where org_id = '22222222-2222-4222-8222-222222222222'`)).rows[0].id;
+  await db.query(`select api_usage_bump($1, $2, '/api/v1/metrics', true)`, ["22222222-2222-4222-8222-222222222222", kid]);
+  await db.query(`select api_usage_bump($1, $2, '/api/v1/metrics', true)`, ["22222222-2222-4222-8222-222222222222", kid]);
+  await db.query(`select api_usage_bump($1, $2, '/api/v1/metrics', false)`, ["22222222-2222-4222-8222-222222222222", kid]);
+  const u = (await db.query(`select calls, denied from api_usage_daily where key_id = $1`, [kid])).rows;
+  check(u.length === 1 && u[0].calls === 2 && u[0].denied === 1, "zzzw: usage is one row per key/endpoint/day, incremented in place", JSON.stringify(u));
+  const priv = (await db.query(`select has_table_privilege('authenticated','api_keys','INSERT') i, has_table_privilege('authenticated','api_keys','UPDATE') u, has_table_privilege('authenticated','api_keys','SELECT') s`)).rows[0];
+  check(priv.i === false && priv.u === false && priv.s === true, "zzzw: the browser keeps read, loses insert/update on api_keys", JSON.stringify(priv));
+  /* Re-runnable: applying it twice changes nothing and does not error. */
+  let again = true; try { await db.exec(zw.slice(0, zw.indexOf("/* ---------- verify"))); } catch (e) { again = String(e.message); }
+  check(again === true, "zzzw: safe to re-run", String(again));
+}
+
 /* 5. Grants: service_role only */
 const acl = (await db.query(`select p.proname, r.rolname from pg_proc p cross join lateral aclexplode(p.proacl) a join pg_roles r on r.oid = a.grantee where p.proname in ('api_ingest','api_metrics')`)).rows;
 check(!acl.some((x) => ["anon", "authenticated", "public"].includes(x.rolname)), "anon/authenticated cannot call either API function directly", JSON.stringify(acl));
 check(acl.filter((x) => x.rolname === "service_role").length === 2, "service_role can call both");
 
-/* 6. The routes call them with the service client */
-for (const route of ["src/app/api/v1/ingest/route.ts", "src/app/api/v1/metrics/route.ts"]) {
-  const src = readFileSync(route, "utf8");
-  check(/serviceClient\(\)/.test(src) && /svc\.rpc\("api_(ingest|metrics)"/.test(src) && !/createClient\(\)[\s\S]{0,80}\.rpc\("api_/.test(src), `${route} calls the RPC with the service client`);
-  check(/enforce\(\[\{ key: `(ingest|metrics):\$\{bucket\}`/.test(src), `${route} rate-limits per key before calling`);
+/* 6. The routes go through the shared API door (lib/api/auth.ts): service client, per-key rate limit, scopes. */
+{
+  const ing = readFileSync("src/app/api/v1/ingest/route.ts", "utf8");
+  const met = readFileSync("src/app/api/v1/metrics/route.ts", "utf8");
+  const auth = readFileSync("src/lib/api/auth.ts", "utf8");
+  check(/apiAuth\(req, "ingest:write", "write"/.test(ing) && /svc\.rpc\("api_ingest"/.test(ing) && !/createClient\(\)/.test(ing), "ingest: scope ingest:write, then the RPC with the service client");
+  check(/apiAuth\(req, "metrics:read", "read"/.test(met) && /\.eq\("org_id", ctx\.orgId\)/.test(met) && !/createClient\(\)/.test(met), "metrics: scope metrics:read, read by the key's own org with the service client");
+  check(/serviceClient\(\)/.test(auth) && /enforce\(\[\{ key: `api:\$\{kind\}:\$\{k\.id\}`/.test(auth), "auth: rate-limits per key (row id, never the secret) before any route work");
+  check(auth.indexOf("enforce([") < auth.indexOf("return { ok: true, svc"), "auth: the limit is applied before the route gets a context");
 }
 
 console.log(`\napi ingest: ${pass} passed, ${fails.length} failed`);

@@ -1439,77 +1439,159 @@ async function requireCapability(orgId: string, cap: Parameters<typeof planInclu
   }
 }
 
-export async function generateApiKey(fd: FormData) {
+/*
+  API KEY LIFECYCLE — create, rotate, regenerate, revoke.
+
+  Every write goes through the SERVICE ROLE after these checks, because
+  2026_zzzw revokes the browser's write access to api_keys: a direct PostgREST
+  insert used to skip the plan gate and the second factor below.
+
+    create      admin + second factor + plan includes "api"; scopes chosen
+                (read-only by default); expiry chosen (365 days by default)
+    rotate      admin + second factor; a new key with the same label, scopes
+                and expiry; the old one keeps working for 24 h or 7 days so
+                the integration can be switched without an outage
+    regenerate  rotate with no grace — the old key dies now (suspected leak)
+    revoke      admin; immediate; the row is KEPT so the audit trail and the
+                usage history survive. Revoking does not need a second
+                factor: making the workspace safer should never be gated.
+
+  Plaintext exists in exactly one place: the return value of create/rotate,
+  shown once by components/api-key-creator.tsx. The audit row stores the
+  prefix (mnbc_<id>), never the key or its hash.
+*/
+type KeyIssue = { key: string | null; prefix?: string; error?: string };
+
+const KEY_MIGRATION_MSG =
+  "API keys need the latest database update (2026_zzzw_api_platform.sql) before new keys can be issued. Existing keys keep working.";
+const isMissingCol = (e: any) => String(e?.code || "") === "42703" || /column .* does not exist|schema cache/i.test(String(e?.message || ""));
+
+async function keyAudit(svc: any, row: { org_id: string; key_id: string | null; key_prefix: string | null; event: string; actor: string | null; detail?: Record<string, unknown> }) {
+  try { await svc.from("api_key_events").insert({ ...row, detail: row.detail || {} }); } catch { /* the key operation itself is what matters */ }
+}
+
+async function apiKeyGate(orgId: string, what: string): Promise<string | null> {
+  const { requireStrongAuth } = await import("@/lib/strong-auth");
+  const sa = await requireStrongAuth(orgId, what);
+  /* Returned, not thrown: Next replaces a thrown server-action message with a generic one in production. */
+  return sa.ok ? null : sa.message;
+}
+
+export async function generateApiKey(fd: FormData): Promise<KeyIssue> {
   const { orgId } = await requireRole("admin"); const sb = await createClient();
+  const { user } = await getUserAndOrg();
   /* An API key reads the whole workspace from outside: issuing one needs a second factor. */
-  {
-    const { requireStrongAuth } = await import("@/lib/strong-auth");
-    const sa = await requireStrongAuth(orgId, "issue an API key");
-    /* Returned, not thrown: Next replaces a thrown server-action message with a generic one in production. */
-    if (!sa.ok) return { key: null as string | null, error: sa.message };
-  }
+  { const m = await apiKeyGate(orgId, "issue an API key"); if (m) return { key: null, error: m }; }
 
   /*
-    ENTITLEMENT. "Public API + outbound webhooks" is a Watch Pro bullet at
-    ₹14,999 and nothing checked the plan, so a ₹4,999 Watch workspace could
-    issue keys. Gating CREATION only is deliberate: a key issued under an older
-    or higher plan keeps working, because cutting off a running integration to
-    enforce a price is the kind of correctness that loses customers.
+    ENTITLEMENT. Gating CREATION only is deliberate: a key issued under an
+    older or higher plan keeps working, because cutting off a running
+    integration to enforce a price loses customers.
   */
   const { data: org } = await sb.from("organizations").select("plan").eq("id", orgId).single();
   const plan = String((org as any)?.plan || "");
   if (!planIncludes(plan, "api")) {
-    return {
-      key: null as string | null,
-      error: `The public API is part of ${lowestPlanWith("api")} and above. Your existing keys keep working — ` +
-        `upgrade under Billing to issue new ones.`,
-    };
+    return { key: null, error: `The public API is part of ${lowestPlanWith("api")} and above. Your existing keys keep working — upgrade under Billing to issue new ones.` };
   }
 
-  /*
-    crypto.randomUUID, not Math.random.
+  const K = await import("@/lib/api-keys");
+  const scopes = K.normaliseScopes(fd.getAll("scopes").length ? fd.getAll("scopes") : K.SCOPE_PRESETS[str(fd.get("preset")) || "read"] || K.SCOPE_PRESETS.read);
+  if (!scopes.length) return { key: null, error: "Choose at least one permission for the key." };
+  const expires_at = K.expiryFrom(fd.get("expiry"), Date.now());
 
-    Math.random is a fast non-cryptographic PRNG with observable internal state:
-    given a few outputs from the same process, the rest of the sequence is
-    recoverable. Three concatenated calls plus a timestamp is therefore a
-    GUESSABLE API key — and this key authenticates full read access to a
-    workspace's financial data. Two UUIDv4s give 244 bits from the platform CSPRNG.
-  */
-  const { randomUUID, createHash } = await import("node:crypto");
-  const key = "mnb_" + (randomUUID() + randomUUID()).replace(/-/g, "");
+  const svc = serviceClient();
+  if (!svc) return { key: null, error: "API keys cannot be issued on this deployment (service role missing)." };
 
-  /*
-    ONLY THE HASH IS STORED.
+  /* 256 bits from the platform CSPRNG; only the SHA-256 is stored (see lib/api-keys.ts for why not a KDF). */
+  const { randomBytes, createHash } = await import("node:crypto");
+  const k = K.newKey((n) => randomBytes(n), (s) => createHash("sha256").update(s).digest("hex"));
 
-    The plaintext used to go straight into api_keys.key, where RLS protected it
-    from other tenants but nothing protected it from a database backup, a
-    staging restore, or the service-role key leaking — in any of which every
-    customer's key was immediately usable.
-
-    A SHA-256 is enough here and bcrypt would be wrong: this is a 244-bit random
-    string from the CSPRNG, not a human-chosen password, so there is no
-    dictionary to slow down and the per-request cost of a KDF would buy nothing.
-
-    `key_prefix` keeps a key identifiable in the dashboard once the plaintext is
-    gone. The full key is returned to the caller exactly once, here.
-  */
-  const key_hash = createHash("sha256").update(key).digest("hex");
-
-  const { error } = await sb.from("api_keys").insert({
+  const { data: ins, error } = await svc.from("api_keys").insert({
     org_id: orgId,
-    label: str(fd.get("label")) || "API key",
-    key_hash,
-    key_prefix: key.slice(0, 12),
-  });
-  if (error) throw new Error(error.message);
+    label: (str(fd.get("label")) || "API key").slice(0, 80),
+    key_hash: k.hash,
+    key_prefix: k.prefix,
+    scopes,
+    expires_at,
+    created_by: user?.id ?? null,
+  }).select("id").single();
+  if (error) return { key: null, error: isMissingCol(error) ? KEY_MIGRATION_MSG : "Could not create the key. Nothing was saved — try again." };
+  await keyAudit(svc, { org_id: orgId, key_id: (ins as any).id, key_prefix: k.prefix, event: "created", actor: user?.id ?? null, detail: { scopes, expires_at } });
   revalidatePath("/developers");
   /* Shown once. There is deliberately no way to ask for it again. */
-  return { key };
+  return { key: k.key, prefix: k.prefix };
 }
-export async function deleteApiKey(fd: FormData) {
-  const { orgId } = await requireRole("admin"); const sb = await createClient();
-  await sb.from("api_keys").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
+
+/** Rotate (grace 24h / 7d) or regenerate (grace 0). Returns the new key once. */
+export async function rotateApiKey(fd: FormData): Promise<KeyIssue> {
+  const { orgId } = await requireRole("admin");
+  const { user } = await getUserAndOrg();
+  const id = str(fd.get("id"));
+  const K = await import("@/lib/api-keys");
+  const grace = K.graceHours(fd.get("grace"));
+  { const m = await apiKeyGate(orgId, grace === 0 ? "regenerate an API key" : "rotate an API key"); if (m) return { key: null, error: m }; }
+
+  const svc = serviceClient();
+  if (!svc) return { key: null, error: "API keys cannot be changed on this deployment (service role missing)." };
+  const { data: old, error: rErr } = await svc.from("api_keys")
+    .select("id, org_id, label, key_prefix, scopes, expires_at, revoked_at").eq("id", id).eq("org_id", orgId).maybeSingle();
+  if (rErr) return { key: null, error: isMissingCol(rErr) ? KEY_MIGRATION_MSG : "Could not read that key." };
+  if (!old) return { key: null, error: "That key was not found in this workspace." };
+  if ((old as any).revoked_at) return { key: null, error: "That key is already revoked — create a new one instead." };
+
+  /* A rotated key keeps its label and permissions. A key that never expired still never expires; one that did gets a fresh 365 days. */
+  const scopes = K.normaliseScopes((old as any).scopes);
+  const now = Date.now();
+  const expires_at = (old as any).expires_at === null ? null : K.expiryFrom("365", now);
+  const { randomBytes, createHash } = await import("node:crypto");
+  const k = K.newKey((n) => randomBytes(n), (s) => createHash("sha256").update(s).digest("hex"));
+
+  const { data: ins, error } = await svc.from("api_keys").insert({
+    org_id: orgId, label: (old as any).label, key_hash: k.hash, key_prefix: k.prefix,
+    scopes: scopes.length ? scopes : K.LEGACY_SCOPES, expires_at, created_by: user?.id ?? null, rotated_from: id,
+  }).select("id").single();
+  if (error) return { key: null, error: "Could not issue the replacement. The old key is unchanged." };
+
+  /* Then cut the old one: revoked now (regenerate), or set to expire after the grace period. */
+  const patch = grace === 0
+    ? { revoked_at: new Date(now).toISOString(), revoked_by: user?.id ?? null }
+    : { expires_at: new Date(Math.min(now + grace * 3_600_000, (old as any).expires_at ? Date.parse((old as any).expires_at) : Infinity)).toISOString() };
+  const { data: cut, error: cErr } = await svc.from("api_keys").update(patch).eq("id", id).eq("org_id", orgId).select("id");
+  await keyAudit(svc, { org_id: orgId, key_id: (ins as any).id, key_prefix: k.prefix, event: grace === 0 ? "regenerated" : "rotated", actor: user?.id ?? null,
+    detail: { replaces: (old as any).key_prefix, grace_hours: grace, old_key_cut: !cErr && !!cut?.length } });
   revalidatePath("/developers");
+  if (cErr || !cut?.length) {
+    return { key: k.key, prefix: k.prefix, error: `New key issued, but the old key (${(old as any).key_prefix}…) could not be ${grace === 0 ? "revoked" : "scheduled to expire"} — revoke it by hand below.` };
+  }
+  return { key: k.key, prefix: k.prefix };
+}
+
+export async function revokeApiKey(fd: FormData): Promise<ActionResult> {
+  const { orgId } = await requireRole("admin");
+  const { user } = await getUserAndOrg();
+  const id = str(fd.get("id"));
+  const svc = serviceClient();
+  if (!svc) return fail("API keys cannot be changed on this deployment (service role missing).");
+  const { data, error } = await svc.from("api_keys")
+    .update({ revoked_at: new Date().toISOString(), revoked_by: user?.id ?? null })
+    .eq("id", id).eq("org_id", orgId).is("revoked_at", null).select("id, key_prefix");
+  if (error && isMissingCol(error)) {
+    /* Before 2026_zzzw there is no revoked_at: deleting is the only way to stop a key, and stopping it is what was asked. */
+    const { data: del, error: dErr } = await svc.from("api_keys").delete().eq("id", id).eq("org_id", orgId).select("id");
+    if (dErr || !del?.length) return fail("Could not remove that key. Nothing changed — try again.");
+    revalidatePath("/developers");
+    return { ok: true };
+  }
+  if (error) return fail("Could not revoke that key. Nothing changed — try again.");
+  if (!data?.length) return fail("That key is not active in this workspace (already revoked, or not found).");
+  await keyAudit(svc, { org_id: orgId, key_id: id, key_prefix: (data[0] as any).key_prefix ?? null, event: "revoked", actor: user?.id ?? null });
+  revalidatePath("/developers");
+  return { ok: true };
+}
+
+/** Kept for the old form: removing a key now REVOKES it, so its audit trail survives. */
+export async function deleteApiKey(fd: FormData): Promise<ActionResult> {
+  return revokeApiKey(fd);
 }
 
 

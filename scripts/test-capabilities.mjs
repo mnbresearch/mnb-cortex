@@ -133,7 +133,10 @@ const CODE = strip(ACTIONS);
 
 const body = (fn) => {
   const i = CODE.indexOf(`export async function ${fn}`);
-  return i < 0 ? "" : CODE.slice(i, i + 900);
+  if (i < 0) return "";
+  /* To the next export, not a fixed 900 chars: generateApiKey grew (scopes, expiry, audit) and its CSPRNG call moved past the cut. */
+  const j = CODE.indexOf("\nexport ", i + 10);
+  return CODE.slice(i, j < 0 ? i + 4000 : j);
 };
 
 for (const [fn, what, why] of [

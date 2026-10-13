@@ -333,7 +333,7 @@ const { CATALOGUE_BY_KEY: CAT } = await import("../src/lib/engine/catalogue.ts")
   check(inserted.length === before, "G: no workspace or nothing suspicious → no alert");
   check(/flagSuspiciousRows\(orgId, "an imported file", rows\)/.test(read("src/lib/actions.ts")), "G: CSV import is scanned");
   check(/flagSuspiciousRows\(orgId, conn\.label/.test(read("src/lib/sync/index.ts")), "G: store/payment sync is scanned");
-  check(/flagSuspiciousRows\(\(k as any\)\?\.org_id, "the public API", rows\)/.test(read("src/app/api/v1/ingest/route.ts")), "G: the public ingest API is scanned");
+  check(/flagSuspiciousRows\(ctx\.orgId, "the public API", rows\)/.test(read("src/app/api/v1/ingest/route.ts")), "G: the public ingest API is scanned");
 }
 
 console.log(`\nLLM01 — indirect prompt injection: ${pass} passed, ${failures.length} failed`);

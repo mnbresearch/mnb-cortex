@@ -209,7 +209,14 @@ check(/isHighImpact\(def\)[\s\S]*requireStrongAuth/.test(fn(sa, "undoProposal"))
 check(/mode === "auto" && pdef && isHighImpact\(pdef\)[\s\S]*requireStrongAuth/.test(fn(sa, "savePolicy")), "wiring: an auto rule for money/outbound asks for a second factor");
 check(/isHighImpact\(adef\)[\s\S]*requireStrongAuth/.test(fn(sa, "acceptAutonomy")), "wiring: accepting earned autonomy for money/outbound asks for a second factor");
 const acts = read("src/lib/actions.ts");
-for (const [name, what] of [["generateApiKey", "issue an API key"], ["addWebhook", "send events to an outside address"], ["approveMessage", "approve a message to a customer"]]) {
+/* API keys go through one helper so create and rotate cannot drift apart. */
+{
+  const gate = acts.slice(acts.indexOf("async function apiKeyGate"), acts.indexOf("export async function generateApiKey"));
+  check(/requireStrongAuth\(orgId, what\)/.test(gate) && /sa\.ok \? null : sa\.message/.test(gate), "wiring: apiKeyGate asks for a second factor");
+  check(/apiKeyGate\(orgId, "issue an API key"\); if \(m\) return/.test(fn(acts, "generateApiKey")), "wiring: generateApiKey asks for a second factor");
+  check(/apiKeyGate\(orgId, grace === 0 \? "regenerate an API key" : "rotate an API key"\); if \(m\) return/.test(fn(acts, "rotateApiKey")), "wiring: rotateApiKey asks for a second factor");
+}
+for (const [name, what] of [["addWebhook", "send events to an outside address"], ["approveMessage", "approve a message to a customer"]]) {
   const body = fn(acts, name);
   check(body.includes(`requireStrongAuth(orgId, "${what}")`) && /if \(!sa\.ok\)/.test(body), `wiring: ${name} asks for a second factor`);
 }
