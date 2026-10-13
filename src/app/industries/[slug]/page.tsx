@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AgentFloor } from "@/components/agent-floor";
 import { notFound } from "next/navigation";
 import { ArrowUpRight, ArrowLeft, Check, X, CalendarClock } from "lucide-react";
 import { SmoothScroll, Cursor, Kinetic } from "@/components/loco";
@@ -163,6 +164,14 @@ export default function IndustryPage({ params }: { params: { slug: string } }) {
             <div className="eyebrow text-primary">Outcome</div>
             <p className="mt-2 text-lg">{ind.outcome}</p>
           </div>
+        </div>
+      </section>
+
+      {/* A night in this trade, desk to desk — the same real steps, with this industry's emphasis. */}
+      <section className="px-5 lg:px-10 pb-16">
+        <div className="max-w-5xl mx-auto">
+          <div className="eyebrow mb-3">A night in {midSentence(ind.name)}, desk to desk</div>
+          <AgentFloor industry={ind.slug} showTabs={false} />
         </div>
       </section>
 

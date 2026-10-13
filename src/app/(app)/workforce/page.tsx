@@ -4,7 +4,8 @@ import { PageShell } from "@/components/page-shell";
 import { Card } from "@/components/ui/card";
 import { WorkforceMap } from "@/components/workforce-map";
 import { WorkforceGraph } from "@/components/workforce-graph";
-import { getUserAndOrg } from "@/lib/data";
+import { getUserAndOrg, getOrgProfile } from "@/lib/data";
+import { AgentFloor } from "@/components/agent-floor";
 import { getProfile } from "@/lib/memory";
 import { agentCount, DEPARTMENTS, agentsForDepartment } from "@/lib/agents/catalog";
 import { Network, ArrowRight } from "lucide-react";
@@ -15,6 +16,7 @@ export default async function Workforce() {
   const { orgId } = await getUserAndOrg();
   const profile = orgId ? await getProfile(orgId) : null;
   const hasBrain = Boolean((profile as any)?.profile_md);
+  const org = orgId ? await getOrgProfile().catch(() => null) : null;
 
   return (
     <>
@@ -24,6 +26,12 @@ export default async function Workforce() {
           <Network className="h-4 w-4 text-primary mt-0.5 shrink-0" />
           <span>Every business runs on the same {DEPARTMENTS.length} functions. Cortex maps ready-made agents to each — {agentCount()} in all (text agents use your own numbers and memory; image and video agents come with Watch Pro). Pick a team to see and run its agents.</span>
         </Card>
+
+        {/* The floor: how the agents hand work to each other, opening on this workspace's own industry. */}
+        <div>
+          <div className="eyebrow mb-3">Watch your team work</div>
+          <AgentFloor industry={(org as any)?.industry || null} />
+        </div>
 
         {/* The living map — every agent connected to the central brain; activated ones light up. */}
         <div>

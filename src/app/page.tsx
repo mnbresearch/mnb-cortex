@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AgentFloor } from "@/components/agent-floor";
 import { Track } from "@/components/track";
 import { ENTRY_PRICE_LABEL, SMALLEST_PACK_LABEL } from "@/lib/config";
 /* Two icons, down from thirty-two. The other thirty went to /features with the
@@ -642,6 +643,18 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* The playbooks above, acted out: the hand-offs between agents, desk to desk, per kind of business. */}
+          <div className="mt-14">
+            <div className="eyebrow">Watch the team work</div>
+            <h3 className="font-display text-2xl lg:text-3xl tracking-tightest mt-3 max-w-3xl">
+              One night in your business, desk to desk.
+            </h3>
+            <p className="mt-2 text-muted-foreground max-w-2xl leading-7 text-sm">
+              Pick a kind of business. Each agent picks up where the last one left off — and the last desk is always yours.
+            </p>
+            <div className="mt-6"><AgentFloor /></div>
           </div>
 
           {/*

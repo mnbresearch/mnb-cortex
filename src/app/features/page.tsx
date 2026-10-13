@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { AgentFloor } from "@/components/agent-floor";
+import { FeatureAtlas } from "@/components/feature-atlas";
+import { FEATURES as ATLAS, gateInfo } from "@/lib/feature-atlas";
 import {
   ArrowUpRight, ShieldCheck, Lock, KeyRound, Network, ScrollText,
   LayoutDashboard, Landmark, ReceiptText, CalendarClock, Database, Gauge,
@@ -254,6 +257,26 @@ export default function Features() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* The loop, acted out per kind of business. */}
+      <section className="px-5 lg:px-10 py-20 border-t">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="◆">Your AI team, at work</SectionLabel>
+          <h2 className="font-display display-3 tracking-tightest mt-5 mb-3 max-w-3xl">Agents that hand work to each other — and to you.</h2>
+          <p className="text-muted-foreground max-w-2xl mb-8">Choose a business. Every step below is a real Cortex step, and links to the page that does it.</p>
+          <AgentFloor />
+        </div>
+      </section>
+
+      {/* Everything, by the job it does — searchable, with the plan that includes it. */}
+      <section id="explore" className="px-5 lg:px-10 py-20 border-t">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="◆">Find what you need</SectionLabel>
+          <h2 className="font-display display-3 tracking-tightest mt-5 mb-3 max-w-3xl">Search it by the job, not the menu.</h2>
+          <p className="text-muted-foreground max-w-2xl mb-8">{ATLAS.length} things Cortex does, grouped by what you are trying to get done, with the plan that includes each one.</p>
+          <FeatureAtlas variant="public" rows={ATLAS.map((f) => ({ id: f.id, included: false, label: gateInfo(f, null).label, used: false }))} />
         </div>
       </section>
 

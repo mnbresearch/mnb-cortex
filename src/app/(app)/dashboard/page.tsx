@@ -29,6 +29,7 @@ import { NeedsYouStrip } from "@/components/needs-you";
 import { getNeedsYou } from "@/lib/needs-you";
 import { dismissAlert } from "@/lib/actions";
 import { SafeForm } from "@/components/safe-form";
+import { usedModes, suggestions } from "@/lib/feature-usage";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,8 @@ export default async function Dashboard() {
   ]);
   const isReal = Boolean(orgId);                 // signed-in workspace vs public demo preview
   const needsYou = orgId ? await getNeedsYou(orgId) : null;
+  /* Three things the plan includes that this workspace has not used lately — the cure for "I didn't know it did that". */
+  const tryNext = orgId ? suggestions((profile as any)?.plan ? String((profile as any).plan) : null, await usedModes(orgId), 3) : [];
   const hasMetrics = metrics.length > 0;
   // Only looked up when there is nothing to show — the healthy path pays nothing.
   const recomputeFailure = isReal && !hasMetrics ? await getRecomputeFailure(orgId) : null;
@@ -102,6 +105,22 @@ export default async function Dashboard() {
         </div>
         {/* What waits on a human, before anything else. */}
         {needsYou && <NeedsYouStrip n={needsYou} />}
+        {tryNext.length > 0 && (
+          <Card className="p-4 no-print">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-medium">Cortex can also do this for you</div>
+              <Link href="/discover" className="text-xs text-primary underline-offset-2 hover:underline">See everything it does</Link>
+            </div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              {tryNext.map((f) => (
+                <Link key={f.id} href={f.route} className="rounded-lg border px-3 py-2 hover:border-primary/40 transition-colors">
+                  <div className="text-sm font-medium">{f.title}</div>
+                  <div className="text-xs text-muted-foreground leading-5 line-clamp-2">{f.outcome}</div>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        )}
         {/* AI summary banner */}
         <Card className="p-5 bg-gradient-to-br from-primary/10 to-purple-500/5 border-primary/20">
           <div className="flex items-start gap-3">

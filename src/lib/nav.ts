@@ -20,7 +20,7 @@ import {
   Award, AlarmClock, Radar,
   HeartHandshake, Umbrella, CalendarDays, Repeat2, House,
   Network, Telescope
-, KeyRound, Store} from "lucide-react";
+, KeyRound, Store, Compass} from "lucide-react";
 
 /*
   `calc: true` marks a STANDALONE CALCULATOR — one that takes numbers you type,
@@ -41,6 +41,7 @@ export const NAV = [
   { href: "/practice", label: "Practice", icon: Building2, group: "Overview" },
   { href: "/dashboard", label: "Business Health", icon: LayoutDashboard, group: "Overview" },
   { href: "/chat", label: "Ask Cortex", icon: MessageSquare, group: "Overview" },
+  { href: "/discover", label: "Explore Cortex", icon: Compass, group: "Overview" },
   { href: "/plan", label: "My Plan", icon: ListChecks, group: "Overview" },
   { href: "/calculators", label: "Calculators", icon: Calculator, group: "Overview" },
   { href: "/tools", label: "AI Tools", icon: Blocks, group: "Overview" },

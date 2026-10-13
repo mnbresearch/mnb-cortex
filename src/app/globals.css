@@ -463,3 +463,22 @@ button:active:not(:disabled), [role="button"]:active { transform: scale(.985); }
   body, .dark body { background: #fff !important; color: #111 !important; }
   .glass { background: #fff !important; backdrop-filter: none !important; }
 }
+
+/* ---- Agent floor (components/agent-floor.tsx) ------------------------------
+   Legs swing only while an agent is walking; idle agents breathe gently.
+   All of it is off under prefers-reduced-motion. */
+@keyframes agent-leg-swing { 0%,100% { transform: rotate(18deg); } 50% { transform: rotate(-18deg); } }
+@keyframes agent-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+@keyframes agent-step { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes agent-pop { from { opacity: 0; transform: translate(-50%, 4px) scale(.96); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+@keyframes agent-dash { to { stroke-dashoffset: -24; } }
+.agent-walk { animation: agent-step .36s ease-in-out infinite; }
+.agent-walk .agent-leg-l { transform-box: fill-box; transform-origin: 50% 0; animation: agent-leg-swing .36s ease-in-out infinite; }
+.agent-walk .agent-leg-r { transform-box: fill-box; transform-origin: 50% 0; animation: agent-leg-swing .36s ease-in-out infinite reverse; }
+.agent-idle { animation: agent-bob 2.4s ease-in-out infinite; }
+.agent-bubble { animation: agent-pop .22s ease-out both; }
+.agent-path { animation: agent-dash 2.8s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .agent-walk, .agent-idle, .agent-bubble, .agent-path,
+  .agent-walk .agent-leg-l, .agent-walk .agent-leg-r { animation: none !important; }
+}
