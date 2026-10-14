@@ -123,8 +123,16 @@ export default function Privacy() {
           document reading. The business context relevant to a request is sent with it.
         </li>
         <li>
-          <strong>Groq, Anthropic, OpenAI</strong> — used only as fallbacks when the primary model is
-          unavailable, so that a request does not simply fail. The same context is sent.
+          <strong>Groq, Anthropic, OpenAI</strong> — fallbacks for analysis, chat and document reading
+          when Gemini is unavailable or not configured, so that a request does not simply fail. The
+          same context is sent.
+        </li>
+        <li>
+          <strong>AI Visibility answer engines</strong> — when you run an AI Visibility check, the buyer
+          questions it asks (built from your category and location, or written by you) are sent to
+          Google Gemini (with Google Search grounding) and to OpenAI&rsquo;s Responses API with web
+          search, which cross-checks a sample of them; Groq answers them instead when neither is
+          available. Your financial records are not sent for this check.
         </li>
         <li>
           <strong>Resend</strong> — outbound email: alerts, the weekly brief, and collections messages
@@ -173,7 +181,7 @@ export default function Privacy() {
       <P>You remain in control of your data at all times. You can:</P>
       <UL>
         <li>access and update your information from your account settings;</li>
-        <li>export your workspace memory and data (JSON / Markdown);</li>
+        <li>export every table in your workspace as JSON (API keys, webhook secrets and integration credentials are redacted), and your Cortex Memory as JSON and Markdown;</li>
         <li>withdraw consent for optional processing;</li>
         <li>request permanent deletion of your records by emailing <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a>.</li>
       </UL>
@@ -205,7 +213,7 @@ export default function Privacy() {
         data, but we keep the <em>financial record</em> of payments and subscriptions with the workspace link
         removed. We are required to retain proof of transactions for tax and audit purposes, and a payment
         record with no workspace attached to it is no longer personal data about you. Everything else goes.
-        You can export the workspace before deleting it.
+        You can export every table in the workspace as JSON before deleting it.
       </P>
 
       <H2>9. Compliance</H2>

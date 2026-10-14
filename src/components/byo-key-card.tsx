@@ -127,7 +127,7 @@ export function ByoKeyCard({ spec, connected }: { spec: ByoKey; connected: boole
             <div>
               <span className="font-medium">Stuck, or would rather not do this yourself?</span>{" "}
               This is the kind of thing whoever manages your website or IT can finish in half an hour. If you do not
-              have anyone, <Link href="/help" className="text-primary underline">contact our team</Link> and we will
+              have anyone, <Link href="/contact" className="text-primary underline">contact our team</Link> and we will
               walk you through it on a call — we cannot create the account for you, but we can sit with you while you do.
             </div>
           </div>

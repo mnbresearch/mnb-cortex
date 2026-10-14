@@ -141,7 +141,8 @@ check(!/defaultValue=\{.*key/.test(PAGE),
   "not even masked — a masked value is still a value that was sent to a browser, and nobody needs to READ their own key out of our UI");
 
 const ERASURE = readFileSync(join(root, "src/lib/erasure.ts"), "utf8");
-check(/integrations:/.test(ERASURE) && /REDACT/.test(ERASURE),
+const EXPORT_COLLECT = readFileSync(join(root, "src/app/api/export/collect.ts"), "utf8");
+check(/collectWorkspace/.test(ERASURE) && /integrations:\s*\[[^\]]*"credentials"/.test(EXPORT_COLLECT) && /EXPORT_REDACT/.test(EXPORT_COLLECT),
   "integration credentials are redacted from the workspace export");
 
 console.log(`\nbyo-keys: ${pass} passed, ${failures.length} failed`);

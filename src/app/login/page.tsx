@@ -6,6 +6,7 @@ import { Logo } from "@/components/logo";
 import { createClient } from "@/lib/supabase/client";
 import { GoogleSignIn } from "@/components/google-signin";
 import { beacon } from "@/components/track";
+import { safeNext } from "./safe-next";
 import { Mail, ArrowRight, Loader2, CheckCircle2, Eye, EyeOff, Lock, Sparkles } from "lucide-react";
 
 type Mode = "signin" | "signup";
@@ -20,6 +21,7 @@ export default function Login() {
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState("");         // e.g. "confirm your email"
   const [linkSent, setLinkSent] = useState(false);
+  const [next, setNext] = useState<string | null>(null); // sanitised ?next=
   const configured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
   /**
@@ -68,10 +70,27 @@ export default function Login() {
    */
   useEffect(() => {
     try {
-      const m = new URL(window.location.href).searchParams.get("mode");
-      if (m === "signup") setMode("signup");
+      const u = new URL(window.location.href);
+      if (u.searchParams.get("mode") === "signup") setMode("signup");
+      /*
+        ?next= carries where the visitor was going — /billing from a plan on
+        /pricing, /usage from the credit packs, a feature route from /features.
+        It was never read: every sign-in and sign-up landed on /dashboard (or
+        onboarding), so someone who had just chosen a plan never reached
+        checkout. Sanitised to a same-origin relative path (see safe-next.ts)
+        and passed through every route in: password, magic link and Google.
+      */
+      setNext(safeNext(u.searchParams.get("next")));
+      // delete-workspace.tsx sends the owner here after deletion.
+      if (u.searchParams.get("deleted") === "1") setNotice("Workspace deleted.");
     } catch { /* ignore */ }
   }, []);
+
+  /* The magic-link / OAuth / email-confirmation return path, carrying ?next so
+     auth/callback can land the user on it (it already honours ?next). */
+  function callbackUrl() {
+    return `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ""}`;
+  }
 
   const [googleOn, setGoogleOn] = useState(false);
   useEffect(() => {
@@ -88,8 +107,12 @@ export default function Login() {
 
   async function afterAuthed() {
     // Guarantee a workspace exists, then enter the app.
-    // Land new workspaces on onboarding, returning users on the dashboard.
-    let next = "/dashboard";
+    // Land new workspaces on onboarding, returning users on the dashboard —
+    // unless the visitor came with a destination (?next=, e.g. /billing from
+    // a plan on /pricing). Then they go straight there, matching
+    // auth/callback, which also skips onboarding when ?next is present;
+    // onboarding stays reachable from the nav.
+    let dest = "/dashboard";
     try {
       const r = await fetch("/api/workspace/bootstrap", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ company }),
@@ -111,7 +134,8 @@ export default function Login() {
         setLoading(false);
         return;
       }
-      if (j?.next) next = j.next;
+      if (next) dest = next;
+      else if (j?.next) dest = j.next;
     } catch {
       /*
         A network failure here is NOT fatal: the session cookie is already set,
@@ -119,7 +143,7 @@ export default function Login() {
         the better outcome than stranding a signed-in user on the login screen.
       */
     }
-    window.location.href = next;
+    window.location.href = dest;
   }
 
   async function submit(e: React.FormEvent) {
@@ -134,7 +158,7 @@ export default function Login() {
           email: email.trim(),
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: callbackUrl(),
             data: { company: company.trim() || undefined, full_name: company.trim() || undefined },
           },
         });
@@ -162,7 +186,7 @@ export default function Login() {
     setErr(""); setNotice(""); setLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: `${window.location.origin}/auth/callback` } });
+      const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: callbackUrl() } });
       if (error) throw error;
       setLinkSent(true);
     } catch (e: any) { setErr(e?.message || "Could not send the link."); }
@@ -174,7 +198,7 @@ export default function Login() {
     beacon("signup_started");
     try {
       const supabase = createClient();
-      await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/auth/callback` } });
+      await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: callbackUrl() } });
     } catch (e: any) { setErr(e?.message || "Google sign-in failed."); }
   }
 

@@ -122,8 +122,11 @@ export const STORIES: Story[] = [
       { actor: "watch", to: "ops", say: "Your best seller is below its reorder level.", module: "/inventory", carry: "stock" },
       { actor: "ops", to: "approvals", say: "Reorder alert raised, with the supplier named.", module: "/inventory", carry: "alert" },
       { actor: "watch", to: "sales", say: "41 repeat customers haven't ordered in 60 days.", module: "/churn" },
-      { actor: "seller", to: "sales", say: "Your top 20% bring 64% of revenue. I'd start with them.", module: "/rfm" },
-      { actor: "seller", to: "approvals", say: "Flagged for you: who to win back first, and why.", module: "/churn", carry: "list" },
+      /* Was "Your top 20% bring 64% of revenue" (/rfm computes segments, not a
+         concentration figure) and "Flagged for you… → approvals" (no churn rule
+         raises an approval). Both now describe what those pages really do. */
+      { actor: "seller", to: "sales", say: "RFM sorts them: at-risk regulars apart from new and lost customers.", module: "/rfm" },
+      { actor: "you", to: "sales", say: "I'll open the churn list and pick who to call first.", module: "/churn", carry: "list" },
       brief,
     ],
   },

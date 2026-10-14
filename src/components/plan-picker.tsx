@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Check, CreditCard, Loader2 } from "lucide-react";
-import { PLANS } from "@/lib/config";
+import { PLANS, ANNUAL_SAVING_PCT } from "@/lib/config";
 import { payCashfree } from "@/lib/pay/checkout-client";
 
 /**
@@ -50,7 +50,7 @@ export function PlanPicker({ currentPlan = "", savedPhone = "" }: { currentPlan?
           <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-primary transition-all ${annual ? "left-[22px]" : "left-0.5"}`} />
         </button>
         <span className={annual ? "font-medium" : "text-muted-foreground"}>
-          Annual <span className="text-success text-xs">(save ~20%)</span>
+          Annual <span className="text-success text-xs">(save ~{ANNUAL_SAVING_PCT}%)</span>
         </span>
       </div>
 

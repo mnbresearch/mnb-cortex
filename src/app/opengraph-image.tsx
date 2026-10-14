@@ -11,8 +11,14 @@ export default function OG() {
           <div style={{ width: 64, height: 64, borderRadius: 16, background: "linear-gradient(135deg,#12b5a0,#1ec98a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, fontWeight: 800, color: "#04201d" }}>C</div>
           <div style={{ fontSize: 40, fontWeight: 700 }}>MNB Cortex</div>
         </div>
-        <div style={{ fontSize: 74, fontWeight: 800, marginTop: 44, lineHeight: 1.05, letterSpacing: -2 }}>Your business now has a brain of its own.</div>
-        <div style={{ fontSize: 30, color: "#8fd8cc", marginTop: 26 }}>One early-warning system for your whole company — it reads everything, remembers everything, and acts.</div>
+        {/* The landing page's own headline. The old card ("a brain of its own…
+            reads everything, remembers everything, and acts") was a retired
+            overclaim still shown on every shared link. */}
+        <div style={{ display: "flex", flexDirection: "column", fontSize: 64, fontWeight: 800, marginTop: 44, lineHeight: 1.08, letterSpacing: -2 }}>
+          <div>Your books tell you what happened.</div>
+          <div>Cortex tells you what&apos;s about to.</div>
+        </div>
+        <div style={{ fontSize: 30, color: "#8fd8cc", marginTop: 26 }}>The early-warning system for Indian businesses.</div>
       </div>
     ), { ...size }
   );

@@ -82,7 +82,7 @@ export const FEATURES: Feature[] = [
   { id: "gbp", job: "sell", title: "Google Business Profile", outcome: "Posts, replies and fixes for your Google listing.", route: "/gbp", gate: all, modes: ["gbp"], keywords: "google maps reviews listing local" },
   // ---- Run operations
   { id: "inventory", job: "operate", title: "Inventory & reorder", outcome: "Items at or below reorder level, with the supplier named.", route: "/inventory", gate: all, modes: [], keywords: "stock reorder warehouse sku" },
-  { id: "vendors", job: "operate", title: "Vendor scorecard", outcome: "Which suppliers deliver, on time and on price.", route: "/vendors", gate: all, modes: ["vendor"], keywords: "supplier vendor rating" },
+  { id: "vendors", job: "operate", title: "Vendor scorecard", outcome: "Describe a supplier's terms and Cortex scores them — with a negotiation angle.", route: "/vendors", gate: all, modes: ["vendor"], keywords: "supplier vendor rating" },
   { id: "sops", job: "operate", title: "SOP builder", outcome: "Turn how you do things into a written procedure your team can follow.", route: "/sops", gate: all, modes: ["sop"], keywords: "process procedure checklist" },
   { id: "hiring", job: "operate", title: "Hiring advisor", outcome: "Job descriptions, interview plans and offer maths.", route: "/hiring", gate: all, modes: ["hiring"], keywords: "recruit jd interview salary" },
   // ---- Decide with numbers
@@ -94,7 +94,7 @@ export const FEATURES: Feature[] = [
   { id: "boardroom", job: "decide", title: "Board deck & investor update", outcome: "A deck or update drafted from your actual numbers.", route: "/boardroom", gate: all, modes: ["board"], keywords: "board investor deck update" },
   // ---- Automate
   { id: "workflows", job: "automate", title: "Workflows", outcome: "Describe an automation in a sentence; Cortex builds the steps and runs them on schedule.", route: "/workflows", gate: { kind: "cap", cap: "workflows" }, modes: ["automation_plan"], keywords: "automation schedule workflow zapier" },
-  { id: "alerts", job: "automate", title: "KPI alert rules", outcome: "Your own thresholds, emailed the moment they are crossed.", route: "/alerts", gate: { kind: "cap", cap: "alert_rules" }, modes: [], keywords: "alert threshold notify" },
+  { id: "alerts", job: "automate", title: "KPI alert rules", outcome: "Your own thresholds, checked nightly — crossings arrive in one daily email digest.", route: "/alerts", gate: { kind: "cap", cap: "alert_rules" }, modes: [], keywords: "alert threshold notify" },
   { id: "autopilot", job: "automate", title: "Autopilot rules", outcome: "Let reminders and other actions run on their own within limits you set.", route: "/approvals", gate: { kind: "cap", cap: "autonomy" }, modes: [], keywords: "autopilot autonomous auto rules" },
   { id: "memory", job: "automate", title: "Cortex Memory", outcome: "Cortex remembers your business — customers, terms, preferences — across every answer.", route: "/memory", gate: { kind: "cap", cap: "memory" }, modes: [], keywords: "memory context remember" },
   { id: "workforce", job: "automate", title: "AI agents & workforce", outcome: "Ready-made agents for every team, on your own numbers.", route: "/workforce", gate: all, modes: [], keywords: "agents team workforce" },

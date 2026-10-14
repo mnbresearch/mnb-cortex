@@ -41,7 +41,7 @@ export default async function Developers() {
           <Card className="p-6 text-sm max-w-2xl">
             <div className="font-medium">API keys are visible to admins and owners only.</div>
             <p className="text-muted-foreground mt-2 leading-6">
-              An API key can read and write everything in this workspace, and the webhook signing
+              An API key can read or write this workspace&rsquo;s data within the scopes it is granted, and the webhook signing
               secret can be used to forge messages that look like they came from Cortex — so both
               are kept to the people who can already do those things. Ask an admin if you need one.
             </p>
@@ -112,7 +112,10 @@ export default async function Developers() {
                           <button className="rounded-lg border min-h-11 px-3 text-xs text-danger hover:bg-danger/10" aria-label={`Revoke ${k.label}`}>Revoke</button></SafeForm>
                       )}
                     </div>
-                    {st.usable && <ApiKeyRotate id={k.id} />}
+                    {/* Expired keys can be rotated too — the server action refuses only
+                        revoked keys, and the API's own 401 tells callers to "rotate it
+                        under Developers", so the control has to be here for them. */}
+                    {(st.usable || st.state === "expired") && <ApiKeyRotate id={k.id} />}
                   </div>
                 );
               })}

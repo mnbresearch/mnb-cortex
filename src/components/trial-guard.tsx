@@ -100,7 +100,7 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
           <div className="mt-3 text-xs text-muted-foreground flex items-center justify-center gap-3">
             <Link href="/pricing" className="hover:text-foreground underline">Compare plans</Link>
             <span>·</span>
-            <Link href="/help" className="hover:text-foreground underline">Talk to us</Link>
+            <Link href="/contact" className="hover:text-foreground underline">Talk to us</Link>
           </div>
         </div>
       </div>
@@ -149,7 +149,9 @@ export function TrialGuard({ status, daysLeft, locked, lapsedSubscription = fals
         <div className={`flex items-center gap-3 rounded-full border shadow-lg px-4 py-2 text-sm ${urgent ? "bg-danger/10 border-danger/30" : "bg-card"}`}>
           <Sparkles className={`h-4 w-4 shrink-0 ${urgent ? "text-danger" : "text-primary"}`} />
           <span className={urgent ? "text-danger font-medium" : ""}>
-            {daysLeft > 0 ? <>Your plan renews in <b>{daysLeft}</b> {daysLeft === 1 ? "day" : "days"}</> : "Your plan ends today"}
+            {/* "ends", not "renews": this banner only shows when auto-renew is OFF,
+                so nothing will renew unless the owner acts. */}
+            {daysLeft > 0 ? <>Your plan ends in <b>{daysLeft}</b> {daysLeft === 1 ? "day" : "days"}</> : "Your plan ends today"}
           </span>
           <Link href="/billing" className="rounded-full brand-gradient text-white px-3 py-1 text-xs font-medium shrink-0">Renew</Link>
           <button onClick={() => setDismissed(true)} className="text-muted-foreground hover:text-foreground shrink-0 min-h-11 min-w-11 p-2" aria-label="Close"><X aria-hidden="true" className="h-3.5 w-3.5" /></button>

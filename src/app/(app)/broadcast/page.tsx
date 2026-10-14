@@ -15,7 +15,7 @@ export default async function Broadcast() {
 
   return (
     <>
-      <Topbar title="WhatsApp Broadcast Composer" subtitle="Write once, send to the right segment" />
+      <Topbar title="WhatsApp Broadcast Composer" subtitle="Write the broadcast once — copy it or open it in WhatsApp to send" />
       <PageShell>
         {/*
           THE GATE WAS INVERTED, AND THIS IS THE SIXTH PAGE WITH IT.
@@ -35,7 +35,7 @@ export default async function Broadcast() {
           built from your own numbers.
         </Card>
         <BroadcastComposer />
-        <Section title="Suggested segments" desc="Who to target — pair with the message above">
+        <Section title="Segment ideas" desc="Examples of who to target — Cortex does not build or send to these lists; choose recipients in WhatsApp">
           <div className="flex flex-wrap gap-2">
             {segments.map((s) => <Card key={s} className="px-3 py-2 text-sm text-muted-foreground">{s}</Card>)}
           </div>

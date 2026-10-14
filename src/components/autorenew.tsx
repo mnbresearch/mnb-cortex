@@ -50,6 +50,16 @@ export function AutoRenew({
   const amount = plan ? (annual ? plan.annual : plan.monthly) : 0;
   const upiOk = amount > 0 && amount <= UPI_MAX;
   const on = live === "ACTIVE" || live === "INITIALIZED";
+  /*
+    A mandate that exists but is not ACTIVE/INITIALIZED — ON_HOLD, PAUSED, a
+    bank approval pending — still blocks a new one: the POST route answers 409
+    for any ref whose status is not CANCELLED/EXPIRED/FAILED. Offering only
+    "Turn on" in that state was a button the server always refused, with no
+    way to clear the old mandate. Such a mandate can be cancelled (DELETE
+    cancels whatever ref is stored), so it gets "Turn off" instead.
+  */
+  const upper = String(live || "").toUpperCase();
+  const stuck = !on && upper !== "" && !["CANCELLED", "EXPIRED", "FAILED"].includes(upper);
 
   // Cashfree returns to /billing?sub=… — reconcile so the badge is truthful.
   useEffect(() => {
@@ -108,18 +118,20 @@ export function AutoRenew({
             {on ? <ShieldCheck className="h-4 w-4 text-success" /> : <RefreshCw className="h-4 w-4 text-muted-foreground" />}
             Auto-renewal
             <span className={`text-[11px] rounded px-1.5 py-0.5 ${on ? "bg-success/10 text-success" : "bg-secondary text-muted-foreground"}`}>
-              {on ? (live === "ACTIVE" ? "on" : "authorising") : "off"}
+              {on ? (live === "ACTIVE" ? "on" : "authorising") : stuck ? upper.toLowerCase().replace(/_/g, " ") : "off"}
             </span>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             {on
               ? `Your ${plan.name} plan renews automatically${nextCharge ? ` — next charge ${new Date(nextCharge).toLocaleDateString("en-IN")}` : ""}. Cancel any time; the period you've paid for is never cut short.`
+              : stuck
+              ? `Your existing mandate is ${upper.toLowerCase().replace(/_/g, " ")} at the payment provider. A new one can't be set up while it exists — turn it off to cancel it, then set up a new one if you want auto-renewal.`
               : "Without this, your plan simply stops at the end of the period and the workspace locks until you pay again. Authorise once and it renews itself."}
           </p>
         </div>
       </div>
 
-      {!on && (
+      {!on && !stuck && (
         <>
           <div className="flex items-center gap-3 text-sm mt-3">
             <span className={!annual ? "font-medium" : "text-muted-foreground"}>Monthly</span>
@@ -139,7 +151,7 @@ export function AutoRenew({
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {on ? (
+        {on || stuck ? (
           <button onClick={disable} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border h-9 px-3 text-xs hover:bg-accent disabled:opacity-60">
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />} Turn off auto-renewal
           </button>

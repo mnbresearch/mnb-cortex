@@ -83,6 +83,8 @@ export default async function Sales() {
           )
         ) : (
           <>
+            {/* Signed-out demo: the four tiles below were unlabelled invented figures. */}
+            <p className="text-xs text-muted-foreground">Sample data — not your business. Sign in and import your orders to see your own figures.</p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <Stat label="Revenue (MTD)" value="₹4.25 Cr" hint="+12% MoM" tone="text-success" />
               <Stat label="Conversion rate" value="22.4%" hint="+1.8 pts" />

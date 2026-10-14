@@ -48,7 +48,7 @@ export default function Proposals() {
             saveMode="strategy"
             suggestions={starters}
           />
-          <p className="text-xs text-muted-foreground mt-2">Save it to your workspace, then export from Reports as a PDF to send.</p>
+          <p className="text-xs text-muted-foreground mt-2">Save it to your workspace. To send it as a PDF, use your browser&rsquo;s Print → Save as PDF while the result is on screen.</p>
         </Section>
       </PageShell>
     </>

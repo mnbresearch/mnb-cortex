@@ -4,11 +4,29 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { IntegrationsManager } from "@/components/integrations-manager";
 import { getIntegrationState } from "@/lib/data";
-import { PLAN_INTEGRATION_LIMIT } from "@/lib/integrations";
+import { PLAN_INTEGRATION_LIMIT, INTEGRATIONS, planLabel } from "@/lib/integrations";
 import Link from "next/link";
 import { ShieldCheck, KeyRound } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+/*
+  THE TIER CARDS ARE DERIVED FROM THE CATALOGUE.
+
+  They were hand-typed and each named a plan one tier too high: Slack, Sheets
+  and Resend are minPlan "starter" (Try), but were listed under Watch; Zoho,
+  Tally, Shopify, Stripe and Razorpay are "growth" (Watch) but were listed
+  under Watch Pro; Salesforce and QuickBooks are "premium" (Watch Pro) but were
+  listed under Command. planLabel() is the same mapping the gate uses.
+*/
+const TIERS = [
+  { id: "try", label: "Try Cortex" },
+  { id: "watch", label: "Watch" },
+  { id: "watchpro", label: "Watch Pro" },
+  { id: "command", label: "Command" },
+  { id: "enterprise", label: "Enterprise" },
+] as const;
+const unlockedAt = (label: string) => INTEGRATIONS.filter((i) => planLabel(i.minPlan) === label.replace(" Cortex", "")).map((i) => i.name);
 
 export default async function Integrations() {
   const { connections, plan, canManage, live, encryption } = await getIntegrationState();
@@ -47,20 +65,24 @@ export default async function Integrations() {
         </Section>
 
         <Section title="What each plan includes" desc="Integration allowances by tier">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {(["watch", "watchpro", "command", "enterprise"] as const).map((p) => (
-              <Card key={p} className={`p-4 ${plan === p ? "border-primary/40 bg-primary/5" : ""}`}>
-                <div className="font-semibold capitalize">{p}</div>
-                <div className="text-2xl font-bold mt-1">{PLAN_INTEGRATION_LIMIT[p] === 999 ? "Unlimited" : PLAN_INTEGRATION_LIMIT[p]}</div>
-                <div className="text-xs text-muted-foreground">integrations</div>
-                <div className="text-xs text-muted-foreground mt-2">
-                  {p === "watch" && "Slack, Telegram, Sheets, Resend"}
-                  {p === "watchpro" && "+ Zoho, Tally, Shopify, HubSpot, Stripe, Razorpay, Notion, Airtable"}
-                  {p === "command" && "+ Salesforce, QuickBooks, Meta & Google Ads, Twilio, Gmail, OpenAI"}
-                  {p === "enterprise" && "+ External Postgres, custom & on-prem connectors"}
-                </div>
-              </Card>
-            ))}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {TIERS.map(({ id: p, label }, idx) => {
+              const names = unlockedAt(label);
+              const shown = names.slice(0, 6).join(", ");
+              const more = names.length > 6 ? ` and ${names.length - 6} more` : "";
+              return (
+                <Card key={p} className={`p-4 ${plan === p ? "border-primary/40 bg-primary/5" : ""}`}>
+                  <div className="font-semibold">{label}</div>
+                  <div className="text-2xl font-bold mt-1">{PLAN_INTEGRATION_LIMIT[p] === 999 ? "Unlimited" : PLAN_INTEGRATION_LIMIT[p]}</div>
+                  <div className="text-xs text-muted-foreground">integrations</div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    {names.length > 0
+                      ? `${idx > 0 ? "+ " : ""}${shown}${more}${p === "enterprise" ? ", plus custom connectors" : ""}`
+                      : p === "enterprise" ? "+ custom connectors" : "Everything above, with no limit on connections"}
+                  </div>
+                </Card>
+              );
+            })}
           </div>
           <p className="text-xs text-muted-foreground mt-3">Connecting a tool stores its credential securely. Today Cortex pulls data in from Shopify, Razorpay, Stripe and Google Sheets every night, sends through WhatsApp Business and your own AI provider, and can email from your Resend domain; the rest are stored for the connectors that follow. Need something not listed? <Link href="/pricing" className="text-primary">Talk to us</Link> — custom connectors are available on Enterprise.</p>
         </Section>

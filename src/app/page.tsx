@@ -37,7 +37,7 @@ const FAQS = [
   { q: "Will it contact my customers on its own?", a: "Not unless you let it. Chasing ships switched off. When you turn it on, Cortex writes each message in your business's name and holds it for your approval — and stops the moment the invoice is marked paid. There is a setting to let it send unattended, off by default, and it's yours to decide." },
   { q: "Do I need to be technical?", a: "No. You ask questions in plain language — English or Hinglish — the way you'd ask your accountant, and Cortex looks up your actual invoices and orders to answer. Nothing to install, nothing to code." },
   { q: "How is this different from an ERP or CRM?", a: "Those record what already happened and wait for you to open them. Cortex reads across all of it every day, names the specific thing about to cost you money, and drafts the action. It doesn't replace them — it does the part they were never built to do." },
-  { q: "Is my data safe?", a: "Yes. Every workspace is isolated with Postgres row-level security, traffic is encrypted with TLS, sensitive keys use AES-256-GCM, and you can export or delete your data anytime." },
+  { q: "Is my data safe?", a: "Yes. Every workspace is isolated with Postgres row-level security, traffic is encrypted with TLS, sensitive keys use AES-256-GCM, and you can export every table in your workspace as JSON, or delete it, anytime." },
   { q: "How does billing work?", a: `Cortex runs on credits. Buy a ${SMALLEST_PACK_LABEL} pack and use it with no subscription, or pick a plan from ${ENTRY_PRICE_LABEL}/mo for a monthly allowance — billed securely via Cashfree. Your free Business Health Check needs no card at all. Prices are in INR; international customers are onboarded by our team.` },
 ];
 
@@ -158,7 +158,7 @@ const OLD_NEW = [
     version of this sentence now points.
   */
   { old: "You find out a customer hasn't paid when you need the cash.", now: "Your overdue list is ranked worst-first and names who to chase — Cortex emails you when overdue money crosses ₹5 lakh (or your own line on Watch Pro), and puts reminders for the costliest bills in front of you to approve." },
-  { old: "You pay a small supplier late and lose the deduction at year end.", now: "It watches the MSME 45-day clock (43B(h)) every night and alerts you to the micro and small suppliers past it, oldest first." },
+  { old: "You pay a small supplier late and lose the deduction at year end.", now: "Its nightly run checks the MSME 45-day clock (43B(h)) and lists the micro and small suppliers past it, oldest first." },
   { old: "A GST or TDS date passes and you find out from a notice.", now: "Every statutory deadline that applies to you, warned before — not after." },
   { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Vyapar and Busy files as they come." },
   { old: "You're too busy running the business to sit and analyse it.", now: "One email on Monday: the three things worth your attention this week." },
@@ -250,7 +250,7 @@ const OBJECTIONS = [
   },
   {
     q: "What if I want out?",
-    a: "Export everything and delete the workspace whenever you like. Your accounting system is untouched, because it was never involved. There is nothing to migrate back.",
+    a: "Export every table in your workspace as JSON and delete the workspace whenever you like. Your accounting system is untouched, because it was never involved. There is nothing to migrate back.",
   },
 ];
 

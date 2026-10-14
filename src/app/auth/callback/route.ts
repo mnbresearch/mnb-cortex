@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ensureWorkspace } from "@/lib/workspace";
 import { record } from "@/lib/funnel";
+import { safeNext } from "@/app/login/safe-next";
 
 /* Awaited by callers (record() never throws). Counted with a reason KIND only — never the address, never the provider's raw message. */
 const failed = async (reason: "oauth_cancelled" | "oauth_error" | "missing_code" | "expired_link" | "exchange_failed" | "workspace_failed") =>
@@ -44,7 +45,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent("That sign-in link is missing its code. Please request a new one.")}`);
   }
 
-  const next = searchParams.get("next") || "/dashboard";
+  /* Same sanitiser as /login: a same-origin relative path or nothing. */
+  const wanted = safeNext(searchParams.get("next"));
+  const next = wanted || "/dashboard";
   const supabase = await createClient();
 
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
@@ -68,7 +71,7 @@ export async function GET(request: Request) {
     }
     /* Awaited: a serverless function can be frozen the instant the redirect is sent. record() never throws. */
     await record("login_succeeded", { path: "/auth/callback", orgId: (res as any).orgId ?? null, meta: { via: "link_or_oauth", new_workspace: Boolean(res.created) } });
-    if (res.created && !searchParams.get("next")) {
+    if (res.created && !wanted) {
       return NextResponse.redirect(`${origin}/onboarding`);
     }
   } catch (e: any) {
@@ -77,5 +80,5 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.redirect(`${origin}${next.startsWith("/") ? next : "/dashboard"}`);
+  return NextResponse.redirect(`${origin}${next}`);
 }

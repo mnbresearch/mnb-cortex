@@ -16,7 +16,7 @@ export default function Act() {
             <Megaphone className="h-4 w-4 text-primary mt-0.5 shrink-0" />
             <span>
               This is the part where Cortex acts on your behalf. Tell it who and why in one line — it drafts a ready-to-send message,
-              you review and edit, then send by email (from your own domain, replies to you) or WhatsApp. You approve every send.
+              you review and edit, then send by email (sent from MNB Cortex&rsquo;s address, with replies coming to you) or open it in WhatsApp on your own phone. You approve every send.
             </span>
           </div>
         </Card>

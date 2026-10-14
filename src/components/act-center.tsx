@@ -144,7 +144,7 @@ export function ActCenter() {
               </div>
             </div>
           )}
-          <p className="text-xs text-muted-foreground">You approve every send. Email goes from your verified domain with replies routed to you.</p>
+          <p className="text-xs text-muted-foreground">You approve every send. Email is sent from MNB Cortex&rsquo;s address, and replies come to your sign-in email.</p>
         </Card>
       )}
     </div>

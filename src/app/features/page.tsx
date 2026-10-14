@@ -127,7 +127,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
         cron already computes nights_for_full_cycle and nothing acts on it.
         Worded so it stays true either way.
       */
-      { icon: Cpu, name: "AI Autopilot", d: "Every night: re-reads your numbers, proposes reminders and alerts on your Approvals page, and writes up what changed." },
+      { icon: Cpu, name: "AI Autopilot", d: "A nightly run re-reads your numbers (your Autopilot page shows when yours was last read), proposes reminders and alerts on your Approvals page, and writes up what changed." },
     ],
   },
   {
@@ -149,7 +149,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
       { icon: Banknote, name: "Payroll & CTC", d: "Take-home, EPF/ESI, gratuity and appraisals." },
       { icon: ScrollText, name: "Contract Review", d: "AI reads a contract and flags the real risks." },
       { icon: Plug, name: "Public API + 4 live syncs", d: "Shopify, Razorpay, Stripe, Sheets — plus Tally & Vyapar file imports." },
-      { icon: ShieldCheck, name: "Security & RLS", d: "Row-level isolation, encryption, export anytime." },
+      { icon: ShieldCheck, name: "Security & RLS", d: "Row-level isolation, encryption, JSON export of every workspace table anytime." },
     ],
   },
 ];
@@ -174,7 +174,8 @@ const AUDIENCE = [
 ];
 
 const COMPARE: [string, string, string, string, string][] = [
-  ["Reads all your business data", "y", "~", "~", "n"],
+  /* Partial: exports (CSV/Tally/Vyapar/Busy) + 4 live syncs (lib/sync CONNECTORS). */
+  ["Reads all your business data", "~", "~", "~", "n"],
   ["Diagnoses problems", "y", "n", "n", "~"],
   ["Predicts outcomes", "y", "n", "n", "n"],
   ["Recommends actions", "y", "n", "n", "~"],
@@ -198,7 +199,7 @@ const SECURITY = [
   { i: Lock, t: "Encrypted everywhere", d: "TLS in transit; sensitive keys encrypted with AES-256-GCM at rest." },
   { i: Network, t: "Workspace isolation", d: "Postgres row-level security means one workspace can never read another's data." },
   { i: KeyRound, t: "Role-based access", d: "Viewer → Analyst → Manager → Admin → Owner, enforced on every action." },
-  { i: ScrollText, t: "Audit logs", d: "Every Cortex action is in the Approvals ledger — who proposed it, who approved it, what ran; export your entire workspace anytime." },
+  { i: ScrollText, t: "Audit logs", d: "Every Cortex action is in the Approvals ledger — who proposed it, who approved it, what ran; export every table in your workspace as JSON anytime." },
 ];
 
 export default function Features() {
@@ -381,6 +382,7 @@ export default function Features() {
               </tbody>
             </table>
           </div>
+          <p className="mt-4 text-xs text-muted-foreground">Cortex reads your Tally, Vyapar, Busy and spreadsheet exports, plus four live syncs: Shopify, Razorpay, Stripe and Google Sheets.</p>
         </div>
       </section>
 

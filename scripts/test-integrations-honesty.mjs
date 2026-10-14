@@ -47,7 +47,13 @@ check(/const fetch = \(u: string, init: RequestInit = \{\}\) => globalThis\.fetc
 check(!/api_token=\$\{/.test(tc), "no token in a query string (Pipedrive uses a header)");
 check(/restricted_api_key/.test(tc), "a Resend sending-only key is recognised as valid");
 check(/zohoapis\.\$\{dc\}/.test(tc), "Zoho is checked against the account's own data centre");
-check(/replace\(\/\^https\?:\\\/\\\/\/i, ""\)/.test(tc), "the Shopify check strips https:// like the sync does");
+/* One normaliser for both the connection test and the sync (they used to
+   differ, so a pasted admin URL passed the test and failed every sync). */
+{
+  const syncSrc = read("src/lib/sync/index.ts");
+  check(/normaliseShopDomain\(c\.shop\)/.test(tc) && /normaliseShopDomain\(c\.shop\)/.test(syncSrc) && /export function normaliseShopDomain/.test(syncSrc),
+    "the Shopify check and the sync share ONE shop-domain normaliser");
+}
 const post = route.slice(route.indexOf("export async function POST"));
 check(/if \(test\.verified && !test\.ok\) \{\s*return NextResponse\.json\(\{ ok: false/.test(post), "a key the provider REJECTED is not saved (was: saved and shown in green)");
 check(post.indexOf("if (test.verified && !test.ok)") < post.indexOf("encryptSecret(JSON.stringify(creds))"), "…and the refusal happens before encryption/storage");

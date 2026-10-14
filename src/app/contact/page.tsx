@@ -38,7 +38,7 @@ export default function Contact() {
 
       <H2>Company</H2>
       <P>
-        <strong>Abrobot Technologies Pvt Ltd</strong> — the company behind MNB Cortex, an AI-COO platform for Indian small and medium
+        <strong>Abrobot Technologies Pvt Ltd</strong> — the company behind MNB Cortex, the early-warning system for Indian small and medium
         businesses. MNB Cortex is built by the MNB Research team.
       </P>
       <P className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" aria-hidden="true" /> 1945 P Sani Colony, Block F, Sector 49, Flat 1201, Delhi, India</P>

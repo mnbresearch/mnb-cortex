@@ -3,7 +3,6 @@ import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { useState } from "react";
 import { Check, Sparkles, X, MessageCircle } from "lucide-react";
 import { PLANS, PUBLIC_CREDIT_PACKS, WHATSAPP_NUMBER, CURRENCIES, formatMoney, planPrice, type CurrencyCode, ANNUAL_SAVING_PCT } from "@/lib/config";
-import { payCashfree } from "@/lib/pay/checkout-client";
 import Link from "next/link";
 import { beacon } from "@/components/track";
 
@@ -14,14 +13,13 @@ import { beacon } from "@/components/track";
  * lead-capture form, which is all any of these buttons used to do.
  */
 export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
-  const [busy, setBusy] = useState("");
-  const [payErr, setPayErr] = useState("");
   const [annual, setAnnual] = useState(false);
   const [cur, setCur] = useState<CurrencyCode>("INR");
   const [open, setOpen] = useState(false);
-  const [plan, setPlan] = useState("Growth");
+  const [plan, setPlan] = useState<string>(PLANS[0]?.name ?? "");
   const [form, setForm] = useState({ name: "", email: "", phone: "" });
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [sendErr, setSendErr] = useState("");
 
   async function choosePlan(p: (typeof PLANS)[number]) {
     /*
@@ -37,13 +35,22 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
     */
     /* Intent, not payment — payment is counted only from Cashfree's verified event. */
     beacon("plan_selected", { plan: p.id, cycle: annual ? "annual" : "monthly" });
-    if (p.monthly === 0 || cur === "USD") { openForm(p.name); return; }
+    if (talkFirst(p)) { openForm(p.name); return; }
     // Checkout lives on /billing, which collects the mobile number the payment
     // gateway requires. Keeping ONE checkout path means the phone step can't be
-    // skipped by starting from the marketing page.
+    // skipped by starting from the marketing page. An anonymous visitor is
+    // almost always new, so they land on "Create account" and, once in, go
+    // straight on to /billing (login reads and sanitises ?next).
     window.location.href = signedIn
       ? "/billing"
-      : `/login?next=${encodeURIComponent("/billing")}`;
+      : `/login?mode=signup&next=${encodeURIComponent("/billing")}`;
+  }
+
+  /* Plans that open a conversation rather than a checkout: Enterprise
+     (bespoke), Practice (its CTA promises a conversation — named onboarding
+     for the firm), and anything priced in USD (Cashfree settles INR only). */
+  function talkFirst(p: (typeof PLANS)[number]) {
+    return p.monthly === 0 || p.id === "practice" || cur === "USD";
   }
 
   function openForm(p: string) { setPlan(p); setForm({ name: "", email: "", phone: "" }); setStatus("idle"); setOpen(true); }
@@ -51,15 +58,19 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name || !form.email) return;
-    setStatus("sending");
+    setStatus("sending"); setSendErr("");
     try {
       const r = await fetch("/api/inquiry", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, plan, currency: cur, cycle: annual ? "annual" : "monthly" }),
       });
-      const j = await r.json();
-      setStatus(j.ok ? "done" : "error");
-    } catch { setStatus("error"); }
+      const j = await r.json().catch(() => ({} as any));
+      if (j?.ok) { setStatus("done"); return; }
+      // Show what the server actually said (validation, duplicate request,
+      // capture failure) rather than always blaming the email.
+      setSendErr(typeof j?.error === "string" && j.error ? j.error : "We could not send that just now.");
+      setStatus("error");
+    } catch { setSendErr("Could not reach us — check your connection."); setStatus("error"); }
   }
 
   const waText = encodeURIComponent(`Hi, I'm interested in MNB Cortex (${plan} plan, ${cur}).\nName: ${form.name || "-"}\nEmail: ${form.email || "-"}\nPhone: ${form.phone || "-"}`);
@@ -101,7 +112,8 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
           const annualTotal = planPrice(p, cur, true);
           return (
             <div key={p.id} className={`rounded-2xl border p-6 flex flex-col ${p.highlight ? "border-primary ring-1 ring-primary bg-primary/5" : "bg-card"}`}>
-              {p.highlight && <div className="text-xs font-semibold text-primary mb-2 flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> Most popular</div>}
+              {/* "Recommended", not "Most popular": there are no customers yet to be popular with. */}
+              {p.highlight && <div className="text-xs font-semibold text-primary mb-2 flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> Recommended</div>}
               <h3 className="text-lg font-semibold">{p.name}</h3>
               <p className="text-sm text-muted-foreground mt-1 min-h-[40px]">{p.tagline}</p>
               <div className="mt-4 mb-4">
@@ -115,8 +127,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
               </div>
               <button
                 onClick={() => choosePlan(p)}
-                disabled={busy === p.id}
-                className={`w-full rounded-full h-11 text-sm font-medium transition-colors disabled:opacity-60 ${p.highlight ? "btn-ink" : "border hover:bg-accent"}`}
+                className={`w-full rounded-full h-11 text-sm font-medium transition-colors ${p.highlight ? "btn-ink" : "border hover:bg-accent"}`}
               >
                 {/*
                   Say what the button will DO. In USD it opens a conversation,
@@ -125,7 +136,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
                   small dishonesty that costs the sale at the moment of most
                   intent.
                 */}
-                {p.monthly === 0 ? p.cta : cur === "USD" ? "Talk to us" : signedIn ? "Subscribe" : "Get started"}
+                {cur === "USD" ? "Talk to us" : talkFirst(p) ? p.cta : signedIn ? "Subscribe" : "Get started"}
               </button>
               <ul className="mt-5 space-y-2 text-sm">
                 {p.features.map((f) => <li key={f} className="flex gap-2"><Check className="h-4 w-4 text-success shrink-0 mt-0.5" /><span>{f}</span></li>)}
@@ -134,8 +145,6 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
           );
         })}
       </div>
-
-      {payErr && <p role="alert" className="text-center text-sm text-danger mt-6">{payErr}</p>}
 
       {/*
         THE CHEAPEST WAY IN WAS INVISIBLE TO EVERYONE WHO HAD NOT ALREADY
@@ -167,7 +176,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
               </p>
             </div>
             <a
-              href={signedIn ? "/usage" : "/login?next=%2Fusage"}
+              href={signedIn ? "/usage" : `/login?mode=signup&next=${encodeURIComponent("/usage")}`}
               className="rounded-full border h-11 px-5 text-sm font-medium inline-flex items-center hover:bg-accent transition-colors"
             >
               {signedIn ? "Buy credits" : "Start with credits"}
@@ -221,7 +230,7 @@ export function PricingClient({ signedIn = false }: { signedIn?: boolean }) {
                   <span>I agree to be contacted about MNB Cortex and consent to my details being processed for this
                     request. See the <Link href="/privacy" className="text-primary link-sweep">privacy policy</Link>.</span>
                 </label>
-                {status === "error" && <p role="alert" className="text-xs text-danger">Something went wrong sending the email — please use WhatsApp below.</p>}
+                {status === "error" && <p role="alert" className="text-xs text-danger">{sendErr || "We could not send that just now."}{/whatsapp/i.test(sendErr) ? "" : " You can also message us on WhatsApp below."}</p>}
                 <button disabled={status === "sending"} className="w-full rounded-full btn-ink h-11 text-sm font-medium">{status === "sending" ? "Sending…" : "Request access"}</button>
                 <a href={waLink} target="_blank" rel="noopener noreferrer" className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] text-white h-11 text-sm font-medium"><MessageCircle className="h-4 w-4" /> Message on WhatsApp</a>
               </form>

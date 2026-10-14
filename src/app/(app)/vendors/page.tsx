@@ -44,7 +44,10 @@ export default async function Vendors() {
             The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
             built from your own numbers.
           </Card>
-        <Section title="Current suppliers" desc="Weighted on price, quality, reliability, lead time, terms and risk">
+        {/* Was titled "Current suppliers" over this hardcoded array. The vendors
+            table holds names and Udyam details, not scores, so there is nothing
+            real to grade here — it is labelled as the example it is. */}
+        <Section title="Example scorecard" desc="Illustrative suppliers, not yours — weighted on price, quality, reliability, lead time, terms and risk">
           <div className="space-y-2">
             {vendors.map((v) => (
               <Card key={v.name} className="p-4 flex items-center gap-3">

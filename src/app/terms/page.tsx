@@ -135,8 +135,8 @@ export default function Terms() {
 
       <H2>6. Credits &amp; Fair Use</H2>
       <P>
-        AI credits are allocated per billing cycle and, unless expressly stated otherwise, do not roll over — unused monthly credits
-        expire at the end of the cycle. Purchased top-up credits remain available per their pack terms. Credits are non-transferable, have
+        AI credits are allocated per billing cycle. Unused monthly credits roll over: each cycle&apos;s allowance is added to the balance
+        you already have. Purchased top-up credits remain available per their pack terms. Credits are non-transferable, have
         no independent monetary value, and cannot be redeemed for cash. Image generation is subject to weekly limits by plan. We may
         throttle, limit, or suspend usage where we detect abnormal patterns, automated abuse, resale, or attempts to circumvent limits.
       </P>

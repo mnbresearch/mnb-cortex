@@ -192,8 +192,14 @@ export const IMAGE_WEEKLY: Record<string, number> = {
     Enterprise is a real number rather than -1 for the same reason its credit
     allowance is: an uncapped tier has unbounded COGS against a fixed
     negotiated price.
+
+    payg is 0, not 50. A credit pack bought with no plan (or after a plan
+    lapsed) unlocked 50 images and 10 videos a week — more than Try or Watch
+    subscribers get (0), while the pricing page says image & video are Watch
+    Pro and up and a pack buys "the AI reads and the calculators". The table
+    now says what the copy says.
   */
-  payg: 50,
+  payg: 0,
   // "try" sits alongside watch: no image/video quota. Those are premium
   // actions on a premium plan, and an entry tier that included them would be
   // selling ₹77-a-clip Veo output inside ₹799.
@@ -209,7 +215,7 @@ export const IMAGE_WEEKLY: Record<string, number> = {
  * cannot sensibly govern both.
  */
 export const VIDEO_WEEKLY: Record<string, number> = {
-  payg: 10,
+  payg: 0, // see IMAGE_WEEKLY.payg
   try: 0, watch: 0, watchpro: 20, practice: 20, command: 60, enterprise: 200,
   starter: 0, growth: 5, business: 20, aicoo: 60,
   solo: 0, premium: 20, trial: 0,
@@ -690,8 +696,9 @@ export const PLANS: Plan[] = [
       "Unlimited workspaces & users",
       "1,50,000 AI credits / month — fair use",
       "Everything in Command",
-      "Audit export · SSO on request",
-      "Dedicated environment options",
+      // Neither has code behind it today — both are arranged per contract.
+      "Audit export & SSO — on request",
+      "Dedicated environment — on request",
       "Named success manager",
     ] },
 ];

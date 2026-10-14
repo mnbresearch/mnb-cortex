@@ -28,6 +28,7 @@ export function HealthCheckClient() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "" });
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [errMsg, setErrMsg] = useState("");
   /*
     Did the report email actually send? The endpoint returns `confirmed`; this
     screen used to promise the report regardless. See the done screen below.
@@ -48,7 +49,7 @@ export function HealthCheckClient() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name || !form.email || !form.phone) return;
-    setStatus("sending");
+    setStatus("sending"); setErrMsg("");
     try {
       /*
         The note is what makes this lead worth calling. It carries the score,
@@ -86,10 +87,13 @@ export function HealthCheckClient() {
           weak: risks.map((x) => x.area),
         }),
       });
-      const j = await r.json();
+      const j = await r.json().catch(() => ({} as any));
       setReportSent(Boolean(j?.confirmed));
-      setStatus(j.ok ? "done" : "error");
-    } catch { setStatus("error"); }
+      // /api/inquiry returns a readable reason (invalid email, already
+      // received, could not record) — show it instead of a generic retry.
+      if (!j?.ok) setErrMsg(typeof j?.error === "string" ? j.error : "");
+      setStatus(j?.ok ? "done" : "error");
+    } catch { setErrMsg("Could not reach us — check your connection and try again."); setStatus("error"); }
   }
 
   if (!done) {
@@ -228,7 +232,7 @@ export function HealthCheckClient() {
                   request. See the <Link href="/privacy" className="text-primary link-sweep">privacy policy</Link>.
                 </span>
               </label>
-              {status === "error" && <p className="text-xs text-danger sm:col-span-2">Something went wrong — please try again.</p>}
+              {status === "error" && <p role="alert" className="text-xs text-danger sm:col-span-2">{errMsg || "Something went wrong — please try again."}</p>}
               <button disabled={status === "sending"} className="sm:col-span-2 rounded-full btn-ink h-11 text-sm font-medium">{status === "sending" ? "Sending…" : "Email me the report"}</button>
               <p className="text-[11px] text-muted-foreground sm:col-span-2">
                 We store these details so we can send the report and follow up, and we use your number to walk

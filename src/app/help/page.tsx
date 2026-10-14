@@ -1,305 +1,120 @@
 import Link from "next/link";
 import { LegalShell, H2, P, UL } from "@/components/legal-shell";
 
+/*
+  THIS PAGE USED TO BE A STALE COPY OF THE PRIVACY POLICY.
+
+  /help rendered an old Privacy Policy under its own metadata title — and it
+  was linked as "Talk to us" from the trial screen, "Help centre" from the
+  setup guides, "contact our team" from the bring-your-own-key card, and
+  listed in the sitemap. Someone asking for help got a legal document.
+
+  It is now a short, real help page: how to start, how to import, how
+  approvals work, billing, and how to reach a person. Every link goes to a
+  route that exists; the in-app ones say they need a sign-in. "Talk to us"
+  style links point straight at /contact.
+*/
 export const metadata = {
-  title: "Privacy Policy — MNB Cortex",
-  description: "How MNB Cortex (Abrobot Technologies Pvt Ltd) collects, protects, and processes your business data.",
+  title: "Help — MNB Cortex",
+  description: "Getting started with MNB Cortex: create a workspace, import your Tally, Vyapar or Busy export, approve actions, manage billing, and reach our team.",
 };
 
-export default function Privacy() {
+const A = "text-primary underline";
+
+export default function Help() {
   return (
-    <LegalShell title="Privacy Policy" subtitle="How we protect your data · Abrobot Technologies Pvt Ltd · Last updated September 2026">
+    <LegalShell title="Help" subtitle="Getting started, importing, approvals, billing — and how to reach a person.">
       <P>
-        At <strong>MNB Cortex</strong>, powered by <strong>Abrobot Technologies Pvt Ltd</strong>, your trust is our highest priority. Every
-        piece of information you share with us — your account details, business data, documents, and the memory you build inside Cortex — is
-        stored, processed, and protected with strong security and transparency. This policy explains what we collect, why, and how we keep it safe.
+        Can&rsquo;t find what you need here? <Link href="/contact" className={A}>Contact us</Link> — the form,
+        email and WhatsApp all reach the team.
       </P>
 
-      <H2>1. Our Commitment</H2>
-      <P>We operate under four principles:</P>
-      <UL>
-        <li><strong>Transparency</strong> — you always know what data we collect and why.</li>
-        <li>
-          <strong>Lawful basis</strong> &mdash; we process your own account and business data to provide the
-          service you asked for. Data you import about <em>your</em> customers is processed on your
-          instructions, and you are responsible for having a lawful basis to hold it. We do not claim to have
-          collected consent from those individuals, because we have no relationship with them.
-        </li>
-        <li><strong>Control</strong> — you can access, export, modify, or delete your data at any time.</li>
-        <li><strong>Security by design</strong> — data protection is embedded at every layer of the platform.</li>
-      </UL>
-
-      <H2>2. Information We Collect</H2>
-      <UL>
-        <li><strong>Account data:</strong> name, email, phone, organisation name, and login credentials.</li>
-        <li><strong>Business data:</strong> the figures, notes, customers, vendors, documents, and memory you enter into your workspace.</li>
-        <li><strong>Usage data:</strong> feature usage, AI credit consumption, and diagnostic logs used to run and improve the service.</li>
-        <li><strong>Payment data:</strong> processed by our payment gateway (Cashfree). We do <strong>not</strong> store your full card, UPI, or bank details on our servers.</li>
-      </UL>
-
-      <H2>3. Secure Infrastructure</H2>
-      <UL>
-        <li><strong>Cloud protection:</strong> the platform is hosted on reputable cloud infrastructure with industry-standard security controls.</li>
-        <li><strong>Encryption in transit:</strong> all traffic is protected with SSL/TLS (HTTPS).</li>
-        <li><strong>Encryption at rest:</strong> stored data and secrets are encrypted; sensitive API keys are encrypted with AES-256-GCM.</li>
-        <li><strong>Workspace isolation:</strong> every organisation&rsquo;s data is isolated using database row-level security (RLS), so one workspace can never read another&rsquo;s data.</li>
-        <li><strong>Access control:</strong> only authorised, role-restricted team members can access production systems, monitored by audit logs.</li>
-      </UL>
-
-      <H2>4. How We Use AI &amp; Your Data</H2>
-      <P>
-        MNB Cortex sends your prompts and relevant workspace context to AI model providers to generate responses, agents, and images. This
-        is done only to deliver the feature you requested. Your business data and memory are used to ground AI outputs for <em>your</em>
-        workspace and are not used to train third-party foundation models on your identifiable data. Uploaded files are processed to
-        deliver the requested result and are not resold or made public.
-      </P>
-
-      <H2>5. Data About Your Customers And Suppliers</H2>
-      <P>
-        This section exists because Cortex now holds information about people who are not our users, and sends messages to
-        them on your instruction. It is the part of this policy most worth reading carefully.
-      </P>
+      <H2>1. Getting started</H2>
       <UL>
         <li>
-          <strong>What we hold.</strong> When you import invoices, orders or a customer list, that data includes the names,
-          and often the email addresses and phone numbers, of your customers and suppliers. Cortex stores it in your
-          workspace so it can age your receivables, match a payment to a party, and — if you enable collections — send a
-          reminder.
+          <Link href="/login?mode=signup" className={A}>Create your workspace</Link> with an email and password,
+          a one-time email link, or Google where it is offered.
         </li>
         <li>
-          <strong>You are the controller; we are the processor.</strong> That data is yours. We process it only to provide
-          the Service to you, on your instructions. We do not sell it, rent it, share it between workspaces, or use it to
-          build products for anyone else.
+          A short onboarding asks for your business name, industry and currency. You can come back to it any time
+          from the app&rsquo;s navigation.
         </li>
         <li>
-          <strong>Your lawful basis is yours.</strong> You are responsible for having a proper basis to hold your
-          customers&rsquo; and suppliers&rsquo; contact details and to contact them about money owed. Cortex gives you the
-          controls — a do-not-contact list, sending hours, limits, and approval of every message — but the decision to
-          contact any particular person is yours.
-        </li>
-        <li>
-          <strong>Messages are sent as you.</strong> Where you connect your own WhatsApp Business or email-sending account,
-          messages leave through that account and appear as coming from your business. Where you use Cortex&rsquo;s email
-          sender, the message identifies your business as the sender.
-        </li>
-        <li>
-          <strong>Deletion.</strong> Deleting an invoice or customer removes it from your workspace, and deleting
-          the workspace removes everything in it. If one of your customers asks you to erase their data, write to
-          us with the workspace and the identifying details and we will remove their records and the history of
-          messages sent to them, subject to anything we are legally required to keep. This is handled manually
-          today and we will confirm by email when it is done &mdash; we would rather say that than imply a
-          self-service control that does not exist.
-        </li>
-        <li>
-          <strong>No profiling of third parties.</strong> Cortex does not build profiles of your customers beyond what is
-          needed to chase a specific invoice, and never shares one workspace&rsquo;s parties with another — even where the
-          same company appears in both.
+          Not ready to use your own numbers? Load the sample dataset under Settings to see how Cortex reads a
+          business. Sample rows are tagged, and &ldquo;Remove sample data&rdquo; clears them without touching
+          anything you imported.
         </li>
       </UL>
 
-      <H2>6. Data Sharing</H2>
-      <P>MNB Cortex <strong>does not sell or trade</strong> your personal or business information. We share limited data only with:</P>
-      {/*
-        NAMED, not gestured at.
-
-        This list previously read "infrastructure & AI sub-processors (hosting,
-        database, AI model, and email providers)" — which names nobody, while
-        the page claimed alignment with GDPR. A GDPR claim with no sub-processor
-        list is worse than making no claim, because it invites the comparison.
-
-        Every entry below is verifiable in the code. Keep it that way: if a
-        provider is added, it belongs here before it ships.
-      */}
+      <H2>2. Importing your data</H2>
       <UL>
         <li>
-          <strong>Supabase</strong> — database, authentication and file storage. This is where your
-          workspace data lives.
+          Export a CSV from Tally, Vyapar, Busy or your spreadsheet and drop it on the Import page (in the app,
+          after you sign in). Cortex matches your column headings itself and tells you which columns it could not
+          find, rather than importing blanks.
         </li>
         <li>
-          <strong>Vercel</strong> — application hosting. Requests and server logs pass through it.
+          Shopify, Razorpay, Stripe and Google Sheets can sync directly — connect them under Integrations. Step-by-step
+          instructions for each are in the Setup guides (in the app, after you sign in).
         </li>
         <li>
-          <strong>Google (Gemini)</strong> — the AI model behind analysis, chat, the weekly brief and
-          document reading. The business context relevant to a request is sent with it.
-        </li>
-        <li>
-          <strong>Groq, Anthropic, OpenAI</strong> — used only as fallbacks when the primary model is
-          unavailable, so that a request does not simply fail. The same context is sent.
-        </li>
-        <li>
-          <strong>Resend</strong> — outbound email: alerts, the weekly brief, and collections messages
-          sent from a workspace that has not connected its own sending domain.
-        </li>
-        <li>
-          <strong>Meta (WhatsApp Cloud API)</strong> — only for workspaces that have connected their own
-          WhatsApp Business account, and only for messages they have approved.
-        </li>
-        <li>
-          <strong>Cashfree Payments</strong> — to complete transactions you initiate.
-        </li>
-        <li>
-          <strong>Authorities</strong>, where required by applicable law.
-        </li>
-      </UL>
-      <P>All sub-processors are bound to maintain confidentiality and equivalent levels of protection.</P>
-
-      {/*
-        BYO keys materially change WHO processes the data, and the policy said
-        nothing about it. Including the fallback, which the code itself flags as
-        the dangerous case: a workspace that connected only Anthropic still has
-        its Gemini-served requests go through OUR key. Saying "your data goes to
-        your own provider" without that caveat would be a false statement about
-        data handling.
-      */}
-      <H2>6a. If you connect your own AI provider</H2>
-      <P>
-        You can connect your own Gemini, OpenAI, Anthropic or Groq key. When you do, requests served by that
-        provider go to <strong>your</strong> account, under your agreement with them and their retention
-        settings — not ours. Two things to be clear about:
-      </P>
-      <UL>
-        <li>
-          We store the key encrypted, and we make one call to that provider when you connect it, to check the
-          key works before we rely on it.
-        </li>
-        <li>
-          The switch is <strong>per provider</strong>. If a request is served by a provider you have not
-          connected — including our fallback chain when your provider is unavailable — it runs on our key and
-          the data goes to our account. Your workspace shows which provider is serving you.
+          Cortex reads your export and never writes back to your accounting software.
         </li>
       </UL>
 
-      <H2>7. Your Rights &amp; Control</H2>
-      <P>You remain in control of your data at all times. You can:</P>
+      <H2>3. Approvals — nothing runs without you</H2>
       <UL>
-        <li>access and update your information from your account settings;</li>
-        <li>export your workspace memory and data (JSON / Markdown);</li>
-        <li>withdraw consent for optional processing;</li>
-        <li>request permanent deletion of your records by emailing <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a>.</li>
-      </UL>
-      <P>Upon a verified request, we delete your personal data within a reasonable period and confirm by email.</P>
-
-      <H2>8. Data Retention</H2>
-      <P>
-        We retain personal and business data for as long as your workspace is active or as needed to provide the
-        service, comply with legal obligations, resolve disputes, and enforce our agreements. Copies of your
-        data may exist in operational exports taken for recovery purposes; these are deleted when they are no
-        longer needed, and a verified deletion request covers them.
-      </P>
-      {/*
-        THIS SAID: "Routine backups are purged on a rolling schedule."
-
-        There is no routine backup and no rolling schedule. Nothing in the
-        product runs one — no cron entry, no workflow, no scheduler. A backup
-        exists only when an operator clicks a button in the superadmin console.
-        The sentence described a retention regime to customers, in a privacy
-        policy, that does not exist.
-
-        The replacement says only what is true today: exports are taken for
-        recovery, and deletion covers them. If scheduled backups are built
-        later, this paragraph is where the schedule gets described — once it
-        actually runs.
-      */}
-      <P>
-        <strong>What survives a deletion, and why.</strong> When a workspace is deleted we remove its business
-        data, but we keep the <em>financial record</em> of payments and subscriptions with the workspace link
-        removed. We are required to retain proof of transactions for tax and audit purposes, and a payment
-        record with no workspace attached to it is no longer personal data about you. Everything else goes.
-        You can export the workspace before deleting it.
-      </P>
-
-      <H2>9. Compliance</H2>
-      <P>
-        We operate under India&rsquo;s Digital Personal Data Protection Act, 2023 (DPDP). We follow
-        data-minimisation and purpose-limitation across the platform.
-      </P>
-      {/*
-        The GDPR/CCPA claim was removed rather than kept.
-
-        Asserting GDPR alignment with no sub-processor list, no stated transfer
-        mechanism, no EU representative and no DPA is worse than making no claim
-        at all, because it invites exactly the comparison it fails. The
-        sub-processors are now named above, but the rest is genuinely not in
-        place — so the honest position is to say what IS true, which is DPDP.
-
-        If EU or California customers are targeted later, that claim can be
-        reinstated alongside the machinery it requires.
-      */}
-
-      <H2>9a. Grievance Officer</H2>
-      {/*
-        DPDP s.13(3) REQUIRES a published Grievance Officer contact. There was
-        none anywhere in the product — "grievance" appeared zero times. The same
-        requirement comes separately from the IT Rules 2021 and the consumer
-        e-commerce rules.
-
-        OPERATOR: replace the name below with a real person before launch. A
-        role mailbox alone does not satisfy the section, which asks for a
-        contactable officer.
-      */}
-      <P>
-        If you are unhappy with how we have handled your data or your request, you can escalate to our
-        Grievance Officer:
-      </P>
-      <UL>
-        <li><strong>Name:</strong> Mridul Nanda</li>
-        <li><strong>Designation:</strong> Grievance Officer, Abrobot Technologies Pvt Ltd</li>
-        <li><strong>Email:</strong> <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a></li>
-        <li><strong>Address:</strong> 1945 P Sani Colony, Block F, Sector 49, Flat 1201, Delhi, India</li>
-        <li><strong>Response:</strong> we acknowledge within 48 hours and aim to resolve within 30 days</li>
-      </UL>
-      <P>
-        If you are not satisfied with our response, you may complain to the Data Protection Board of India.
-      </P>
-
-      <H2>9b. If something goes wrong</H2>
-      <P>
-        If a personal data breach affects you, we will notify you and the Data Protection Board of India as
-        required under the DPDP Act, without undue delay once we have established what happened and who is
-        affected. We will tell you what data was involved and what we are doing about it, rather than waiting
-        until the investigation is complete.
-      </P>
-
-      {/*
-        Rewritten to say what is actually set, because the previous wording
-        implied non-essential cookies that do not exist.
-
-        It said "limited analytics to understand usage" and "you can control
-        non-essential cookies through your browser settings" — which invites
-        the reader to go and switch something off. There is nothing to switch
-        off: there is no advertising or third-party analytics cookie anywhere
-        in this app. Usage analytics is first-party and server-side, and
-        lib/funnel.ts records "no raw IP, no user agent, no cookie, no query
-        string". Naming the three cookies is both more useful and checkable.
-      */}
-      <H2>10. Cookies</H2>
-      <P>
-        We set three first-party cookies, all strictly necessary: your sign-in session, which workspace you
-        are currently viewing, and — if you arrived through a referral link — the referral code, so the
-        person who referred you is credited. We set no advertising cookies and load no third-party trackers.
-        Usage analytics is first-party and recorded on our server without cookies, IP addresses or device
-        fingerprints. Clearing cookies in your browser will sign you out.
-      </P>
-
-      <H2>11. Breach Response</H2>
-      <P>
-        We perform regular reviews and monitoring to prevent unauthorised access. In the unlikely event of a data breach affecting your
-        personal data, we will notify affected users and relevant authorities as required by law, and take prompt corrective action.
-      </P>
-
-      <H2>12. Contact — Data Protection</H2>
-      <UL>
-        <li><strong>Company:</strong> Abrobot Technologies Pvt Ltd (MNB Cortex)</li>
-        <li><strong>Registered address:</strong> 1945 P Sani Colony, Block F, Sector 49, Flat 1201, Delhi, India</li>
-        <li><strong>Email:</strong> <a href="mailto:contact@mnbresearch.com" className="text-primary underline">contact@mnbresearch.com</a></li>
-        <li><strong>Phone / WhatsApp:</strong> <a href="https://wa.me/919711488480" className="text-primary underline">+91 97114 88480</a></li>
+        <li>
+          When Cortex suggests an action — a payment reminder, a due-date change, marking an invoice paid — it
+          appears as a proposal on the Approvals page and runs only when you approve it.
+        </li>
+        <li>
+          On plans that include Autopilot you can let specific actions run on their own, within limits you set
+          per action — a daily count, a rupee ceiling, known parties only.
+        </li>
       </UL>
 
+      <H2>4. Billing &amp; credits</H2>
+      <UL>
+        <li>
+          Compare plans on <Link href="/pricing" className={A}>Pricing</Link>. Once signed in, choose or change your
+          plan, and turn auto-renew on or off, on the Billing page.
+        </li>
+        <li>
+          AI work uses credits. Your balance, what each action costs and credit packs are on the Usage page in
+          the app.
+        </li>
+        <li>
+          Refunds and cancellations follow our <Link href="/refund" className={A}>Refund &amp; Cancellation Policy</Link>.
+        </li>
+      </UL>
+
+      <H2>5. Your data</H2>
+      <UL>
+        <li>
+          Export every table in your workspace as JSON from Settings, and delete the workspace there when you are
+          done. See the <Link href="/privacy" className={A}>Privacy Policy</Link> for what is kept and why.
+        </li>
+      </UL>
+
+      <H2>6. Developers</H2>
       <P>
-        <strong>Summary:</strong> Your data with MNB Cortex is encrypted, workspace-isolated, and never sold. You can access, export, or
-        delete it at any time, and every verified deletion request is honoured. See also our{" "}
-        <Link href="/terms" className="text-primary underline">Terms &amp; Conditions</Link> and{" "}
-        <Link href="/refund" className="text-primary underline">Refund Policy</Link>.
+        The read API and its keys are managed on the Developers page in the app. The machine-readable reference
+        is at <a href="/api/v1/openapi.json" className={A}>/api/v1/openapi.json</a>.
+      </P>
+
+      <H2>7. Is something down?</H2>
+      <P>
+        Check the <Link href="/status" className={A}>status page</Link>. Recent changes are listed in the{" "}
+        <Link href="/changelog" className={A}>changelog</Link>.
+      </P>
+
+      <H2>8. Talk to us</H2>
+      <P>
+        Use the form on the <Link href="/contact" className={A}>Contact page</Link>, email{" "}
+        <a href="mailto:contact@mnbresearch.com" className={A}>contact@mnbresearch.com</a>, or message us on{" "}
+        <a href="https://wa.me/919711488480" target="_blank" rel="noopener noreferrer" className={A}>WhatsApp</a>.
+        Support hours are Mon–Sat, 10:00–19:00 IST, and we usually reply within 2 business days.
       </P>
     </LegalShell>
   );

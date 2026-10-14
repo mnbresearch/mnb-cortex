@@ -26,9 +26,10 @@ export default async function Pricing() {
           <SectionLabel n="00">Pricing</SectionLabel>
           <Kinetic as="h1" text={"Find out first,\nnot last."} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            Cortex watches your receivables, your MSME supplier deadlines and your stock every night, and emails you
-            when one of them needs you. From <span className="text-foreground font-medium">{ENTRY_PRICE_LABEL}/month</span>.
-            Keep Tally or Zoho — this is the part they were never built to do.
+            Cortex re-reads your receivables, your MSME supplier deadlines and your stock in a nightly run — your
+            workspace shows when it last read them — and emails you when one of them needs you. From{" "}
+            <span className="text-foreground font-medium">{ENTRY_PRICE_LABEL}/month</span>.
+            Keep Tally, Vyapar, Busy or any spreadsheet — this is the part they were never built to do.
           </p>
           {/*
             One line for CAs, on the pricing page rather than buried.

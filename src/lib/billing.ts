@@ -39,6 +39,13 @@ export type BillingStatus = {
    * an unexplained lock.
    */
   pooledBy: string | null;
+  /**
+   * The paying firm's organisation name, read with the service client (a
+   * client workspace cannot read the firm's row under RLS). Null when there is
+   * no pooling OR the name could not be read — the page then falls back to
+   * "your CA firm" rather than printing a blank or a uuid.
+   */
+  pooledByName: string | null;
 };
 
 /**
@@ -49,7 +56,7 @@ export type BillingStatus = {
 export async function getBillingStatus(): Promise<BillingStatus> {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) {
-    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, autorenewActive: false, plan: "starter", locked: false, credits: 0, pooledBy: null };
+    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, autorenewActive: false, plan: "starter", locked: false, credits: 0, pooledBy: null, pooledByName: null };
   }
   const sb = await createClient();
 
@@ -132,6 +139,7 @@ export async function getBillingStatus(): Promise<BillingStatus> {
   let payerCredits = credits;
   let payerUnlimited = unlimited;
   let pooledBy: string | null = null;
+  let pooledByName: string | null = null;
 
   if (enforceable && practiceOrgId && practiceOrgId !== orgId) {
     try {
@@ -151,6 +159,10 @@ export async function getBillingStatus(): Promise<BillingStatus> {
             payerCredits = Number((firmRow as any).credits ?? 0);
             payerUnlimited = (firmRow as any).credits_allowance === -1;
             pooledBy = String((firmRow as any).id);
+            /* Same row, already read with the service client — no extra query.
+               Error-tolerant: a blank or non-string name stays null. */
+            const firmName = typeof (firmRow as any).name === "string" ? (firmRow as any).name.trim() : "";
+            pooledByName = firmName ? firmName.slice(0, 120) : null;
             /* The dates that decide `status` below belong to the payer too —
                otherwise a covered client still reads as an expired trial. */
             subEnd = (firmRow as any).subscription_ends_at ? new Date((firmRow as any).subscription_ends_at).getTime() : null;
@@ -266,6 +278,6 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     subscriptionEndsAt: subEnd ? new Date(subEnd).toISOString() : null,
     lapsedSubscription,
     autorenewActive: ["ACTIVE", "INITIALIZED"].includes(String(autorenewStatus || "").toUpperCase()),
-    plan, locked, credits, pooledBy,
+    plan, locked, credits, pooledBy, pooledByName,
   };
 }

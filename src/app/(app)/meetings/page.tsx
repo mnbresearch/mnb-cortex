@@ -23,7 +23,7 @@ export default async function Meetings() {
   const { rows, live } = await getMeetingsList();
   return (
     <>
-      <Topbar title="Meeting Assistant" subtitle="Google Meet · Zoom · Microsoft Teams" />
+      <Topbar title="Meeting Assistant" subtitle="Paste a transcript or your notes — get minutes, decisions and actions" />
       <PageShell>
         {/*
           THE GATE WAS INVERTED, AND THIS IS THE SIXTH PAGE WITH IT.
@@ -57,10 +57,10 @@ export default async function Meetings() {
         <SavedAnalyses title="Saved meetings" rows={rows} live={live} table="meetings" path="/meetings"
           titleKey="title" metaKey="platform" textKey="summary"
           emptyHint="Generate minutes above and choose “Save to workspace” — the decisions and action items will be here in full." />
-        <Section title="Example: Weekly Ops Review" desc="auto-transcribed" right={<Badge className="border-success/30 text-success">MOM ready</Badge>}>
+        <Section title="Example: Weekly Ops Review" desc="Illustrative — what you get back from pasted notes" right={<Badge className="border-border text-muted-foreground">Example</Badge>}>
           <p className="text-sm text-muted-foreground">Reviewed Line B stockout risk and agreed to approve the RM-204 PO and add a backup supplier. Sales confirmed Premium-X ramp; agreed to send the UAE pilot proposal.</p>
           <div className="mt-4">
-            <div className="font-medium text-sm mb-2 flex items-center gap-2"><CheckSquare className="h-4 w-4 text-primary" /> Action items (auto-assigned)</div>
+            <div className="font-medium text-sm mb-2 flex items-center gap-2"><CheckSquare className="h-4 w-4 text-primary" /> Action items (example)</div>
             <div className="space-y-2">
               {actions.map((a, i) => (
                 <div key={i} className="flex items-center justify-between rounded-lg border p-3 text-sm">

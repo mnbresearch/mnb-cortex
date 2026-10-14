@@ -19,6 +19,9 @@ import { createReportLink, revokeReportLink } from "@/lib/actions";
 import { Link2, Trash2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+/* Same canonical origin every email uses (lib/weekly-update APP_URL etc.) —
+   share links used to display mnb-cortex.vercel.app. */
+const APP_HOST = (process.env.NEXT_PUBLIC_APP_URL || "https://cortex.mnbresearch.com").replace(/\/$/, "").replace(/^https?:\/\//, "");
 const LABEL: Record<string, string> = { sales_orders: "Sales orders", invoices: "Invoices", inventory_items: "Inventory items", employees: "Employees", customers: "Customers", documents: "Documents" };
 
 export default async function Billing() {
@@ -45,9 +48,17 @@ export default async function Billing() {
             <div>
               <div className="flex items-center gap-2"><span className="font-semibold">{planName} plan</span><Badge className={badge.cls}>{badge.text}</Badge></div>
               <div className="text-sm text-muted-foreground">
+                {/*
+                  "renews" only when a mandate will actually renew it. Without
+                  auto-renew the plan ENDS on that date. A Practice-pooled client
+                  is shown the firm's plan — say so, rather than presenting the
+                  firm's subscription as the client's own.
+                */}
                 {billing.status === "active"
-                  ? (billing.subscriptionEndsAt
-                      ? `Active · renews ${new Date(billing.subscriptionEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+                  ? (billing.pooledBy
+                      ? `Covered by ${billing.pooledByName ? `${billing.pooledByName}'s` : "your CA firm's"} Practice plan${billing.subscriptionEndsAt ? ` · current period ends ${new Date(billing.subscriptionEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}`
+                      : billing.subscriptionEndsAt
+                      ? `Active · ${billing.autorenewActive ? "renews" : "ends"} ${new Date(billing.subscriptionEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}${billing.autorenewActive ? "" : " — turn on auto-renewal below to keep it running"}`
                       : "Subscription active · thank you!")
                   : billing.status === "expired" ? "No active plan — choose one below to start using Cortex."
                   : billing.trialEndsAt ? `Access until ${new Date(billing.trialEndsAt).toLocaleDateString("en-IN")} · choose a plan to continue after that`
@@ -79,7 +90,7 @@ export default async function Billing() {
             <div className="space-y-2 mt-3">
               {links.rows.map((l: any) => (
                 <div key={l.id} className="flex items-center justify-between rounded-lg border p-3">
-                  <a href={`/r/${l.token}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary break-all">mnb-cortex.vercel.app/r/{l.token}</a>
+                  <a href={`/r/${l.token}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary break-all">{APP_HOST}/r/{l.token}</a>
                   <SafeForm action={revokeReportLink}><input type="hidden" name="id" value={l.id} /><button className="text-muted-foreground hover:text-danger p-1.5 rounded-md hover:bg-danger/10 min-h-11 min-w-11" aria-label="Remove"><Trash2 aria-hidden="true" className="h-4 w-4" /></button></SafeForm>
                 </div>
               ))}

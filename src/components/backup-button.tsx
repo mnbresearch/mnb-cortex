@@ -5,7 +5,13 @@ export function BackupButton() {
   const [busy, setBusy] = useState(false);
   async function backup() {
     setBusy(true);
-    try { const r = await fetch("/api/export"); if (!r.ok) { alert("Sign in to export."); return; }
+    try { const r = await fetch("/api/export");
+      if (!r.ok) {
+        // Show the server's own reason (e.g. "Export failed — nothing was exported. …"); "sign in" only for a 401.
+        const j = await r.json().catch(() => null as any);
+        alert(r.status === 401 ? "Sign in to export." : (j?.error || `Export failed (HTTP ${r.status}). Nothing was downloaded.`));
+        return;
+      }
       const blob = await r.blob(); const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = "mnb-cortex-backup.json"; a.click(); URL.revokeObjectURL(url);
     } catch { alert("Export failed."); } finally { setBusy(false); }

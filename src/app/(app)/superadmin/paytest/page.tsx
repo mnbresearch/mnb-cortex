@@ -51,7 +51,7 @@ export default async function PayTestPage() {
   }
 
   return (
-    <main className="p-6 space-y-4 max-w-3xl">
+    <main id="main" tabIndex={-1} className="p-6 space-y-4 max-w-3xl focus:outline-none">
       <div>
         <h1 className="text-2xl font-semibold">Live payment test</h1>
         <p className="text-sm text-muted-foreground mt-1">
