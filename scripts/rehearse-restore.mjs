@@ -166,6 +166,20 @@ await db.exec(`
   -- so user_org_rank() was never created, so every later migration that uses it
   -- failed too. One missing stub made three files look like ordering bugs.
   create or replace function auth.jwt() returns jsonb language sql stable as $$ select null::jsonb $$;
+  -- storage.buckets was missing, and its absence hid a WHOLE FILE:
+  -- 2026_zzzv_media_sales_watch.sql inserts the private 'media' bucket, failed
+  -- on "relation storage.buckets does not exist", and — because "storage." is
+  -- on the Supabase-only allow-list below — was skipped silently. Everything
+  -- else in that file (media_assets, the sales status fixes, the api_ingest
+  -- revision) never reached the rebuilt schema, which is why BACKUP_TABLES'
+  -- media_assets "did not exist". The stub carries the columns our SQL touches.
+  create schema if not exists storage;
+  create table if not exists storage.buckets (
+    id text primary key,
+    name text not null,
+    public boolean default false,
+    created_at timestamptz default now()
+  );
 `);
 // NOTE: user_org_ids() is deliberately NOT stubbed. It is defined for real in
 // supabase/rls.sql, and stubbing it here previously hid that fact — the stub
@@ -174,7 +188,7 @@ await db.exec(`
 for (const r of ["anon", "authenticated", "service_role"]) {
   try { await db.exec(`create role ${r};`); } catch { /* already exists */ }
 }
-ok("Supabase-only pieces stubbed: auth.users, auth.uid(), auth.jwt(), auth.role(), the three roles");
+ok("Supabase-only pieces stubbed: auth.users, auth.uid(), auth.jwt(), auth.role(), storage.buckets, the three roles");
 
 const applied = [];
 const skipped = [];
@@ -184,7 +198,24 @@ for (const p of sqlFiles) {
   try { sql = readFileSync(p, "utf8"); } catch { continue; }
   sql = sql.replace(/create\s+extension[^;]*;/gi, "");
   try {
-    await db.exec(sql);
+    /*
+      CREATE INDEX CONCURRENTLY cannot run inside a transaction block, and a
+      multi-statement exec() is one implicit transaction — so a file using it
+      (2026_zzzl_receivables_index.sql) could never apply here, though it is
+      correct as written: it is pasted into the Supabase SQL editor, which runs
+      it outside a transaction (see the note in the file). Such a file is
+      applied the way production applies it — one statement at a time, each
+      outside any transaction — so the SQL that runs here is byte-for-byte the
+      SQL that ran there. Only for files with no dollar-quoted bodies, where a
+      top-level split on ";" is exact; anything else is applied whole and, if
+      it fails, fails loudly below.
+    */
+    if (/create\s+(unique\s+)?index\s+concurrently/i.test(sql) && !sql.includes("$$")) {
+      const noComments = sql.replace(/--[^\n]*/g, "");
+      for (const stmt of noComments.split(";").map((x) => x.trim()).filter(Boolean)) await db.exec(stmt + ";");
+    } else {
+      await db.exec(sql);
+    }
     applied.push(name);
   } catch (e) {
     skipped.push([name, String(e.message).split("\n")[0].slice(0, 95)]);

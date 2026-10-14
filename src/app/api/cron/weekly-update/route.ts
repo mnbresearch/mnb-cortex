@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendWeeklyUpdate } from "@/lib/weekly-update";
 import { cronAuthorised } from "@/lib/cron-auth";
+import { createBudget } from "@/lib/cron-budget";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,9 @@ export async function GET(req: Request) {
   if (!cronAuthorised(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const test = url.searchParams.get("test") === "1";
   const force = url.searchParams.get("force") === "1";
-  const res = await sendWeeklyUpdate({ test, force });
+  /* maxDuration is 60s and the broadcast loop had no clock, so a big list was
+     killed mid-send — some users mailed, the send log never written. The
+     budget stops it cleanly (stoppedEarly) with room to record what went. */
+  const res = await sendWeeklyUpdate({ test, force, budget: createBudget(55_000) });
   return NextResponse.json({ ok: true, ...res });
 }

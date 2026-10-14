@@ -183,7 +183,7 @@ const strip = (s) =>
     "the visibility lead insert reads its error",
     "the two sibling lead endpoints already did; this one was written the " +
     "same day and left bare");
-  check(/let notified = false/.test(s) && /notified = true/.test(s),
+  check(/let notified = false/.test(s) && /notified = (true|Boolean\(sent\?\.sent\))/.test(s),
     "and the operator notification reports whether it sent");
   check(/if \(!leadStored && !notified\)/.test(s) && /kind: "lead_lost"/.test(s),
     "losing both records escalates instead of vanishing",

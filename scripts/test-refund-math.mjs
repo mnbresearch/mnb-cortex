@@ -52,7 +52,7 @@ for (const f of ["refund-math.js", "period.js"]) {
   writeFileSync(p, readFileSync(p, "utf8").replace(/^import ["']server-only["'];?\s*$/m, ""));
 }
 
-const { planRefund, creditsToReclaim, daysToRemove, cycleDays, equivalentDays } =
+const { planRefund, creditsToReclaim, daysToRemove, cycleDays, equivalentDays, disputeOutcome } =
   await import(pathToFileURL(join(out, "refund-math.js")).href);
 /* refundReadiness lives in refund.ts, which imports Supabase — so it is read as
    source rather than executed. The RULES are what matter and they are asserted
@@ -358,8 +358,8 @@ console.log("\nREADINESS — only reverse when the money has actually gone back"
      "reversing at dispute creation takes the product from a customer who may win");
   ok("a dispute we WON is recognised as nothing to reverse",
      /dispute_won/.test(code));
-  ok("only a lost or accepted dispute reverses",
-     /dispute_lost/.test(code) && /LOST\|ACCEPT\|CHARGEBACK/.test(code));
+  ok("only a lost or accepted dispute reverses (decided by disputeOutcome, not a regex on CHARGEBACK)",
+     /dispute_lost/.test(code) && /disputeOutcome\(status, t\)/.test(code) && !/LOST\|ACCEPT\|CHARGEBACK/.test(code));
   ok("the gate runs BEFORE the claim is taken",
      code.indexOf("refundReadiness(") < code.indexOf('from("payment_refunds")'),
      "claiming the event id first would make the real REFUND_SUCCESS look like a duplicate");
@@ -372,6 +372,31 @@ console.log("\nREADINESS — only reverse when the money has actually gone back"
   ok("the reversal flag is set before anything that can throw",
      code.indexOf("reversedSomething = true") < code.indexOf("daysRemoved = days"),
      "a throw between the commit and the flag deleted the claim and let the event reverse twice");
+}
+
+/* ======================================================================= */
+console.log("\nDISPUTE OUTCOME — a chargeback being RAISED is not a decision");
+/* ======================================================================= */
+{
+  /*
+    The old gate was /LOST|ACCEPT|CHARGEBACK/ on the status, and every
+    chargeback status contains CHARGEBACK — so CHARGEBACK_CREATED revoked the
+    entitlement the moment the dispute opened. Executed, not grepped.
+  */
+  for (const st of ["CHARGEBACK_CREATED", "CHARGEBACK_DOCS_RECEIVED", "CHARGEBACK_UNDER_REVIEW",
+                    "DISPUTE_CREATED", "DISPUTE_UNDER_REVIEW", "PRE_ARBITRATION_CREATED", "RETRIEVAL_CREATED", ""]) {
+    eq(`${st || "(no status)"} on DISPUTE_UPDATED is still open`, disputeOutcome(st, "DISPUTE_UPDATED"), "open");
+  }
+  eq("CHARGEBACK_CREATED with a CHARGEBACK event name is open", disputeOutcome("CHARGEBACK_CREATED", "CHARGEBACK_RAISED"), "open");
+  eq("a bare DISPUTE_CLOSED with no outcome is open (alert only)", disputeOutcome("", "DISPUTE_CLOSED"), "open");
+  for (const st of ["CHARGEBACK_MERCHANT_LOST", "DISPUTE_MERCHANT_LOST", "DISPUTE_MERCHANT_ACCEPTED",
+                    "CHARGEBACK_MERCHANT_ACCEPTED", "PRE_ARBITRATION_INSUFFICIENT_EVIDENCE", "CLOSED_LOST"]) {
+    eq(`${st} is lost`, disputeOutcome(st, "DISPUTE_CLOSED"), "lost");
+  }
+  for (const st of ["CHARGEBACK_MERCHANT_WON", "DISPUTE_MERCHANT_WON", "CLOSED_WON", "DISPUTE_REJECTED"]) {
+    eq(`${st} is won`, disputeOutcome(st, "DISPUTE_CLOSED"), "won");
+  }
+  eq("case-insensitive", disputeOutcome("chargeback_merchant_lost", "dispute_closed"), "lost");
 }
 
 /* ======================================================================= */

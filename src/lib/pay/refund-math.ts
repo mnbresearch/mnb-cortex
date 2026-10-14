@@ -194,3 +194,32 @@ export function equivalentDays(args: {
 }
 
 function round2(n: number): number { return Math.round(n * 100) / 100; }
+
+/**
+ * Has a dispute been DECIDED, and which way?
+ *
+ * Cashfree's dispute webhooks (DISPUTE_CREATED / DISPUTE_UPDATED /
+ * DISPUTE_CLOSED) carry a dispute_status built from the dispute type and the
+ * stage, e.g. CHARGEBACK_CREATED, CHARGEBACK_UNDER_REVIEW,
+ * CHARGEBACK_MERCHANT_LOST, DISPUTE_MERCHANT_ACCEPTED, DISPUTE_MERCHANT_WON,
+ * PRE_ARBITRATION_INSUFFICIENT_EVIDENCE.
+ *
+ * The old test was /LOST|ACCEPT|CHARGEBACK/ — and every chargeback status
+ * contains CHARGEBACK, so CHARGEBACK_CREATED revoked the entitlement the moment
+ * the dispute opened, before anybody had decided it.
+ *
+ * Matched on whole `_`-separated tokens, conservatively:
+ *   lost — LOST, ACCEPTED/ACCEPT (merchant accepted), or INSUFFICIENT + EVIDENCE
+ *          (the merchant did not contest in time — Cashfree decides against us)
+ *   won  — WON, or REJECTED (the customer's dispute was rejected)
+ *   anything else, including CREATED, UNDER_REVIEW, DOCS_RECEIVED and a bare
+ *   CLOSED with no outcome, is "open": the operator is told, nothing changes.
+ * The dispute TYPE (CHARGEBACK, PRE_ARBITRATION, …) is never an outcome.
+ */
+export function disputeOutcome(status: string, eventType: string): "lost" | "won" | "open" {
+  const tokens = new Set(`${status || ""}_${eventType || ""}`.toUpperCase().split(/[^A-Z]+/).filter(Boolean));
+  if (tokens.has("WON") || tokens.has("REJECTED")) return "won";
+  if (tokens.has("LOST") || tokens.has("ACCEPTED") || tokens.has("ACCEPT")
+      || (tokens.has("INSUFFICIENT") && tokens.has("EVIDENCE"))) return "lost";
+  return "open";
+}

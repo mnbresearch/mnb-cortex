@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cronAuthorised } from "@/lib/cron-auth";
 import { serviceClient } from "@/lib/supabase/server";
-import { generateFor } from "@/lib/ai/cortex";
+import { generateFor, isEngineFailure } from "@/lib/ai/cortex";
 import { withOrgAiKeys } from "@/lib/ai/byo";
 import { recomputeMetrics } from "@/lib/metrics";
 import { statusOf, isLapsed } from "@/lib/entitlement";
@@ -72,14 +72,27 @@ export async function GET(req: Request) {
   const budget = createBudget(300_000);
 
   const sb = serviceClient();
-  if (!sb) return NextResponse.json({ ok: true, ran: 0, note: "add SUPABASE_SERVICE_ROLE_KEY to enable scheduled autopilot" });
+  /* Nothing at all can run without the service role. That is an outage, not a
+     quiet "ok": a 200 here kept Vercel's cron log green while no renewal,
+     alert, sweep or analysis happened. */
+  if (!sb) return NextResponse.json({ ok: false, ran: 0, error: "SUPABASE_SERVICE_ROLE_KEY is not set — the scheduled autopilot cannot run" }, { status: 500 });
 
   // 1. Expire any paid plan whose period has run out, before doing anything else.
   let expired = 0;
+  /* Critical steps whose failure makes the whole run a failure (HTTP 500), so
+     Vercel's cron log shows it. Everything still runs and coverage is still
+     written; only the verdict changes. */
+  const criticalFailures: string[] = [];
   try {
-    const { data } = await sb.rpc("expire_lapsed_subscriptions");
+    const { data, error: expErr } = await sb.rpc("expire_lapsed_subscriptions");
+    /* rpc() returns { error } rather than throwing, so the old catch never saw
+       a failure. A missing function is the not-yet-migrated case and stays
+       quiet; anything else means lapsed plans were not expired tonight. */
+    if (expErr && !/PGRST202|could not find the function|does not exist/i.test(`${(expErr as any).code || ""} ${expErr.message}`)) {
+      criticalFailures.push(`expire_lapsed_subscriptions: ${expErr.message}`);
+    }
     expired = Number(data ?? 0);
-  } catch { /* migration not applied yet */ }
+  } catch (e: any) { criticalFailures.push(`expire_lapsed_subscriptions threw: ${e?.message}`); }
 
   // 1a. Expire action proposals nobody decided on within their window, so the
   //     approvals queue does not fill with week-old suggestions and a stale
@@ -197,6 +210,27 @@ export async function GET(req: Request) {
             console.warn("[cron] last_swept_at missing — run 2026_collections_whatsapp.sql; sweeping without rotation");
           } else {
             on = (ordered.data as any[]) || [];
+          }
+        }
+        /*
+          ENTITLED ONLY. This lane ignored entitlement, so a lapsed workspace
+          kept drafting and sending dunning. Skipped workspaces are still
+          stamped, or they would sit at the head of the rotation forever. An
+          unreadable entitlement sends for nobody this run (fail closed).
+        */
+        {
+          const { collectionsEntitledSet } = await import("../collections-entitled");
+          const ent = await collectionsEntitledSet(svcC, (on || []).map((r: any) => String(r.org_id)));
+          if (ent.error) console.error("[cron] collections entitlement unreadable — sending for nobody this run:", ent.error);
+          const notEntitled = (on || []).filter((r: any) => !ent.allowed.has(String(r.org_id)));
+          on = (on || []).filter((r: any) => ent.allowed.has(String(r.org_id)));
+          if (!ent.error) {
+            for (const r of notEntitled) {
+              try {
+                await svcC.from("collection_policies")
+                  .update({ last_swept_at: new Date().toISOString() }).eq("org_id", String(r.org_id));
+              } catch { /* rotation is best-effort */ }
+            }
           }
         }
         const cBudget = budget.slice(SHARE.collections);
@@ -482,7 +516,10 @@ export async function GET(req: Request) {
     */
     let text = "";
     try { text = await withOrgAiKeys(o.id, () => generateFor("pulse", "", ctx)); } catch { return; }
-    if (!text.trim() || text.startsWith("I couldn't reach the AI engine")) return;
+    /* isEngineFailure: the unreachable text AND the no-key hint — the old
+       startsWith caught only the first, so a workspace with no AI key got the
+       setup hint stored as "Tonight's read of your numbers". */
+    if (!text.trim() || isEngineFailure(text)) return;
     const stamp = new Date().toISOString();
     const { error: insErr } = await sb.from("ai_insights").insert({
       org_id: o.id, module: "autopilot", severity: "yellow", title: "Tonight's read of your numbers",
@@ -692,7 +729,14 @@ export async function GET(req: Request) {
     console.error("[cron] coverage alert —", e?.message);
   }
 
-  return NextResponse.json({ ok: true, ran, skipped, expired, proposalsExpired, media, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, decisionsEmailed, collectionsSent, coverage,
+  /* Renewal reminders (money) and the heartbeat (the only proof the run
+     happened) are the other critical steps. */
+  if (renewals && typeof renewals === "object" && (renewals as any).error) criticalFailures.push(`renewals: ${(renewals as any).error}`);
+  if (heartbeat !== "ok") criticalFailures.push(`heartbeat: ${heartbeat}`);
+  if (criticalFailures.length) console.error("[cron] critical step(s) failed —", criticalFailures.join(" | "));
+  const runOk = criticalFailures.length === 0;
+
+  return NextResponse.json({ ok: runOk, criticalFailures, ran, skipped, expired, proposalsExpired, media, recomputed, renewals, reports, webhooks, synced, weekly, plan, lifecycle, heartbeat, pruned, scheduledWorkflows, alertsEmailed, decisionsEmailed, collectionsSent, coverage,
     /*
       How long the run took and whether it finished with room to spare. If
       `budget_left_ms` trends towards zero, the caps in lib/cron-budget.ts need
@@ -700,5 +744,5 @@ export async function GET(req: Request) {
       be a decision made from this number, not a discovery made from a customer
       complaint.
     */
-    timing: { spent_ms: budget.spentMs(), budget_left_ms: budget.remaining() } });
+    timing: { spent_ms: budget.spentMs(), budget_left_ms: budget.remaining() } }, { status: runOk ? 200 : 500 });
 }

@@ -89,8 +89,15 @@ export async function provisionBusinesses() {
       // Mark my own businesses as paid so they're never trial-gated (no-op if column absent).
       try { await sb.from("organizations").update({ subscription_status: "active" }).eq("id", orgId); } catch { /* column may not exist yet */ }
     }
-    const { data: mem } = await sb.from("memberships").select("id").eq("org_id", orgId).eq("user_id", user.id).maybeSingle();
-    if (!mem) await sb.from("memberships").insert({ org_id: orgId, user_id: user.id, role: "owner" });
+    /* Checked: an unchecked insert reported "provisioned" while the operator
+       had no membership and could not open the workspace. */
+    const { data: mem, error: memReadErr } = await sb.from("memberships").select("id").eq("org_id", orgId).eq("user_id", user.id).maybeSingle();
+    if (memReadErr) throw new Error(`Could not check your membership of ${b.name}: ${memReadErr.message}`);
+    if (!mem) {
+      const { data: ins, error: memErr } = await sb.from("memberships").insert({ org_id: orgId, user_id: user.id, role: "owner" }).select("id");
+      if (memErr && memErr.code !== "23505") throw new Error(`Could not add you to ${b.name}: ${memErr.message}`);
+      if (!memErr && !(ins as any[])?.length) throw new Error(`Could not add you to ${b.name}: no membership row was written.`);
+    }
   }
   return { ok: true, created };
 }
@@ -216,18 +223,23 @@ export async function manageOrg(org_id: string, patch: {
 
   let periodWarning: string | undefined;
   if (Object.keys(updates).length) {
-    const { error } = await sb.from("organizations").update(updates).eq("id", org_id);
+    /* .select("id") makes a zero-row update visible: an org id that matches
+       nothing used to "save" successfully and report the change as made. */
+    const { data: upd, error } = await sb.from("organizations").update(updates).eq("id", org_id).select("id");
     if (error) {
       // The subscription-period columns may not exist yet. Retry without them so
       // changing a plan or status still works before 2026_hardening.sql is run.
       const { subscription_ends_at, subscription_cycle, ...rest } = updates;
       if (("subscription_ends_at" in updates) && Object.keys(rest).length) {
-        const retry = await sb.from("organizations").update(rest).eq("id", org_id);
+        const retry = await sb.from("organizations").update(rest).eq("id", org_id).select("id");
         if (retry.error) throw new Error(retry.error.message);
+        if (!(retry.data as any[])?.length) throw new Error("No workspace matched that id — nothing was changed.");
         periodWarning = "Saved, but the subscription period columns don't exist yet — run supabase/migrations/2026_hardening.sql to enable plan expiry.";
       } else {
         throw new Error(error.message);
       }
+    } else if (!(upd as any[])?.length) {
+      throw new Error("No workspace matched that id — nothing was changed.");
     }
   }
 
@@ -330,8 +342,15 @@ export async function joinOrg(org_id: string) {
   if (!sb) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set.");
   const { data: { user } } = await (await createClient()).auth.getUser();
   if (!user || !org_id) throw new Error("Missing user or organization.");
-  const { data: mem } = await sb.from("memberships").select("id").eq("org_id", org_id).eq("user_id", user.id).maybeSingle();
-  if (!mem) await sb.from("memberships").insert({ org_id, user_id: user.id, role: "owner" });
+  /* Checked: this reported "joined" when the insert was rejected (PostgREST
+     returns { error }, it does not throw) or wrote nothing. */
+  const { data: mem, error: memReadErr } = await sb.from("memberships").select("id").eq("org_id", org_id).eq("user_id", user.id).maybeSingle();
+  if (memReadErr) throw new Error(`Could not check your membership: ${memReadErr.message}`);
+  if (!mem) {
+    const { data: ins, error: memErr } = await sb.from("memberships").insert({ org_id, user_id: user.id, role: "owner" }).select("id");
+    if (memErr && memErr.code !== "23505") throw new Error(`Could not join the workspace: ${memErr.message}`);
+    if (!memErr && !(ins as any[])?.length) throw new Error("Could not join the workspace: no membership row was written.");
+  }
   return { ok: true };
 }
 
@@ -373,7 +392,20 @@ export async function provisionCustomer(input: {
   }
 
   // 3) Pre-signup owner invite so they join automatically on sign-up.
-  try { await sb.from("invites").insert({ org_id: orgId, email, role: "owner", status: "pending" }); } catch { /* ignore duplicate */ }
+  /*
+    CHECKED, AND IT GATES THE EMAIL. This was try { insert } catch {} — and
+    supabase-js returns { error } rather than throwing, so a failed insert was
+    invisible and the customer was still emailed "sign in and you'll land
+    straight in your workspace" for a workspace they could never reach. A
+    duplicate (23505: an invite already pending) is fine; anything else stops
+    here, before the email.
+  */
+  {
+    const { error: invErr } = await sb.from("invites").insert({ org_id: orgId, email, role: "owner", status: "pending" });
+    if (invErr && invErr.code !== "23505") {
+      throw new Error(`Workspace "${orgName}" was created, but the owner invite for ${email} could not be saved (${invErr.message}), so no activation email was sent. Use "Grant access" to invite them.`);
+    }
+  }
 
   // 4) Email the customer their activation link.
   const appUrl = (process.env.APP_URL || "https://cortex.mnbresearch.com").replace(/\/$/, "");

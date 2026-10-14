@@ -88,10 +88,11 @@ export function CollectionsDryRun({ preview }: { preview: CollectionsPreview }) 
         <div className="mt-4">
           <div className="text-sm">
             It would chase <b>{count} invoice{count === 1 ? "" : "s"}</b>{" "}
-            worth <b>{rupee(preview.wouldChaseValue)}</b>, starting tonight.
+            worth <b>{rupee(preview.wouldChaseValue)}</b>. Reminders are drafted overnight; approved ones are sent
+            once a day at about 11:30 IST, when that falls inside your sending window — starting with the next daytime run.
             {preview.perDayCap > 0 && count > preview.perDayCap && (
               <>
-                {" "}Your daily limit is {preview.perDayCap}, so the first {preview.perDayCap} would go tonight and the
+                {" "}Your daily limit is {preview.perDayCap}, so the first {preview.perDayCap} would go on the first day and the
                 rest over the following days.
               </>
             )}

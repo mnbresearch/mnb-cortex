@@ -155,8 +155,14 @@ export const INTEGRATIONS: Integration[] = [
     docs: "https://www.zoho.com/books/api/v3/",
     fields: [KEY("OAuth token", "1000.xxxx"), { key: "organization_id", label: "Organization ID", type: "text", placeholder: "60xxxxxxx", required: true },
       { key: "data_center", label: "Data centre (in, com, eu, com.au, jp, ca, sa)", type: "text", placeholder: "in" }] },
-  { id: "tally", name: "Tally", category: "Accounting & Finance", desc: "Endpoint for the Tally bridge — pushes from your PC", minPlan: "growth",
-    fields: [{ key: "endpoint", label: "Tally endpoint URL", type: "text", placeholder: "http://localhost:9000", required: true, help: "Enable ODBC/HTTP in Tally Prime" }] },
+  /* The endpoint below is stored and NEVER READ: Cortex runs on the public
+     internet and cannot reach Tally on your LAN. Data arrives only through the
+     Tally bridge (scripts/tally-bridge.mjs), which runs next to Tally and
+     pushes through the public API with an API key. The field stays (removing
+     it would orphan existing connections) but is optional and labelled for
+     what it is: a note for your own reference. */
+  { id: "tally", name: "Tally", category: "Accounting & Finance", desc: "Via the Tally bridge, which runs on your PC and pushes with an API key (Developers → API keys). Nothing saved here is read by Cortex", minPlan: "growth",
+    fields: [{ key: "endpoint", label: "Where Tally runs (your reference only)", type: "text", placeholder: "http://localhost:9000", required: false, help: "Not used by Cortex — it cannot reach your PC. Run the Tally bridge next to Tally Prime with an API key instead." }] },
   { id: "quickbooks", name: "QuickBooks", category: "Accounting & Finance", desc: "Store your QuickBooks access token", minPlan: "premium",
     fields: [KEY("Access token"), { key: "realm_id", label: "Realm ID", type: "text", required: true }] },
   { id: "razorpay", name: "Razorpay", category: "Commerce & Payments", desc: "Payments and settlements, read-only. Razorpay keys cannot be limited to read-only; Cortex only calls GET endpoints — use a separate key you can revoke", minPlan: "growth", testable: true,

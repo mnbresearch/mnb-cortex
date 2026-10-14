@@ -3,7 +3,7 @@ import { serviceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
 import { PLANS, CREDIT_PACKS } from "@/lib/config";
-import { unsubUrl } from "@/lib/weekly-update";
+import { unsubUrl, unsubSigningAvailable } from "@/lib/weekly-update";
 import { planFollowups, renderFollowup, maskEmail, MAX_AGE_DAYS, COOLDOWN_DAYS, type FollowupMode, type IntentRow, type Decision } from "@/lib/checkout-followup-plan";
 import type { Budget } from "@/lib/cron-budget";
 
@@ -153,8 +153,13 @@ export async function runCheckoutFollowups(opts: { budget?: Budget; forceMode?: 
   }
   const decisions: Decision[] = planFollowups({ now, intents: inp.rows, paidOrders: inp.paidOrders, lastPaidAt: inp.lastPaidAt, activeOrgs: inp.activeOrgs, previous: inp.previous, lastSentAt: inp.lastSentAt, recipients, optedOut });
 
+  /* Every follow-up carries a signed unsubscribe link. With no signing secret
+     unsubUrl() throws — after a row has been claimed "sending" it would stay
+     stuck there — so check before claiming anything. */
+  const canSign = unsubSigningAvailable();
   for (const d of decisions) {
     if (d.action === "skip") { rep.skipped[d.reason] = (rep.skipped[d.reason] || 0) + 1; continue; }
+    if (!canSign && rep.mode !== "dry_run") { rep.skipped["unsubscribe links cannot be signed (set LINK_SIGNING_SECRET or CRON_SECRET)"] = (rep.skipped["unsubscribe links cannot be signed (set LINK_SIGNING_SECRET or CRON_SECRET)"] || 0) + 1; continue; }
     rep.queued++;
     const item = itemFor(d.intent);
     rep.preview.push({ order_id: d.order_id, to: maskEmail(d.to || ""), item: item.name, amount: d.intent.amount ?? null, action: d.action });

@@ -39,18 +39,33 @@ export async function POST(req: Request) {
     still active is the orphaning bug described above; the customer has to
     cancel first, which also stops the debits.
   */
-  try {
-    const { data: cur } = await serviceClient()!.from("organizations")
-      .select("subscription_ref, autorenew_status").eq("id", orgId).maybeSingle();
-    const existing = (cur as any)?.subscription_ref;
+  /*
+    A FAILED READ IS NOT "NO MANDATE". This check used to sit in a try/catch
+    that ignored the returned `error` (PostgREST returns it, it does not throw)
+    and "fell through rather than block a first-time setup" — so a read failure
+    let a second mandate be created over a live one. Refuse instead: nothing has
+    been created or charged yet, and the customer can simply try again.
+  */
+  const svcPre = serviceClient();
+  if (!svcPre) {
+    return NextResponse.json({ ok: false, error: "We couldn\u2019t check your current auto-renewal, so nothing was set up. Please try again in a minute." }, { status: 503 });
+  }
+  const { data: cur, error: curErr } = await svcPre.from("organizations")
+    .select("subscription_ref, autorenew_status").eq("id", orgId).maybeSingle();
+  if (curErr || !cur) {
+    console.error("[pay/subscription] could not read the current mandate for", orgId, curErr?.message || "no row");
+    return NextResponse.json({ ok: false, error: "We couldn\u2019t check your current auto-renewal, so nothing was set up. Please try again in a minute." }, { status: 503 });
+  }
+  const existingRef: string | null = (cur as any)?.subscription_ref || null;
+  {
     const status = String((cur as any)?.autorenew_status || "").toUpperCase();
-    if (existing && !["CANCELLED", "EXPIRED", "FAILED", ""].includes(status)) {
+    if (existingRef && !["CANCELLED", "EXPIRED", "FAILED", ""].includes(status)) {
       return NextResponse.json({
         ok: false,
         error: "Auto-renewal is already set up for this workspace. Turn the existing one off before creating a new mandate, or you will be charged for both.",
       }, { status: 409 });
     }
-  } catch { /* cannot read \u2014 fall through rather than block a first-time setup */ }
+  }
 
   const b = await req.json().catch(() => ({} as any));
   const profile = await getOrgProfile();
@@ -123,7 +138,7 @@ export async function POST(req: Request) {
     a recurring charge with no delivery and no off switch.
   */
   if (res.ok && res.subscriptionId) {
-    const stored = await recordRef(orgId, res.subscriptionId);
+    const stored = await recordRef(orgId, res.subscriptionId, existingRef);
 
     if (!stored) {
       /*
@@ -183,15 +198,23 @@ export async function POST(req: Request) {
  * anything a second attempt would repeat. The update is idempotent \u2014 same org,
  * same values \u2014 so retrying is safe.
  */
-async function recordRef(orgId: string, subscriptionId: string): Promise<boolean> {
+async function recordRef(orgId: string, subscriptionId: string, previousRef: string | null): Promise<boolean> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const svc = serviceClient();
       if (!svc) return false;
-      const { data, error } = await svc.from("organizations")
+      /*
+        CONDITIONAL on the ref we checked above (null, or the dead mandate's
+        id). An unconditional write let a concurrent setup overwrite a live
+        mandate's ref — orphaning it: still debiting, never attributable. If
+        someone else's ref landed in between, zero rows match and we refuse
+        (the caller then cancels the mandate it just created).
+      */
+      let q = svc.from("organizations")
         .update({ subscription_ref: subscriptionId, autorenew_status: "INITIALIZED" })
-        .eq("id", orgId)
-        .select("id");
+        .eq("id", orgId);
+      q = previousRef ? q.eq("subscription_ref", previousRef) : q.is("subscription_ref", null);
+      const { data, error } = await q.select("id");
       if (!error && (data?.length ?? 0) > 0) return true;
       console.error(
         `[pay/subscription] attempt ${attempt + 1} did not store ${subscriptionId} for ${orgId} \u2014`,
@@ -218,7 +241,15 @@ export async function DELETE() {
   }
 
   const svc = serviceClient();
-  const { data } = await svc!.from("organizations").select("subscription_ref").eq("id", orgId).maybeSingle();
+  if (!svc) return NextResponse.json({ ok: false, error: "We couldn\u2019t reach billing to turn auto-renewal off. Nothing was changed \u2014 please try again in a minute." }, { status: 503 });
+  /* A failed read used to answer "Auto-renewal wasn't on" while the mandate
+     stayed live and kept debiting. Only a successful read of an empty ref
+     means it was off. */
+  const { data, error: readErr } = await svc.from("organizations").select("subscription_ref").eq("id", orgId).maybeSingle();
+  if (readErr) {
+    console.error("[pay/subscription] could not read subscription_ref for", orgId, readErr.message);
+    return NextResponse.json({ ok: false, error: "We couldn\u2019t check your auto-renewal, so it has NOT been turned off. Please try again in a minute." }, { status: 503 });
+  }
   const ref = (data as any)?.subscription_ref;
   if (!ref) return NextResponse.json({ ok: true, note: "Auto-renewal wasn\u2019t on." });
 
@@ -250,7 +281,7 @@ export async function DELETE() {
     honest answer is "cancelled, but we couldn't update your billing page",
     not a failure and not an unqualified success.
   */
-  const { data: recorded, error } = await svc!.from("organizations")
+  const { data: recorded, error } = await svc.from("organizations")
     .update({ autorenew_status: "CANCELLED", autorenew_next: null })
     .eq("id", orgId)
     .select("id");

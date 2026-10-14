@@ -558,6 +558,21 @@ async function checkGenModels(): Promise<Check> {
   };
 }
 
+/** system_status key written by /api/cron/reconcile on every run. */
+const RECONCILE_KEY = "reconcile_last_run";
+/** How stale the reconcile heartbeat may get: one daily run plus slack. */
+export const RECONCILE_STALE_HOURS = 36;
+
+/** Pure: is the reconcile heartbeat missing or stale? */
+export function reconcileVerdict(last: unknown, now = Date.now()): { degraded: boolean; detail: string } {
+  if (!last) return { degraded: true, detail: "payment reconciliation has not reported a run yet (daily at 11:30 IST)" };
+  const t = new Date(String(last)).getTime();
+  if (!Number.isFinite(t)) return { degraded: true, detail: "payment reconciliation heartbeat unreadable" };
+  const h = (now - t) / 3_600_000;
+  if (h > RECONCILE_STALE_HOURS) return { degraded: true, detail: `payment reconciliation last ran ${Math.round(h)}h ago` };
+  return { degraded: false, detail: "" };
+}
+
 /** Has the daily cron actually run recently? Reads its own heartbeat. */
 async function checkCron(): Promise<Check> {
   const sb = serviceClient();
@@ -569,12 +584,12 @@ async function checkCron(): Promise<Check> {
       goes wrong quietly. See below.
     */
     const { data: rows, error } = await sb
-      .from("system_status").select("key,value").in("key", ["cron_last_run", COVERAGE_KEY]);
+      .from("system_status").select("key,value").in("key", ["cron_last_run", COVERAGE_KEY, RECONCILE_KEY]);
     if (error) return { name: "Scheduled jobs", status: "degraded", detail: "Heartbeat table missing — run 2026_system_status.sql" };
     const at = (k: string) => ((rows as any[]) || []).find((r) => r.key === k)?.value;
     const last = at("cron_last_run");
     if (!last) {
-      return { name: "Scheduled jobs", status: "degraded", detail: "Not run since this was deployed — first run is 08:00 IST" };
+      return { name: "Scheduled jobs", status: "degraded", detail: "Not run since this was deployed — the nightly run is at 02:00 IST" };
     }
     const hours = (Date.now() - new Date(String(last)).getTime()) / 3_600_000;
     /*
@@ -613,10 +628,19 @@ async function checkCron(): Promise<Check> {
     */
     const verdict = coverageVerdict(parseCoverage(at(COVERAGE_KEY)));
     const age = `Last ran ${Math.round(hours)}h ago`;
+    /*
+      THE SECOND CRON. /api/cron/reconcile (11:30 IST) is the only thing that
+      finds a customer who paid and got nothing, and it now also sends the
+      day's approved collections reminders. It wrote no heartbeat, so it could
+      stop for a week with this check green. Degrade (not critical: the
+      nightly run is the outage signal) when it is missing or > 36h old.
+    */
+    const rec = reconcileVerdict(at(RECONCILE_KEY));
+    const parts = [age, verdict.detail, rec.detail].filter(Boolean);
     return {
       name: "Scheduled jobs",
-      status: verdict.status === "degraded" ? "degraded" : "operational",
-      detail: verdict.detail ? `${age} · ${verdict.detail}` : age,
+      status: verdict.status === "degraded" || rec.degraded ? "degraded" : "operational",
+      detail: parts.join(" · "),
     };
   } catch (e: any) {
     return { name: "Scheduled jobs", status: "degraded", detail: e?.message };

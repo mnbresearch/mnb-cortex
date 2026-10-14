@@ -160,11 +160,15 @@ async function attempt(svc: any, deliveryId: string, endpoint: any, event: strin
   */
   const signingKey = usableSecret(endpoint.secret);
   if (!signingKey) {
-    await svc.from("webhook_deliveries").update({
+    /* The column is `last_error` (2026_integrations_layer.sql). Writing `error`
+       made PostgREST reject the whole update — unchecked — so the delivery
+       stayed `pending` and was retried, and failed the same way, forever. */
+    const { error: updErr } = await svc.from("webhook_deliveries").update({
       status: "failed",
-      error: "Signing secret could not be read — ENCRYPTION_KEY is missing or has changed. Re-create this endpoint to issue a new secret.",
+      last_error: "Signing secret could not be read — ENCRYPTION_KEY is missing or has changed. Re-create this endpoint to issue a new secret.",
       attempts: (endpoint.attempts ?? 0) + 1,
     }).eq("id", deliveryId);
+    if (updErr) console.error(`[webhooks] could not mark delivery ${deliveryId} failed:`, updErr.message);
     clearTimeout(timer);
     return false;
   }

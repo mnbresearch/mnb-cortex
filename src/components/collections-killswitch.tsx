@@ -55,7 +55,7 @@ export function CollectionsKillSwitch({ enabled, reason, updatedAt }: {
         setOn(Boolean(res.on));
         setConfirming(false);
         setMsg({ ok: true, text: next
-          ? "Collections resumed. Queued messages will send on the next run."
+          ? "Collections resumed. Approved messages will send on the next daytime run (about 11:30 IST), inside each workspace's sending window."
           : "Collections STOPPED platform-wide. Nothing further will be sent until you resume." });
       } else {
         setMsg({ ok: false, text: res.error || "Could not flip the switch." });
@@ -128,7 +128,8 @@ export function CollectionsKillSwitch({ enabled, reason, updatedAt }: {
       ) : (
         <div className="space-y-3">
           <p className="text-sm">
-            Resuming will send anything that queued while stopped, on the next run.
+            Resuming will send anything that queued while stopped and is approved, on the next daytime run
+            (about 11:30 IST), inside each workspace&rsquo;s sending window.
             Check the queue before you do.
           </p>
           <Button onClick={() => flip(true)} disabled={busy}>

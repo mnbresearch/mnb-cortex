@@ -37,7 +37,7 @@ export async function ensureWorkspace(opts?: { name?: string; industry?: string 
   // This runs on every sign-in, not just signup, so someone who is invited
   // after they already have an account joins on their next visit. RLS hides an
   // invite from its own recipient, so this must use the service role.
-  const joined = await claimInvites(svc, user.id, user.email || "");
+  const joined = await claimInvites(svc, user.id, user.email || "", Boolean((user as any).email_confirmed_at));
 
   // A DB signup trigger may already have created a workspace. Reuse it if so;
   // otherwise create one. Either way we then ensure it's fully provisioned.
@@ -196,17 +196,48 @@ export async function ensureWorkspace(opts?: { name?: string; industry?: string 
  * Idempotent: an already-accepted invite is skipped, and a user who is already
  * a member of the target org is not duplicated.
  */
-async function claimInvites(svc: any, userId: string, email: string): Promise<number> {
+/** How long an invite stays claimable. Matches the DB default on
+ *  invites.expires_at (2026_zzzz_e_invite_expiry.sql); rows from before that
+ *  column existed are aged from created_at. */
+export const INVITE_TTL_DAYS = 14;
+
+/** Pure: is this invite still claimable at `now`? */
+export function inviteIsLive(inv: { expires_at?: string | null; created_at?: string | null }, now = Date.now()): boolean {
+  const exp = inv.expires_at ? Date.parse(inv.expires_at)
+    : inv.created_at ? Date.parse(inv.created_at) + INVITE_TTL_DAYS * 86_400_000
+    : NaN;
+  return Number.isFinite(exp) && exp > now;
+}
+
+async function claimInvites(svc: any, userId: string, email: string, emailConfirmed: boolean): Promise<number> {
   const addr = email.trim().toLowerCase();
   if (!addr) return 0;
+  /*
+    AN INVITE IS ADDRESSED TO A MAILBOX, SO ONLY THE MAILBOX'S OWNER CLAIMS IT.
+    This used to turn any pending invite into a membership for whoever signed
+    in with a matching address — including an unverified email+password
+    sign-up, i.e. anyone who could TYPE the invitee's address. Unconfirmed
+    accounts claim nothing; the invite waits until the address is verified.
+  */
+  if (!emailConfirmed) return 0;
   try {
     // ilike() does NOT escape LIKE metacharacters, and `_` is common in email
     // local-parts — an invite to john_doe@acme.com would otherwise be claimable
     // by johnXdoe@acme.com. Escape for the query AND re-verify exactly in JS.
     const pattern = addr.replace(/([\\%_])/g, "\\$1");
-    const { data: invites } = await svc
-      .from("invites").select("id, org_id, role, email").ilike("email", pattern).eq("status", "pending");
-    const list = ((invites as any[]) || []).filter((i) => String(i.email || "").trim().toLowerCase() === addr);
+    /* expires_at arrives with 2026_zzzz_e_invite_expiry.sql. Until that runs,
+       the column is absent: fall back to created_at so expiry still applies. */
+    let res = await svc
+      .from("invites").select("id, org_id, role, email, created_at, expires_at").ilike("email", pattern).eq("status", "pending");
+    if (res.error && /expires_at/.test(String(res.error.message || ""))) {
+      res = await svc
+        .from("invites").select("id, org_id, role, email, created_at").ilike("email", pattern).eq("status", "pending");
+    }
+    if (res.error) { console.error("[workspace] could not read invites:", res.error.message); return 0; }
+    const now = Date.now();
+    const list = ((res.data as any[]) || [])
+      .filter((i) => String(i.email || "").trim().toLowerCase() === addr)
+      .filter((i) => inviteIsLive(i, now));
     if (!list.length) return 0;
 
     const { data: existing } = await svc.from("memberships").select("org_id").eq("user_id", userId);

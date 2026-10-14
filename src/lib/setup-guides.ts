@@ -159,10 +159,14 @@ export const SETUP_GUIDES: SetupGuide[] = [
     docs: "https://docs.stripe.com/keys",
     steps: [
       { title: "Open API keys", detail: "Stripe Dashboard → Developers → API keys." },
-      { title: "Create a restricted key", detail: "“Create restricted key”. Grant READ on Charges and Balance transactions, and nothing else. A restricted key limits the damage if it ever leaks — prefer it to the secret key." },
-      { title: "Paste it into Cortex", detail: "Integrations → Stripe → Connect. The key begins rk_live_ (restricted) or sk_live_ (secret)." },
+      { title: "Create a restricted key", detail: "“Create restricted key”. Set Charges to Read and Balance to Read, and leave everything else at None. Cortex tests the connection by reading your balance, so Balance: Read is required." },
+      { title: "Paste it into Cortex", detail: "Integrations → Stripe → Connect. The key begins rk_live_. Your account secret key (sk_live_) is refused: it can create charges, refunds and payouts, and Cortex only reads." },
     ],
-    gotchas: ["Pasting a test-mode key (sk_test_/rk_test_) — it connects but returns no live payments."],
+    gotchas: [
+      "Pasting the secret key (sk_live_) — Cortex refuses it; create a restricted key instead.",
+      "Leaving Balance at None — the connection test reads the balance and fails without it.",
+      "Pasting a test-mode key (rk_test_) — it connects but returns no live payments.",
+    ],
   },
   {
     provider: "razorpay",

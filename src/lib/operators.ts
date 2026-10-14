@@ -30,3 +30,21 @@ export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "mnbgotyou@gmail.com";
  */
 export const SUPER_ADMINS: string[] = (process.env.SUPER_ADMIN_EMAILS || "mridulnanda2004@gmail.com,mnbgotyou@gmail.com")
   .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+
+/**
+ * Is THIS USER a platform super-admin?
+ *
+ * The address alone is not proof of anything: with email+password sign-up, an
+ * account can exist for an address nobody has verified — so whoever signs up
+ * first as an operator's address would have held the whole platform. Only an
+ * address the auth provider has CONFIRMED counts (Google sign-in and magic
+ * links set email_confirmed_at; an unverified password sign-up does not).
+ * The fallback list above stays — operators rely on it — but it is only ever
+ * effective through this check.
+ */
+export function isSuperAdminUser(
+  user: { email?: string | null; email_confirmed_at?: string | null } | null | undefined,
+): boolean {
+  const email = String(user?.email || "").trim().toLowerCase();
+  return Boolean(email) && Boolean(user?.email_confirmed_at) && SUPER_ADMINS.includes(email);
+}

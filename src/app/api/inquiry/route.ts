@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { recordQuietly } from "@/lib/funnel";
 import { sendEmail } from "@/lib/email";
 import { ADMIN_EMAIL } from "@/lib/operators";
-import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
+import { renderBrandedEmail, brandFrom, brandReplyTo, plainCallerText } from "@/lib/branded-email";
+import { ALL_PLANS } from "@/lib/config";
 import { createClient, hasSupabase } from "@/lib/supabase/server";
 import { clientIp, contactFormLimits, enforce } from "@/lib/ratelimit";
 
@@ -12,13 +13,27 @@ export const dynamic = "force-dynamic";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const cap = (v: any, n: number) => String(v ?? "").slice(0, n);
 
+/*
+  ALLOW-LISTED, NOT ECHOED. plan, currency and source arrive from the browser,
+  and plan and currency used to go verbatim into the email we send to whatever
+  address was typed — uncapped. That made this unauthenticated route a relay
+  for arbitrary text (and links) from our verified domain. Only values our own
+  pages send are accepted; anything else becomes the neutral default.
+*/
+const PLAN_NAMES = new Set<string>([...ALL_PLANS.map((p) => p.name), "Health Check"]);
+const CURRENCIES = new Set(["INR", "USD"]);
+const SOURCES = new Set(["pricing", "health-check"]);
+/** Hosts our own copy links to; nothing else in a caller-bound mail is a link. */
+const LINK_HOSTS = ["mnbresearch.com", "wa.me"];
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({} as any));
     const name = cap(body.name, 120).trim();
     const email = cap(body.email, 200).trim();
     const phone = cap(body.phone, 30).trim();
-    const { plan, currency, cycle, source } = body;
+    const plan = PLAN_NAMES.has(String(body.plan ?? "")) ? String(body.plan) : "";
+    const cycle = body.cycle;
     const note = cap(body.note, 2000);
     const company = cap(body.company, 160).trim();
     /*
@@ -28,7 +43,8 @@ export async function POST(req: Request) {
     */
     const rawScore = Number(body.score);
     const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, Math.round(rawScore))) : null;
-    const weak: string[] = Array.isArray(body.weak) ? body.weak.map((w: any) => cap(w, 80)).slice(0, 8) : [];
+    /* Echoed into the caller's report, so stripped of URLs/domains and capped. */
+    const weak: string[] = Array.isArray(body.weak) ? body.weak.map((w: any) => plainCallerText(w, 60)).filter(Boolean).slice(0, 8) : [];
     if (!name || !email) return NextResponse.json({ ok: false, error: "Name and email are required." }, { status: 200 });
     if (!EMAIL_RE.test(email)) return NextResponse.json({ ok: false, error: "Enter a valid email address." }, { status: 200 });
 
@@ -42,13 +58,14 @@ export async function POST(req: Request) {
       }, { status: 429 });
     }
 
-    const src = cap(source || "pricing", 40);
+    const src = SOURCES.has(String(body.source ?? "")) ? String(body.source) : "pricing";
 
     // Where the operator gets notified (defaults to ADMIN_EMAIL; override with LEAD_NOTIFY_EMAIL).
     const notifyTo = process.env.LEAD_NOTIFY_EMAIL || ADMIN_EMAIL;
     const origin = (() => { try { return new URL(req.url).origin; } catch { return "https://cortex.mnbresearch.com"; } })();
     const when = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-    const cur = (currency || "INR").toString().toUpperCase();
+    const curIn = String(body.currency ?? "INR").toUpperCase();
+    const cur = CURRENCIES.has(curIn) ? curIn : "INR";
     const cyc = cycle === "annual" ? "Annual" : "Monthly";
 
     // Persist the lead first (best-effort) so nothing is lost even if email fails.
@@ -113,7 +130,9 @@ WHAT TO DO NEXT
 3. Find their workspace and set the plan + grant credits from the customer manager.
 
 Reply to this email to reach ${name.split(" ")[0] || "them"} directly.`;
-    const adminHtml = renderBrandedEmail(adminBody, { preheader: `${plan || "Cortex"} request from ${name} (${cur})` });
+    /* Operator mail too: the prospect's typed note/name never become links. */
+    const ownHosts = [...LINK_HOSTS, (() => { try { return new URL(origin).hostname; } catch { return "mnbresearch.com"; } })()];
+    const adminHtml = renderBrandedEmail(adminBody, { preheader: `${plan || "Cortex"} request from ${name} (${cur})`, linkHosts: ownHosts });
 
     /*
       SEND THE REPORT WE PROMISED.
@@ -131,7 +150,9 @@ Reply to this email to reach ${name.split(" ")[0] || "them"} directly.`;
       "AI COO" is also gone from this copy — the product was repositioned away
       from that phrase months ago and this email was still using it.
     */
-    const firstName = name.split(" ")[0] || "there";
+    /* The only free text echoed back to the caller: no URLs, domains or
+       addresses, capped (see plainCallerText). */
+    const firstName = plainCallerText(name.split(" ")[0], 40) || "there";
     const isHealthCheck = src === "health-check" && score !== null;
 
     const band = score === null ? "" : score >= 80 ? "Strong" : score >= 55 ? "Developing" : "At risk";
@@ -180,6 +201,7 @@ In the meantime, reply to this email or message us on WhatsApp: https://wa.me/91
 — Team MNB Cortex`;
 
     const userHtml = renderBrandedEmail(userBody, {
+      linkHosts: ownHosts,
       preheader: isHealthCheck
         ? `Your Business Health Check: ${score}/100 — ${band}`
         : "We received your MNB Cortex request",

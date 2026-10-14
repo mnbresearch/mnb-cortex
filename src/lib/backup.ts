@@ -1,5 +1,6 @@
 import "server-only";
 import { gzipSync } from "zlib";
+import { randomUUID } from "crypto";
 import { serviceClient } from "@/lib/supabase/server";
 
 /**
@@ -120,6 +121,23 @@ export const BACKUP_TABLES = [
   // 2026_zzzx: the abandoned-checkout send ledger — losing it would re-send
   // the one reminder each customer was promised they would get only once.
   "checkout_followups",
+  // 2026_zzzr_actions: the Approvals ledger. action_proposals is every action
+  // Cortex proposed, who approved or rejected it, what it did and how to undo
+  // it (and its idempotency_key is what stops a restored queue re-executing a
+  // done action); action_policies is the owner's own auto/approve/blocked
+  // choices and caps. Both are the customer's workspace data and key only on
+  // organizations. Found missing by the rehearsal's reverse-coverage check.
+  "action_proposals", "action_policies",
+  // 2026_zzzz_c_net_cash_flow: the one-time safety copy of every net_profit
+  // value that migration moved into net_cash_flow. The migration's promise is
+  // "nothing is lost; any row can be restored from there" — and after a
+  // disaster restore that is only true if this table came back too. Small (one
+  // row per workspace-month), operator-only (RLS on, no policies), and the
+  // values can diverge from finance_ledger once a new bank upload overwrites
+  // net_cash_flow, so it is not redundant. Kept until someone decides to drop
+  // the table itself; until 2026_zzzz_c is run, backups report it as a read
+  // error — run the SQL, don't delete the line.
+  "finance_ledger_net_profit_backup_c",
 ];
 
 /**
@@ -162,7 +180,17 @@ export const DELIBERATELY_EXCLUDED = [
 const REDACT: Record<string, string[]> = {
   api_keys: ["key"],
   webhook_endpoints: ["secret"],
+  /* A live share token: anyone holding it reads the workspace's public report.
+     Replaced with a random, unique placeholder (the column is UNIQUE NOT NULL,
+     so a constant would make a multi-row restore collide). */
+  report_links: ["token"],
+  /* Key/value: only the VALUE of secret-looking keys (resend_webhook_secret,
+     written by api/email/inbound, and any *_token / *_key / *password). */
+  app_settings: ["value (where key matches /secret|token|key|password/i)"],
 };
+
+/** app_settings keys whose value is a credential. */
+export const SECRET_SETTING_KEY = /secret|token|key|password/i;
 
 /** Rows per request. PostgREST's default max-rows is 1000; asking for exactly
  *  that is deliberate but leaves no margin — see the short-page check below. */
@@ -265,7 +293,13 @@ async function dumpAuthUsers(): Promise<{ rows: any[]; result: TableResult }> {
   }
 }
 
-function scrub(table: string, rows: any[]): any[] {
+export function scrub(table: string, rows: any[]): any[] {
+  if (table === "app_settings") {
+    return rows.map((r) => (r && SECRET_SETTING_KEY.test(String(r.key ?? "")) && r.value != null ? { ...r, value: "[REDACTED]" } : r));
+  }
+  if (table === "report_links") {
+    return rows.map((r) => (r && r.token != null ? { ...r, token: `redacted-${randomUUID()}` } : r));
+  }
   const cols = REDACT[table];
   if (!cols?.length) return rows;
   return rows.map((r) => {
@@ -391,7 +425,7 @@ export async function createBackup(): Promise<BackupResult> {
       "auth.users IS included (as auth_users), read through the Supabase Admin API — but WITHOUT passwords, which that API does not return. Restoring means recreating the accounts; people sign in again by magic link or Google.",
       "Does not include Supabase Storage objects.",
       "Not a point-in-time snapshot: tables are read one after another over minutes.",
-      "api_keys.key and webhook_endpoints.secret are redacted and must be reissued after a restore.",
+      "api_keys.key, webhook_endpoints.secret, report_links.token and secret app_settings values (e.g. resend_webhook_secret) are redacted and must be reissued after a restore.",
       "Restore path is tested by `npm run rehearse:restore` against a real PostgreSQL. Restore with `node scripts/restore.mjs <file> > restore.sql`.",
     ],
     notes,

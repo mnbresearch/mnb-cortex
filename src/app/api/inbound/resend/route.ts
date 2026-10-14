@@ -96,14 +96,36 @@ export async function POST(req: Request) {
     }
   }
 
-  // Idempotent insert on resend_email_id.
+  /*
+    Idempotent insert on resend_email_id — which is exactly what makes a 500
+    safe here. This used to be try { upsert } catch {} and then 200: a rejected
+    write (returned as { error }, never thrown) was acked, Resend never
+    redelivered, and the customer's reply was lost. Now a failed write asks for
+    a retry; the redelivery upserts the same id and changes nothing twice.
+  */
   try {
-    await sb.from("email_replies").upsert({
+    const { error: repErr } = await sb.from("email_replies").upsert({
       org_id: org, resend_email_id: emailId || `noid-${Date.now()}`, campaign_id: campaignId, recipient_id: recipientId,
       from_email: fromEmail, to_email: toEmail, subject, text, html, verified,
     }, { onConflict: "resend_email_id", ignoreDuplicates: true });
-    if (recipientId) await sb.from("campaign_recipients").update({ status: "replied" }).eq("id", recipientId);
-  } catch { /* never 500 the webhook */ }
+    if (repErr) {
+      console.error("[inbound/resend] reply not stored, asking for a retry:", repErr.message);
+      return NextResponse.json({ ok: false, error: "temporary failure" }, { status: 500 });
+    }
+    if (recipientId) {
+      const { data: stRows, error: stErr } = await sb.from("campaign_recipients").update({ status: "replied" }).eq("id", recipientId).select("id");
+      /* Zero rows = the recipient row was removed since the lookup; the reply
+         itself is stored, so that is logged, not retried. */
+      if (!stErr && !(stRows as any[])?.length) console.warn("[inbound/resend] recipient", recipientId, "no longer exists; reply kept");
+      if (stErr) {
+        console.error("[inbound/resend] recipient not marked replied, asking for a retry:", stErr.message);
+        return NextResponse.json({ ok: false, error: "temporary failure" }, { status: 500 });
+      }
+    }
+  } catch (e: any) {
+    console.error("[inbound/resend] reply write threw, asking for a retry:", e?.message);
+    return NextResponse.json({ ok: false, error: "temporary failure" }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true, verified, linked: Boolean(recipientId) });
 }

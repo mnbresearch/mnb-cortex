@@ -35,18 +35,47 @@ export type WeeklyResult = {
 };
 
 /* ---- unsubscribe tokens (HMAC so links can't be forged) ------------------ */
-function unsubSecret(): string {
-  return process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "cortex-weekly-fallback";
+/*
+  WHICH KEY SIGNS AN UNSUBSCRIBE LINK.
+
+  This was CRON_SECRET || SUPABASE_SERVICE_ROLE_KEY || "cortex-weekly-fallback".
+  The literal meant a deployment missing both env vars signed every link with a
+  string published in this repository — anyone could mint a valid link for any
+  address and unsubscribe it. And reusing CRON_SECRET (which authorises the
+  cron that mails every user) or the service-role key as an HMAC key widens
+  what a leak of either one costs.
+
+  Now: LINK_SIGNING_SECRET signs new links when it is set. CRON_SECRET is kept
+  as a fallback — and is still ACCEPTED when verifying — because every link
+  already sitting in someone's inbox was signed with it, and an unsubscribe
+  link that stops working is the one link that must never break. No literal:
+  with neither set, no link can be made (senders skip) and none verifies.
+*/
+function unsubSecrets(): string[] {
+  return [process.env.LINK_SIGNING_SECRET, process.env.CRON_SECRET]
+    .map((v) => String(v || "").trim()).filter(Boolean);
+}
+/** True when unsubscribe links can be signed — senders must check this. */
+export function unsubSigningAvailable(): boolean {
+  return unsubSecrets().length > 0;
+}
+function tokenWith(secret: string, email: string): string {
+  return crypto.createHmac("sha256", secret).update(email.toLowerCase().trim()).digest("base64url").slice(0, 24);
 }
 export function unsubToken(email: string): string {
-  return crypto.createHmac("sha256", unsubSecret()).update(email.toLowerCase().trim()).digest("base64url").slice(0, 24);
+  const [secret] = unsubSecrets();
+  if (!secret) throw new Error("No LINK_SIGNING_SECRET or CRON_SECRET — refusing to sign an unsubscribe link with a guessable key.");
+  return tokenWith(secret, email);
 }
 export function verifyUnsub(email: string, token: string): boolean {
-  const expected = unsubToken(email);
-  try {
-    return token.length === expected.length &&
-      crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
-  } catch { return false; }
+  const t = String(token || "");
+  for (const secret of unsubSecrets()) {
+    const expected = tokenWith(secret, email);
+    try {
+      if (t.length === expected.length && crypto.timingSafeEqual(Buffer.from(t), Buffer.from(expected))) return true;
+    } catch { /* try the next key */ }
+  }
+  return false;
 }
 export function unsubUrl(email: string): string {
   return `${APP_URL}/api/unsub?e=${encodeURIComponent(email)}&t=${unsubToken(email)}`;
@@ -218,6 +247,7 @@ export async function sendWeeklyUpdate(opts?: { test?: boolean; force?: boolean;
   const sb = serviceClient();
   if (!sb) return { skipped: true, reason: "no SUPABASE_SERVICE_ROLE_KEY" };
   if (!process.env.RESEND_API_KEY) return { skipped: true, reason: "no RESEND_API_KEY" };
+  if (!unsubSigningAvailable()) return { skipped: true, reason: "no LINK_SIGNING_SECRET or CRON_SECRET to sign unsubscribe links" };
 
   const latest = RELEASES[0];
 

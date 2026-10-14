@@ -98,6 +98,30 @@ function esc(s: string) {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * Caller-typed text that will be put into an email we send TO THE CALLER.
+ *
+ * The public forms (/api/inquiry, /api/access-request) are unauthenticated and
+ * mail whatever address was typed. Anything else typed into the same form and
+ * echoed back — a "name" of `https://evil.example/login`, a "plan" of
+ * "Your account is locked, verify at …" — turns our verified domain into a
+ * phishing relay. So: no URLs, no domain-looking tokens, no e-mail addresses,
+ * no control characters, collapsed whitespace, and a hard length cap.
+ */
+export function plainCallerText(v: unknown, max = 60): string {
+  return String(v ?? "")
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/g, " ")
+    .replace(/\b(?:https?|ftp|mailto|tel|data|javascript):\S*/gi, " ")
+    .replace(/\bwww\.\S*/gi, " ")
+    .replace(/\S+@\S+/g, " ")
+    .replace(/\S*[a-z0-9-]\.[a-z]{2,}\S*/gi, " ")
+    .replace(/[<>{}\[\]\\|`^]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max)
+    .trim();
+}
+
 export type MergeVars = { name?: string; email?: string; firstName?: string };
 
 /** Replace {{name}}, {{firstName}}, {{email}} case-insensitively. */
@@ -115,13 +139,27 @@ export function mergeTokens(text: string, v: MergeVars): string {
  * Escapes the body, linkifies bare URLs (optionally click-tracked), converts
  * newlines to <br>, and appends an open-tracking pixel when tracking is provided.
  */
-export function renderBrandedEmail(bodyText: string, opts?: { origin?: string; token?: string; preheader?: string }): string {
+export function renderBrandedEmail(bodyText: string, opts?: { origin?: string; token?: string; preheader?: string; linkHosts?: string[] }): string {
   const origin = opts?.origin || "";
   const token = opts?.token;
+  /*
+    linkHosts: when given, only URLs on these hosts (or their subdomains)
+    become links; anything else stays inert text. Mail sent to an address a
+    stranger typed into a public form passes our own hosts here, so even a URL
+    that slipped past plainCallerText could never be a clickable link from us.
+  */
+  const hosts = opts?.linkHosts?.map((h) => h.toLowerCase());
+  const linkable = (u: string) => {
+    if (!hosts) return true;
+    try {
+      const h = new URL(u.replace(/&amp;/g, "&")).hostname.toLowerCase();
+      return hosts.some((x) => h === x || h.endsWith("." + x));
+    } catch { return false; }
+  };
 
   // Body: escape → linkify (tracked if token) → line breaks.
   const linked = esc(bodyText).split(/(https?:\/\/[^\s<]+)/g).map((p) => {
-    if (/^https?:\/\//.test(p)) {
+    if (/^https?:\/\//.test(p) && linkable(p)) {
       /* Signed: /api/t/c now refuses an off-origin destination without a valid
          HMAC, because an unsigned `u` was an open redirect on our own domain. */
       const href = token && origin

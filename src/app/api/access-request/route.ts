@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendEmail } from "@/lib/email";
 import { ADMIN_EMAIL } from "@/lib/operators";
-import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
+import { renderBrandedEmail, brandFrom, brandReplyTo, plainCallerText } from "@/lib/branded-email";
 import { createClient, hasSupabase } from "@/lib/supabase/server";
 import { clientIp, contactFormLimits, enforce } from "@/lib/ratelimit";
 
@@ -89,10 +89,13 @@ Message: ${message || "—"}
 Received: ${when}
 
 Reply to this email to reach them directly.`;
-    const adminHtml = renderBrandedEmail(adminBody, { preheader: `Access request from ${name}` });
+    const adminHtml = renderBrandedEmail(adminBody, { preheader: `Access request from ${name}`, linkHosts: ["mnbresearch.com"] });
 
     // Confirm to the requester.
-    const userBody = `Hi ${name.split(" ")[0] || "there"},
+    /* The requester's own name is the only caller text echoed to the typed
+       address — stripped of URLs/domains/addresses and capped, and the mail
+       links only to our own site (a public form must not be a phishing relay). */
+    const userBody = `Hi ${plainCallerText(name.split(" ")[0], 40) || "there"},
 
 Thanks for your interest in MNB Cortex — the early-warning system for your business.
 
@@ -100,7 +103,7 @@ Our team has received your request and will reach out shortly with access. In th
 
 Talk soon,
 Team MNB Research`;
-    const userHtml = renderBrandedEmail(userBody, { preheader: "We received your access request" });
+    const userHtml = renderBrandedEmail(userBody, { preheader: "We received your access request", linkHosts: ["mnbresearch.com"] });
 
     const [adminRes, userRes] = await Promise.all([
       sendEmail(ADMIN_EMAIL, `New access request: ${name}`, adminHtml, { from: brandFrom(), replyTo: email }),

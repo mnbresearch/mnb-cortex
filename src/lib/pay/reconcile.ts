@@ -103,7 +103,7 @@ export async function reconcilePayments(opts?: { dryRun?: boolean }): Promise<Re
     fair, which is what the cron_cursors table does for the nightly sweep.
   */
   const { data: intents, error: intentsErr } = await svc.from("payment_intents")
-    .select("order_id, org_id, kind, ref, amount, created_at")
+    .select("order_id, org_id, kind, ref, amount, created_at, outcome")
     .is("settled_at", null)
     .lt("created_at", graceCutoff)
     .order("reconcile_checked_at", { ascending: true, nullsFirst: true })
@@ -186,7 +186,20 @@ export async function reconcilePayments(opts?: { dryRun?: boolean }): Promise<Re
         what: res.kind === "credits" ? `${res.credits} credits` : `plan ${res.plan || it.ref}`,
       });
     } else {
-      report.unresolved.push({ orderId, orgId: res.orgId || it.org_id, why: res.error || "settlement refused" });
+      /*
+        PAID AT CASHFREE AND REFUSED HERE — the worst case this job can find —
+        was pushed to `unresolved` but never counted in newlyUnresolved, so the
+        operator email (sent only when something is new) never fired for it.
+        Counted now, once: the diagnosis is left in `outcome` (settled_at stays
+        null, so the intent remains open and is re-examined), and a later run
+        that finds it already noted does not email again.
+      */
+      const why = String(res.error || "settlement refused");
+      report.unresolved.push({ orderId, orgId: res.orgId || it.org_id, why });
+      if (!it.outcome) newlyUnresolved++;
+      const { error: noteErr } = await svc.from("payment_intents")
+        .update({ outcome: `refused: ${why}`.slice(0, 500) }).eq("order_id", orderId);
+      if (noteErr) console.error(`[reconcile] could not note refused intent ${orderId}:`, noteErr.message);
     }
   }
 

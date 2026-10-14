@@ -3,6 +3,7 @@ import { serviceClient, createClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
 import { assertRole } from "@/lib/roles";
 import { PAYMENTS_TABLE } from "@/lib/pay/table";
+import { collectWorkspace } from "@/app/api/export/collect";
 
 /**
  * Workspace erasure — the "or delete" half of a promise we were already making.
@@ -64,24 +65,12 @@ const OWNED_TABLES = [
   "report_links", "invites", "scheduled_reports", "credit_ledger", "app_settings",
 ];
 
-/**
- * Tables the EXPORT must never include verbatim.
- *
- * The export exists so a customer leaves with their business data. It must not
- * become a way to read credentials that RLS and the /developers guard were just
- * tightened to protect — an export endpoint that dumps `api_keys.key` and
- * `webhook_endpoints.secret` reopens exactly the hole those changes closed.
- *
- * These tables are exported with their secret column removed rather than
- * dropped entirely, because knowing WHICH integrations existed is legitimately
- * part of your data; knowing the key is not, and you cannot use it after the
- * workspace is gone anyway.
+/*
+ * Export redaction (api_keys.key, webhook_endpoints.secret, integration
+ * credentials, report_links.token, secret app_settings values) lives with the
+ * export itself: EXPORT_REDACT in app/api/export/collect.ts, shared by
+ * exportBeforeErasure() below and /api/export.
  */
-const REDACT: Record<string, string[]> = {
-  api_keys: ["key"],
-  webhook_endpoints: ["secret"],
-  integrations: ["config", "credentials", "api_key", "token", "secret"],
-};
 
 export type ErasureResult = {
   ok: boolean;
@@ -120,6 +109,34 @@ export async function eraseWorkspace(confirmation: string): Promise<ErasureResul
 
   if (confirmation.trim() !== name) {
     return { ok: false, error: `Type the workspace name exactly — "${name}" — to confirm.` };
+  }
+
+  /*
+    SECOND FACTOR, like every other high-impact operation (issuing an API key,
+    connecting an integration, approving a customer message). Deleting the
+    whole workspace is the most irreversible thing in the product and it was
+    the one that did not ask: a hijacked owner session could erase the
+    business's records with nothing but the (visible) workspace name.
+
+    ALWAYS a second factor here — not the workspace's optional policy. Once
+    an owner has turned that policy off (a reasonable choice for day-to-day
+    actions), every gated operation falls back to password-only — and for
+    this one operation that means a stolen password deletes the business's
+    records for good. Irreversible gets the strict rule unconditionally.
+  */
+  {
+    const { assurance } = await import("@/lib/strong-auth");
+    const { strongAuthVerdict, SECURITY_PAGE } = await import("@/lib/strong-auth-rules");
+    const a = await assurance();
+    const sa = strongAuthVerdict({ required: true, current: a.current, next: a.next }, "delete this workspace");
+    if (!sa.ok) {
+      return {
+        ok: false,
+        error: sa.reason === "enrol"
+          ? `Deleting a workspace always needs two-step sign-in, because it cannot be undone. Turn it on under Settings → Security (${SECURITY_PAGE}) — it takes a minute with any authenticator app — then come back here.`
+          : sa.message,
+      };
+    }
   }
 
   /*
@@ -265,30 +282,27 @@ export async function exportBeforeErasure(): Promise<{ ok: boolean; json?: strin
   const svc = serviceClient();
   if (!svc) return { ok: false, error: "Export is unavailable right now." };
 
-  const out: Record<string, any[]> = {};
-  for (const t of [...OWNED_TABLES, PAYMENTS_TABLE, "subscriptions"]) {
-    try {
-      const { data } = await svc.from(t).select("*").eq("org_id", orgId);
-      let rows = (data as any[]) || [];
-      const drop = REDACT[t];
-      if (drop && rows.length) {
-        rows = rows.map((r) => {
-          const copy = { ...r };
-          for (const k of drop) if (k in copy) copy[k] = "[redacted]";
-          return copy;
-        });
-      }
-      if (rows.length) out[t] = rows;
-    } catch { /* absent table */ }
+  /*
+    Every workspace table, paged to the end, and ANY read error fails the whole
+    export (see app/api/export/collect.ts). This used to be one unpaged select
+    per table with errors turned into [] — so the file offered right before an
+    irreversible delete could be missing rows or whole tables and say nothing.
+  */
+  const extra = PAYMENTS_TABLE === "cortex_payments" ? [] : [PAYMENTS_TABLE];
+  const r = await collectWorkspace(svc, orgId, { extraTables: extra });
+  if (!r.ok) {
+    return { ok: false, error: `Export failed, so nothing was exported — do not delete yet. ${r.error}` };
   }
   return {
     ok: true,
     json: JSON.stringify({
       exported: new Date().toISOString(),
       org: orgId,
-      note: "API keys, webhook signing secrets and integration credentials are redacted. "
+      note: "API keys, webhook signing secrets, integration credentials, share-link tokens and secret settings are redacted. "
           + "They authenticate access to this workspace and are of no use once it is deleted.",
-      data: out,
+      counts: r.counts,
+      absent: r.absent,
+      data: r.data,
     }, null, 2),
   };
 }

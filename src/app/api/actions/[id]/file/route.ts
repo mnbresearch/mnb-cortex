@@ -19,6 +19,15 @@ export const maxDuration = 60;
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const { orgId, user } = await getUserAndOrg();
   if (!orgId || !user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  /* A generated workbook is a paid feature; a lapsed workspace is refused here
+     like every other non-metered export (lib/api-guard requireWorkspace). The
+     full JSON export (/api/export) stays open — leaving with your data is a
+     right, not a feature. */
+  {
+    const { requireWorkspace } = await import("@/lib/api-guard");
+    const gate = await requireWorkspace();
+    if (!gate.ok) return NextResponse.json(gate.body, { status: gate.status });
+  }
 
   const svc = serviceClient();
   if (!svc) return NextResponse.json({ error: "Service role not configured." }, { status: 503 });

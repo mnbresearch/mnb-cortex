@@ -27,13 +27,25 @@ async function optOut(rawEmail: string, token: string) {
   if (!email || !verifyUnsub(email, token)) {
     return page("Invalid link", "This unsubscribe link is invalid or has expired. To stop these emails, write to <a href=\"mailto:contact@mnbresearch.com\" style=\"color:#2f6b54\">contact@mnbresearch.com</a> and we'll remove you right away.", 400);
   }
+  /*
+    "You're unsubscribed" is a promise, so it is shown only once the opt-out is
+    actually stored. It used to render whatever happened — no service client,
+    a rejected upsert (PostgREST returns { error }, it does not throw) — and the
+    person kept getting the emails they had been told had stopped.
+  */
   const sb = serviceClient();
+  let stored = false;
   if (sb) {
     try {
-      await sb.from("email_optouts").upsert({ email, reason: "user_unsubscribe" }, { onConflict: "email" });
-    } catch { /* best effort */ }
+      const { error } = await sb.from("email_optouts").upsert({ email, reason: "user_unsubscribe" }, { onConflict: "email" });
+      if (error) console.error("[unsub] opt-out not stored:", error.message);
+      else stored = true;
+    } catch (e: any) { console.error("[unsub] opt-out threw:", e?.message); }
   }
-  return page("You're unsubscribed", `We've removed <b>${esc(email)}</b> from MNB Cortex product-update emails. You won't receive these any more. Changed your mind? Email <a href="mailto:contact@mnbresearch.com" style="color:#2f6b54">contact@mnbresearch.com</a>.`);
+  if (!stored) {
+    return page("We couldn't unsubscribe you just now", "Something went wrong on our side and your request was <b>not</b> saved. Please try the link again in a few minutes, or write to <a href=\"mailto:contact@mnbresearch.com\" style=\"color:#2f6b54\">contact@mnbresearch.com</a> and we'll remove you by hand.", 503);
+  }
+  return page("You're unsubscribed", `We've removed <b>${esc(email)}</b> from MNB Cortex product-update and marketing emails. You won't receive these any more. Changed your mind? Email <a href="mailto:contact@mnbresearch.com" style="color:#2f6b54">contact@mnbresearch.com</a>.`);
 }
 
 export async function GET(req: Request) {

@@ -55,8 +55,19 @@ export function buildOpenApi(server = "https://cortex.mnbresearch.com") {
   };
   paths["/api/v1/ingest"] = {
     post: {
-      summary: "Push records into the workspace (upsert on each table's natural key).",
-      description: "Requires scope `ingest:write`. At most 10,000 rows and 5 MB per call. Rows without their key (order_no, invoice_no, name; email or phone for leads) are counted in skipped_no_key and never invented.",
+      summary: "Push records into the workspace.",
+      /*
+        What each table ACTUALLY does — read off api_ingest in
+        2026_zzzw_api_platform.sql. This used to say "upsert on each table's
+        natural key" for all five, which was false for two of them: an
+        integrator re-sending inventory got duplicates, and one re-sending
+        leads expected updates that never happen.
+      */
+      description: "Requires scope `ingest:write`. At most 10,000 rows and 5 MB per call. Behaviour per table: "
+        + "`sales_orders` upserts on order_no, `invoices` on invoice_no, `customers` on name (existing rows are updated). "
+        + "`leads` is insert-if-absent: a row whose email (or last 10 phone digits) already exists in the workspace is skipped, and existing leads are never updated. "
+        + "`inventory_items` is a plain insert with no de-duplication — every row sent is added, so re-sending the same SKUs creates duplicate items. "
+        + "Rows without their key (order_no, invoice_no, name; email or phone for leads) are counted in skipped_no_key and never invented.",
       security: [{ bearer: ["ingest:write"] }, { apiKeyHeader: ["ingest:write"] }],
       requestBody: {
         required: true,
@@ -68,7 +79,7 @@ export function buildOpenApi(server = "https://cortex.mnbresearch.com") {
           },
         } } },
       },
-      responses: { "200": { description: "{ ok, written, skipped_no_key, note, request_id }" }, ...errorResponses({ "413": "Too many rows or body over 5 MB — nothing written" }) },
+      responses: { "200": { description: "{ ok, written, skipped_no_key, note, request_id }" }, ...errorResponses({ "413": "Too many rows or body over 5 MB — nothing written", "500": "Server-side failure (not a problem with your rows) — nothing written; safe to retry" }) },
     },
   };
 

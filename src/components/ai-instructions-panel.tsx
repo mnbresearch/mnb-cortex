@@ -56,6 +56,10 @@ Flag anything that improves reported profit but worsens cash.`,
 export function AiInstructionsPanel({ canEdit = true }: { canEdit?: boolean }) {
   const [text, setText] = useState("");
   const [loaded, setLoaded] = useState(false);
+  /* Editing is allowed only once the CURRENT instructions have been read.
+     A failed load used to enable an empty editor, and Save then replaced the
+     owner's real instructions with blank. */
+  const [loadErr, setLoadErr] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState("");
@@ -63,10 +67,12 @@ export function AiInstructionsPanel({ canEdit = true }: { canEdit?: boolean }) {
 
   useEffect(() => {
     fetch("/api/ai/instructions")
-      .then((r) => r.json())
-      .then((j) => { if (j?.ok) setText(j.text || ""); })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
+      .then(async (r) => {
+        const j = await r.json().catch(() => null);
+        if (r.ok && j?.ok && typeof j.text === "string") { setText(j.text); setLoaded(true); }
+        else setLoadErr(j?.error ? String(j.error) : "Could not load your current instructions.");
+      })
+      .catch(() => setLoadErr("Could not load your current instructions — check your connection."));
   }, []);
 
   async function save() {
@@ -104,7 +110,7 @@ export function AiInstructionsPanel({ canEdit = true }: { canEdit?: boolean }) {
               <button
                 key={p.label}
                 onClick={() => applyPreset(p.text)}
-                disabled={!canEdit}
+                disabled={!canEdit || !loaded}
                 title={p.hint}
                 className="inline-flex items-center gap-1.5 rounded-full border px-3 h-8 text-xs hover:bg-accent disabled:opacity-50"
               >
@@ -120,7 +126,7 @@ export function AiInstructionsPanel({ canEdit = true }: { canEdit?: boolean }) {
             rows={10}
             placeholder={loaded
               ? `e.g. We sell to distributors on 60-day credit, so receivables matter more than revenue.\nCall out anything over 75 days overdue by name.\nKeep answers under 200 words unless I ask for detail.`
-              : "Loading…"}
+              : loadErr ? "Not loaded — editing is disabled so nothing you saved is overwritten." : "Loading…"}
             className="mt-3 w-full rounded-lg border bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring font-mono leading-relaxed disabled:opacity-60"
           />
 
@@ -141,6 +147,11 @@ export function AiInstructionsPanel({ canEdit = true }: { canEdit?: boolean }) {
             </div>
           </div>
 
+          {loadErr && (
+            <p className="mt-2 text-sm text-danger" role="alert">
+              {loadErr} Editing is disabled so your saved instructions are not overwritten — reload the page to try again.
+            </p>
+          )}
           {err && <p className="mt-2 text-sm text-danger" role="alert">{err}</p>}
           {!canEdit && (
             <p className="mt-2 text-xs text-muted-foreground">

@@ -4,7 +4,7 @@ import { serviceClient } from "@/lib/supabase/server";
 import { emitQuietly } from "@/lib/webhooks";
 import { PAYMENTS_TABLE } from "@/lib/pay/table";
 import { operatorAlert } from "@/lib/operator-alert";
-import { planRefund, creditsToReclaim, daysToRemove, cycleDays, equivalentDays } from "@/lib/pay/refund-math";
+import { planRefund, creditsToReclaim, daysToRemove, cycleDays, equivalentDays, disputeOutcome } from "@/lib/pay/refund-math";
 import { ALL_PLANS } from "@/lib/config";
 import { pricePerDay } from "@/lib/pay/period";
 
@@ -104,9 +104,16 @@ export async function handleRefundEvent(
     return { ok: true, action: "recorded_only", detail: gate.why };
   }
 
-  const { data: row } = await svc.from(PAYMENTS_TABLE)
+  const { data: row, error: rowErr } = await svc.from(PAYMENTS_TABLE)
     .select("order_id, org_id, kind, ref, amount, status, cycle, refunded_amount, reversed_at")
     .eq("order_id", orderId).maybeSingle();
+  /*
+    A failed READ is not "no such order". Treating it as one recorded the
+    refund as unmatched, the route acked 200, and Cashfree never redelivered —
+    so a refund on a real order reversed nothing, for good. Throwing makes the
+    route answer 500 and Cashfree retry.
+  */
+  if (rowErr) throw new Error(`refund: could not read order ${orderId}: ${rowErr.message}`);
 
   if (!row) {
     /*
@@ -464,7 +471,8 @@ export async function handleRefundEvent(
  *   when the event type itself says so and no status is present. PENDING,
  *   ONHOLD, CANCELLED and FAILED are all "the money is still with us".
  *
- *   A dispute is acted on only once it is lost, accepted or charged back.
+ *   A dispute is acted on only once it is lost or accepted (disputeOutcome).
+ *   A chargeback being RAISED is not a decision.
  *   DISPUTE_CREATED and UNDER_REVIEW are decisions nobody has made yet, and
  *   reversing on them takes the product from a customer who may well win.
  */
@@ -477,8 +485,11 @@ export function refundReadiness(type: string, body: any, isDispute: boolean): {
     const status = String(
       body?.data?.dispute?.dispute_status ?? body?.data?.dispute?.status ?? "",
     ).toUpperCase();
-    const decided = /LOST|ACCEPT|CHARGEBACK|CLOSED_LOST/.test(status) || /LOST|CHARGEBACK/.test(t);
-    const won = /WON|CLOSED_WON|REJECTED/.test(status) || /WON/.test(t);
+    /* Outcome tokens only — see disputeOutcome. "CHARGEBACK" is a dispute
+       TYPE, not a decision: CHARGEBACK_CREATED used to count as lost. */
+    const outcome = disputeOutcome(status, t);
+    const decided = outcome === "lost";
+    const won = outcome === "won";
     if (won) {
       return { act: false, kind: "dispute_won", severity: "amber",
         why: `The dispute was resolved in our favour (${status || t}), so there is nothing to reverse.` };

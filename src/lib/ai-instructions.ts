@@ -24,18 +24,38 @@ export const AI_INSTRUCTIONS_KEY = "ai_instructions";
 /** Hard cap. Long instructions crowd out the business data in the context window. */
 export const MAX_INSTRUCTIONS = 4000;
 
-export async function getInstructions(orgId: string | null | undefined): Promise<string> {
-  if (!orgId) return "";
+/**
+ * Read the instructions, distinguishing "none saved" from "could not read".
+ *
+ * The old reader returned "" on ANY failure, and the settings panel treated
+ * that as "you have no instructions" and enabled the editor — so pressing Save
+ * after a transient read error overwrote the owner's real instructions with
+ * blank. A failed read is now an error, never an empty string.
+ */
+export async function readInstructions(orgId: string | null | undefined): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  if (!orgId) return { ok: true, text: "" };
   const svc = serviceClient();
-  if (!svc) return "";
+  if (!svc) return { ok: false, error: "Service role not configured." };
   try {
-    const { data } = await svc
+    const { data, error } = await svc
       .from("app_settings").select("value")
       .eq("org_id", orgId).eq("key", AI_INSTRUCTIONS_KEY).maybeSingle();
-    return String((data as any)?.value || "").slice(0, MAX_INSTRUCTIONS);
-  } catch {
-    return "";
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, text: String((data as any)?.value || "").slice(0, MAX_INSTRUCTIONS) };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Could not read the AI instructions." };
   }
+}
+
+/**
+ * The instructions text. THROWS when they cannot be read — so GET
+ * /api/ai/instructions answers non-200 instead of { ok: true, text: "" }, and
+ * runCortex (which catches) simply proceeds without them for that answer.
+ */
+export async function getInstructions(orgId: string | null | undefined): Promise<string> {
+  const r = await readInstructions(orgId);
+  if (!r.ok) throw new Error(`Could not read the AI instructions: ${r.error}`);
+  return r.text;
 }
 
 export async function setInstructions(orgId: string, text: string): Promise<{ ok: boolean; error?: string }> {

@@ -113,7 +113,7 @@ export function normalisePhone(raw: string): string | null {
 export type SendResult = { sent: boolean; id?: string; error?: string; needsSetup?: boolean };
 
 /**
- * The workspace's OWN WhatsApp credentials, falling back to the platform ones.
+ * The workspace's OWN WhatsApp credentials (no orgId: the platform ones).
  *
  * /integrations already collected a "Permanent access token" and "Phone number
  * ID" for WhatsApp and encrypted them — and nothing ever read them back, so a
@@ -121,6 +121,18 @@ export type SendResult = { sent: boolean; id?: string; error?: string; needsSetu
  * what makes that connection actually do something.
  */
 export async function whatsappConfigFor(orgId?: string | null): Promise<WhatsAppConfig | null> {
+  /*
+    A WORKSPACE NEVER FALLS BACK TO OUR ACCOUNT.
+
+    With an orgId, this used to swallow any error reading the workspace's own
+    key — and also a workspace with no key at all — and return the platform
+    env account. So a tenant's messages went out from OUR number, contradicting
+    "messages send from your own business number, never pooled through ours"
+    (and a fast route to a Meta ban for everyone). With an orgId the answer is
+    the workspace's own account or null — the callers already turn null into
+    whatsappCustomerHint(). The env account is only for platform/operator sends
+    that pass no orgId.
+  */
   if (orgId) {
     try {
       const { credentialsFor } = await import("@/lib/credentials");
@@ -128,12 +140,15 @@ export async function whatsappConfigFor(orgId?: string | null): Promise<WhatsApp
       const token = String(c?.api_key || c?.token || "").trim();
       const phoneNumberId = String(c?.phone_number_id || "").trim();
       if (token && phoneNumberId) return { token, phoneNumberId };
-    } catch { /* fall back to the platform account below */ }
+    } catch (e: any) {
+      console.error("[whatsapp] could not read this workspace's WhatsApp credentials:", e?.message);
+    }
+    return null;
   }
   return whatsappConfig();
 }
 
-/** True when THIS workspace can send — its own account, or the platform one. */
+/** True when THIS workspace can send from its own account (no orgId: the platform one). */
 export async function hasWhatsAppFor(orgId?: string | null): Promise<boolean> {
   return (await whatsappConfigFor(orgId)) !== null;
 }

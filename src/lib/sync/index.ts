@@ -80,11 +80,26 @@ const MAX_PAGES = 20;
 const day = (iso?: string) => (iso ? String(iso).slice(0, 10) : undefined);
 
 /* ------------------------------------------------------------------ Shopify */
+/**
+ * The ONE Shopify shop-domain normaliser, shared by the connection test
+ * (api/integrations) and this sync. They used to differ — the test stripped
+ * any path and was case-insensitive about the scheme, the sync stripped only a
+ * trailing slash — so "https://acme.myshopify.com/admin" passed the test and
+ * then failed every sync. People paste the admin URL; both now read it alike.
+ */
+export function normaliseShopDomain(raw: unknown): string {
+  return String(raw ?? "").trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/[/?#].*$/, "")
+    .replace(/\.$/, "")
+    .toLowerCase();
+}
+
 const shopify: Connector = {
   id: "shopify",
   label: "Shopify",
   async pull(c, since) {
-    const shop = String(c.shop || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const shop = normaliseShopDomain(c.shop);
     if (!shop || !c.api_key) throw new Error("Shopify needs a shop domain and access token.");
     /*
       `c.shop` is a free-text field the customer saved. Interpolated into a

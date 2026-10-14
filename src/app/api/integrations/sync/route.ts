@@ -12,6 +12,12 @@ export const maxDuration = 120;
 export async function POST(req: Request) {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) return NextResponse.json({ ok: false, error: "Sign in to sync." }, { status: 401 });
+  /* Lapsed workspaces do not sync — same gate as every non-metered feature. */
+  {
+    const { requireWorkspace } = await import("@/lib/api-guard");
+    const gate = await requireWorkspace();
+    if (!gate.ok) return NextResponse.json(gate.body, { status: gate.status });
+  }
 
   const sb = await createClient();
   const { data: mem } = await sb.from("memberships").select("role").eq("org_id", orgId).eq("user_id", user.id).maybeSingle();

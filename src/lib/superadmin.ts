@@ -1,15 +1,15 @@
 import "server-only";
 import { createClient, serviceClient, hasSupabase } from "@/lib/supabase/server";
 import { MY_BUSINESSES } from "@/lib/config";
-import { SUPER_ADMINS } from "@/lib/operators";
+import { isSuperAdminUser } from "@/lib/operators";
 
 /** Platform-level check: is the signed-in user an operator of the whole platform? */
 export async function isSuperAdmin(): Promise<boolean> {
   if (!hasSupabase()) return false;
   try {
     const { data: { user } } = await (await createClient()).auth.getUser();
-    const email = (user?.email || "").toLowerCase();
-    return Boolean(email) && SUPER_ADMINS.includes(email);
+    /* Confirmed address only — see isSuperAdminUser. */
+    return isSuperAdminUser(user);
   } catch { return false; }
 }
 

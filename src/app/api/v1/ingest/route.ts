@@ -74,7 +74,21 @@ export async function POST(req: Request) {
   */
   const { data, error } = await svc.rpc("api_ingest", { p_key: key, p_table: table, p_rows: rows });
   /* The database's own wording stays in our logs, not in a third party's integration. */
-  if (error) return apiError(ctx.rid, 400, "bad_request", "The rows could not be written. Check types (numbers, YYYY-MM-DD dates) and retry. Nothing was written.");
+  /*
+    A DATA error is the caller's to fix (400); anything else is ours (500).
+    Every database failure used to come back as 400 "check your types", so an
+    outage or a broken migration told integrators their data was wrong — and a
+    well-behaved client does not retry a 400. SQLSTATE class 22 (bad value:
+    number, date, length) and 23 (constraint) are data; the rest is internal.
+  */
+  if (error) {
+    const code = String((error as any).code || "");
+    if (/^2[23]/.test(code)) {
+      return apiError(ctx.rid, 400, "bad_request", "The rows could not be written. Check types (numbers, YYYY-MM-DD dates) and retry. Nothing was written.");
+    }
+    console.error("[api/v1/ingest] api_ingest failed (not a data error):", code, error.message);
+    return apiError(ctx.rid, 500, "internal", "Something went wrong on our side. Nothing was written — it is safe to retry.");
+  }
 
   // An invalid key used to come back inside a 200, so integrators never noticed
   // their pipeline was silently doing nothing.
