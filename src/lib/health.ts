@@ -910,6 +910,11 @@ async function checkSchema(): Promise<Check> {
     ["api_key_events", "event", "2026_zzzw_api_platform.sql"],
     ["checkout_followups", "status, attempts", "2026_zzzx_checkout_followup.sql"],
     ["platform_switches", "checkout_followup_mode", "2026_zzzx_checkout_followup.sql"],
+    /* 6.46 (full-app audit). The code tolerates each column being absent, so
+       without these lines an unrun file would be invisible. */
+    ["finance_ledger", "net_cash_flow", "2026_zzzz_c_net_cash_flow.sql"],
+    ["vendors", "written_agreement_recorded_at", "2026_zzzz_c_msme_agreement_unknown.sql"],
+    ["invites", "expires_at", "2026_zzzz_e_invite_expiry.sql"],
   ];
   /*
     CONCURRENT, BECAUSE SEQUENTIAL WAS TIMING THE CHECK OUT.
