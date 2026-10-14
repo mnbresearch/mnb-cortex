@@ -20,9 +20,18 @@ const SEED: Bill[] = [
  * is headed "What you owe, how long you take, and when to pay early", which is
  * a claim about the reader's own money.
  */
-export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesHint?: number } = {}) {
+/**
+ * `totals` is computed by the SERVER over every open payable and committed PO.
+ * The table shows at most 60 rows; the headline must not be the sum of the
+ * visible rows, which is what it used to be. Edits made here adjust the
+ * server total by exactly the amount edited, so modelling still works.
+ */
+export type PayableTotals = { total: number; count: number; truncated?: boolean };
+
+export function PayablesDpo({ seed, purchasesHint, totals }: { seed?: Bill[]; purchasesHint?: number; totals?: PayableTotals } = {}) {
   const isReal = Boolean(seed && seed.length);
   const [bills, setBills] = useState<Bill[]>(isReal ? seed! : SEED);
+  const seedSum = useMemo(() => (isReal ? seed!.reduce((s, b) => s + b.amount, 0) : 0), [isReal, seed]);
 
   /*
     THE DENOMINATOR WAS INVENTED, AND THE WARNING WAS SUPPRESSED FOR EXACTLY
@@ -55,7 +64,9 @@ export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesH
   const [netDays, setNetDays] = useState(30);
 
   const m = useMemo(() => {
-    const total = bills.reduce((s, b) => s + b.amount, 0);
+    const visible = bills.reduce((s, b) => s + b.amount, 0);
+    /* Whole-book total from the server, moved by whatever the owner edited. */
+    const total = isReal && totals ? totals.total + (visible - seedSum) : visible;
     const dpo = purchasesKnown ? (total / purchases) * 30 : null;
     /*
       A 100% discount divides by zero and rendered "an effective Infinity%" in
@@ -68,7 +79,7 @@ export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesH
       : null;
     const worthTaking = effAnnual !== null && effAnnual > 12; // vs ~12% cost of capital
     return { total, dpo, effAnnual, worthTaking };
-  }, [bills, purchases, purchasesKnown, discPct, discDays, netDays]);
+  }, [bills, purchases, purchasesKnown, discPct, discDays, netDays, isReal, totals, seedSum]);
 
   function upd(id: string, k: keyof Bill, v: string) { setBills((xs) => xs.map((b) => b.id === id ? { ...b, [k]: k === "vendor" ? v : Number(v) } : b)); }
   function add() { setBills((xs) => [...xs, { id: "b" + Date.now(), vendor: "New vendor", amount: 100000, days: 30 }]); }
@@ -88,8 +99,14 @@ export function PayablesDpo({ seed, purchasesHint }: { seed?: Bill[]; purchasesH
           so DPO cannot be calculated. Enter your typical monthly purchases below and it will compute.
         </div>
       )}
+      {isReal && totals && totals.count > bills.length && (
+        <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          Showing the largest <b>{bills.length}</b> of <b>{totals.count}</b> open bills and purchase orders. The total
+          and DPO cover all {totals.count}{totals.truncated ? " that Cortex could read (the first 20,000 rows)" : ""}.
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        <Stat label="Total payable" value={inr(m.total)} />
+        <Stat label={isReal && totals && totals.count > bills.length ? `Total payable (all ${totals.count})` : "Total payable"} value={inr(m.total)} />
         <Stat label="DPO" value={m.dpo === null ? "—" : `${m.dpo.toFixed(0)} days`} highlight />
         <Stat
           label={derived ? "Monthly purchases (from your last 90 days)" : "Monthly purchases"}

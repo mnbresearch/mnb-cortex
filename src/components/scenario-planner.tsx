@@ -21,8 +21,10 @@ import { inr, mdToHtml } from "@/lib/utils";
  */
 export type ScenarioBaseline = {
   revenue: number | null;   // monthly
-  margin: number | null;    // 0..1
+  margin: number | null;    // 0..1 — only from a real record; otherwise null and the owner sets it
   cash: number | null;
+  /** Where the revenue figure came from, e.g. "Sep 2026, the last complete month". */
+  revenueBasis?: string | null;
 };
 
 const COST_PER_HIRE = 60_000; // fully-loaded monthly
@@ -51,7 +53,18 @@ export function ScenarioPlanner({ baseline }: { baseline?: ScenarioBaseline } = 
   */
   const real = Boolean(baseline && baseline.revenue !== null);
   const BASE_REVENUE = baseline?.revenue ?? 0;
-  const BASE_MARGIN = baseline?.margin ?? 0.12;
+  /*
+    MARGIN IS AN ASSUMPTION THE OWNER SETS, AND THE PAGE SAYS SO.
+
+    No KPI in the product carries a margin — metrics.ts never emits
+    gross_margin or net_profit — so the old banner "at 12% net, from your own
+    figures" was the placeholder wearing the workspace's name, every time.
+    The margin is now an explicit, editable assumption; a real recorded margin
+    (if one is ever supplied as baseline.margin) is used as its starting value.
+  */
+  const marginFromBooks = typeof baseline?.margin === "number";
+  const [marginPct, setMarginPct] = useState(Math.round((baseline?.margin ?? 0.12) * 100));
+  const BASE_MARGIN = marginPct / 100;
   const BASE_COSTS = BASE_REVENUE * (1 - BASE_MARGIN);
   /*
     Cash is tracked as "do we know it" separately from its value. `?? 0` alone
@@ -120,8 +133,11 @@ export function ScenarioPlanner({ baseline }: { baseline?: ScenarioBaseline } = 
     <>
     {real ? (
       <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground mb-3">
-        Baseline: <b>{inr(BASE_REVENUE)}</b> monthly revenue at <b>{Math.round(BASE_MARGIN * 100)}%</b> net,
-        from your own figures. Move the sliders to model against it.
+        Baseline: <b>{inr(BASE_REVENUE)}</b> monthly revenue{baseline?.revenueBasis ? ` (${baseline.revenueBasis})` : ""}, from your own figures.
+        {marginFromBooks
+          ? <> The starting margin of <b>{marginPct}%</b> is from your books.</>
+          : <> The <b>{marginPct}%</b> net margin is an <b>assumption</b>, not from your books — Cortex does not hold your costs. Set your own below.</>}
+        {" "}Move the sliders to model against it.
       </div>
     ) : (
       <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground mb-3">
@@ -143,6 +159,7 @@ export function ScenarioPlanner({ baseline }: { baseline?: ScenarioBaseline } = 
         <Slider label="Price change" value={p} min={-15} max={20} step={1} unit="%" onChange={setP} />
         <Slider label="Cost inflation" value={c} min={-10} max={25} step={1} unit="%" onChange={setC} />
         <Slider label="New hires" value={h} min={0} max={20} step={1} unit="" onChange={setH} />
+        <Slider label={marginFromBooks ? "Net margin today" : "Net margin today (your assumption)"} value={marginPct} min={-30} max={60} step={1} unit="% " onChange={setMarginPct} />
       </div>
 
       {/*

@@ -67,8 +67,18 @@ export function ValuationCalculator({ seed }: { seed?: WorkspaceSeed } = {}) {
     <ExampleFigures
       source={seedSource(seed, "revenue", "ebitdaAnnual")}
       what="valuation inputs"
-      stillExample={["growth", "the revenue multiple", "the EBITDA multiple", "the discount rate", "the terminal multiple"]}
-      note="Revenue and EBITDA are your trailing twelve months from the finance ledger."
+      stillExample={[
+        /* EBITDA is almost never on the ledger (nothing in the product writes
+           it), and the banner used to say it was "your trailing twelve months"
+           while the field held the ₹90 L example. Named when it is one. */
+        seed?.revenue == null ? "revenue" : "",
+        seed?.ebitdaAnnual == null ? "EBITDA" : "",
+        "growth", "the revenue multiple", "the EBITDA multiple", "the discount rate", "the terminal multiple",
+      ].filter(Boolean)}
+      note={[
+        seed?.revenue != null ? "Revenue is your trailing twelve months from the finance ledger" : "",
+        seed?.ebitdaAnnual != null ? "EBITDA is your trailing twelve months from the finance ledger" : "",
+      ].filter(Boolean).join("; ") + (seed?.revenue != null || seed?.ebitdaAnnual != null ? "." : "")}
     />
     <Card className="p-5 space-y-5">
       <div>

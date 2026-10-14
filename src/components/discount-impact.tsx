@@ -51,7 +51,10 @@ export function DiscountImpact({ seed }: { seed?: WorkspaceSeed } = {}) {
       <ExampleFigures
         source={seededPrice != null ? "yours" : "example"}
         what="price and cost"
-        note="Price is your average order value; cost applies your overall COGS-to-revenue ratio to it. Units stay an example — how many you would sell at the lower price is a forecast, and the workspace only knows what you sold at the old one."
+        stillExample={seededCost == null ? ["cost (no COGS recorded)"] : []}
+        note={seededCost != null
+          ? "Price is your average order value; cost applies your overall COGS-to-revenue ratio to it. Units stay an example — how many you would sell at the lower price is a forecast, and the workspace only knows what you sold at the old one."
+          : "Price is your average order value. Your workspace records no cost of goods, so cost is an example — enter yours. Units stay an example too: how many you would sell at the lower price is a forecast."}
       />
     <Card className="p-5 space-y-5">
       <div>

@@ -20,10 +20,12 @@
  * module is that idea done properly: per-column alias lists, a report of what
  * was and was not recognised, and no silent failure.
  *
- * DELIBERATELY PURE. No imports, no server-only, no database. So the import
- * screen can preview the match before uploading, the server can apply the same
- * mapping when writing, and the test can exercise the real thing.
+ * DELIBERATELY PURE. No server-only, no database — its one import is the
+ * equally pure date parser. So the import screen can preview the match before
+ * uploading, the server can apply the same mapping when writing, and the test
+ * can exercise the real thing.
  */
+import { parseIndianDate } from "./accounting-export.ts";
 
 /**
  * Normalise a header for comparison: lowercase, drop everything that is not a
@@ -57,6 +59,14 @@ export const COLUMN_ALIASES: Record<string, Record<string, string[]>> = {
     product: ["product", "item", "itemname", "description", "productname", "sku", "goods", "service", "particular"],
     amount: ["amount", "total", "value", "netamount", "grandtotal", "invoiceamount", "billamount", "saleamount", "amt", "totalamount", "debit"],
     status: ["status", "state", "orderstatus", "stage", "paymentstatus"],
+    /*
+      THE DATE OF THE SALE. It was not importable at all, so every imported
+      order landed on the import day (`order_date` defaults to current_date):
+      two years of history became "Revenue (MTD)", the monthly trend was one
+      spike, and DSO / RFM recency were computed from today. Listed LAST so the
+      fuzzy "date" match only takes a header nothing above wanted.
+    */
+    order_date: ["order_date", "orderdate", "invoicedate", "voucherdate", "billdate", "saledate", "salesdate", "transactiondate", "docdate", "date", "dated"],
   },
   invoices: {
     invoice_no: ["invoice_no", "invoiceno", "invoicenumber", "invoice", "billno", "billnumber", "voucherno", "vouchernumber", "docno", "id"],
@@ -218,7 +228,7 @@ export function applyMapping(row: any, match: HeaderMatch): Record<string, any> 
 
 export const IMPORT_COLS: Record<string, { cols: string[]; nums: string[] }> = {
 
-  sales_orders: { cols: ["order_no", "customer_name", "region", "product", "amount", "status"], nums: ["amount"] },
+  sales_orders: { cols: ["order_no", "customer_name", "region", "product", "amount", "status", "order_date"], nums: ["amount"] },
   invoices: { cols: ["invoice_no", "party", "amount", "issue_date", "due_date", "status", "type"], nums: ["amount"] },
   inventory_items: { cols: ["sku", "name", "category", "on_hand", "reorder_level", "unit_cost", "supplier"], nums: ["on_hand", "reorder_level", "unit_cost"] },
   employees: { cols: ["name", "department", "role", "monthly_ctc", "performance"], nums: ["monthly_ctc", "performance"] },
@@ -243,11 +253,40 @@ export const IMPORT_COLS: Record<string, { cols: string[]; nums: string[] }> = {
   `picked` is the row AFTER header resolution, so this function never sees the
   customer's original column names.
 */
+/** Columns that hold a calendar date and are parsed, never passed through raw. */
+export const DATE_COLS = new Set(["order_date", "issue_date", "due_date", "run_date"]);
+
+/**
+ * Statuses that mean "this sale happened" in the exports SMEs actually have.
+ *
+ * Revenue everywhere is `status = 'won'`. An imported order marked Paid,
+ * Completed, Delivered or Closed is a sale that happened, and it counted ₹0 —
+ * so a Vyapar or Shopify export of 800 delivered orders showed revenue of
+ * nothing. Exact matches only: "closed lost" must not become a win.
+ */
+export const WON_STATUS_SYNONYMS = new Set([
+  "won", "paid", "completed", "complete", "delivered", "closed", "closed won", "closedwon",
+  "fulfilled", "invoiced", "settled", "done", "success", "successful",
+]);
+const LOST_STATUS_SYNONYMS = new Set(["closed lost", "closedlost"]);
+
+/** Invoice `type` values from real exports, folded to the two the product understands. */
+const RECEIVABLE_TYPES = new Set(["receivable", "receivables", "sales", "sale", "sales invoice", "customer", "debtor", "debtors", "ar", "income", "outward"]);
+const PAYABLE_TYPES = new Set(["payable", "payables", "purchase", "purchases", "purchase invoice", "supplier", "vendor", "creditor", "creditors", "ap", "expense", "bill", "inward"]);
+
 export function mapImportedRow(table: string, spec: { cols: string[]; nums: string[] }, orgId: string, picked: Record<string, any>): any {
   const o: any = { org_id: orgId };
   for (const c of spec.cols) {
     const v = picked[c];
     if (v === undefined || v === "") continue;
+    if (DATE_COLS.has(c)) {
+      /* The same day-first parser the export flattener uses (1-Apr-2026,
+         01/04/2026, 2026-04-01). An unreadable date is LEFT OUT rather than
+         written raw: Postgres would reject the whole batch on one bad cell. */
+      const iso = parseIndianDate(String(v));
+      if (iso) o[c] = iso;
+      continue;
+    }
     o[c] = spec.nums.includes(c) ? (parseFloat(String(v).replace(/[^0-9.-]/g, "")) || 0) : String(v);
   }
 
@@ -260,6 +299,11 @@ export function mapImportedRow(table: string, spec: { cols: string[]; nums: stri
   if (table === "sales_orders" && !o.status) o.status = "won";
   /* "Won" from Tally/CSV must count: revenue is `status = 'won'` everywhere. */
   if (table === "sales_orders" && o.status) o.status = String(o.status).trim().toLowerCase();
+  if (table === "sales_orders" && o.status) {
+    const st = String(o.status).replace(/[\s_-]+/g, " ");
+    if (WON_STATUS_SYNONYMS.has(st)) o.status = "won";
+    else if (LOST_STATUS_SYNONYMS.has(st)) o.status = "lost";
+  }
 
   /*
     Normalise the two columns that are COMPARED rather than displayed.
@@ -274,8 +318,14 @@ export function mapImportedRow(table: string, spec: { cols: string[]; nums: stri
   if (table === "invoices") {
     if (o.status) o.status = String(o.status).trim().toLowerCase();
     if (o.type) o.type = String(o.type).trim().toLowerCase();
-    // Anything that is not a known receivable/payable value is a receivable,
-    // which is the existing column default.
+    /* Fold real-world labels first, so a "Purchase" row is a PAYABLE. It used
+       to fall through to the line below and become a receivable — a supplier
+       bill the collections agent would then chase as money owed TO us.
+       Receipts, payments, journals and contra entries are not invoices at all;
+       accounting-export.ts drops them (with a count) before they reach here. */
+    if (o.type && RECEIVABLE_TYPES.has(o.type)) o.type = "receivable";
+    else if (o.type && PAYABLE_TYPES.has(o.type)) o.type = "payable";
+    // Anything still unrecognised is a receivable, which is the column default.
     if (o.type && !["receivable", "payable"].includes(o.type)) o.type = "receivable";
   }
   return o;

@@ -1,7 +1,7 @@
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { PayablesDpo } from "@/components/payables-dpo";
-import { getInvoices, getPurchaseOrders } from "@/lib/data";
+import { getTableStats } from "@/lib/data";
 import { daysPastDueIST } from "@/lib/statutory";
 
 export const dynamic = "force-dynamic";
@@ -19,10 +19,25 @@ export default async function Payables() {
     both belong in DPO — a PO that has been sent is a commitment whether or not
     the supplier's invoice has landed.
   */
-  const [{ rows: invRows, live: invLive }, { rows: poRows, live: poLive }] =
-    await Promise.all([getInvoices(), getPurchaseOrders()]);
+  /*
+    EVERY open payable, not the newest 200.
 
-  const bills = [
+    This read getInvoices()/getPurchaseOrders() — list reads capped at 200
+    rows each, newest first — then sliced to the largest 60, and the component
+    totalled whatever it was handed. So "Total payable" covered at most 60 of
+    at most 200 bills: always too low, never flagged, on the page an owner uses
+    to decide what to pay. The totals are now computed here over every row
+    (paged past PostgREST's 1,000 cap), and only the TABLE is truncated, with
+    "showing N of M" on screen.
+  */
+  const [inv, po] = await Promise.all([
+    getTableStats("invoices", "id, party, amount, status, type, due_date, created_at"),
+    getTableStats("purchase_orders", "id, supplier, amount, status, created_at"),
+  ]);
+  const invRows = inv.rows, poRows = po.rows, invLive = inv.live, poLive = po.live;
+  const readError = inv.error || po.error;
+
+  const allBills = [
     ...(invLive ? invRows : [])
       .filter((i) => String(i.type || "").toLowerCase() === "payable")
       .filter((i) => String(i.status || "").toLowerCase() !== "paid")
@@ -30,7 +45,13 @@ export default async function Payables() {
     ...(poLive ? poRows : [])
       .filter((p) => ["sent", "received", "approved"].includes(String(p.status || "").toLowerCase()))
       .map((p) => ({ id: `po-${p.id}`, vendor: String(p.supplier || "Unnamed supplier"), amount: n(p.amount), days: ageDays(p.created_at) })),
-  ].sort((a, b) => b.amount - a.amount).slice(0, 60);
+  ].sort((a, b) => b.amount - a.amount);
+  const totals = {
+    total: allBills.reduce((s, b) => s + b.amount, 0),
+    count: allBills.length,
+    truncated: inv.truncated || po.truncated,
+  };
+  const bills = allBills.slice(0, 60);
 
   /*
     DPO = outstanding payables / monthly purchases x 30. The denominator must be
@@ -59,7 +80,15 @@ export default async function Payables() {
   return (
     <>
       <Topbar title="Payables & DPO" subtitle="What you owe, how long you take, and when to pay early" />
-      <PageShell><PayablesDpo seed={bills} purchasesHint={purchasesHint} /></PageShell>
+      <PageShell>
+        {readError ? (
+          <div role="alert" className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm mb-3">
+            <b className="text-danger">Cortex couldn&rsquo;t read all of your bills just now</b> ({readError}). The figures below may be
+            incomplete — reload to try again before acting on them.
+          </div>
+        ) : null}
+        <PayablesDpo seed={bills} purchasesHint={purchasesHint} totals={totals} />
+      </PageShell>
     </>
   );
 }

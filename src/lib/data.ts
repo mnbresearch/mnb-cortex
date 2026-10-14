@@ -239,12 +239,49 @@ export async function getAlertRules() {
 }
 
 // ---- entity fetchers (return real rows when logged in; [] otherwise) ----
+/** Rows a list page shows. KPIs must NOT be computed from these — see getTableStats. */
+export const LIST_LIMIT = 200;
+/*
+  BACKWARD COMPATIBLE: `rows` and `live` are unchanged. Two fields are added:
+
+    error      the database's message when the read FAILED. It used to be
+               dropped, so a failed query rendered the page's "No records yet"
+               empty state — telling an owner with 3,000 orders that they have
+               none. Callers should show it.
+    truncated  true when the list hit LIST_LIMIT, i.e. there are probably more
+               rows than are on screen. A header that says "N records" over
+               these rows must say "latest N" instead.
+*/
 async function fetchRows(table: string, order = "created_at") {
   const org = await currentOrg();
-  if (!org) return { rows: [] as any[], live: false };
+  if (!org) return { rows: [] as any[], live: false, error: null as string | null, truncated: false };
   const sb = await createClient();
-  const { data } = await sb.from(table).select("*").eq("org_id", org).order(order, { ascending: false }).limit(200);
-  return { rows: (data as any[]) || [], live: true };
+  const { data, error } = await sb.from(table).select("*").eq("org_id", org).order(order, { ascending: false }).limit(LIST_LIMIT);
+  const rows = (data as any[]) || [];
+  return { rows, live: true, error: error ? error.message : null, truncated: rows.length >= LIST_LIMIT };
+}
+
+/**
+ * EVERY row of a table (selected columns only), for page-level KPIs.
+ *
+ * fetchRows() is a list read capped at 200; KPIs computed from it describe
+ * the newest 200 while the header says "N records". This pages past
+ * PostgREST's 1,000 cap up to 20,000 and reports `truncated` and `error`
+ * honestly, so a page can say "first 20,000" or "couldn't read" rather than
+ * printing a confident partial total.
+ */
+export async function getTableStats(
+  table: string,
+  columns: string,
+  order = "created_at",
+): Promise<{ rows: any[]; live: boolean; truncated: boolean; error: string | null }> {
+  const org = await currentOrg();
+  if (!org) return { rows: [], live: false, truncated: false, error: null };
+  const sb = await createClient();
+  const { pageAll } = await import("@/lib/page-all");
+  const r = await pageAll<any>((a, b) => sb.from(table).select(columns)
+    .eq("org_id", org).order(order, { ascending: false }).order("id").range(a, b));
+  return { rows: r.rows, live: true, truncated: r.truncated, error: r.error };
 }
 export const getSalesOrders = () => fetchRows("sales_orders", "order_date");
 
@@ -391,7 +428,12 @@ export async function getFinanceSeries() {
   const series = data.map((r: any) => ({
     month: new Date(r.period).toLocaleString("en", { month: "short" }),
     revenue: +(Number(r.revenue) / 1e7).toFixed(2),
-    profit: +(Number(r.net_profit) / 1e7).toFixed(2),
+    /* Unknown stays unknown: a month with no recorded profit is plotted as a
+       gap, not as ₹0. (The bank reader no longer writes net_profit — a
+       statement's money-in minus money-out is net CASH FLOW, which can be
+       a loan — so most months now carry no profit figure at all.) */
+    profit: r.net_profit === null || r.net_profit === undefined || !Number.isFinite(Number(r.net_profit))
+      ? null : +(Number(r.net_profit) / 1e7).toFixed(2),
     cash: +(Number(r.cash_balance) / 1e7).toFixed(2),
   }));
   // Revenue is derived from real sales orders, but profit and cash need cost data
@@ -430,19 +472,27 @@ export async function getLeads() {
   const { user, orgId } = await getUserAndOrg();
   if (!orgId) return { rows: [] as any[], live: false };
   const isSuper = SUPER_ADMINS.includes(String(user?.email || "").toLowerCase());
-  // Platform owner (super-admin) sees every pricing inquiry, including public
-  // ones with no org, via the service role. Regular customers only ever see
-  // leads scoped to their own workspace — never another tenant's.
+  // Platform owner (super-admin) additionally sees the PUBLIC pricing inquiries
+  // — leads with no org — via the service role, plus their own workspace's.
+  // NOT every tenant's: the service key bypasses RLS, and this used to select
+  // `leads` with no org filter at all, so the operator's /leads page listed
+  // every customer's private sales leads. Another tenant's pipeline is not
+  // platform data. Regular customers only ever see their own workspace.
   if (isSuper) {
     const svc = serviceClient();
-    if (svc) {
-      const { data } = await svc.from("leads").select("*").order("created_at", { ascending: false }).limit(300);
-      return { rows: (data as any[]) || [], live: true };
+    if (svc && /^[0-9a-f-]{36}$/i.test(String(orgId))) {
+      const { data, error } = await svc.from("leads").select("*")
+        .or(`org_id.is.null,org_id.eq.${orgId}`)
+        .order("created_at", { ascending: false }).limit(300);
+      const rows = (data as any[]) || [];
+      return { rows, live: true, error: error ? String(error.message || "read failed") : null, truncated: rows.length >= 300 };
     }
   }
   const sb = await createClient();
-  const { data } = await sb.from("leads").select("*").eq("org_id", orgId).order("created_at", { ascending: false }).limit(200);
-  return { rows: (data as any[]) || [], live: true };
+  /* A failed read must not read as "no leads yet"; a full page must not read as "all of them". */
+  const { data, error } = await sb.from("leads").select("*").eq("org_id", orgId).order("created_at", { ascending: false }).limit(200);
+  const rows = (data as any[]) || [];
+  return { rows, live: true, error: error ? String(error.message || "read failed") : null, truncated: rows.length >= 200 };
 }
 
 /*

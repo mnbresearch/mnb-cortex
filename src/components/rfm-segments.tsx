@@ -7,6 +7,15 @@ import { Sparkles, Plus, Trash2 } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
 import { scoreBook, SEGMENT_TONE } from "@/lib/rfm";
 
+/* An /api/ai reply that is not `ok: true` is an ERROR, whatever its `text`
+   says — show it as one, never as the analysis (or the email body). */
+function aiFailure(j: any): string {
+  const t = j && typeof j.text === "string" && j.text.trim() ? j.text.trim()
+    : j && typeof j.error === "string" && j.error.trim() ? j.error.trim() : "";
+  return t || "The AI did not return an answer. Try again in a moment.";
+}
+
+
 type Cust = { id: string; name: string; recency: number; frequency: number; monetary: number };
 
 const SEED: Cust[] = [
@@ -22,7 +31,7 @@ const SEED: Cust[] = [
 export function RfmSegments({ seed }: { seed?: Cust[] } = {}) {
   const isReal = Boolean(seed && seed.length);
   const [rows, setRows] = useState<Cust[]>(isReal ? seed! : SEED);
-  const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
+  const [out, setOut] = useState(""); const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
 
   // Scored as a BOOK, not row by row: frequency and monetary are ranked against
   // this workspace's own customers as well as against absolute bands, so the
@@ -44,10 +53,10 @@ export function RfmSegments({ seed }: { seed?: Cust[] } = {}) {
   function del(id: string) { setRows((rs) => rs.filter((c) => c.id !== id)); }
 
   async function advise() {
-    setLoading(true); setOut("");
-    const input = "Customer RFM segments:\n" + scored.map((c) => `- ${c.name}: ${c.seg.name} (recency ${c.recency}d, ${c.frequency} orders/yr, ${inr(c.monetary)}/yr)`).join("\n") + "\nGive a specific action for each segment (Champions, Loyal, At risk, Lost, New), prioritised by revenue impact.";
-    try { const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "strategy", input }) }); const j = await r.json(); setOut(j.text || "No response."); }
-    catch { setOut("Network error reaching the AI."); } finally { setLoading(false); }
+    setLoading(true); setOut(""); setErr("");
+    const input = "Customer RFM segments:\n" + scored.map((c) => `- ${c.name}: ${c.seg.name} (recency ${c.recency}d, ${c.frequency} orders in the last 12 months, ${inr(c.monetary)} in the last 12 months)`).join("\n") + "\nGive a specific action for each segment (Champions, Loyal, At risk, Lost, New), prioritised by revenue impact.";
+    try { const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "strategy", input }) }); const j = await r.json(); if (j && j.ok === true && typeof j.text === "string" && j.text.trim()) setOut(j.text); else setErr(aiFailure(j)); }
+    catch { setErr("Network error reaching the AI."); } finally { setLoading(false); }
   }
 
   const I = "rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring";
@@ -69,7 +78,7 @@ export function RfmSegments({ seed }: { seed?: Cust[] } = {}) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-muted-foreground border-b">
-              <th className="py-2 pr-2 font-medium">Customer</th><th className="py-2 pr-2 font-medium">Days since order</th><th className="py-2 pr-2 font-medium">Orders/yr</th><th className="py-2 pr-2 font-medium">₹/yr</th><th className="py-2 pr-2 font-medium">RFM</th><th className="py-2 font-medium">Segment</th>
+              <th className="py-2 pr-2 font-medium">Customer</th><th className="py-2 pr-2 font-medium">Days since order</th><th className="py-2 pr-2 font-medium">Orders/yr (last 12 mo)</th><th className="py-2 pr-2 font-medium">₹/yr (last 12 mo)</th><th className="py-2 pr-2 font-medium">RFM</th><th className="py-2 font-medium">Segment</th>
             </tr></thead>
             <tbody>
               {scored.map((c) => (
@@ -87,6 +96,7 @@ export function RfmSegments({ seed }: { seed?: Cust[] } = {}) {
         </div>
         <Button onClick={advise} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Thinking…" : "What should I do per segment?"}</Button>
         {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
+        {err && <p role="alert" className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger">{err}</p>}
       </Card>
     </div>
   );

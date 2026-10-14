@@ -4,6 +4,7 @@ import { deriveInsights, type DerivedInsight } from "@/lib/insights";
 import { worstOverdue } from "@/lib/worst-invoice";
 import { evaluateRules } from "@/lib/alert-rules";
 import { emitQuietly } from "@/lib/webhooks";
+import { likeForLikeWindows } from "@/lib/money-rules";
 
 /**
  * The aggregation layer.
@@ -28,6 +29,8 @@ type Row = Record<string, any>;
 
 const MONTHS = 12;
 const num = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+/** A ledger row's bank net movement: `net_cash_flow` when the column exists, else the pre-migration `net_profit`. */
+const netCashFlowOf = (r: any) => num(r && Object.prototype.hasOwnProperty.call(r, "net_cash_flow") ? r.net_cash_flow : r?.net_profit);
 
 /** First day of the month, N months back from this month, as YYYY-MM-DD. */
 function monthStart(offset: number): string {
@@ -59,6 +62,25 @@ type Metric = {
   */
   delta_pct: number | null; status: "green" | "yellow" | "red"; trend: number[];
 };
+
+/**
+ * Won revenue dated in [start, endExclusive) (YYYY-MM-DD, IST calendar days),
+ * or null when the read failed — a failed read is unknown, never ₹0. Dated by
+ * order_date, falling back to created_at (as an IST day) when order_date is
+ * empty, which is the rule the monthly revenue series uses.
+ */
+async function wonRevenueBetween(svc: any, orgId: string, start: string, endExclusive: string): Promise<number | null> {
+  try {
+    const { pageAll } = await import("@/lib/page-all");
+    const r = await pageAll<any>((a, b) => svc.from("sales_orders").select("id, amount")
+      .eq("org_id", orgId).ilike("status", "won")
+      .or(`and(order_date.gte.${start},order_date.lt.${endExclusive}),`
+        + `and(order_date.is.null,created_at.gte.${start}T00:00:00+05:30,created_at.lt.${endExclusive}T00:00:00+05:30)`)
+      .order("id").range(a, b), { max: 50_000 });
+    if (r.error || r.truncated) return null;
+    return r.rows.reduce((acc: number, o: any) => acc + num(o.amount), 0);
+  } catch { return null; }
+}
 
 /** Percentage change, guarding divide-by-zero. */
 function delta(now: number, prev: number): number {
@@ -403,15 +425,35 @@ export async function recomputeMetrics(orgId: string): Promise<{
       trend: buckets.slice(-7).map((b) => ordersByMonth.get(b) || 0),
     });
 
-    // Year-on-year growth, only when we actually have a comparable month.
-    const yearAgo = buckets[0];
-    const revYearAgo = revenueByMonth.get(yearAgo) || 0;
-    if (revYearAgo > 0) {
-      const growth = delta(revenueNow, revYearAgo);
-      metrics.push({
-        metric_key: "growth", label: "Growth Rate (YoY)", value: growth, unit: "%",
-        delta_pct: growth, status: band(growth, 10, 0), trend: [],
-      });
+    /*
+      YEAR ON YEAR, LIKE FOR LIKE.
+
+      This compared month-to-date revenue with the WHOLE month eleven months
+      earlier (buckets[0]) — 14 days of October against all of last November.
+      Not the same month, not the same number of days, so it read as a slump
+      for most of every month and was not year-on-year at all.
+
+      Now: won revenue on days 1..D of this month against days 1..D of the same
+      month last year, D = today in IST (clamped for a short February). The
+      twelve monthly buckets do not reach back thirteen months and hold no
+      day-level detail, so both windows are read directly — the same rule as
+      the revenue series: status "won", dated by order_date, else created_at.
+      Either read failing, or nothing won in last year's window, means no
+      metric rather than a guessed one.
+    */
+    const w = likeForLikeWindows(today);
+    if (w) {
+      const [nowWin, prevWin] = await Promise.all([
+        wonRevenueBetween(svc, orgId, w.thisStart, w.thisEnd),
+        wonRevenueBetween(svc, orgId, w.lastStart, w.lastEnd),
+      ]);
+      if (nowWin !== null && prevWin !== null && prevWin > 0) {
+        const growth = delta(nowWin, prevWin);
+        metrics.push({
+          metric_key: "growth", label: "Revenue growth (YoY, same days)", value: growth, unit: "%",
+          delta_pct: growth, status: band(growth, 10, 0), trend: [],
+        });
+      }
     }
   }
 
@@ -511,7 +553,11 @@ export async function recomputeMetrics(orgId: string): Promise<{
 
     // Runway only when they are actually burning cash — a profitable month has
     // no runway to report, and printing a number there would be nonsense.
-    const nets = cashRows.slice(-3).map((r) => num(r.net_profit));
+    /* Net CASH flow, not net profit: the bank reader now writes money-in minus
+       money-out to `net_cash_flow` (2026_zzzz_c_net_cash_flow.sql). Rows from
+       before that migration only carry it in `net_profit`, so fall back to it
+       only when the column is absent from the row altogether. */
+    const nets = cashRows.slice(-3).map(netCashFlowOf);
     const avgNet = nets.length ? nets.reduce((a, b) => a + b, 0) / nets.length : 0;
     if (avgNet < 0 && closing > 0) {
       const months = +(closing / Math.abs(avgNet)).toFixed(1);
@@ -737,7 +783,7 @@ export async function recomputeMetrics(orgId: string): Promise<{
   let derived: DerivedInsight[] = [];
   try {
     const cashLatest = hasBank ? num(cashRows[cashRows.length - 1].cash_balance) : 0;
-    const nets = hasBank ? cashRows.slice(-3).map((r) => num(r.net_profit)) : [];
+    const nets = hasBank ? cashRows.slice(-3).map(netCashFlowOf) : [];
     const avgNet = nets.length ? nets.reduce((a, b) => a + b, 0) / nets.length : 0;
 
     derived = deriveInsights({

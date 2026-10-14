@@ -16,12 +16,14 @@ export default async function Churn() {
   const { rows: hist, unmatched, capped, ambiguousNames, orphanOrders } = await getCustomerHistory();
   const seed = hist
     .filter((c) => c.hasOrders)   // no orders means no churn signal to score
-    .sort((a, b) => b.monetary - a.monetary)
+    .sort((a, b) => b.monetary12m - a.monetary12m || b.monetary - a.monetary)
     .slice(0, 100)
     .map((c) => ({
       id: c.id,
       name: c.name,
-      value: c.monetary,
+      /* Trailing-12-month value — the table heads it "₹/yr (last 12 mo)". It
+         was the LIFETIME total under a per-year label. */
+      value: c.monetary12m,
       // Unknown recency previously mapped to 0 — "ordered today", the LOWEST
       // risk value in the scorer. Exactly inverted. Anyone we cannot date is
       // treated as long-dormant instead.
@@ -54,7 +56,7 @@ export default async function Churn() {
         <ChurnPredictor seed={seed} />
         <Section title="How the score works" desc="A transparent, editable model">
           <div className="text-sm text-muted-foreground space-y-2">
-            <p>Churn risk blends recency (days since last order), support friction (open tickets), and sentiment. Edit any cell to run your own accounts — the table re-scores and re-ranks instantly, and totals the annual revenue sitting in high-risk accounts.</p>
+            <p>Churn risk blends recency (days since last order), support friction (open tickets), and sentiment. Edit any cell to run your own accounts — the table re-scores and re-ranks instantly, and totals the last twelve months' revenue sitting in high-risk accounts.</p>
             <p>When you ask for a retention plan, Cortex writes a specific play for each at-risk account, prioritised by the revenue you'd lose.</p>
           </div>
         </Section>

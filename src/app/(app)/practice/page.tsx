@@ -33,6 +33,21 @@ export default async function Practice() {
     specific about what the plan buys rather than being a generic paywall — a
     firm reading this should be able to decide, not have to ask.
   */
+  /* A failed read is not "not on the Practice plan" and not "no clients". */
+  if (p.error) {
+    return (
+      <>
+        <Topbar title="Practice" subtitle="Every client you watch, ranked by who needs you" />
+        <PageShell>
+          <Card role="alert" className="p-6 text-sm border-danger/30 bg-danger/5">
+            <div className="font-medium">Cortex couldn&rsquo;t check your clients just now.</div>
+            <p className="text-muted-foreground mt-1">{p.error}. Reload to try again — nothing below would be complete.</p>
+          </Card>
+        </PageShell>
+      </>
+    );
+  }
+
   if (!p.allowed) {
     return (
       <>

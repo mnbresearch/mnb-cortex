@@ -145,6 +145,32 @@ check(r.ok === false && /not allowed/.test(r.error), "tables outside the list ar
   check(again === true, "zzzw: safe to re-run", String(again));
 }
 
+/* 4d. 2026_zzzz_h: a supplied order_date is used when it parses, else current_date — and a bad one never sinks the batch. */
+{
+  const zh = readFileSync("supabase/migrations/2026_zzzz_h_api_ingest_order_date.sql", "utf8").replace(/notify pgrst[^;]*;/g, "");
+  const body = zh.slice(0, zh.indexOf("/* ---------- verify"));
+  await db.exec(body);
+  const vr = (await db.query(zh.slice(zh.indexOf("/* ---------- verify")).replace(/^\/\*[\s\S]*?\*\//, ""))).rows;
+  check(vr.length >= 6 && vr.every((x) => x.ok === true), "zzzz_h: every verify row is true on real Postgres", JSON.stringify(vr.filter((x) => !x.ok)));
+  const today = (await db.query(`select current_date::text d`)).rows[0].d;
+  const q = await call("KEY-A", "sales_orders", [
+    { order_no: "SO-D1", amount: 1, order_date: "2025-12-31" },
+    { order_no: "SO-D2", amount: 1, order_date: "2026-01-15T09:30:00+05:30" },
+    { order_no: "SO-D3", amount: 1, order_date: "" },
+    { order_no: "SO-D4", amount: 1, order_date: "2026-02-30" },
+    { order_no: "SO-D5", amount: 1, order_date: "01/02/2026" },
+    { order_no: "SO-D6", amount: 1 },
+  ]);
+  check(q.ok === true && q.written === 6, "zzzz_h: blank/invalid order_date rows no longer fail the whole call", JSON.stringify(q));
+  const ds = Object.fromEntries((await db.query(`select order_no, order_date::text d from sales_orders where order_no like 'SO-D%'`)).rows.map((x) => [x.order_no, x.d]));
+  check(ds["SO-D1"] === "2025-12-31" && ds["SO-D2"] === "2026-01-15", "zzzz_h: a supplied ISO order_date (or timestamp) is kept", JSON.stringify(ds));
+  check(["SO-D3", "SO-D4", "SO-D5", "SO-D6"].every((k) => ds[k] === today), "zzzz_h: blank, impossible, ambiguous or missing → current_date", JSON.stringify(ds));
+  const iv = await call("KEY-A", "invoices", [{ invoice_no: "INV-ZH", amount: 5, due_date: "2026-06-30" }]);
+  check(iv.ok === true, "zzzz_h: other tables behave as before", JSON.stringify(iv));
+  let again = true; try { await db.exec(body); } catch (e) { again = String(e.message); }
+  check(again === true, "zzzz_h: safe to re-run", String(again));
+}
+
 /* 5. Grants: service_role only */
 const acl = (await db.query(`select p.proname, r.rolname from pg_proc p cross join lateral aclexplode(p.proacl) a join pg_roles r on r.oid = a.grantee where p.proname in ('api_ingest','api_metrics')`)).rows;
 check(!acl.some((x) => ["anon", "authenticated", "public"].includes(x.rolname)), "anon/authenticated cannot call either API function directly", JSON.stringify(acl));

@@ -57,6 +57,10 @@ export function GstReturnPanel() {
   const [a, setA] = useState<Analysis | null>(null);
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState<"idle" | "saving" | "done">("idle");
+  /* The workspace (ledger) write the route always attempts — held or failed
+     used to look identical to saved. */
+  const [ledger, setLedger] = useState<{ kind: "saved" | "held" | "failed"; text: string } | null>(null);
+  const [memErr, setMemErr] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -69,13 +73,18 @@ export function GstReturnPanel() {
 
   async function run() {
     if (text.trim().length < 30) { setErr("Upload or paste a GST return first."); return; }
-    setLoading(true); setErr(""); setA(null); setSaved("idle");
+    setLoading(true); setErr(""); setA(null); setSaved("idle"); setLedger(null); setMemErr("");
     try {
       const r = await fetch("/api/gst/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
       const j = await r.json();
-      if (!j.ok) setErr(j.error || "Analysis failed.");
-      else {
+      if (!j.ok) {
+        setErr(j.error || "Analysis failed.");
+        if (j.analysis) { setA(j.analysis); setLedger({ kind: "failed", text: j.error || "Your return could not be saved to your workspace." }); }
+      } else {
         setA(j.analysis);
+        if (j.held) setLedger({ kind: "held", text: String(j.held) });
+        else if (Number(j.saved) > 0) setLedger({ kind: "saved", text: "Filed turnover and tax for this return period were saved to your workspace (finance ledger)." });
+        else setLedger({ kind: "held", text: "No return period or taxable turnover could be read, so nothing was saved to your workspace." });
         try { await refreshDerivedPages(); } catch { /* cosmetic only */ }
       }
     } catch { setErr("Network error reaching the AI."); }
@@ -84,8 +93,16 @@ export function GstReturnPanel() {
 
   async function save() {
     if (!a || saved === "saving") return; setSaved("saving");
-    try { const r = await fetch("/api/memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: `GST return — ${a.period}`, content: a.summaryMd, kind: "fact" }) }); setSaved(r.ok ? "done" : "idle"); if (r.ok) setTimeout(() => setSaved("idle"), 3000); }
-    catch { setSaved("idle"); }
+    setMemErr("");
+    try {
+      const r = await fetch("/api/memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: `GST return — ${a.period}`, content: a.summaryMd, kind: "fact" }) });
+      setSaved(r.ok ? "done" : "idle"); if (r.ok) setTimeout(() => setSaved("idle"), 3000);
+      if (!r.ok) {
+        let why = ""; try { why = (await r.json())?.error || ""; } catch { /* not JSON */ }
+        setMemErr(`Not saved to Memory${why ? `: ${why}` : ` (the server answered ${r.status})`}. Try again.`);
+      }
+    }
+    catch { setSaved("idle"); setMemErr("Not saved to Memory — Cortex could not be reached. Try again."); }
   }
 
   const cards = a ? [
@@ -135,11 +152,20 @@ export function GstReturnPanel() {
             computed by creditCost() will drift again the next time either
             moves. lib/config.ts is deliberately client-safe for exactly this.
           */}
-          <span className="text-xs text-muted-foreground">Read on your device + AI · {creditCost("gst")} credits</span>
+          <span className="text-xs text-muted-foreground">Sent to our AI provider for analysis · {creditCost("gst")} credits · turnover and tax are saved to your workspace automatically</span>
         </div>
         {err && <div className="flex items-start gap-2 text-sm text-danger" role="alert"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
       </Card>
 
+      {a && ledger && (
+        <div role={ledger.kind === "saved" ? "status" : "alert"} className={`rounded-lg border p-3 text-sm ${
+          ledger.kind === "saved" ? "border-success/30 bg-success/10"
+            : ledger.kind === "held" ? "border-warning/40 bg-warning/10" : "border-danger/30 bg-danger/5"}`}>
+          {ledger.kind === "held" ? <><b>Shown, but not saved to your workspace.</b> {ledger.text}</>
+            : ledger.kind === "failed" ? <><b>Not saved to your workspace.</b> {ledger.text}</>
+            : ledger.text}
+        </div>
+      )}
       {a && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -204,6 +230,7 @@ export function GstReturnPanel() {
             <Button onClick={save} disabled={saved === "saving"}>
               {saved === "done" ? <Check className="h-4 w-4" /> : <BrainCircuit className="h-4 w-4" />}{saved === "saving" ? "Saving…" : saved === "done" ? "Saved to Memory" : "Save to Cortex Memory"}
             </Button>
+            {memErr && <div role="alert" className="w-full text-sm text-danger">{memErr}</div>}
           </div>
         </>
       )}

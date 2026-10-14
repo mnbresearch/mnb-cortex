@@ -1,4 +1,4 @@
-import { getUserAndOrg, getInventory } from "@/lib/data";
+import { getUserAndOrg, getTableStats } from "@/lib/data";
 import Link from "next/link";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
@@ -24,7 +24,10 @@ export default async function Reorder() {
     generatePO() has always computed the truly-lowest item correctly. This page
     now uses the same rule, so the warning and the button agree.
   */
-  const { rows, live } = await getInventory();
+  /* Every item, paged — not the 200-row list read, which could miss the very
+     item furthest below its reorder level. A failed read is shown, not
+     presented as "every item is above its reorder level". */
+  const { rows, live, error: readError, truncated } = await getTableStats("inventory_items", "id, sku, name, on_hand, reorder_level, daily_consumption");
   const below = (live ? rows : [])
     .filter((i) => n(i.reorder_level) > 0 && n(i.on_hand) < n(i.reorder_level))
     .sort((a, b) => n(a.on_hand) / n(a.reorder_level) - n(b.on_hand) / n(b.reorder_level));
@@ -52,7 +55,16 @@ export default async function Reorder() {
             </div>
           </Card>
         )}
-        {signedIn && live && below.length === 0 && (
+        {signedIn && readError && (
+          <Card role="alert" className="p-4 text-sm border-danger/30 bg-danger/5">
+            <b className="text-danger">Cortex couldn&rsquo;t read your inventory just now</b> ({readError}), so it can&rsquo;t say
+            whether anything needs reordering. Reload to try again.
+          </Card>
+        )}
+        {signedIn && truncated && !readError && (
+          <Card className="p-4 text-sm text-muted-foreground">You have more than 20,000 items; the check above covers the first 20,000.</Card>
+        )}
+        {signedIn && live && !readError && below.length === 0 && (
           <Card className="p-4 text-sm text-muted-foreground">
             {rows.length
               ? <>Every item with a reorder level set is currently above it. Nothing needs ordering right now.</>

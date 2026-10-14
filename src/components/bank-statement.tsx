@@ -68,6 +68,11 @@ export function BankStatementPanel() {
   const [a, setA] = useState<Analysis | null>(null);
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState<"idle" | "saving" | "done">("idle");
+  /* What happened to the WORKSPACE copy of the figures. The route always tries
+     to write them to the ledger; this used to be discarded, so a refused
+     (held) or failed write looked exactly like a saved one. */
+  const [ledger, setLedger] = useState<{ kind: "saved" | "held" | "failed"; text: string } | null>(null);
+  const [memErr, setMemErr] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -83,13 +88,20 @@ export function BankStatementPanel() {
 
   async function run() {
     if (text.trim().length < 40) { setErr("Upload or paste a bank statement first."); return; }
-    setLoading(true); setErr(""); setA(null); setSaved("idle");
+    setLoading(true); setErr(""); setA(null); setSaved("idle"); setLedger(null); setMemErr("");
     try {
       const r = await fetch("/api/bank/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
       const j = await r.json();
-      if (!j.ok) setErr(j.error || "Analysis failed.");
-      else {
+      if (!j.ok) {
+        setErr(j.error || "Analysis failed.");
+        /* The analysis ran but could not be SAVED: show it, and say plainly
+           that it is not in the workspace. */
+        if (j.analysis) { setA(j.analysis); setLedger({ kind: "failed", text: j.error || "Your figures could not be saved to your workspace." }); }
+      } else {
         setA(j.analysis);
+        if (j.held) setLedger({ kind: "held", text: String(j.held) });
+        else if (Number(j.saved) > 0) setLedger({ kind: "saved", text: `Monthly cash figures for ${j.saved} month${Number(j.saved) === 1 ? "" : "s"} were saved to your workspace (finance ledger).` });
+        else setLedger({ kind: "held", text: "Nothing from this statement could be dated to a month, so no figures were saved to your workspace." });
         // This wrote finance_ledger and recomputed health_metrics. Without
         // this call, clicking "Dashboard" within ~30s shows the numbers from
         // BEFORE the upload — Next's client Router Cache still holds them.
@@ -103,10 +115,15 @@ export function BankStatementPanel() {
     if (!a || saved === "saving") return;
     setSaved("saving");
     const content = `${a.summaryMd}\n\nTop expenses:\n${a.topExpenses.map((t) => `- ${t.desc} — ${inr(t.amount)} (${t.category})`).join("\n")}`;
+    setMemErr("");
     try {
       const r = await fetch("/api/memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: `Bank statement — ${a.period}`, content, kind: "fact" }) });
       setSaved(r.ok ? "done" : "idle"); if (r.ok) setTimeout(() => setSaved("idle"), 3000);
-    } catch { setSaved("idle"); }
+      if (!r.ok) {
+        let why = ""; try { why = (await r.json())?.error || ""; } catch { /* not JSON */ }
+        setMemErr(`Not saved to Memory${why ? `: ${why}` : ` (the server answered ${r.status})`}. Try again.`);
+      }
+    } catch { setSaved("idle"); setMemErr("Not saved to Memory — Cortex could not be reached. Try again."); }
   }
 
   const mMax = a && a.monthly.length ? Math.max(1, ...a.monthly.map((m) => Math.max(m.inflow, m.outflow))) : 1;
@@ -149,11 +166,20 @@ export function BankStatementPanel() {
             computed by creditCost() will drift again the next time either
             moves. lib/config.ts is deliberately client-safe for exactly this.
           */}
-          <span className="text-xs text-muted-foreground">Runs on your device + AI · {creditCost("bankstatement")} credits · nothing is stored unless you save it</span>
+          <span className="text-xs text-muted-foreground">Sent to our AI provider for analysis · {creditCost("bankstatement")} credits · monthly totals are saved to your workspace automatically</span>
         </div>
         {err && <div className="flex items-start gap-2 text-sm text-danger" role="alert"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {err}</div>}
       </Card>
 
+      {a && ledger && (
+        <div role={ledger.kind === "saved" ? "status" : "alert"} className={`rounded-lg border p-3 text-sm ${
+          ledger.kind === "saved" ? "border-success/30 bg-success/10"
+            : ledger.kind === "held" ? "border-warning/40 bg-warning/10" : "border-danger/30 bg-danger/5"}`}>
+          {ledger.kind === "held" ? <><b>Shown, but not saved to your workspace.</b> {ledger.text}</>
+            : ledger.kind === "failed" ? <><b>Not saved to your workspace.</b> {ledger.text}</>
+            : ledger.text}
+        </div>
+      )}
       {a && (
         <>
           <div className="grid sm:grid-cols-3 gap-3">
@@ -298,6 +324,7 @@ export function BankStatementPanel() {
             <Button onClick={save} disabled={saved === "saving"}>
               {saved === "done" ? <Check className="h-4 w-4" /> : <BrainCircuit className="h-4 w-4" />}{saved === "saving" ? "Saving…" : saved === "done" ? "Saved to Memory" : "Save to Cortex Memory"}
             </Button>
+            {memErr && <div role="alert" className="w-full text-sm text-danger">{memErr}</div>}
           </div>
         </>
       )}

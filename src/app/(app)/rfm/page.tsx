@@ -11,11 +11,24 @@ export default async function Rfm() {
   // Segmented "Customer A / Nova Distributors / Zenith Wholesale" for everyone.
   // Now scores the workspace's own customers from their own won orders.
   const { rows: hist, unmatched, capped, ambiguousNames, orphanOrders } = await getCustomerHistory();
+  /*
+    ONLY CUSTOMERS WHO HAVE ORDERED ARE SEGMENTED.
+
+    A customer with no orders used to take its recency from created_at (the
+    day it was typed in) and its monetary from the customer record's `value`,
+    so a contact added yesterday with a big deal value scored as a CHAMPION.
+    No orders means no RFM — they are counted below as "No orders yet".
+
+    Frequency and monetary are the TRAILING 12 MONTHS, because the table heads
+    them per year; they used to be lifetime totals under a "/yr" label.
+  */
+  const noOrders = hist.filter((c) => !c.hasOrders).length;
   const seed = hist
+    .filter((c) => c.hasOrders)
     .map((c) => ({
-      id: c.id, name: c.name, monetary: c.monetary, frequency: c.frequency,
-      // The scorer needs a number. 9999 means "no order on record", which is
-      // correctly the WORST recency score rather than the best.
+      id: c.id, name: c.name, monetary: c.monetary12m, frequency: c.frequency12m,
+      // The scorer needs a number. 9999 means "order on record but undated",
+      // which is correctly the WORST recency score rather than the best.
       recency: c.recencyDays ?? 9999,
     }))
     .sort((a, b) => b.monetary - a.monetary)
@@ -38,7 +51,7 @@ export default async function Rfm() {
         )}
         {(unmatched > 0 || capped || orphanOrders > 0) && (
           <Card className="p-3 text-xs text-muted-foreground">
-            {unmatched > 0 && <>{unmatched} customer{unmatched === 1 ? " has" : "s have"} no orders on record. </>}
+            {unmatched > 0 && <><b>No orders yet:</b> {noOrders || unmatched} customer{(noOrders || unmatched) === 1 ? " has" : "s have"} no orders on record, so {(noOrders || unmatched) === 1 ? "it is" : "they are"} not segmented. </>}
             {orphanOrders > 0 && <>{orphanOrders} won order{orphanOrders === 1 ? "" : "s"} could not be attributed to a customer record. </>}
             {capped && <>Only the most recent 20,000 orders were scored.</>}
           </Card>

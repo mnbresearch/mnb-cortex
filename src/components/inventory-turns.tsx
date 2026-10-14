@@ -33,6 +33,7 @@ export function InventoryTurns({ seed }: { seed?: WorkspaceSeed } = {}) {
       <ExampleFigures
         source={source}
         what="stock figures"
+        stillExample={[seed?.cogs == null ? "annual COGS" : "", seed?.inventoryValue == null ? "average inventory" : ""].filter(Boolean)}
         note="Stock is valued at on-hand × unit cost for everything in your item list; items with no unit cost entered count as nil, so this is a floor."
       />
       <Card className="p-5 space-y-4">

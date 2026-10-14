@@ -24,7 +24,11 @@ export default function GstReader() {
         <Card className="p-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="h-4 w-4 text-success" />
-            Read on your device and analysed on the fly — nothing stored on our servers unless you save the summary. Not a substitute for your CA; always verify before filing.
+            {/* This used to promise on-device reading and no server storage — untrue: the text goes to /api/gst/analyze and
+                our AI provider, and persistGstAnalysis writes turnover and tax to the finance ledger. */}
+            Your file is opened in your browser, then its text is sent to our AI provider for analysis. The filed turnover and tax
+            for the return period are saved to your workspace automatically; saving the summary to Memory is optional. Not a
+            substitute for your CA; always verify before filing.
           </div>
         </Card>
       </PageShell>

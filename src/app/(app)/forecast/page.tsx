@@ -1,4 +1,6 @@
 import { getUserAndOrg } from "@/lib/data";
+import { createClient } from "@/lib/supabase/server";
+import { lastCompleteMonthRevenue } from "@/lib/money-rules";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
@@ -50,17 +52,39 @@ async function scenarioBaseline(): Promise<ScenarioBaseline> {
       const v = row ? Number(row.value) : NaN;
       return Number.isFinite(v) ? v : null;
     };
-    const revenue = pick("revenue");
     const cash = pick("cash_balance");
-    /* Margin is a percentage KPI when we have it; 12% is a neutral placeholder
-       used only to make the sliders move, and the banner says the baseline is
-       unknown whenever revenue is missing. */
-    const marginPct = pick("gross_margin") ?? pick("net_profit");
-    return {
-      revenue,
-      margin: marginPct !== null && marginPct > 0 && marginPct < 100 ? marginPct / 100 : null,
-      cash,
-    };
+    /*
+      REVENUE: THE LAST COMPLETE MONTH, NOT MONTH-TO-DATE.
+
+      The "revenue" KPI is "Revenue (MTD)" — on the 3rd of the month it is
+      three days of sales — and it was used as the MONTHLY baseline, so every
+      what-if early in a month modelled a business a tenth of its size. The
+      ledger carries one revenue figure per month (recomputeMetrics writes
+      it); the newest month strictly before this one is the honest baseline.
+    */
+    let revenue: number | null = null;
+    let revenueBasis: string | null = null;
+    const { orgId } = await getUserAndOrg();
+    if (orgId) {
+      const sb = await createClient();
+      const { data } = await sb.from("finance_ledger").select("period, revenue")
+        .eq("org_id", orgId).order("period", { ascending: false }).limit(24);
+      const full = lastCompleteMonthRevenue((data as any[]) || [], new Date().toISOString().slice(0, 7));
+      if (full) {
+        revenue = full.revenue;
+        revenueBasis = new Date(full.period + "-01T00:00:00Z")
+          .toLocaleDateString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" }) + ", the last complete month";
+      }
+    }
+    /*
+      MARGIN: NOT READ FROM ANYWHERE, BECAUSE NOTHING HOLDS IT.
+
+      This used to be `pick("gross_margin") ?? pick("net_profit")`. metrics.ts
+      emits neither key, so it was always null and the planner's 12%
+      placeholder was presented as "from your own figures". It is now null on
+      purpose and the planner asks the owner to set it as an assumption.
+    */
+    return { revenue, margin: null, cash, revenueBasis };
   } catch {
     return { revenue: null, margin: null, cash: null };
   }

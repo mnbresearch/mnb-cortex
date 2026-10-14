@@ -2,6 +2,9 @@ import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
 import { practiceClientLimit } from "@/lib/config";
+import { pageAll } from "@/lib/page-all";
+import { isPastDueReceivable } from "@/lib/money-rules";
+import { istTodayISO } from "@/lib/statutory";
 
 /**
  * The Practice console — every client a firm watches, on one screen.
@@ -63,6 +66,15 @@ export type ClientSignal = {
     inside that client, weeks later.
   */
   pooled: boolean;
+  /**
+   * Signals that could NOT be read for this client (e.g. "receivables",
+   * "43B(h) exposure", "alerts"). Supabase reads return `{ error }` rather than
+   * throwing, so the try/catch blocks here never fired: a failed read looked
+   * exactly like an empty one, and the console said "Nothing needs you this
+   * week" about a client it had not been able to check. Non-empty means the
+   * headline says so.
+   */
+  unchecked: string[];
 };
 
 export type Practice = {
@@ -89,6 +101,8 @@ export type Practice = {
   */
   totalRecovered: number;
   live: boolean;
+  /** The console itself could not be built (client list unreadable). */
+  error?: string;
 };
 
 const EMPTY: Practice = {
@@ -113,9 +127,11 @@ export async function getPractice(): Promise<Practice> {
 
   let orgIds: string[] = [];
   try {
-    const { data } = await svc.from("memberships").select("org_id").eq("user_id", user.id).limit(200);
+    const { data, error } = await svc.from("memberships").select("org_id").eq("user_id", user.id).limit(200);
+    /* A failed membership read is not "no clients"; say we could not check. */
+    if (error) return { ...EMPTY, live: true, error: `Couldn't read your client list: ${error.message}` };
     orgIds = [...new Set(((data as any[]) || []).map((m) => String(m.org_id)))];
-  } catch { return EMPTY; }
+  } catch (e: any) { return { ...EMPTY, live: true, error: `Couldn't read your client list: ${e?.message || "unknown error"}` }; }
   if (!orgIds.length) return EMPTY;
 
   const { data: orgRows } = await svc.from("organizations").select("id, name, plan, practice_org_id").in("id", orgIds);
@@ -181,35 +197,43 @@ export async function getPractice(): Promise<Practice> {
     let lastActivity: string | null = null;
     let recovered = 0;
 
+    const unchecked: string[] = [];
+
     // --- receivables past due -------------------------------------------
+    /* PAGED, not `.limit(1000)` — a client with more open invoices than that
+       had its overdue total silently cut short. And the dashboard's rule
+       (lib/money-rules.ts): untyped invoices are receivables, "overdue" status
+       counts, due dates compare against the IST calendar day. */
     try {
-      const { data } = await svc.from("invoices")
-        .select("amount, due_date, status")
-        .eq("org_id", orgId).eq("type", "receivable").or("status.is.null,status.not.ilike.paid").limit(1000);
-      const today = Date.now();
-      for (const r of ((data as any[]) || [])) {
-        if (!r.due_date) continue;
-        const overdueBy = Math.round((today - new Date(r.due_date).getTime()) / 86_400_000);
-        if (overdueBy > 0) receivablesOverdue += Number(r.amount) || 0;
+      const today = istTodayISO();
+      const r = await pageAll<any>((a, b) => svc.from("invoices")
+        .select("id, amount, due_date, status, type")
+        .eq("org_id", orgId).or("status.is.null,status.not.ilike.paid").order("id").range(a, b));
+      if (r.error) unchecked.push("receivables");
+      else {
+        for (const row of r.rows) if (isPastDueReceivable(row, today)) receivablesOverdue += Number(row.amount) || 0;
+        if (r.truncated) detail.push("Over 20,000 open invoices — overdue total covers the first 20,000");
       }
-    } catch { /* table shape differs — skip this signal, keep the client */ }
+    } catch { unchecked.push("receivables"); }
 
     // --- 43B(h) exposure -------------------------------------------------
     try {
-      const { data } = await svc.rpc("cortex_msme_exposure", { p_org: orgId });
+      const { data, error } = await svc.rpc("cortex_msme_exposure", { p_org: orgId });
+      if (error) unchecked.push("43B(h) exposure");
       for (const r of ((data as any[]) || [])) {
         const covered = r.udyam_category === "micro" || r.udyam_category === "small";
         if (covered && r.past_window) msmeAtRisk += Number(r.total_amount) || 0;
       }
-    } catch { /* migration not applied for this org — no claim made */ }
+    } catch { unchecked.push("43B(h) exposure"); }
 
     // --- open alerts -----------------------------------------------------
     try {
-      const { count } = await svc.from("alerts")
+      const { count, error } = await svc.from("alerts")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId).eq("is_read", false);
+      if (error) unchecked.push("alerts");
       openAlerts = count || 0;
-    } catch { /* ignore */ }
+    } catch { unchecked.push("alerts"); }
 
     // What Cortex collected for this client. Absent table -> 0, never a guess.
     try {
@@ -311,16 +335,26 @@ export async function getPractice(): Promise<Practice> {
       needs you" about a workspace nobody has imported anything into is the
       false reassurance this product keeps having to design against.
     */
-    if (!lastActivity && !openAlerts && !receivablesOverdue && !msmeAtRisk) {
+    if (!lastActivity && !openAlerts && !receivablesOverdue && !msmeAtRisk && !unchecked.length) {
       rank = 1;
       headline = "No data yet — nothing to watch";
       detail.push("Import this client's books to start watching");
+    }
+    /*
+      A signal we could not read is not a quiet one. "Nothing needs you this
+      week" is a claim that every signal was checked; when one was not, the
+      headline says which, and the client is never ranked quiet.
+    */
+    if (unchecked.length) {
+      detail.push(`Couldn't check: ${unchecked.join(", ")}`);
+      if (rank === 2) { rank = 1; headline = `Couldn't check ${unchecked.join(", ")} — open this client`; }
     }
 
     clients.push({
       orgId, name: names.get(orgId) || "Untitled", rank, headline, detail,
       receivablesOverdue, msmeAtRisk, openAlerts, lastActivity, recovered, movedPct,
       pooled: Boolean(currentOrgId) && pooledTo.get(orgId) === String(currentOrgId),
+      unchecked,
     });
   }
 

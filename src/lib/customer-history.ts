@@ -34,8 +34,14 @@ const daysSince = (d: any) => {
 };
 
 export type CustomerHistoryRow = {
+  /** LIFETIME won-order value and count (all orders read). */
   id: string; name: string; monetary: number; frequency: number;
+  /** Days since the last won order. null when the customer has NO orders —
+   *  never their created_at, which is when they were typed in, not when they
+   *  last bought, and which let a brand-new contact score as a "Champion". */
   recencyDays: number | null; hasOrders: boolean;
+  /** Won orders and value in the trailing 12 months — what "/yr" means. */
+  frequency12m: number; monetary12m: number;
 };
 
 export type CustomerHistory = {
@@ -49,13 +55,17 @@ export type CustomerHistory = {
   orphanOrders: number;
 };
 
-type Agg = { count: number; total: number; last: number };
-const blank = (): Agg => ({ count: 0, total: 0, last: 0 });
+type Agg = { count: number; total: number; last: number; count12: number; total12: number };
+const blank = (): Agg => ({ count: 0, total: 0, last: 0, count12: 0, total12: 0 });
+const YEAR_MS = 365 * 86_400_000;
 function absorb(a: Agg, amount: any, when: any) {
   a.count += 1;
   a.total += n(amount);
   const t = new Date(when || 0).getTime();
   if (Number.isFinite(t) && t > a.last) a.last = t;
+  /* Trailing twelve months. An undated order cannot be placed in the window,
+     so it counts toward lifetime only. */
+  if (Number.isFinite(t) && t > 0 && Date.now() - t <= YEAR_MS) { a.count12 += 1; a.total12 += n(amount); }
 }
 
 export async function getCustomerHistory(): Promise<CustomerHistory> {
@@ -142,7 +152,10 @@ export async function getCustomerHistory(): Promise<CustomerHistory> {
     // older ones still matched by name.
     let h: Agg | undefined;
     if (linked && named) {
-      h = { count: linked.count + named.count, total: linked.total + named.total, last: Math.max(linked.last, named.last) };
+      h = {
+        count: linked.count + named.count, total: linked.total + named.total, last: Math.max(linked.last, named.last),
+        count12: linked.count12 + named.count12, total12: linked.total12 + named.total12,
+      };
     } else h = linked || named;
 
     if (h) matched++;
@@ -153,9 +166,12 @@ export async function getCustomerHistory(): Promise<CustomerHistory> {
       // record, which is at least something the owner typed deliberately.
       monetary: h ? h.total : n(c.value),
       frequency: h ? h.count : 0,
-      // null means "we genuinely do not know", NOT "today" and NOT "never".
-      recencyDays: h && h.last ? daysSince(h.last) : daysSince(c.created_at),
+      // null means "we genuinely do not know", NOT "today" and NOT "never" —
+      // and a customer with no orders has no recency at all.
+      recencyDays: h && h.last ? daysSince(h.last) : null,
       hasOrders: Boolean(h),
+      frequency12m: h ? h.count12 : 0,
+      monetary12m: h ? h.total12 : 0,
     };
   });
 

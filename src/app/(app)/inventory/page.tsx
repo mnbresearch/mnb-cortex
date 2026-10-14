@@ -5,38 +5,61 @@ import { Section } from "@/components/section";
 import { InsightCard } from "@/components/insight-card";
 import { DataTable } from "@/components/data-table";
 import { CollapsibleForm, Field, SelectField, ActionForm } from "@/components/forms";
-import { getInsights, getInventory, getPurchaseOrders, getUserAndOrg } from "@/lib/data";
+import { getInsights, getInventory, getPurchaseOrders, getUserAndOrg, getTableStats } from "@/lib/data";
 import { inr } from "@/lib/utils";
 import { addInventoryItem, generatePO } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function Inventory() {
-  const insights = await getInsights("inventory");
-  const inv = await getInventory();
-  const po = await getPurchaseOrders();
-  const { orgId } = await getUserAndOrg();
+  const [insights, inv, po, { orgId }, invStats, poStats] = await Promise.all([
+    getInsights("inventory"), getInventory(), getPurchaseOrders(), getUserAndOrg(),
+    /* KPIs over EVERY item and PO, not the 200-row list the tables show. */
+    getTableStats("inventory_items", "id, sku, name, on_hand, reorder_level"),
+    getTableStats("purchase_orders", "id, status"),
+  ]);
   const signedIn = Boolean(orgId);
+  const statsError = invStats.error || poStats.error || inv.error || po.error;
 
   // Computed from this workspace's own stock, not a fixture.
   const n = (v: any) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
-  const atRisk = inv.rows.filter((i: any) => n(i.reorder_level) > 0 && n(i.on_hand) < n(i.reorder_level));
-  const dead = inv.rows.filter((i: any) => String(i.movement || "").toLowerCase() === "dead");
-  const deadValue = dead.reduce((a: number, i: any) => a + n(i.on_hand) * n(i.unit_cost), 0);
-  const fast = inv.rows.filter((i: any) => String(i.movement || "").toLowerCase() === "fast");
+  const atRisk = invStats.rows.filter((i: any) => n(i.reorder_level) > 0 && n(i.on_hand) < n(i.reorder_level));
+  /*
+    "DEAD STOCK" AND "FAST MOVERS" ARE GONE FROM THE KPI ROW, NOT RELABELLED.
+
+    Both read `inventory_items.movement`, which defaults to 'fast' in
+    schema.sql and is written only by the demo seeder. So every real item was
+    "fast-moving", "Fast movers" counted the whole catalogue, and dead stock
+    was always ₹0 — a reassuring figure computed from a column default. There
+    is no reliable sales-to-SKU link to derive movement from (sales_orders.product
+    is free text), so the honest answer is to not show them, and to say why.
+  */
+  const openPOs = poStats.rows.filter((p: any) => ["draft", "sent", "approved"].includes(String(p.status || "").toLowerCase()));
   const riskNames = atRisk.slice(0, 3).map((i: any) => i.sku || i.name).filter(Boolean).join(", ");
 
   return (
     <>
       <Topbar title="Inventory Intelligence" subtitle="Predict stockouts before they happen" />
       <PageShell>
+        {signedIn && statsError ? (
+          <div role="alert" className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm">
+            <b className="text-danger">Cortex couldn&rsquo;t read your inventory just now</b> ({statsError}). The figures and
+            tables below may be incomplete or empty for that reason — reload to try again.
+          </div>
+        ) : null}
         {signedIn ? (
+          <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Stat label="Items at risk" value={`${atRisk.length} SKU${atRisk.length === 1 ? "" : "s"}`} hint={riskNames || "below reorder level"} tone={atRisk.length ? "text-danger" : undefined} />
-            <Stat label="Dead stock" value={inr(deadValue)} hint={`${dead.length} SKU${dead.length === 1 ? "" : "s"} marked dead`} tone={deadValue > 0 ? "text-warning" : undefined} />
-            <Stat label="Fast movers" value={`${fast.length} SKU${fast.length === 1 ? "" : "s"}`} hint="marked fast-moving" />
-            <Stat label="Open POs" value={`${po.rows.length}`} hint="incl. AI-drafted" />
+            <Stat label="Items on file" value={`${invStats.rows.length}${invStats.truncated ? "+" : ""}`} hint={inv.truncated ? `table below shows the latest ${inv.rows.length}` : "all items"} />
+            <Stat label="Open POs" value={`${openPOs.length}`} hint="draft, sent or approved" />
+            <Stat label="Below reorder level" value={invStats.rows.length ? `${Math.round((atRisk.length / invStats.rows.length) * 100)}%` : "—"} hint="of all items" />
           </div>
+          <p className="text-xs text-muted-foreground">
+            Dead stock and fast movers aren&rsquo;t shown: Cortex doesn&rsquo;t record how fast each item sells, so it can&rsquo;t
+            tell you which stock is dead — and a ₹0 there would be a guess, not a fact.
+          </p>
+          </>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Stat label="Items at risk" value="2 SKUs" hint="sample data" tone="text-danger" />

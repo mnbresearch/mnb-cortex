@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
+import { pageAll } from "@/lib/page-all";
 
 /**
  * MSME 45-day exposure, Section 43B(h).
@@ -53,6 +54,14 @@ export type Exposure = {
   /** True when the workspace has never classified a single supplier. */
   nothingClassified: boolean;
   live: boolean;
+  /**
+   * Set when the workspace is signed in but the exposure could NOT be worked
+   * out (RPC missing or failing). It used to collapse into the signed-out
+   * state, so the page told a signed-in owner with forty supplier bills to
+   * "Sign in to a workspace with supplier bills" — and showed no exposure at
+   * all on the one page whose job is to warn about a tax disallowance.
+   */
+  error?: string;
 };
 
 const EMPTY: Exposure = {
@@ -69,9 +78,12 @@ export async function getMsmeExposure(): Promise<Exposure> {
   const sb = await createClient();
 
   let rows: ExposureRow[] = [];
+  /* Signed in from here on: a failure is "could not calculate", never the
+     signed-out EMPTY state. */
+  const failed = (why: string): Exposure => ({ ...EMPTY, live: true, error: why });
   try {
     const { data, error } = await sb.rpc("cortex_msme_exposure", { p_org: orgId });
-    if (error) return EMPTY;   // migration not applied — say nothing rather than guess
+    if (error) return failed(error.message || "the exposure calculation is unavailable");
     rows = (data as any[] || []).map((r) => ({
       party: r.party,
       udyam_category: r.udyam_category,
@@ -83,7 +95,7 @@ export async function getMsmeExposure(): Promise<Exposure> {
       other_count: Number(r.other_count) || 0,
       other_amount: Number(r.other_amount) || 0,
     }));
-  } catch { return EMPTY; }
+  } catch (e: any) { return failed(e?.message || "unknown error"); }
 
   let atRisk = 0, atRiskCount = 0, notCovered = 0, unclassified = 0, unclassifiedCount = 0, totalPayable = 0;
   let anyClassified = false;
@@ -172,18 +184,31 @@ export async function getMsmeExposure(): Promise<Exposure> {
  * or not this particular bill is settled, and classifying them once is the
  * point; filtering would make a vendor appear and disappear as bills are paid.
  */
-export async function syncVendorsFromPayables(): Promise<number> {
+/**
+ * Returns how many vendor rows were added, and — new — an `error` when the
+ * sync could not run. The comment below always said "a failed sync must not
+ * be silent", and then the code returned 0, which is indistinguishable from
+ * "nothing new to add". The page now shows the reason.
+ *
+ * Both reads are PAGED (lib/page-all): bills used to stop at 5,000 and
+ * vendors at 5,000 here and 500 in listVendors, so suppliers beyond those
+ * caps never got a row and could never be classified.
+ */
+export async function syncVendorsFromPayables(): Promise<{ added: number; error?: string }> {
   const { orgId } = await getUserAndOrg();
-  if (!orgId) return 0;
+  if (!orgId) return { added: 0 };
   const sb = await createClient();
   try {
-    const { data: bills, error } = await sb.from("invoices")
-      .select("party").eq("org_id", orgId).eq("type", "payable").limit(5000);
-    if (error || !bills?.length) return 0;
+    const billsRes = await pageAll<any>((a, b) => sb.from("invoices")
+      .select("id, party").eq("org_id", orgId).ilike("type", "payable").order("id").range(a, b));
+    if (billsRes.error) return { added: 0, error: `Could not read your supplier bills: ${billsRes.error}` };
+    const bills = billsRes.rows;
+    if (!bills.length) return { added: 0 };
 
-    const { data: existing } = await sb.from("vendors")
-      .select("name").eq("org_id", orgId).limit(5000);
-    const have = new Set((existing as any[] || []).map((v) => normName(v.name)));
+    const existingRes = await pageAll<any>((a, b) => sb.from("vendors")
+      .select("id, name").eq("org_id", orgId).order("id").range(a, b));
+    if (existingRes.error) return { added: 0, error: `Could not read your supplier list: ${existingRes.error}` };
+    const have = new Set(existingRes.rows.map((v) => normName(v.name)));
 
     const seen = new Set<string>();
     const toAdd: Array<{ org_id: string; name: string }> = [];
@@ -195,18 +220,18 @@ export async function syncVendorsFromPayables(): Promise<number> {
       seen.add(n);
       toAdd.push({ org_id: orgId, name: raw });
     }
-    if (!toAdd.length) return 0;
+    if (!toAdd.length) return { added: 0 };
 
     const { error: insErr } = await sb.from("vendors")
       .upsert(toAdd, { onConflict: "org_id,name", ignoreDuplicates: true });
     /*
       A failed sync must not be silent: the page would then show the same
-      impossible "no suppliers on file" state with no explanation. Returning 0
-      lets the caller fall back to reading whatever is already there.
+      impossible "no suppliers on file" state with no explanation. The caller
+      still reads whatever is already there, AND shows this reason.
     */
-    if (insErr) return 0;
-    return toAdd.length;
-  } catch { return 0; }
+    if (insErr) return { added: 0, error: `Could not add ${toAdd.length} new supplier(s) from your bills: ${insErr.message}` };
+    return { added: toAdd.length };
+  } catch (e: any) { return { added: 0, error: `Could not sync suppliers from your bills: ${e?.message || "unknown error"}` }; }
 }
 
 /**
@@ -219,14 +244,24 @@ function normName(raw: string | null | undefined): string {
   return String(raw ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+/**
+ * Every vendor, paged — not the first 500 — so the classifier and the
+ * agreement toggle cover every supplier the exposure table can show.
+ * `written_agreement_recorded_at` arrives with 2026_zzzz_c_msme_agreement_unknown.sql;
+ * before that migration the read retries without it (agreement then reads as
+ * unknown, which is the truth).
+ */
 export async function listVendors(): Promise<any[]> {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return [];
   const sb = await createClient();
+  const read = (cols: string) => pageAll<any>((a, b) => sb.from("vendors")
+    .select(cols).eq("org_id", orgId).order("name").order("id").range(a, b));
   try {
-    const { data } = await sb.from("vendors")
-      .select("id, name, udyam_category, udyam_number, has_written_agreement, category")
-      .eq("org_id", orgId).order("name").limit(500);
-    return (data as any[]) || [];
+    let r = await read("id, name, udyam_category, udyam_number, has_written_agreement, written_agreement_recorded_at, category");
+    if (r.error && /written_agreement_recorded_at/i.test(r.error)) {
+      r = await read("id, name, udyam_category, udyam_number, has_written_agreement, category");
+    }
+    return r.rows;
   } catch { return []; }
 }

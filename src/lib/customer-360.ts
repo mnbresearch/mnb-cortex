@@ -65,7 +65,11 @@ export async function getCustomer360(orgId: string, customerId: string): Promise
 
   const allOrders = ordersRes.rows;
   const byId = allOrders.filter((o) => o.customer_id === customerId);
-  const byName = norm ? allOrders.filter((o) => o.customer_id !== customerId && normalizeCustomerName(o.customer_name) === norm) : [];
+  /* Name matches only for orders linked to NO customer. `customer_id !==
+     customerId` also pulled in orders explicitly linked to ANOTHER customer
+     who happens to share the normalised name — crediting one customer with
+     another's revenue on the page an owner uses to decide whom to chase. */
+  const byName = norm ? allOrders.filter((o) => o.customer_id == null && normalizeCustomerName(o.customer_name) === norm) : [];
   const orders = [...byId, ...byName].map((o) => ({ id: o.id, order_no: o.order_no, amount: Number(o.amount) || 0, status: o.status, order_date: o.order_date, product: o.product }));
 
   const invoices = invoicesRes.rows

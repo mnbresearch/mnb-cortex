@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
 import { ExampleFigures } from "@/components/example-figures";
 import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
+import { projectRunway } from "@/lib/money-rules";
 
 /*
   SEEDED FROM THE BANK STATEMENT CORTEX ALREADY READ.
@@ -39,6 +40,21 @@ export function CashRunway({ seed }: { seed?: WorkspaceSeed } = {}) {
   const [growth, setGrowth] = useState(6);
 
   const source = seedSource(seed, "cash", "monthlyCost", "monthlyRevenue");
+  /*
+    NAME THE FIELDS THAT ARE STILL EXAMPLES.
+
+    `seedSource` says "yours" when ANY of the three landed. A workspace with a
+    real bank balance and no recorded costs got its real cash divided by the
+    invented ₹22 L burn and ₹14 L revenue — under a green "these come from
+    your workspace" banner. Burn in particular is almost never known: a bank
+    statement's money-out includes loan repayments and transfers, so Cortex
+    does not pretend it is operating burn. Every unseeded input is listed.
+  */
+  const stillExample = [
+    seed?.cash == null ? "cash in bank" : "",
+    seed?.monthlyCost == null ? "monthly burn" : "",
+    seed?.monthlyRevenue == null ? "monthly revenue" : "",
+  ].filter(Boolean);
   const note = [
     seed?.cashAsOf ? `Cash is your closing balance as at ${seed.cashAsOf}, not today` : "",
     seed?.cashAgeMonths && seed.cashAgeMonths >= 2
@@ -48,25 +64,16 @@ export function CashRunway({ seed }: { seed?: WorkspaceSeed } = {}) {
   ].filter(Boolean).join(" ") || undefined;
 
   const m = useMemo(() => {
-    let bal = cash, rev = revenue, month = 0;
-    const series: number[] = [bal];
-    // simulate up to 60 months
-    while (bal > 0 && month < 60) {
-      month++;
-      const net = burn - rev; // positive = losing money
-      bal -= net;
-      rev = rev * (1 + growth / 100);
-      series.push(Math.max(bal, 0));
-      if (net <= 0) break; // cash-flow positive → runway is effectively infinite
-    }
-    const netBurn = burn - revenue;
-    const profitable = netBurn <= 0;
-    const runway = profitable ? Infinity : month >= 60 ? 60 : month;
-    const zeroDate = profitable ? null : (() => {
-      const d = new Date(); d.setMonth(d.getMonth() + runway);
+    /* lib/money-rules.ts projectRunway: "out of cash" only if the simulated
+       balance actually reaches zero. The old loop broke out on the first
+       cash-positive month, judged profitability on month 0 alone, and printed
+       "60" when it merely ran out of months to simulate. */
+    const p = projectRunway({ cash, burn, revenue, growthPct: growth, horizon: 60 });
+    const zeroDate = p.monthsToZero === null ? null : (() => {
+      const d = new Date(); d.setMonth(d.getMonth() + p.monthsToZero!);
       return d.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
     })();
-    return { netBurn, profitable, runway, zeroDate, series };
+    return { netBurn: p.netBurnNow, cashPositiveNow: p.netBurnNow <= 0, hitZero: p.hitZero, runway: p.monthsToZero, zeroDate, series: p.series };
   }, [cash, burn, revenue, growth]);
 
   const max = Math.max(...m.series, 1);
@@ -78,7 +85,7 @@ export function CashRunway({ seed }: { seed?: WorkspaceSeed } = {}) {
 
   return (
     <div className="space-y-4">
-      <ExampleFigures source={source} what="cash and burn figures" note={note} />
+      <ExampleFigures source={source} what="cash and burn figures" note={note} stillExample={stillExample} />
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {F("Cash in bank", cash, setCash)}
@@ -87,9 +94,9 @@ export function CashRunway({ seed }: { seed?: WorkspaceSeed } = {}) {
           {F("Revenue growth /mo", growth, setGrowth, "%")}
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          <Stat label="Net burn / month" value={m.profitable ? "Cash positive" : inr(m.netBurn)} cls={m.profitable ? "text-success" : "text-danger"} />
-          <Stat label="Runway" value={m.profitable ? "∞" : m.runway >= 60 ? "60+ months" : `${m.runway} months`} highlight />
-          <Stat label="Out of cash" value={m.zeroDate ?? "Never (at this rate)"} cls={m.profitable ? "text-success" : ""} />
+          <Stat label="Net burn / month (now)" value={m.cashPositiveNow ? "Cash positive" : inr(m.netBurn)} cls={m.cashPositiveNow ? "text-success" : "text-danger"} />
+          <Stat label="Runway" value={m.hitZero ? `${m.runway} month${m.runway === 1 ? "" : "s"}` : "Beyond 5 years"} highlight />
+          <Stat label="Out of cash" value={m.zeroDate ?? "Never (within 5 years)"} cls={m.hitZero ? "text-danger" : "text-success"} />
         </div>
       </Card>
 
@@ -101,8 +108,8 @@ export function CashRunway({ seed }: { seed?: WorkspaceSeed } = {}) {
           ))}
         </div>
         <div className="text-xs text-muted-foreground mt-2">
-          {m.profitable
-            ? "You're cash-flow positive — the balance grows rather than depletes. Keep an eye on collection timing so book profit turns into real cash."
+          {!m.hitZero
+            ? "At these inputs the balance does not reach zero within five years. Keep an eye on collection timing so book profit turns into real cash."
             : "Each bar is a month. When it hits zero you need fresh cash or profitability. Rule of thumb: start raising or cutting when runway falls under 6 months."}
         </div>
       </Card>

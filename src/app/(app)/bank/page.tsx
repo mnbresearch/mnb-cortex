@@ -24,7 +24,12 @@ export default function Bank() {
         <Card className="p-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="h-4 w-4 text-success" />
-            The file is read in your browser and analysed on the fly — nothing is stored on our servers unless you choose to save the summary to Memory.
+            {/* This used to promise browser-only reading and no server storage. Neither was true: the statement text is sent
+                to /api/bank/analyze and on to our AI provider, and persistBankAnalysis always writes the monthly figures to the
+                workspace's finance ledger. */}
+            Your file is opened in your browser, then its text is sent to our AI provider for analysis. The monthly cash totals
+            (money in minus money out, and the closing balance) are saved to your workspace automatically so the dashboard and
+            runway can use them. Saving the written summary to Memory is a separate, optional step.
           </div>
         </Card>
       </PageShell>

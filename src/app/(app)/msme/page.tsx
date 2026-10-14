@@ -4,6 +4,8 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { getMsmeExposure, listVendors, syncVendorsFromPayables, COVERED } from "@/lib/msme";
 import { VendorClassifier } from "@/components/vendor-classifier";
+import { AgreementToggle } from "./agreement-toggle";
+import { getUserAndOrg } from "@/lib/data";
 import { AlertTriangle, Info, HelpCircle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +33,13 @@ export default async function Msme() {
     shape of it. Running it here rather than only in the importer means a
     workspace that imported payables yesterday is fixed by visiting the page.
   */
-  await syncVendorsFromPayables();
-  const [exp, vendors] = await Promise.all([getMsmeExposure(), listVendors()]);
+  const sync = await syncVendorsFromPayables();
+  const [exp, vendors, { orgId }] = await Promise.all([getMsmeExposure(), listVendors(), getUserAndOrg()]);
+  /* Agreement state per supplier name, so each row can say which window it
+     was aged against and whether that window was recorded or assumed. */
+  const normName = (s: string) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const agreementByName = new Map<string, "yes" | "no" | "unknown">(
+    vendors.map((v: any) => [normName(v.name), v.written_agreement_recorded_at ? (v.has_written_agreement ? "yes" : "no") : "unknown"]));
 
   return (
     <>
@@ -41,9 +48,27 @@ export default async function Msme() {
         subtitle="Section 43B(h) — deductions at risk from late supplier payments"
       />
       <PageShell>
-        {!exp.live ? (
+        {sync.error && (
+          <Card role="alert" className="p-4 text-sm border-warning/30 bg-warning/5">
+            <b>Some suppliers could not be added to the list below.</b> {sync.error}. Reload to try again.
+          </Card>
+        )}
+        {!orgId ? (
           <Card className="p-5 text-sm text-muted-foreground">
             Sign in to a workspace with supplier bills to see your exposure.
+          </Card>
+        ) : exp.error ? (
+          /* Signed in, but the calculation failed. NOT the signed-out message,
+             and NOT an empty page that reads as "no exposure". */
+          <Card role="alert" className="p-5 text-sm border-danger/30 bg-danger/5 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-danger mt-0.5 shrink-0" />
+            <div>
+              <div className="font-medium">Cortex couldn&rsquo;t calculate your 43B(h) exposure just now.</div>
+              <p className="text-muted-foreground mt-1">
+                This is not a zero — your exposure is unknown until the calculation runs. Reload to try again; if it keeps
+                failing, the database said: {exp.error}
+              </p>
+            </div>
           </Card>
         ) : (
           <>
@@ -99,8 +124,11 @@ export default async function Msme() {
               <div className="text-muted-foreground leading-6">
                 <span className="font-medium text-foreground">This is an exposure figure, not a tax computation.</span>{" "}
                 It is the value of unpaid bills to micro and small suppliers that have passed the statutory window
-                (45 days with a written agreement, 15 without). What is actually disallowed depends on your year end,
-                when you pay, and your method of accounting. Confirm with your chartered accountant before filing.
+                (45 days with a written agreement, 15 without). <b className="text-foreground">Where you have not recorded whether
+                a supplier has a written agreement, Cortex uses the 15-day window</b> — the stricter one, so an unknown never
+                makes a late bill look safe. Record it per supplier under &ldquo;Written agreements&rdquo; below.
+                What is actually disallowed depends on your year end, when you pay, and your method of accounting.
+                Confirm with your chartered accountant before filing.
               </div>
             </Card>
 
@@ -161,6 +189,9 @@ export default async function Msme() {
                               ) : (
                                 <span className="text-xs text-muted-foreground">Within {r.window_days}d</span>
                               )}
+                              {agreementByName.get(normName(r.party)) !== "yes" && agreementByName.get(normName(r.party)) !== "no" && (
+                                <div className="text-[11px] text-muted-foreground mt-0.5">15d assumed — agreement not recorded</div>
+                              )}
                             </td>
                           </tr>
                         );
@@ -173,6 +204,10 @@ export default async function Msme() {
 
             <Section title="Classify your suppliers" desc="Only micro and small are covered by 43B(h)">
               <VendorClassifier vendors={vendors} />
+            </Section>
+
+            <Section title="Written agreements" desc="45 days with a written agreement, 15 without — unrecorded is treated as 15">
+              <AgreementToggle vendors={vendors} />
             </Section>
           </>
         )}

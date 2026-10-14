@@ -52,7 +52,19 @@ export function PnlBuilder({ seed }: { seed?: WorkspaceSeed } = {}) {
   const seeded = seededFrom(seed, "monthlyRevenue", "monthlyCogs", "monthlyOpex");
 
   const [revenue, setRevenue] = useState(orDefault(seed?.monthlyRevenue, 4_250_000));
-  const [cogs, setCogs] = useState(orDefault(seed?.monthlyCogs, 2_932_500));
+  /*
+    COGS IS NEVER BORROWED FROM THE EXAMPLE WHEN THE PAGE SAYS "YOURS".
+
+    `orDefault(seed?.monthlyCogs, 2_932_500)` dropped the example business's
+    COGS under a real revenue figure whenever the ledger had no cost of goods
+    (which is nearly always — nothing in the product records it), and the
+    banner said "One month from your finance ledger" over a gross margin built
+    on an invented number. A seeded page now leaves COGS blank and says it is
+    not recorded; the margins below wait for it.
+  */
+  const cogsKnown = seed?.monthlyCogs != null;
+  const [cogs, setCogs] = useState(cogsKnown ? seed!.monthlyCogs! : seeded ? 0 : 2_932_500);
+  const [cogsEntered, setCogsEntered] = useState(cogsKnown || !seeded);
   const [opex, setOpex] = useState<Line[]>(
     seeded && seed?.monthlyOpex != null
       ? [{ id: "ledger", label: "Operating expenses (from your ledger)", amount: seed.monthlyOpex }]
@@ -62,6 +74,13 @@ export function PnlBuilder({ seed }: { seed?: WorkspaceSeed } = {}) {
   );
   const [tax, setTax] = useState(25); // % on profit before tax
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
+
+  /* Opex is "not recorded" when the ledger supplied none and the owner has
+     not added a line — an empty list would otherwise read as ₹0 overheads. */
+  const opexMissing = seeded && opex.length === 0;
+  const stillExample = seeded
+    ? [!cogsEntered ? "COGS (not recorded — enter it)" : "", opexMissing ? "operating expenses (none recorded — add lines)" : ""].filter(Boolean)
+    : [];
 
   const m = useMemo(() => {
     const totalOpex = opex.reduce((s, l) => s + l.amount, 0);
@@ -92,14 +111,17 @@ export function PnlBuilder({ seed }: { seed?: WorkspaceSeed } = {}) {
       <ExampleFigures
         source={seeded ? "yours" : "example"}
         what="P&L lines"
-        note="One month from your finance ledger. Overheads arrive as the single total the ledger holds — use Add line to split them."
+        stillExample={stillExample}
+        note={seeded
+          ? `Revenue is one complete month from your finance ledger.${cogsKnown ? " COGS is the same ledger's." : ""} Anything not recorded is left blank rather than filled with an example.`
+          : undefined}
       />
       <Card className="p-5 space-y-3">
         <div className="font-semibold">Inputs (monthly)</div>
         <label className="flex items-center justify-between gap-2 text-sm"><span className="text-muted-foreground">Revenue</span>
           <input className={I + " w-36"} type="number" value={revenue} onChange={(e) => setRevenue(Number(e.target.value))} /></label>
         <label className="flex items-center justify-between gap-2 text-sm"><span className="text-muted-foreground">Cost of goods sold (COGS)</span>
-          <input className={I + " w-36"} type="number" value={cogs} onChange={(e) => setCogs(Number(e.target.value))} /></label>
+          <input className={I + " w-36"} type="number" value={cogsEntered ? cogs : ""} placeholder="not recorded" onChange={(e) => { setCogsEntered(true); setCogs(Number(e.target.value)); }} /></label>
         <div className="pt-1 text-sm font-medium">Operating expenses</div>
         {opex.map((l) => (
           <div key={l.id} className="flex items-center gap-2">
@@ -116,14 +138,16 @@ export function PnlBuilder({ seed }: { seed?: WorkspaceSeed } = {}) {
       <Card className="p-5 space-y-1 text-sm">
         <div className="font-semibold mb-2">Income statement</div>
         <Row label="Revenue" value={inr(revenue)} />
-        <Row label="Less: COGS" value={`(${inr(cogs)})`} />
-        <Row label="Gross profit" value={`${inr(m.grossProfit)} · ${m.grossMargin.toFixed(1)}%`} strong cls={m.grossMargin >= 30 ? "text-success" : "text-warning"} />
-        <Row label="Less: Operating expenses" value={`(${inr(m.totalOpex)})`} />
-        <Row label="EBITDA" value={`${inr(m.ebitda)} · ${m.ebitdaMargin.toFixed(1)}%`} strong cls={m.ebitda >= 0 ? "text-success" : "text-danger"} />
-        <Row label={`Less: Tax (${tax}%)`} value={`(${inr(m.taxAmt)})`} />
-        <Row label="Net profit" value={`${inr(m.net)} · ${m.netMargin.toFixed(1)}%`} strong cls={m.net >= 0 ? "text-success" : "text-danger"} />
+        {/* Without COGS every line below revenue would be revenue minus
+            nothing — a 100% gross margin nobody earned. Shown as unknown. */}
+        <Row label="Less: COGS" value={cogsEntered ? `(${inr(cogs)})` : "not recorded"} />
+        <Row label="Gross profit" value={cogsEntered ? `${inr(m.grossProfit)} · ${m.grossMargin.toFixed(1)}%` : "—"} strong cls={!cogsEntered ? "" : m.grossMargin >= 30 ? "text-success" : "text-warning"} />
+        <Row label="Less: Operating expenses" value={opexMissing ? "none recorded" : `(${inr(m.totalOpex)})`} />
+        <Row label="EBITDA" value={cogsEntered && !opexMissing ? `${inr(m.ebitda)} · ${m.ebitdaMargin.toFixed(1)}%` : "—"} strong cls={!(cogsEntered && !opexMissing) ? "" : m.ebitda >= 0 ? "text-success" : "text-danger"} />
+        <Row label={`Less: Tax (${tax}%)`} value={cogsEntered && !opexMissing ? `(${inr(m.taxAmt)})` : "—"} />
+        <Row label="Net profit" value={cogsEntered && !opexMissing ? `${inr(m.net)} · ${m.netMargin.toFixed(1)}%` : "—"} strong cls={!(cogsEntered && !opexMissing) ? "" : m.net >= 0 ? "text-success" : "text-danger"} />
         <div className="pt-3">
-          <Button onClick={review} disabled={loading} className="w-full"><Sparkles className="h-4 w-4" /> {loading ? "Reviewing…" : "Review my P&L (ask the AI CFO)"}</Button>
+          <Button onClick={review} disabled={loading || !cogsEntered || opexMissing} title={!cogsEntered || opexMissing ? "Enter COGS and at least one cost line first" : undefined} className="w-full"><Sparkles className="h-4 w-4" /> {loading ? "Reviewing…" : "Review my P&L (ask the AI CFO)"}</Button>
         </div>
         {out && <div className="rounded-lg border bg-background/50 p-4 leading-relaxed mt-2" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
       </Card>

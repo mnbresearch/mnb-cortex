@@ -52,7 +52,10 @@ export function MarkupMargin({ seed }: { seed?: WorkspaceSeed } = {}) {
       <ExampleFigures
         source={seededPrice != null ? "yours" : "example"}
         what="price and cost"
-        note="Price is your average order value. Cost applies your overall COGS-to-revenue ratio to it — an average, so correct it for this particular product."
+        stillExample={seededCost == null ? ["cost (no COGS recorded)"] : []}
+        note={seededCost != null
+          ? "Price is your average order value. Cost applies your overall COGS-to-revenue ratio to it — an average, so correct it for this particular product."
+          : "Price is your average order value. Your workspace records no cost of goods, so cost is an example — enter yours before reading the margin."}
       />
     <div className="grid lg:grid-cols-2 gap-4">
       <Card className="p-5 space-y-4">

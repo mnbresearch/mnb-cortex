@@ -39,7 +39,33 @@ export type Detected = {
   note: string;
 };
 
-export type FlattenResult = Detected & { rows: Record<string, string>[] };
+export type FlattenResult = Detected & {
+  rows: Record<string, string>[];
+  /**
+   * Vouchers left out because they are not invoices — receipts, payments,
+   * journals, contra entries, credit/debit notes — counted by voucher type so
+   * the import preview can say exactly what was not imported and why.
+   */
+  skippedVouchers?: Record<string, number>;
+};
+
+/**
+ * What a Tally / Busy voucher type means for an import.
+ *
+ *   "receivable"  a sales voucher — an invoice raised on a customer
+ *   "payable"     a purchase voucher — a supplier's bill
+ *   null          anything else: money MOVING (receipt, payment, contra), a
+ *                 journal adjustment, or a note against an earlier invoice.
+ *                 None of those is a new amount owed, and importing one as an
+ *                 invoice creates a debt that does not exist.
+ */
+export function voucherKind(v: string): "receivable" | "payable" | null {
+  const t = String(v || "").trim().toLowerCase();
+  if (!t) return null;
+  if (/^(sales?|sales invoice|tax invoice|retail invoice)\b/.test(t)) return "receivable";
+  if (/^(purchases?|purchase invoice|bill)\b/.test(t)) return "payable";
+  return null;
+}
 
 const norm = (s: any) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -163,7 +189,7 @@ export function parseAmount(v: string): string {
  * `grid` is the CSV as arrays of strings — the importer's parseCsv output
  * before it assumes row 0 is the header.
  */
-export function flattenExport(grid: string[][]): FlattenResult {
+export function flattenExport(grid: string[][], opts: { table?: string } = {}): FlattenResult {
   if (!grid.length) {
     return { rows: [], source: "generic", headerRow: 0, skippedTitles: [], droppedTotals: 0, note: "Empty file." };
   }
@@ -223,6 +249,43 @@ export function flattenExport(grid: string[][]): FlattenResult {
     }
   }
 
+  /*
+    ROUTE BY VOUCHER TYPE — A DAY BOOK IS NOT A LIST OF INVOICES.
+
+    A Tally Day Book interleaves Sales, Purchase, Receipt, Payment, Journal and
+    Contra vouchers. Every one used to come through with a positive Amount and
+    no type, so the invoice importer filed all of them as RECEIVABLES: a
+    customer's payment became a fresh debt, a supplier's bill became money owed
+    to us, and the collections agent could chase both. Now:
+
+      Sales     -> Type = receivable
+      Purchase  -> Type = payable   (dropped when importing sales orders —
+                                     a purchase is not revenue)
+      anything else -> left out, counted per voucher type in the note.
+  */
+  const vchCol = headers.find((h) => /^(voucher\s*type|vch\.?\s*type)$/i.test(h))
+    /* A bare "Type" column only counts when it is plainly carrying voucher
+       types, so an invoices file whose Type says "Receivable" is untouched. */
+    ?? headers.find((h) => /^type$/i.test(h)
+      && rows.some((r) => /^(receipt|payment|journal|contra)\b/i.test(String(r[h] ?? "").trim())));
+  const skippedVouchers: Record<string, number> = {};
+  if (vchCol) {
+    const salesOnly = opts.table === "sales_orders";
+    const typeKey = headers.some((h) => /^type$/i.test(h)) && !/^type$/i.test(vchCol) ? "Voucher Kind" : "Type";
+    rows = rows.filter((r) => {
+      const raw = String(r[vchCol] ?? "").trim();
+      const kind = voucherKind(raw);
+      if (!kind || (salesOnly && kind !== "receivable")) {
+        const label = raw || "(no voucher type)";
+        skippedVouchers[label] = (skippedVouchers[label] || 0) + 1;
+        return false;
+      }
+      r[typeKey] = kind;
+      return true;
+    });
+  }
+  const skippedVoucherCount = Object.values(skippedVouchers).reduce((a, b) => a + b, 0);
+
   // Normalise any date-looking column in place.
   for (const h of headers) {
     if (!/date/i.test(h)) continue;
@@ -237,6 +300,13 @@ export function flattenExport(grid: string[][]): FlattenResult {
   if (skippedTitles.length) bits.push(`skipped ${skippedTitles.length} title row(s)`);
   if (droppedTotals) bits.push(`ignored ${droppedTotals} total/blank row(s)`);
   if (hasDr && hasCr) bits.push("combined Debit/Credit into Amount");
+  if (skippedVoucherCount) {
+    const list = Object.entries(skippedVouchers).map(([k, n]) => `${n} ${k}`).join(", ");
+    bits.push(`left out ${skippedVoucherCount} voucher(s) that are not ${opts.table === "sales_orders" ? "sales" : "invoices"} (${list}) — receipts, payments, journals and contra entries move money; they are not amounts owed`);
+  }
 
-  return { rows, source, headerRow, skippedTitles, droppedTotals, note: bits.join(", ") + "." };
+  return {
+    rows, source, headerRow, skippedTitles, droppedTotals, note: bits.join(", ") + ".",
+    ...(skippedVoucherCount ? { skippedVouchers } : {}),
+  };
 }

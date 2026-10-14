@@ -70,10 +70,23 @@ export function NetWorthBuilder({ seed }: { seed?: WorkspaceSeed } = {}) {
 
   return (
     <div className="space-y-4">
+      {/*
+        "Yours" fired when ANY ONE of the four seedable lines was real, and the
+        note then claimed all four came from the workspace. Every line that is
+        still an example is now named — the four seedable ones only when they
+        did not arrive, and the five that this product cannot hold, always.
+      */}
       <ExampleFigures
         source={seedSource(seed, "cash", "receivables", "inventoryValue", "payables")}
         what="cash, receivables, stock and payables"
-        note="Those four come from your workspace. Plant & equipment, investments, both loans and tax due are still examples — this product keeps no fixed-asset register or debt schedule, so type those in."
+        stillExample={[
+          seed?.cash == null ? "cash & bank" : "",
+          seed?.receivables == null ? "receivables" : "",
+          seed?.inventoryValue == null ? "inventory" : "",
+          seed?.payables == null ? "payables" : "",
+          "plant & equipment", "investments", "working-capital loan", "term loan", "GST / tax due",
+        ].filter(Boolean)}
+        note="This product keeps no fixed-asset register or debt schedule, so plant, investments, loans and tax due are always yours to type in."
       />
       <div className="grid lg:grid-cols-2 gap-4">
         <Ledger title="Assets" rows={assets} setRows={setAssets} tone="text-success" />

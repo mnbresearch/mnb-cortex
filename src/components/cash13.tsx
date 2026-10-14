@@ -28,13 +28,33 @@ export type Cash13Seed = {
   weeklyOut: number | null;
   /** What the numbers were derived from, shown to the user. */
   basis: string | null;
+  /** Per-week amounts scheduled by due date (preferred over the flat weeklyIn/weeklyOut). */
+  weeklyInByWeek?: number[];
+  weeklyOutByWeek?: number[];
+  /** The scheduling rules and exclusions, stated to the user. */
+  notes?: string[];
+  /** The read failed — say so instead of opening on zeros. */
+  error?: string;
 };
 
 export function Cash13({ seed }: { seed?: Cash13Seed } = {}) {
-  const real = Boolean(seed && (seed.opening !== null || seed.weeklyIn !== null));
+  const byWeek = (arr: number[] | undefined, flat: number | null | undefined) =>
+    Array.from({ length: WEEKS }, (_, i) => (arr && Number.isFinite(arr[i]) ? arr[i] : flat ?? 0));
+  const real = Boolean(seed && (seed.opening !== null || seed.weeklyIn !== null
+    || seed.weeklyInByWeek?.some((v) => v) || seed.weeklyOutByWeek?.some((v) => v)));
   const [opening, setOpening] = useState(seed?.opening ?? 0);
-  const [inflow, setInflow] = useState<number[]>(Array.from({ length: WEEKS }, () => seed?.weeklyIn ?? 0));
-  const [outflow, setOutflow] = useState<number[]>(Array.from({ length: WEEKS }, () => seed?.weeklyOut ?? 0));
+  /*
+    AN UNKNOWN OPENING BALANCE IS NOT ₹0.
+
+    With no bank statement this opened at 0, so any week with more going out
+    than coming in printed "Cash goes negative in week 1" at a business that
+    may hold crores. Until the owner enters a balance (or Cortex has one), the
+    out-of-cash warning and the balance figures are withheld and the page
+    shows net movement only.
+  */
+  const [openingKnown, setOpeningKnown] = useState(seed?.opening != null);
+  const [inflow, setInflow] = useState<number[]>(byWeek(seed?.weeklyInByWeek, seed?.weeklyIn));
+  const [outflow, setOutflow] = useState<number[]>(byWeek(seed?.weeklyOutByWeek, seed?.weeklyOut));
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
 
   const m = useMemo(() => {
@@ -54,7 +74,7 @@ export function Cash13({ seed }: { seed?: Cash13Seed } = {}) {
 
   async function analyse() {
     setLoading(true); setOut("");
-    const input = `13-week cash flow: opening balance ${inr(opening)}. Weekly inflows ${inflow.map((v) => Math.round(v / 1000) + "k").join(", ")}. Weekly outflows ${outflow.map((v) => Math.round(v / 1000) + "k").join(", ")}. Closing ${inr(m.closing)}, lowest point ${inr(m.low)} in week ${m.lowWeek}${m.firstNegative ? `, goes negative in week ${m.firstNegative}` : ""}. What should I do now to protect cash, in priority order?`;
+    const input = `13-week cash flow: opening balance ${openingKnown ? inr(opening) : "UNKNOWN (balances below are cumulative net movement from zero, not cash in bank — do not conclude the business runs out of cash)"}. Weekly inflows ${inflow.map((v) => Math.round(v / 1000) + "k").join(", ")}. Weekly outflows ${outflow.map((v) => Math.round(v / 1000) + "k").join(", ")}. Closing ${inr(m.closing)}, lowest point ${inr(m.low)} in week ${m.lowWeek}${openingKnown && m.firstNegative ? `, goes negative in week ${m.firstNegative}` : ""}. What should I do now to protect cash, in priority order?`;
     try {
       const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "forecast", input }) });
       const j = await r.json(); setOut(j.text || "No response.");
@@ -66,11 +86,19 @@ export function Cash13({ seed }: { seed?: Cash13Seed } = {}) {
 
   return (
     <>
+    {seed?.error && (
+      <div role="alert" className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm mb-3">{seed.error}</div>
+    )}
     {/* Say where the numbers came from — or that they came from nowhere. */}
-    {real ? (
+    {seed?.error ? null : real ? (
       <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground mb-3">
         Seeded from {seed!.basis}. Adjust any week to model what you actually expect —
         nothing here is saved.
+        {seed?.notes?.length ? (
+          <ul className="list-disc pl-5 mt-2 space-y-0.5">
+            {seed.notes.map((t, i) => <li key={i}>{t}</li>)}
+          </ul>
+        ) : null}
       </div>
     ) : (
       <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground mb-3">
@@ -86,12 +114,19 @@ export function Cash13({ seed }: { seed?: Cash13Seed } = {}) {
         </div>
         <label className="text-sm">
           <span className="text-muted-foreground block mb-1">Opening balance</span>
-          <input type="number" value={opening} onChange={(e) => setOpening(Number(e.target.value))}
+          <input type="number" value={openingKnown ? opening : ""} placeholder="enter your bank balance"
+            onChange={(e) => { setOpeningKnown(e.target.value !== ""); setOpening(Number(e.target.value)); }}
             className="rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring w-40" />
         </label>
       </div>
 
-      {m.firstNegative && (
+      {!openingKnown && (
+        <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          Opening balance unknown — the figures below are <b>net movement from zero</b>, not your bank balance, so no
+          out-of-cash warning is given. Enter today&rsquo;s balance above to see the real low point.
+        </div>
+      )}
+      {openingKnown && m.firstNegative && (
         <div className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 text-danger mt-0.5 shrink-0" />
           <span><b className="text-danger">Cash goes negative in week {m.firstNegative}.</b> You need to pull in receipts, delay payments, or arrange a facility before then.</span>
@@ -99,9 +134,9 @@ export function Cash13({ seed }: { seed?: Cash13Seed } = {}) {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat label="Closing balance" value={inr(m.closing)} cls={m.closing >= 0 ? "text-success" : "text-danger"} />
+        <Stat label="Closing balance" value={openingKnown ? inr(m.closing) : "—"} cls={!openingKnown ? "" : m.closing >= 0 ? "text-success" : "text-danger"} />
         <Stat label="Net movement" value={`${m.net >= 0 ? "+" : ""}${inr(m.net)}`} cls={m.net >= 0 ? "text-success" : "text-danger"} />
-        <Stat label="Lowest point" value={inr(m.low)} cls={m.low < 0 ? "text-danger" : m.low < opening * 0.4 ? "text-warning" : ""} />
+        <Stat label={openingKnown ? "Lowest point" : "Lowest point (from zero)"} value={inr(m.low)} cls={!openingKnown ? "" : m.low < 0 ? "text-danger" : m.low < opening * 0.4 ? "text-warning" : ""} />
         <Stat label="Occurs in" value={`Week ${m.lowWeek}`} />
       </div>
 
@@ -123,9 +158,9 @@ export function Cash13({ seed }: { seed?: Cash13Seed } = {}) {
               {outflow.map((v, i) => <td key={i} className="px-0.5"><input className={I} type="number" value={v} onChange={(e) => setAt(outflow, setOutflow, i, e.target.value)} /></td>)}
             </tr>
             <tr className="border-t">
-              <td className="py-1.5 pr-2 font-medium sticky left-0 bg-card">Balance</td>
+              <td className="py-1.5 pr-2 font-medium sticky left-0 bg-card">{openingKnown ? "Balance" : "Net from zero"}</td>
               {m.balances.map((b, i) => (
-                <td key={i} className={`px-0.5 py-1.5 text-center font-medium tabular-nums ${b < 0 ? "text-danger" : "text-foreground"}`}>
+                <td key={i} className={`px-0.5 py-1.5 text-center font-medium tabular-nums ${openingKnown && b < 0 ? "text-danger" : "text-foreground"}`}>
                   {Math.round(b / 1000)}k
                 </td>
               ))}
@@ -138,7 +173,7 @@ export function Cash13({ seed }: { seed?: Cash13Seed } = {}) {
         <div className="text-xs text-muted-foreground mb-2">Balance trend</div>
         <div className="flex items-end gap-1 h-20">
           {m.balances.map((b, i) => (
-            <div key={i} className={`flex-1 rounded-t ${b < 0 ? "bg-danger" : "brand-gradient"}`}
+            <div key={i} className={`flex-1 rounded-t ${openingKnown && b < 0 ? "bg-danger" : "brand-gradient"}`}
               style={{ height: `${Math.max(3, (Math.abs(b) / maxAbs) * 100)}%` }} title={inr(b)} />
           ))}
         </div>

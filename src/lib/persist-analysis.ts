@@ -108,7 +108,17 @@ export async function persistBankAnalysis(orgId: string | null | undefined, anal
     .map((m, i) => {
       const period = toPeriod(m.key || m.label);
       if (!period) return null;
-      const row: Record<string, any> = { org_id: orgId, period, net_profit: +num(m.net).toFixed(2) };
+      /*
+        NET CASH FLOW, NOT NET PROFIT.
+
+        `m.net` is money in minus money out on the bank statement. A loan
+        drawdown, owner capital, a GST refund or an asset sale all raise it;
+        loan repayments and capex lower it. It was written into `net_profit`,
+        and from there it became "net profit" on the dashboard, /finance,
+        /ratios and /runway — so a business that borrowed ₹50 L in March
+        reported a ₹50 L profit for March. It is stored as what it is.
+      */
+      const row: Record<string, any> = { org_id: orgId, period, net_cash_flow: +num(m.net).toFixed(2) };
       if (balances[i] !== null) row.cash_balance = balances[i];
       return row;
     })
@@ -118,16 +128,34 @@ export async function persistBankAnalysis(orgId: string | null | undefined, anal
   // worth being honest that nothing landed.
   if (!rows.length) return { saved: 0, ok: true };
 
+  let savedCount = rows.length;
   try {
-    const { error } = await svc.from("finance_ledger").upsert(rows, { onConflict: "org_id,period" });
+    let { error } = await svc.from("finance_ledger").upsert(rows, { onConflict: "org_id,period" });
+    /*
+      Deploy-order guard: if migration 2026_zzzz_c_net_cash_flow.sql has not
+      been applied yet the column does not exist. Saving the cash balances
+      without the flow is strictly better than refusing the whole analysis —
+      and it must NOT fall back to writing the flow into net_profit.
+    */
+    if (error && /net_cash_flow/i.test(error.message || "")) {
+      const withoutFlow = rows.map(({ net_cash_flow: _drop, ...rest }) => rest)
+        .filter((r) => r.cash_balance !== undefined);
+      // Nothing storable without the column — that is our schema, not their file.
+      if (!withoutFlow.length) return { saved: 0, ok: false, error: `Your analysis ran but could not be saved: ${error.message}. You have not been charged.` };
+      ({ error } = await svc.from("finance_ledger").upsert(withoutFlow, { onConflict: "org_id,period" }));
+      savedCount = withoutFlow.length;
+    }
     if (error) return { saved: 0, ok: false, error: `Your analysis ran but could not be saved: ${error.message}. You have not been charged.` };
   } catch (e: any) {
     return { saved: 0, ok: false, error: `Your analysis ran but could not be saved: ${e?.message || "unknown error"}. You have not been charged.` };
   }
 
   await recomputeQuietly(orgId);
-  return { saved: rows.length, ok: true };
+  return { saved: savedCount, ok: true };
 }
+/* Note for readers of this file: the bank reader no longer writes
+   `net_profit` at all. Nothing in the product derives profit from a bank
+   statement, because a statement cannot tell profit from borrowing. */
 
 /**
  * GST return → filed turnover and tax for the return period.

@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
 import { EMPTY_SEED, type WorkspaceSeed } from "@/lib/seed-types";
+import { lastCompleteMonthRevenue } from "@/lib/money-rules";
 
 export { EMPTY_SEED, type WorkspaceSeed };
 
@@ -171,14 +172,40 @@ export async function getWorkspaceSeed(): Promise<WorkspaceSeed> {
     const scale = revenueMonths > 0 ? 12 / revenueMonths : 0;
     const rawRevenue = sumOf(revRows, (r) => r.revenue);
     const revenue = rawRevenue === null ? null : Math.round(rawRevenue * scale);
-    const rawCogs = sumOf(revRows, (r) => r.cogs);
-    const cogs = rawCogs === null ? null : Math.round(rawCogs * scale);
-    const rawOpex = sumOf(revRows, (r) => r.opex);
-    const opex = rawOpex === null ? null : Math.round(rawOpex * scale);
+    /* COGS: ONLY rows that actually recorded one.
+
+       `finance_ledger.cogs` is `default 0` in schema.sql and nothing in the
+       product writes it, so every ledger row carries a 0 that means "never
+       entered". Summing those zeros seeded COGS = 0 under a "yours" banner:
+       /ccc printed DIO 0, /markup and /discount a 100% margin, and
+       /inventory-turns 0.0× — all from a number nobody recorded. A zero COGS
+       month is not a fact any trading business has; it is the column default.
+       Scaled by the months that carried it, and null when none did. */
+    const cogsRows = revRows.filter((r) => num(r.cogs) !== null);
+    const rawCogs = sumOf(cogsRows, (r) => r.cogs);
+    const cogs = rawCogs === null || !cogsRows.length ? null : Math.round(rawCogs * (12 / cogsRows.length));
+    /* Opex: NOT SEEDED.
+
+       The only writer of `finance_ledger.opex` is lib/metrics.ts, which puts
+       ONE month of payroll on the CURRENT month's row. Summed and annualised
+       here it became anything from 1× to 12× a month's salaries depending on
+       how many months of revenue were on file, and it was never opex in the
+       first place (rent, utilities and everything else are absent). Unknown is
+       the true answer until something records real operating expenses. */
+    const opex: number | null = null;
+    /* Net profit: only when the ledger can tell profit from cash flow.
+
+       The bank reader used to write each month's money-in minus money-out into
+       `net_profit`, so a loan drawdown or owner capital became "profit". It now
+       writes `net_cash_flow`, and migration 2026_zzzz_c_net_cash_flow.sql moves
+       the old values across. Until that migration has run, the column does not
+       exist on the row, every `net_profit` on file is a bank flow, and the
+       honest reading is "profit unknown". */
+    const ledgerSeparatesCashFlow = ledger.some((r) => r && Object.prototype.hasOwnProperty.call(r, "net_cash_flow"));
     /* Only the rows that actually recorded a bottom line contribute, and the
        scale is theirs, not revenue's — annualising six months of profit by the
        revenue window's twelve-month factor would halve it. */
-    const profitRows = revRows.filter((r) => r.net_profit !== null && r.net_profit !== undefined
+    const profitRows = !ledgerSeparatesCashFlow ? [] : revRows.filter((r) => r.net_profit !== null && r.net_profit !== undefined
       && Number.isFinite(Number(r.net_profit)));
     const rawNetProfit = sumOf(profitRows, (r) => r.net_profit);
     const netProfitAnnual = rawNetProfit === null || !profitRows.length
@@ -197,20 +224,31 @@ export async function getWorkspaceSeed(): Promise<WorkspaceSeed> {
        number and a recorded break-even month is a real zero, and both are
        facts about the business. `latestWith` already established the column is
        populated, so there is no unknown left to guard against. */
-    const profitRow = latestWith(ledger, "net_profit");
+    const profitRow = ledgerSeparatesCashFlow ? latestWith(ledger, "net_profit") : null;
     const monthlyProfit = profitRow ? Number(profitRow.net_profit) : null;
 
     /* Inflow and outflow for the SAME month, so /runway's burn reconciles with
        the profit figure instead of being an annual average of a different
        period. Cost is derived by subtraction rather than as cogs + opex,
        because those two columns do not have to account for every rupee that
-       moved and net_profit is the row's own authoritative bottom line. */
-    const monthlyRevenue = profitRow ? num(profitRow.revenue) : null;
-    const monthlyCost = monthlyRevenue !== null && monthlyProfit !== null
+       moved and net_profit is the row's own authoritative bottom line.
+
+       With no recorded profit there is no cost figure either — monthlyCost is
+       null and /runway lists burn as an example. Revenue alone still comes
+       from the LAST COMPLETE month: the newest ledger row is usually the
+       current, part-finished month, and seeding month-to-date revenue as "your
+       monthly revenue" understated it by however far into the month we are. */
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const lastFull = lastCompleteMonthRevenue(ledger, thisMonth);
+    const monthlyRevenue = profitRow ? num(profitRow.revenue) : (lastFull ? lastFull.revenue : null);
+    const monthlyCost = profitRow && monthlyRevenue !== null && monthlyProfit !== null
       ? Math.round(monthlyRevenue - monthlyProfit)
       : null;
-    const monthlyCogs = profitRow ? num(profitRow.cogs) : null;
-    const monthlyOpex = profitRow ? num(profitRow.opex) : null;
+    /* Same rule as annual COGS above: a stored 0 is the column default. */
+    const cogsRow = ledger.find((r) => num(r.cogs) !== null && String(r.period || "").slice(0, 7) < thisMonth);
+    const monthlyCogs = profitRow ? num(profitRow.cogs) : (cogsRow ? num(cogsRow.cogs) : null);
+    /* Opex: not seeded — see the note on annual opex above. */
+    const monthlyOpex: number | null = null;
 
     /* ---- Cash, with the month it belongs to ------------------------------
        A cash balance is a claim about a moment. The dashboard once printed a

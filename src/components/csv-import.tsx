@@ -61,6 +61,10 @@ export function CsvImport({ initialTable }: { initialTable?: string } = {}) {
   const [rows, setRows] = useState<any[]>([]);
   const [msg, setMsg] = useState("");
   const [shape, setShape] = useState<FlattenResult | null>(null);
+  /* The raw grid, kept so the file can be re-flattened for whichever dataset
+     ends up selected — flattenExport({ table }) drops purchase vouchers only
+     for sales orders, so the right answer depends on the dropdown. */
+  const [grid, setGrid] = useState<string[][] | null>(null);
   const [guess, setGuess] = useState<DatasetGuess | null>(null);
   const [switched, setSwitched] = useState<string | null>(null);
   const [result, setResult] = useState<Awaited<ReturnType<typeof importRows>> | null>(null);
@@ -98,22 +102,41 @@ export function CsvImport({ initialTable }: { initialTable?: string } = {}) {
       and the last row is a Grand Total that would otherwise be imported as a
       transaction worth the sum of all the others.
     */
-    const flat = flattenExport(parseCsvGrid(text));
-    setShape(flat);
-    setRows(flat.rows);
+    const g0 = parseCsvGrid(text);
+    setGrid(g0);
+    // Detect on the table-neutral shape (the headers do not depend on the table)…
+    const probe = flattenExport(g0);
 
     /* Which dataset IS this? Switch only on a confident answer — see
        lib/import-detect for why a confident wrong switch is the worse bug. */
-    const g = detectDataset(Object.keys(flat.rows[0] || {}), OFFERED);
+    const g = detectDataset(Object.keys(probe.rows[0] || {}), OFFERED);
     setGuess(g);
+    let target = table;
     if (g && g.confident && g.table !== table) {
+      target = g.table;
       setTable(g.table);
       setSwitched(g.table);
     } else {
       setSwitched(null);
     }
 
+    // …then flatten FOR the dataset being imported, so a sales-order import
+    // leaves purchase vouchers out (a purchase is not revenue) and says so.
+    const flat = flattenExport(g0, { table: target });
+    setShape(flat);
+    setRows(flat.rows);
     setMsg(`${flat.rows.length.toLocaleString("en-IN")} rows detected. ${flat.note} Check the column match below, then import.`);
+  }
+
+  /* The owner changed the dataset after choosing a file: re-flatten for it. */
+  function onTableChange(next: string) {
+    setTable(next); setSwitched(null); setResult(null);
+    if (grid) {
+      const flat = flattenExport(grid, { table: next });
+      setShape(flat);
+      setRows(flat.rows);
+      setMsg(`${flat.rows.length.toLocaleString("en-IN")} rows detected. ${flat.note} Check the column match below, then import.`);
+    }
   }
 
   async function doImport() {
@@ -124,7 +147,7 @@ export function CsvImport({ initialTable }: { initialTable?: string } = {}) {
     setLoading(false);
     if (res.error) { setMsg(`Error: ${res.error}`); return; }
     setResult(res);
-    setRows([]); setShape(null); setGuess(null); setSwitched(null);
+    setRows([]); setShape(null); setGrid(null); setGuess(null); setSwitched(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -148,7 +171,7 @@ export function CsvImport({ initialTable }: { initialTable?: string } = {}) {
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">Dataset
           <select
             value={table}
-            onChange={(e) => { setTable(e.target.value); setSwitched(null); setResult(null); }}
+            onChange={(e) => onTableChange(e.target.value)}
             className="rounded-lg border bg-background px-3 h-9 text-sm"
           >
             {DATASETS.map((d) => <option key={d.table} value={d.table}>{d.label}</option>)}
@@ -238,6 +261,12 @@ export function CsvImport({ initialTable }: { initialTable?: string } = {}) {
               explanation reads like data loss. */}
           {result.skippedReason && (
             <p className="text-xs text-muted-foreground">{result.skippedReason}</p>
+          )}
+          {/* URL path: what was read and what was LEFT OUT ("left out N
+              vouchers…"). The file path shows this in its preview; the URL
+              path has no preview, so it is said here. */}
+          {result.note && (
+            <p className="text-xs text-muted-foreground">{result.note}</p>
           )}
 
           {result.warning ? (

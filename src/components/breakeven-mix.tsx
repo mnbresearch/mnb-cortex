@@ -26,7 +26,12 @@ const SEED: Prod[] = [
   owner corrects, rather than an invented one they accept.
 */
 export function BreakevenMix({ seed }: { seed?: WorkspaceSeed } = {}) {
-  const [fixed, setFixed] = useState(orDefault(seed?.opex, 2_500_000));
+  /* `seed.opex` is ANNUAL; this field is "Fixed costs / month". Seeding the
+     annual figure straight in made fixed costs 12× too high and break-even
+     12× too far away. Divided by twelve. (The seed currently leaves opex
+     unknown — see workspace-seed.ts — so this shows the example until real
+     operating expenses are recorded.) */
+  const [fixed, setFixed] = useState(orDefault(seed?.opex != null ? Math.round(seed.opex / 12) : null, 2_500_000));
   const [prods, setProds] = useState<Prod[]>(SEED);
 
   const calc = useMemo(() => {
@@ -58,7 +63,7 @@ export function BreakevenMix({ seed }: { seed?: WorkspaceSeed } = {}) {
       <ExampleFigures
         source={seedSource(seed, "opex")}
         what="fixed costs"
-        note="Seeded from your recorded annual operating expenses. Break-even wants only the FIXED share of that — rent, salaries, utilities — so trim it if you carry large variable overheads."
+        note="Seeded as one twelfth of your recorded annual operating expenses. Break-even wants only the FIXED share of that — rent, salaries, utilities — so trim it if you carry large variable overheads. The products below are always examples."
       />
       <Card className="p-5 space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">

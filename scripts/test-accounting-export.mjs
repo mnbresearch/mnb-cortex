@@ -62,15 +62,28 @@ const TALLY = [
   check(r.skippedTitles.length === 3, "Tally: reported the skipped titles", JSON.stringify(r.skippedTitles));
 
   // THE ONE THAT DOUBLES REVENUE.
-  check(r.rows.length === 3, "Tally: the Grand Total row is NOT imported as a transaction",
+  /*
+    UPDATED: this used to expect THREE rows summing to ₹2,50,000 — i.e. it
+    locked in the Receipt voucher (Mehta Industries paying us ₹45,000) being
+    imported as a fresh positive-amount row, which the invoice importer then
+    filed as a RECEIVABLE that collections could chase. A receipt is money
+    arriving, not money owed. The two Sales vouchers are the only invoices.
+  */
+  check(r.rows.length === 2, "Tally: only the two Sales vouchers are imported (no Grand Total, no Receipt)",
     `${r.rows.length} rows: ${JSON.stringify(r.rows.map((x) => x["Particulars"]))}`);
   const sum = r.rows.reduce((n, x) => n + Number(x["Amount"] || 0), 0);
-  check(sum === 250000, "Tally: imported rows sum to the real total, not double it", `sum = ${sum}`);
+  check(sum === 205000, "Tally: imported rows sum to the real sales total, not double it", `sum = ${sum}`);
 
   // Debit/Credit collapsed.
   check(r.rows[0]["Amount"] === "120000", "Tally: Debit becomes Amount", r.rows[0]["Amount"]);
-  check(r.rows[2]["Amount"] === "45000", "Tally: a Credit-only row still gets an Amount",
-    `got ${r.rows[2]["Amount"]} — a Debit-only reader would zero this row`);
+  check(!r.rows.some((x) => x["Particulars"] === "Mehta Industries"),
+    "Tally: the Receipt voucher is NOT imported as an invoice");
+  check(r.skippedVouchers && r.skippedVouchers["Receipt"] === 1,
+    "Tally: the left-out Receipt is counted for the import preview", JSON.stringify(r.skippedVouchers));
+  check(/left out 1 voucher/.test(r.note) && /Receipt/.test(r.note),
+    "Tally: the preview note says what was left out and why", r.note);
+  check(r.rows.every((x) => x["Type"] === "receivable"), "Tally: Sales vouchers are typed receivable",
+    JSON.stringify(r.rows.map((x) => x["Type"])));
 
   check(r.rows[0]["Date"] === "2026-04-01", "Tally: 1-Apr-2026 becomes ISO", r.rows[0]["Date"]);
   check(r.rows[1]["Particulars"] === "Gupta Traders", "Tally: rows line up after the blank line is dropped");
