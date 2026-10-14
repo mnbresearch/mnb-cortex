@@ -7,6 +7,27 @@ import { chargeForMode, imageGenGate, refundIfCharged } from "@/lib/credits";
 import { hasImageProvider, generateImages, IMAGE_ASPECTS, type ImageAspect } from "@/lib/ai/image";
 import { createMedia, storeBytes, fromDataUrl } from "@/lib/media";
 import { buildImagePrompt } from "@/lib/ai/visual-prompts";
+import { isEngineFailure } from "@/lib/ai/cortex";
+
+/*
+  Every field of an agent's form is interpolated into a paid prompt. Capped
+  server-side, before the charge: 4,000 characters per field and 12,000 in
+  total is room for a pasted brief or document, not an unbounded body.
+*/
+const MAX_FIELD = 4_000;
+const MAX_FIELDS = 20;
+const MAX_TOTAL = 12_000;
+function capInputs(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!raw || typeof raw !== "object") return out;
+  let total = 0;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, MAX_FIELDS)) {
+    const val = String(v ?? "").slice(0, Math.max(0, Math.min(MAX_FIELD, MAX_TOTAL - total)));
+    total += val.length;
+    out[String(k).slice(0, 80)] = val;
+  }
+  return out;
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,7 +71,9 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({} as any));
   const agent = await resolveAgent(orgId, String(b.agentId || ""));
   if (!agent) return NextResponse.json({ ok: false, error: "Unknown agent." }, { status: 200 });
-  const inputs = (b.inputs || {}) as Record<string, string>;
+  const inputs = capInputs(b.inputs);
+  if (b.reviseNote) b.reviseNote = String(b.reviseNote).slice(0, 2_000);
+  if (b.prior) b.prior = String(b.prior).slice(0, MAX_TOTAL);
 
   // ---- Video: handled by its own async route ----
   // Veo takes 1-3 minutes, so it can't run inside this request. The console
@@ -156,6 +179,16 @@ export async function POST(req: Request) {
     if (!String(output || "").trim()) {
       await refundIfCharged(gate, "document");
       return NextResponse.json({ ok: false, error: `"${agent.name}" came back empty — try running it again. Your credits have not been used.` }, { status: 200 });
+    }
+
+    /*
+      NO PROVIDER ANSWERED. runReasoning() hands back runCortex's own failure
+      sentence, which this used to save as the agent's run and return ok:true —
+      billed, and filed in the run history as if it were the deliverable.
+    */
+    if (isEngineFailure(output)) {
+      await refundIfCharged(gate, "document");
+      return NextResponse.json({ ok: false, engineFailure: true, error: `"${agent.name}" could not run — the AI engine did not answer. Try again in a moment. Your credits have not been used.` }, { status: 200 });
     }
 
     const version = Number(b.version || 0) + 1;

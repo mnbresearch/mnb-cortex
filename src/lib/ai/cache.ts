@@ -45,6 +45,21 @@ import { serviceClient } from "@/lib/supabase/server";
 
 const VERSION = "v1";
 
+/**
+ * Mark a computed value as NOT to be cached. A fallback produced because the
+ * model failed is a fact about that moment, not about the input — caching it
+ * on the input's fingerprint would serve the fallback for hours after the
+ * provider recovered. Non-enumerable, so it never reaches a JSON response.
+ */
+export const DO_NOT_CACHE = Symbol.for("cortex.cache.skip");
+export function doNotCache<T extends object>(value: T): T {
+  try { Object.defineProperty(value, DO_NOT_CACHE, { value: true, enumerable: false }); } catch { /* frozen — cached as before */ }
+  return value;
+}
+function cacheable(value: unknown): boolean {
+  return !(value && typeof value === "object" && (value as any)[DO_NOT_CACHE] === true);
+}
+
 export function fingerprint(...parts: unknown[]): string {
   return createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 32);
 }
@@ -80,6 +95,7 @@ export async function cachedByInput<T>(
   }
 
   const value = await compute();
+  if (!cacheable(value)) return { value, hit: false };
 
   try {
     await svc.from("app_settings").upsert(

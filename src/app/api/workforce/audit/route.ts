@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUserAndOrg, getBusinessContext } from "@/lib/data";
-import { runCortex } from "@/lib/ai/cortex";
+import { runCortex, isEngineFailure } from "@/lib/ai/cortex";
 import { recallContext } from "@/lib/memory";
 import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundIfCharged } from "@/lib/credits";
@@ -27,7 +27,14 @@ export async function POST() {
   const gate = await chargeForMode("report");
   if (!gate.ok) { const d = creditDenial(gate, "An AI workforce audit"); return NextResponse.json(d.body, { status: d.status }); }
 
-  const [context, mem] = await Promise.all([getBusinessContext(), recallContext(orgId, "priorities goals bottlenecks", 8)]);
+  /* Past the charge, so a throw here must give the credits back rather than surface as a 500. */
+  let context = "", mem = "";
+  try {
+    [context, mem] = await Promise.all([getBusinessContext(), recallContext(orgId, "priorities goals bottlenecks", 8)]);
+  } catch (e: any) {
+    await refundIfCharged(gate, "report");
+    return NextResponse.json({ ok: false, plan: "", error: "Could not read your business data for the audit — try again in a moment. Your credits have not been used." });
+  }
   const depts = DEPARTMENTS.map((d) => d.name).join(", ");
   const prompt = `You are Cortex's AI-adoption auditor. Based on the business snapshot and remembered context, produce a prioritised plan for putting AI agents to work across these departments: ${depts}.
 Return Markdown with: (1) a one-line read of where this business is losing the most time/money, (2) "Deploy first" — 3 agents to run this week with the exact job each does and why, (3) "Next" — 3 more, (4) one metric to watch. Be specific to this business, not generic.
@@ -45,7 +52,7 @@ ${mem}`;
   */
   let plan = "";
   try { plan = await runCortex([{ role: "user", content: prompt }], ""); } catch { plan = ""; }
-  if (!String(plan || "").trim()) {
+  if (!String(plan || "").trim() || isEngineFailure(plan)) {
     await refundIfCharged(gate, "report");
     return NextResponse.json({ ok: false, plan: "", error: "Could not generate the audit right now — try again in a moment. Your credits have not been used." });
   }

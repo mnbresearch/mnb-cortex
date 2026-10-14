@@ -8,6 +8,15 @@ import { ExampleFigures } from "@/components/example-figures";
 import { computeRatios, ratioRows, type Grade, type RatioRow } from "@/lib/ratios";
 import { orDefault, seededFrom, type WorkspaceSeed } from "@/lib/seed-types";
 
+/* An /api/ai reply that is not `ok: true` is an ERROR, whatever its `text`
+   says — show it as one, never as the analysis (or the email body). */
+function aiFailure(j: any): string {
+  const t = j && typeof j.text === "string" && j.text.trim() ? j.text.trim()
+    : j && typeof j.error === "string" && j.error.trim() ? j.error.trim() : "";
+  return t || "The AI did not return an answer. Try again in a moment.";
+}
+
+
 /*
   THE CALCULATOR WHERE PARTIAL SEEDING NEEDED THE MOST CARE.
 
@@ -53,7 +62,7 @@ export function FinancialRatios({ seed }: { seed?: WorkspaceSeed } = {}) {
     "current assets", "current liabilities", "debt", "equity", "EBIT",
     "interest", "total assets",
   ].filter(Boolean);
-  const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
+  const [out, setOut] = useState(""); const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
 
   /*
     The arithmetic and the grading thresholds live in lib/ratios.ts, which is
@@ -71,7 +80,7 @@ export function FinancialRatios({ seed }: { seed?: WorkspaceSeed } = {}) {
   };
 
   async function analyse() {
-    setLoading(true); setOut("");
+    setLoading(true); setOut(""); setErr("");
     /*
       Only send what was computable. These are `number | null` now, so the old
       unconditional .toFixed() would throw on any uncomputed ratio — and before
@@ -102,8 +111,8 @@ export function FinancialRatios({ seed }: { seed?: WorkspaceSeed } = {}) {
     if (parts.length === 0) caveats.push("No ratio could be computed from the figures entered.");
 
     const input = `Financial ratios: ${parts.join(", ") || "none computable"}.${caveats.length ? " " + caveats.join(" ") : ""} Assess this company's financial health vs Indian SME norms — what's strong, what's a concern, and the 3 priorities to fix. Do not invent any ratio that was not supplied.`;
-    try { const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "strategy", input }) }); const j = await res.json(); setOut(j.text || "No response."); }
-    catch { setOut("Network error reaching the AI."); } finally { setLoading(false); }
+    try { const res = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "strategy", input }) }); const j = await res.json(); if (j && j.ok === true && typeof j.text === "string" && j.text.trim()) setOut(j.text); else setErr(aiFailure(j)); }
+    catch { setErr("Network error reaching the AI."); } finally { setLoading(false); }
   }
 
   const F = (label: string, key: keyof typeof v) => (
@@ -160,6 +169,7 @@ export function FinancialRatios({ seed }: { seed?: WorkspaceSeed } = {}) {
         ))}
         <Button onClick={analyse} disabled={loading} className="w-full"><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "Assess financial health (AI)"}</Button>
         {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
+        {err && <p role="alert" className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger">{err}</p>}
       </Card>
     </div>
   );

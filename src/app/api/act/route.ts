@@ -7,6 +7,59 @@ import { sendEmail } from "@/lib/email";
 import { brandFrom } from "@/lib/branded-email";
 import { enforce } from "@/lib/ratelimit";
 import { sendText, sendTemplate, hasWhatsAppFor, whatsappSetupHint } from "@/lib/whatsapp";
+import { hasRole } from "@/lib/roles";
+import { getPolicy } from "@/lib/collections";
+import { normalizeCustomerName } from "@/lib/customer-match";
+import { serviceClient } from "@/lib/supabase/server";
+
+/* Brief and body are user text bound for a paid model / an outbound message. */
+const MAX_BRIEF = 4_000;
+const MAX_BODY = 10_000;
+const MAX_SUBJECT = 200;
+
+/** Last 10 digits — how an Indian mobile number is compared across "+91 98…", "098…" and "98…". */
+function phoneKey(v: string | null | undefined): string {
+  const d = String(v || "").replace(/\D/g, "");
+  return d.length >= 10 ? d.slice(-10) : d;
+}
+
+/**
+ * Is this recipient on the workspace's collections do-not-contact list?
+ *
+ * The list holds PARTY NAMES (collections matches it against the invoice
+ * party). This route is given an address, so the address is resolved to the
+ * customer it belongs to and that customer's name/company is checked — plus
+ * the address itself, in case it was entered on the list directly. Only read
+ * when the list is non-empty, which it usually is not.
+ */
+async function onDoNotContact(orgId: string, to: string, kind: "email" | "phone"): Promise<boolean> {
+  const policy = await getPolicy(orgId);
+  const list = (policy.do_not_contact || []).map((x) => String(x || "").trim()).filter(Boolean);
+  if (!list.length) return false;
+  const raw = new Set(list.map((x) => x.toLowerCase()));
+  if (kind === "email" && raw.has(to.toLowerCase())) return true;
+  if (kind === "phone" && list.some((x) => phoneKey(x) && phoneKey(x) === phoneKey(to))) return true;
+  const names = new Set(list.map((x) => normalizeCustomerName(x)).filter((x): x is string => Boolean(x)));
+  if (!names.size) return false;
+  const svc = serviceClient();
+  if (!svc) return false;
+  const { data, error } = await svc.from("customers").select("name, company, email, phone").eq("org_id", orgId).limit(5000);
+  /* Could not check → do not send. Contacting someone who asked not to be is the failure that matters. */
+  if (error) throw new Error("Could not check your do-not-contact list, so nothing was sent.");
+  for (const c of (data as any[]) || []) {
+    const match = kind === "email"
+      ? String(c.email || "").trim().toLowerCase() === to.toLowerCase()
+      : Boolean(phoneKey(c.phone)) && phoneKey(c.phone) === phoneKey(to);
+    if (!match) continue;
+    for (const n of [c.name, c.company]) {
+      const k = normalizeCustomerName(String(n ?? ""));
+      if (k && names.has(k)) return true;
+    }
+  }
+  return false;
+}
+
+const DNC_REFUSAL = "This recipient is on your do-not-contact list (Collections settings), so nothing was sent. Remove them from the list first if that is a mistake.";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +98,7 @@ export async function POST(req: Request) {
       if (!gate.ok) { const d = creditDenial(gate, "Drafting"); return NextResponse.json(d.body, { status: d.status }); }
       let context = "";
       try { context = await getBusinessContext(); } catch {}
-      const draft = await draftOutreach(String(b.kind || "custom"), String(b.brief || ""), context);
+      const draft = await draftOutreach(String(b.kind || "custom"), String(b.brief || "").slice(0, MAX_BRIEF), context);
       if (!draft) {
         // No draft is no product. This branch billed for it.
         await refundIfCharged(gate, "act");
@@ -55,13 +108,19 @@ export async function POST(req: Request) {
     }
 
     if (op === "send") {
-      // Any authenticated workspace member may send from their own workspace.
+      /*
+        Sending is an action on the business's behalf, to its customers, on our
+        domain — manager rank or above, the same bar as other outbound actions.
+        It used to be "any authenticated member", viewers included.
+      */
       const { user, orgId } = await getUserAndOrg();
       if (!user || !orgId) return NextResponse.json({ ok: false, error: "Please sign in to send." }, { status: 200 });
+      if (!(await hasRole("manager"))) return NextResponse.json({ ok: false, error: "Sending messages to customers needs the manager role or higher." }, { status: 403 });
       const to = String(b.to || "").trim();
-      const subject = String(b.subject || "").trim();
-      const body = String(b.body || "");
+      const subject = String(b.subject || "").trim().slice(0, MAX_SUBJECT);
+      const body = String(b.body || "").slice(0, MAX_BODY);
       if (!to || !EMAIL_RE.test(to) || !subject || !body.trim()) return NextResponse.json({ ok: false, error: "A valid recipient, subject and message are required." }, { status: 200 });
+      if (await onDoNotContact(orgId, to, "email")) return NextResponse.json({ ok: false, doNotContact: true, error: DNC_REFUSAL }, { status: 200 });
 
       // Outbound mail leaves on OUR verified domain, so a throwaway trial account
       // must not be able to use this as an unlimited bulk mailer. Cap per
@@ -94,6 +153,7 @@ export async function POST(req: Request) {
     if (op === "whatsapp") {
       const { user, orgId } = await getUserAndOrg();
       if (!user || !orgId) return NextResponse.json({ ok: false, error: "Please sign in to send." }, { status: 200 });
+      if (!(await hasRole("manager"))) return NextResponse.json({ ok: false, error: "Sending messages to customers needs the manager role or higher." }, { status: 403 });
 
       // Honest, actionable state when THIS workspace hasn't connected Meta yet.
       // Checked per workspace, not globally: WhatsApp is bring-your-own-account.
@@ -102,11 +162,12 @@ export async function POST(req: Request) {
       }
 
       const to = String(b.to || "").trim();
-      const text = String(b.body || "").trim();
-      const template = String(b.template || "").trim();
+      const text = String(b.body || "").trim().slice(0, 4_096);   // WhatsApp's own text limit
+      const template = String(b.template || "").trim().slice(0, 512);
       if (!to || (!text && !template)) {
         return NextResponse.json({ ok: false, error: "A recipient and a message (or template name) are required." }, { status: 200 });
       }
+      if (await onDoNotContact(orgId, to, "phone")) return NextResponse.json({ ok: false, doNotContact: true, error: DNC_REFUSAL }, { status: 200 });
 
       // Same per-workspace daily cap as email — this leaves on our number.
       const over = await enforce([{ key: `act:whatsapp:org:${orgId}`, limit: 100, windowSecs: 86_400 }]);

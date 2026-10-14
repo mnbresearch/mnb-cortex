@@ -108,6 +108,19 @@ export async function POST(req: Request) {
     cost: gate.enforced ? gate.cost : 0, charged: Boolean(gate.ok && gate.enforced), byo: usingOwnKey(),
   });
 
+  /*
+    THE TABLE EXISTS BUT THE JOB WAS NOT RECORDED. The status poll looks the
+    operation up in media_assets and answers 404 for anything it cannot find
+    there, so returning ok:true here meant the clip could never be delivered
+    while the credits stayed spent. Only a genuinely missing table (before
+    the migration) falls back to the browser-only flow. Veo may still finish
+    the job; we cannot hand it over, so we do not charge for it.
+  */
+  if (!job.id && !job.missing) {
+    await refundIfCharged(gate, "agent_video");
+    return NextResponse.json({ ok: false, error: "The video was started but could not be saved to your library, so it could not be delivered. Please try again. Your credits have not been used." }, { status: 200 });
+  }
+
   return NextResponse.json({
     ok: true,
     operation: started.operation,

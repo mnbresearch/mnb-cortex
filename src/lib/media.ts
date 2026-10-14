@@ -1,6 +1,6 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
-import { grantCredits } from "@/lib/credits";
+import { grantCredits, resolvePayerOrgId, refundReason } from "@/lib/credits";
 
 /*
   THE MEDIA LIBRARY — every generated image and video, kept, and a video job
@@ -102,7 +102,22 @@ export async function deleteMedia(orgId: string, id: string): Promise<{ ok: bool
   const row = await mediaById(orgId, id);
   if (!row) return { ok: false, error: "Not found." };
   if (row.status === "running") return { ok: false, error: "This video is still being made — delete it once it finishes." };
-  if (row.storage_path) { try { await svc.storage.from(BUCKET).remove([row.storage_path]); } catch { /* the row goes regardless */ } }
+  /*
+    The FILE first, and its result read. supabase-js REPORTS a failed remove as
+    `{ error }` rather than throwing, so the old try/catch never saw one: the
+    row was deleted anyway and the object stayed in the bucket with nothing
+    pointing at it — a private file the customer believes is gone. If the file
+    cannot be removed, keep the row so the delete can be retried.
+  */
+  if (row.storage_path) {
+    try {
+      const { error: rmErr } = await svc.storage.from(BUCKET).remove([row.storage_path]);
+      if (rmErr) { console.error(`[media] storage remove failed for ${row.id}: ${rmErr.message}`); return { ok: false, error: "Could not delete the file from storage — please try again." }; }
+    } catch (e: any) {
+      console.error(`[media] storage remove threw for ${row.id}: ${e?.message}`);
+      return { ok: false, error: "Could not delete the file from storage — please try again." };
+    }
+  }
   const { data, error } = await svc.from("media_assets").delete().eq("org_id", orgId).eq("id", id).select("id");
   if (error) return { ok: false, error: error.message };
   return data && data.length === 1 ? { ok: true } : { ok: false, error: "Not found." };
@@ -126,6 +141,12 @@ export type Settled =
  * Fail a running job and refund it — at most once, whoever gets there first.
  * The claim is the conditional UPDATE (status running → failed, refunded false
  * → true); only the caller that flips it grants the credits back.
+ *
+ * `refunded: true` is the LOCK, and it is only allowed to stay true if the
+ * grant actually happened. It used to be set before grantCredits and never
+ * undone, so a grant that threw left the row saying "refunded" with no credits
+ * returned and nothing that would ever try again. Now a failed grant releases
+ * the lock (refunded → false), and retryRefund() picks the row up later.
  */
 export async function failAndRefund(row: MediaRow, reason: string): Promise<boolean> {
   const svc = serviceClient();
@@ -136,12 +157,47 @@ export async function failAndRefund(row: MediaRow, reason: string): Promise<bool
     .select("id, cost, charged");
   const won = ((data as any[]) || [])[0];
   if (!won) return false;
-  if (won.charged && Number(won.cost) > 0) {
-    try { await grantCredits(row.org_id, Number(won.cost), `refund:agent_video:${row.id}`); }
-    catch (e: any) { console.error(`[media] refund failed for ${row.id}: ${e?.message}`); return false; }
-    return true;
+  return grantClaimedRefund(row, won);
+}
+
+/**
+ * A job that FAILED but whose refund did not go through (the grant threw and
+ * the lock was released). Claims refunded false → true on a failed row; only
+ * the caller that flips it grants. Same release-on-failure rule.
+ */
+export async function retryRefund(row: MediaRow): Promise<boolean> {
+  const svc = serviceClient();
+  if (!svc || row.status !== "failed" || row.refunded || !row.charged || !(Number(row.cost) > 0)) return false;
+  const { data } = await svc.from("media_assets")
+    .update({ refunded: true })
+    .eq("id", row.id).eq("org_id", row.org_id).eq("status", "failed").eq("refunded", false)
+    .select("id, cost, charged");
+  const won = ((data as any[]) || [])[0];
+  if (!won) return false;
+  return grantClaimedRefund(row, won);
+}
+
+/** Grant a claimed refund to WHOEVER PAID; on failure, release the claim so it can be retried. */
+async function grantClaimedRefund(row: MediaRow, won: { cost: any; charged: any }): Promise<boolean> {
+  const svc = serviceClient();
+  if (!(won.charged && Number(won.cost) > 0)) {
+    /* Nothing was charged (BYO key, unmetered) — there is nothing to give back. */
+    return false;
   }
-  return false;
+  try {
+    /* A pooled workspace's clip was paid by the Practice firm, so the firm gets it back. */
+    const payer = await resolvePayerOrgId(row.org_id);
+    const base = refundReason(`agent_video:${row.id}`, null);
+    await grantCredits(payer.payerOrgId, Number(won.cost), payer.pooledFor ? `${base}:client:${payer.pooledFor}` : base);
+    return true;
+  } catch (e: any) {
+    console.error(`[media] refund failed for ${row.id}: ${e?.message} — releasing the claim for a retry`);
+    try {
+      const { error } = await svc!.from("media_assets").update({ refunded: false }).eq("id", row.id).eq("org_id", row.org_id).eq("refunded", true);
+      if (error) console.error(`[media] could not release refund claim for ${row.id}: ${error.message} — needs a manual refund of ${won.cost}`);
+    } catch (e2: any) { console.error(`[media] could not release refund claim for ${row.id}: ${e2?.message} — needs a manual refund of ${won.cost}`); }
+    return false;
+  }
 }
 
 /**
@@ -157,7 +213,11 @@ export async function settleVideoJob(
 ): Promise<Settled> {
   const svc = serviceClient();
   if (row.status === "done") return { state: "done", mediaId: row.id, url: `/api/media/${row.id}` };
-  if (row.status === "failed") return { state: "error", error: row.error || "Generation failed.", refunded: row.refunded };
+  if (row.status === "failed") {
+    /* A failed job whose refund did not land gets another attempt here. */
+    const refunded = row.refunded || await retryRefund(row);
+    return { state: "error", error: row.error || "Generation failed.", refunded };
+  }
   if (!row.operation) return { state: "error", error: "No operation recorded.", refunded: false };
 
   const st = await poll(row.operation);

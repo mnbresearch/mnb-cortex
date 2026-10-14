@@ -1,6 +1,6 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
-import { generateFor, generateReport } from "@/lib/ai/cortex";
+import { generateFor, generateReport, isEngineFailure } from "@/lib/ai/cortex";
 import { withOrgAiKeys } from "@/lib/ai/byo";
 import { sendEmail } from "@/lib/email";
 import { brandFrom } from "@/lib/branded-email";
@@ -163,8 +163,11 @@ export async function runScheduledReports(budget?: Budget): Promise<ReportRun> {
        pulse. It has its own generator, the one /api/report uses. */
     try { body = await withOrgAiKeys(r.org_id, () => String(r.mode) === "report" ? generateReport(context) : generateFor(String(r.mode || "brief"), "", context)); }
     catch { /* handled below */ }
-    if (!body || /^I couldn't reach the AI engine/.test(body)) {
-      /* Charged above, nothing produced: give the credits back. */
+    /* isEngineFailure: the unreachable text AND the no-key hint. The old regex
+       caught only the first, so a workspace with no AI key was charged and
+       emailed the setup hint as its "monthly review", every cadence. */
+    if (!body || !body.trim() || isEngineFailure(body)) {
+      /* Charged above, nothing produced: give the credits back, send nothing. */
       const { refundIfCharged } = await import("@/lib/credits");
       await refundIfCharged(gate, String(r.mode || "brief")).catch(() => {});
       out.errors++; continue;

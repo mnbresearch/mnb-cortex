@@ -17,13 +17,16 @@ export type DenialBody = {
   needsAuth?: boolean;
   outOfCredits?: boolean;
   planExpired?: boolean;
+  /** Metering could not be performed (credits.ts reason "unavailable"): 503, retry. */
+  creditsUnavailable?: boolean;
   cost: number;
   balance: number;
 };
 
 /**
  * Turn a failed chargeForMode() into an HTTP status + body.
- * 401 for "you aren't signed in", 402 for "you're out of credits".
+ * 401 for "you aren't signed in", 402 for "out of credits" / "no live plan",
+ * 503 for "credits could not be checked" (nothing charged; retry).
  */
 export function creditDenial(gate: ChargeResult, action = "This action"): { status: number; body: DenialBody } {
   /*
@@ -48,22 +51,62 @@ export function creditDenial(gate: ChargeResult, action = "This action"): { stat
       },
     };
   }
-  if (gate.reason === "lapsed") {
-    // Distinct from "out of credits": topping up would not help, because the
-    // subscription period itself has ended. Send them to /billing, not /usage.
+  if (gate.reason === "unavailable") {
+    /*
+      METERING ITSELF FAILED (credits.ts: charge_credits errored or threw).
+      Nothing was debited and the action did not run. This used to fall through
+      to the out-of-credits branch below, telling a customer with a full balance
+      "you're out of credits" over our own database fault — a 503 with a
+      retry is the true answer.
+    */
     return {
-      status: 402,
+      status: 503,
       body: {
-        ok: false, planExpired: true, cost: gate.cost, balance: 0,
-        error: "Your MNB Cortex plan has ended, so this is paused. Your workspace and data are exactly as you left them — renew under Billing and everything comes straight back.",
+        ok: false, creditsUnavailable: true, cost: gate.cost, balance: gate.balance,
+        error: "Credits could not be checked right now — nothing was charged. Please try again.",
       },
     };
   }
+  if (gate.reason === "lapsed") {
+    /*
+      What credits.ts calls "lapsed" is: no live plan funding this workspace
+      (its own, or the Practice firm's when pooled) AND fewer credits than this
+      costs — or an operator suspension. It is NOT always "your plan has
+      ended": a workspace that never subscribed is `expired` from its first
+      second, and a pooled client's plan is the firm's. Buying credits DOES
+      help (except under a suspension), so the copy must not say otherwise.
+      Sent to /billing, not /usage.
+    */
+    return {
+      status: 402,
+      body: {
+        ok: false, planExpired: true, cost: gate.cost, balance: gate.balance,
+        error: "There's no active MNB Cortex plan behind this workspace right now, and not enough credits for this, so it's paused. Your workspace and data are exactly as you left them — see Billing to choose a plan or add credits.",
+      },
+    };
+  }
+  if (gate.reason === "insufficient") {
+    const n = `${gate.cost} credit${gate.cost === 1 ? "" : "s"}`;
+    /* For a pooled client the balance that ran out is the Practice firm's, and
+       only the firm can top it up — "your balance is 0" would send the client
+       to a Usage page that cannot fix it. */
+    return {
+      status: 402,
+      body: {
+        ok: false, outOfCredits: true, cost: gate.cost, balance: gate.balance,
+        error: gate.pooledFor
+          ? `Your practice's shared AI credits have run out. ${action} costs ${n} and the shared balance is ${gate.balance}. Ask your practice to top up under Usage & Credits.`
+          : `You're out of AI credits. ${action} costs ${n} and your balance is ${gate.balance}. Top up under Usage & Credits.`,
+      },
+    };
+  }
+  /* A refusal with no reason we recognise: we do not know it was the balance,
+     so we do not say it was. Nothing was charged on any refusal path. */
   return {
-    status: 402,
+    status: 503,
     body: {
-      ok: false, outOfCredits: true, cost: gate.cost, balance: gate.balance,
-      error: `You're out of AI credits. ${action} costs ${gate.cost} credit${gate.cost === 1 ? "" : "s"} and your balance is ${gate.balance}. Top up under Usage & Credits.`,
+      ok: false, creditsUnavailable: true, cost: gate.cost, balance: gate.balance,
+      error: "Credits could not be checked right now — nothing was charged. Please try again.",
     },
   };
 }

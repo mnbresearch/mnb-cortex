@@ -17,12 +17,13 @@ export async function POST(req: Request) {
   let gate: ChargeResult | null = null;
   try {
     const b = await req.json().catch(() => ({} as any));
-    const brand = String(b.brand || "").trim();
+    /* Capped before the charge: each of these reaches up to twelve paid model calls. */
+    const brand = String(b.brand || "").trim().slice(0, 120);
     if (!brand) return NextResponse.json({ ok: false, error: "Enter your brand name." }, { status: 200 });
-    const category = String(b.category || "").trim();
-    const location = String(b.location || "").trim();
-    const competitors = Array.isArray(b.competitors) ? b.competitors.map((c: any) => String(c)) : [];
-    const prompts: string[] = Array.isArray(b.prompts) && b.prompts.length ? b.prompts.map((p: any) => String(p)) : defaultPrompts(category, location);
+    const category = String(b.category || "").trim().slice(0, 120);
+    const location = String(b.location || "").trim().slice(0, 120);
+    const competitors = Array.isArray(b.competitors) ? b.competitors.slice(0, 12).map((c: any) => String(c).slice(0, 120)) : [];
+    const prompts: string[] = Array.isArray(b.prompts) && b.prompts.length ? b.prompts.slice(0, 8).map((p: any) => String(p).slice(0, 500)) : defaultPrompts(category, location);
 
     gate = await chargeForMode("visibility");
     if (!gate.ok) { const d = creditDenial(gate, "An AI Visibility check"); return NextResponse.json(d.body, { status: d.status }); }

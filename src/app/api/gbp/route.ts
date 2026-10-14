@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getUserAndOrg, getOrgProfile } from "@/lib/data";
 import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundIfCharged, type ChargeResult } from "@/lib/credits";
-import { runCortex } from "@/lib/ai/cortex";
+import { runCortex, isEngineFailure } from "@/lib/ai/cortex";
 import { FAST, STANDARD } from "@/lib/ai/generation";
 import { buildGbpPrompt, GBP_KINDS, type GbpKind } from "@/lib/gbp";
 import { recallContext } from "@/lib/memory";
@@ -33,7 +33,8 @@ export async function POST(req: Request) {
     }
 
     const [{ orgId }, profile] = await Promise.all([getUserAndOrg(), getOrgProfile().catch(() => null)]);
-    const business = String(b.business || (profile as any)?.name || "").trim();
+    /* Capped before they reach the paid prompt (a pasted review is the longest legitimate input). */
+    const business = String(b.business || (profile as any)?.name || "").trim().slice(0, 200);
     if (!business) {
       /*
         A VALIDATION failure, billed. The charge happens above, and this check
@@ -49,8 +50,8 @@ export async function POST(req: Request) {
       kind,
       business,
       industry: (profile as any)?.industry,
-      city: String(b.city || "").trim() || null,
-      detail: String(b.detail || ""),
+      city: String(b.city || "").trim().slice(0, 120) || null,
+      detail: String(b.detail || "").slice(0, 4_000),
       rating: typeof b.rating === "number" ? b.rating : undefined,
     });
 
@@ -70,6 +71,11 @@ export async function POST(req: Request) {
     if (!String(text || "").trim()) {
       await refundIfCharged(gate, "gbp");
       return NextResponse.json({ ok: false, error: "The AI returned nothing — try again. Your credits have not been used." }, { status: 200 });
+    }
+    /* runCortex's own failure sentence is not profile content — never bill or return it as such. */
+    if (isEngineFailure(text)) {
+      await refundIfCharged(gate, "gbp");
+      return NextResponse.json({ ok: false, engineFailure: true, error: "The AI engine did not answer — try again in a moment. Your credits have not been used." }, { status: 200 });
     }
 
     return NextResponse.json({ ok: true, text, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });

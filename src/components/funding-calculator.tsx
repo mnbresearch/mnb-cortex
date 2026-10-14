@@ -6,6 +6,15 @@ import { Sparkles } from "lucide-react";
 import { inr, mdToHtml } from "@/lib/utils";
 import { type WorkspaceSeed } from "@/lib/seed-types";
 
+/* An /api/ai reply that is not `ok: true` is an ERROR, whatever its `text`
+   says — show it as one, never as the analysis (or the email body). */
+function aiFailure(j: any): string {
+  const t = j && typeof j.text === "string" && j.text.trim() ? j.text.trim()
+    : j && typeof j.error === "string" && j.error.trim() ? j.error.trim() : "";
+  return t || "The AI did not return an answer. Try again in a moment.";
+}
+
+
 export function FundingCalculator({ seed }: { seed?: WorkspaceSeed } = {}) {
   const [amount, setAmount] = useState(5_000_000);
   const [rate, setRate] = useState(14);
@@ -28,7 +37,7 @@ export function FundingCalculator({ seed }: { seed?: WorkspaceSeed } = {}) {
   */
   const [monthlyProfit, setMonthlyProfit] = useState(
     seed?.monthlyProfit != null && seed.monthlyProfit > 0 ? seed.monthlyProfit : 0);
-  const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
+  const [out, setOut] = useState(""); const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
 
   const m = useMemo(() => {
     const n = years * 12;
@@ -42,13 +51,13 @@ export function FundingCalculator({ seed }: { seed?: WorkspaceSeed } = {}) {
   }, [amount, rate, years, monthlyProfit]);
 
   async function advise() {
-    setLoading(true); setOut("");
+    setLoading(true); setOut(""); setErr("");
     const cover = m.coverage === null
       ? "Monthly profit not provided, so EMI coverage is unknown — ask me for it before judging affordability."
       : `Monthly profit is ${inr(monthlyProfit)}, so EMI coverage is ${m.coverage.toFixed(1)}x.`;
     const input = `Considering a loan of ${inr(amount)} at ${rate}% for ${years} years. EMI ≈ ${inr(m.emi)}/month, total interest ${inr(m.interest)}. ${cover} Should I take it?`;
-    try { const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "loan", input }) }); const j = await r.json(); setOut(j.text || "No response."); }
-    catch { setOut("Network error reaching the AI."); } finally { setLoading(false); }
+    try { const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "loan", input }) }); const j = await r.json(); if (j && j.ok === true && typeof j.text === "string" && j.text.trim()) setOut(j.text); else setErr(aiFailure(j)); }
+    catch { setErr("Network error reaching the AI."); } finally { setLoading(false); }
   }
 
   return (
@@ -83,6 +92,7 @@ export function FundingCalculator({ seed }: { seed?: WorkspaceSeed } = {}) {
       )}
       <Button onClick={advise} disabled={loading}><Sparkles className="h-4 w-4" /> {loading ? "Analysing…" : "Should I take this loan? (ask the AI CFO)"}</Button>
       {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
+        {err && <p role="alert" className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger">{err}</p>}
     </Card>
   );
 }

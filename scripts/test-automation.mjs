@@ -76,7 +76,12 @@ console.log("\n2. arguments");
   ok(A.validateWorkflowPlan({ ...good, steps: ["agent d_sales.winback weekly"] }, { ...deps, checkAgent: (id) => id === "d_sales.winback" }).ok, "agent with a real id validates");
   const wf = read("src/lib/workflows.ts");
   const agentCase = wf.slice(wf.indexOf('case "agent":'), wf.indexOf('case "note":'));
-  ok(/chargeOrgForMode\(orgId, "document"\)/.test(agentCase) && /grantCredits\(orgId, gate\.cost, "refund:document"\)/.test(agentCase), "agent step is metered and refunded when it produces nothing");
+  ok(/chargeOrgForMode\(orgId, "document"\)/.test(agentCase) && /refundWorkflowCharge\(gate, "document", orgId\)/.test(agentCase), "agent step is metered and refunded when it produces nothing");
+  /* …and the refund goes to whoever PAID (a pooled charge debited the Practice firm), never blindly to orgId. */
+  const helper = wf.slice(wf.indexOf("async function refundWorkflowCharge"), wf.indexOf("function parse("));
+  ok(/const payer = gate\.payerOrgId \?\? orgFallback/.test(helper) && /grantCredits\(payer, gate\.cost, refundReason\(/.test(helper)
+     && /if \(!gate\.ok \|\| !gate\.enforced/.test(helper), "workflow refunds go to gate.payerOrgId, only for a charge that was taken");
+  ok(/isEngineFailure\(text\)/.test(agentCase), "agent step treats both engine-failure texts as failure");
   ok(/agent\.kind !== "reasoning"/.test(agentCase) && /health_metrics/.test(agentCase), "agent step runs text agents only, on the workspace's own numbers");
   ok(/saveRun\(orgId, null, agent/.test(agentCase), "agent step saves to the agent's history");
 }

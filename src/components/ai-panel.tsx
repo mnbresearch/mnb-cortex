@@ -93,6 +93,8 @@ export function AIPanel({
 }) {
   const [input, setInput] = useState("");
   const [out, setOut] = useState("");
+  /* True when `out` is a failure message, not an analysis — it must not be announced as ready or offered for saving. */
+  const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [needsInput, setNeedsInput] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -124,15 +126,22 @@ export function AIPanel({
       return;
     }
     setNeedsInput(false);
-    setLoading(true); setOut("");
+    setLoading(true); setOut(""); setFailed(false);
     try {
       const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode, input }) });
       const j = await r.json();
       const text = j.text || "";
-      setOut(text || "No response.");
+      /*
+        BRANCH ON ok. A refusal, an engine failure or an empty answer comes
+        back with ok:false and an explanation in `text`; that explanation was
+        rendered as "Analysis ready." and offered for "Save to workspace".
+      */
+      const good = r.ok && j.ok !== false && Boolean(text);
+      setFailed(!good);
+      setOut(text || j.error || "No response.");
       /* Only a real answer counts as generated — "No response." is not one. */
-      if (text) onResult?.(text, new Date());
-    } catch { setOut("Network error reaching the AI."); }
+      if (good) onResult?.(text, new Date());
+    } catch { setFailed(true); setOut("Network error reaching the AI."); }
     finally { setLoading(false); }
   }
 
@@ -224,13 +233,14 @@ export function AIPanel({
         ready and can then read it at their own pace.
       */}
       <p role="status" aria-live="polite" className={loading ? "text-sm text-muted-foreground" : "sr-only"}>
-        {loading ? "Cortex is analysing…" : out ? "Analysis ready." : ""}
+        {loading ? "Cortex is analysing…" : out ? (failed ? "The analysis did not run." : "Analysis ready.") : ""}
       </p>
 
       {out && (
         <div
           aria-busy={loading}
-          className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed"
+          role={failed ? "alert" : undefined}
+          className={`rounded-lg border p-4 text-sm leading-relaxed ${failed ? "border-danger/40 bg-danger/5" : "bg-background/50"}`}
           dangerouslySetInnerHTML={{ __html: mdToHtml(out) }}
         />
       )}
@@ -254,7 +264,7 @@ export function AIPanel({
         `repeatable` so a second save after an edit is possible; without it the
         form disables itself after the first success.
       */}
-      {out && saveMode && (
+      {out && !failed && saveMode && (
         <SafeForm
           action={saveArtifact}
           repeatable
@@ -281,7 +291,7 @@ export function AIPulse() {
   const [loading, setLoading] = useState(false);
   async function run() {
     setLoading(true);
-    try { const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "pulse" }) }); const j = await r.json(); setText(j.text || ""); }
+    try { const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "pulse" }) }); const j = await r.json(); setText(j.text || j.error || ""); }
     catch { setText("Could not refresh."); } finally { setLoading(false); }
   }
   return (

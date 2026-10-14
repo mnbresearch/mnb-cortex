@@ -39,12 +39,33 @@ export default function Chat() {
   const [listening, setListening] = useState(false);
   const [lang, setLang] = useState("English");
   const [saved, setSaved] = useState<Record<number, boolean>>({});
+  /* Per message: "saving", or the server's reason a save did not happen. */
+  const [saveState, setSaveState] = useState<Record<number, string>>({});
   const endRef = useRef<HTMLDivElement>(null);
 
+  /*
+    "REMEMBERED" ONLY WHEN IT WAS.
+
+    This set saved=true before the request and swallowed the response, so a
+    plan without Cortex Memory — or a viewer, or a failed write — was shown
+    "Remembered" for a write the server refused. Success now waits for ok:true;
+    anything else shows the server's own message (upgrade, role, error).
+  */
   async function remember(i: number, content: string) {
-    if (saved[i] || !content.trim()) return;
-    setSaved((s) => ({ ...s, [i]: true }));
-    await fetch("/api/memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, kind: "insight", source: "chat" }) }).catch(() => {});
+    if (saved[i] || saveState[i] === "saving" || !content.trim()) return;
+    setSaveState((s) => ({ ...s, [i]: "saving" }));
+    try {
+      const r = await fetch("/api/memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, kind: "insight", source: "chat" }) });
+      const j = await r.json().catch(() => ({} as any));
+      if (r.ok && j?.ok) {
+        setSaved((s) => ({ ...s, [i]: true }));
+        setSaveState((s) => { const n = { ...s }; delete n[i]; return n; });
+      } else {
+        setSaveState((s) => ({ ...s, [i]: String(j?.error || `Could not save that (HTTP ${r.status}). Nothing was remembered.`) }));
+      }
+    } catch {
+      setSaveState((s) => ({ ...s, [i]: "Could not reach Cortex, so nothing was remembered. Try again." }));
+    }
   }
   const started = useRef(false);
   const recogRef = useRef<any>(null);
@@ -130,7 +151,9 @@ export default function Chat() {
   return (
     <>
       <Topbar title="Ask Cortex" subtitle="Ask about your own numbers — it looks them up." />
-      <div className="flex flex-col h-[calc(100vh-4rem)]">
+      {/* The skip link's target: this page does not use PageShell, so it
+          carries the id="main" landmark itself (one per page, never two). */}
+      <main id="main" tabIndex={-1} className="flex flex-col h-[calc(100vh-4rem)] focus:outline-none">
         <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-6">
           <div className="max-w-3xl mx-auto space-y-6">
             {messages.length === 0 && (
@@ -162,10 +185,17 @@ export default function Chat() {
                       </a>
                     )}
                     {m.role === "assistant" && m.content && !loading && (
-                      <button onClick={() => remember(i, m.content)} disabled={saved[i]}
-                        className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
-                        {saved[i] ? <><Check className="h-3 w-3" /> Remembered</> : <><BrainCircuit className="h-3 w-3" /> Remember this</>}
-                      </button>
+                      <>
+                        <button onClick={() => remember(i, m.content)} disabled={saved[i] || saveState[i] === "saving"}
+                          className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
+                          {saved[i] ? <><Check className="h-3 w-3" /> Remembered</>
+                            : saveState[i] === "saving" ? <><BrainCircuit className="h-3 w-3" /> Saving…</>
+                            : <><BrainCircuit className="h-3 w-3" /> Remember this</>}
+                        </button>
+                        {saveState[i] && saveState[i] !== "saving" && (
+                          <p role="alert" className="mt-1 text-xs text-danger">{saveState[i]}</p>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -188,7 +218,7 @@ export default function Chat() {
             <Button size="icon" className="h-12 w-12 rounded-xl" disabled={loading}><Send className="h-4 w-4" /></Button>
           </form>
         </div>
-      </div>
+      </main>
     </>
   );
 }

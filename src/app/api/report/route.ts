@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { generateReport } from "@/lib/ai/cortex";
+import { generateReport, isEngineFailure } from "@/lib/ai/cortex";
 import { getBusinessContext } from "@/lib/data";
-import { chargeForMode, refundForMode } from "@/lib/credits";
+import { chargeForMode, refundIfCharged } from "@/lib/credits";
 import { creditDenial } from "@/lib/api-guard";
 
 export const runtime = "nodejs";
@@ -18,13 +18,24 @@ export async function POST() {
   try {
     const context = await getBusinessContext();
     const report = await generateReport(context);
-    if (!report) {
-      if (gate.enforced) await refundForMode("report");
-      return NextResponse.json({ ok: false, report: "Could not generate the report — please try again." }, { status: 200 });
+    /*
+      generateReport() reports an engine failure as TEXT (unreachable, or the
+      no-key setup hint), never as "" — so `!report` alone billed the customer
+      for an error message and handed it back as ok:true, where the page shows
+      it (and can save it) as their monthly review. isEngineFailure catches
+      both. Refund to whoever paid (refundIfCharged follows gate.payerOrgId).
+    */
+    if (!report || !report.trim() || isEngineFailure(report)) {
+      await refundIfCharged(gate, "report");
+      return NextResponse.json({
+        ok: false,
+        report: "Could not generate the report — please try again.",
+        ...(report && isEngineFailure(report) ? { error: report.trim().slice(0, 400) } : {}),
+      }, { status: 200 });
     }
     return NextResponse.json({ ok: true, report, charged: gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
-    if (gate.enforced) await refundForMode("report"); // failed run is never billed
+    await refundIfCharged(gate, "report"); // failed run is never billed
     return NextResponse.json({ ok: false, report: "Could not generate the report — check the AI key.", error: e?.message }, { status: 200 });
   }
 }

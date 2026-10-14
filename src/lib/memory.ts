@@ -2,7 +2,7 @@ import "server-only";
 import { likeLiteral } from "@/lib/sql";
 import { serviceClient, createClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
-import { runCortex } from "@/lib/ai/cortex";
+import { runCortex, isEngineFailure } from "@/lib/ai/cortex";
 
 export type Memory = {
   id: string; org_id: string; author: string | null;
@@ -57,6 +57,24 @@ async function memoryWriteAllowed(orgId: string): Promise<boolean> {
   } catch { return true; }   // fail OPEN: never lose a customer's note to a gate bug
 }
 
+/**
+ * The same plan gate, for ROUTES to ask BEFORE they charge credits or call a
+ * model. remember() refusing silently at the end of a paid extraction meant the
+ * customer paid, the model ran, and the answer was "nothing worth remembering"
+ * when the truth was "your plan does not include memory".
+ */
+export async function canWriteMemory(orgId: string): Promise<boolean> {
+  if (!orgId) return false;
+  return memoryWriteAllowed(orgId);
+}
+
+/** What to tell a workspace whose plan does not include Cortex Memory. */
+export async function memoryUpgradeMessage(): Promise<string> {
+  let plan = "a higher plan";
+  try { const { lowestPlanWith } = await import("@/lib/config"); plan = lowestPlanWith("memory"); } catch { /* generic wording */ }
+  return `Cortex Memory is part of the ${plan} plan and above, so nothing was saved and you have not been charged. Anything already remembered stays readable.`;
+}
+
 export async function remember(input: {
   content: string; title?: string; kind?: string; entities?: string[]; tags?: string[];
   importance?: number; source?: string; source_ref?: string; author?: string | null; orgId?: string;
@@ -77,7 +95,7 @@ export async function remember(input: {
   try {
     const { data, error } = await svc.from("memories").insert(row).select("*").single();
     if (error) return null;
-    for (const name of entities) { await upsertEntity(orgId, name).catch(() => {}); }
+    for (const name of entities) { await upsertEntity(orgId, name, undefined, undefined, { gated: true }).catch(() => {}); }
     return data as Memory;
   } catch { return null; }
 }
@@ -281,8 +299,15 @@ export async function memoryStats(orgId: string) {
 
 /* --------------------------------------------------------------- entities/graph */
 
-export async function upsertEntity(orgId: string, name: string, type?: string, summary?: string) {
+/*
+  `gated: true` means the caller has already passed memoryWriteAllowed() for
+  this org (remember(), ingestBusinessData()), so the plan is not re-read once
+  per entity. Any other caller is checked here — this was the one memory write
+  with no plan gate at all.
+*/
+export async function upsertEntity(orgId: string, name: string, type?: string, summary?: string, opts: { gated?: boolean } = {}) {
   const svc = serviceClient(); if (!svc || !orgId || !name?.trim()) return null;
+  if (!opts.gated && !(await memoryWriteAllowed(orgId))) return null;
   const clean = name.trim().slice(0, 120);
   try {
     // .ilike() with an unescaped name treats `_` and `%` in an entity name as
@@ -347,7 +372,9 @@ Skip trivia and pleasantries. Max 8 items.
 TEXT:
 ${text.slice(0, 6000)}`;
   let out = "";
-  try { out = await runCortex([{ role: "user", content: prompt }], ""); } catch { return { count: 0, items: [] }; }
+  try { out = await runCortex([{ role: "user", content: prompt }], ""); } catch { return { count: 0, items: [], engineFailed: true }; }
+  /* The engine's own failure text is not an extraction — say so, so the route refunds and says why. */
+  if (isEngineFailure(out)) return { count: 0, items: [], engineFailed: true };
   const arr = firstJson(out);
   if (!Array.isArray(arr)) return { count: 0, items: [] };
   const items: any[] = [];
@@ -376,7 +403,12 @@ export async function regenerateProfile(orgId: string) {
   const prompt = `You are the memory of an AI Chief Operating Officer. From these remembered facts, write a concise living profile of the business in Markdown with sections: **What the business is**, **Priorities & goals**, **Key people & relationships**, **Preferences & ways of working**, **Watch-outs**. Be specific, use only what's given, no fluff.\n\nMEMORIES:\n${corpus}`;
   let md = "";
   try { md = await runCortex([{ role: "user", content: prompt }], ""); } catch { md = ""; }
-  if (!md) return null;
+  /*
+    NEVER OVERWRITE THE PROFILE WITH A FAILURE. runCortex answers "I couldn't
+    reach the AI engine…" as a string; this used to upsert that sentence over
+    the customer's company profile, wiping it, and report success.
+  */
+  if (!md || !md.trim() || isEngineFailure(md)) return null;
   try { await svc.from("memory_profile").upsert({ org_id: orgId, profile_md: md, updated_at: new Date().toISOString() }); } catch {}
   return md;
 }
@@ -390,6 +422,8 @@ export async function getProfile(orgId: string) {
 /** Teach Cortex from the workspace's existing data: customers, team, KPIs, insights. */
 export async function ingestBusinessData(orgId: string, author?: string | null) {
   const svc = serviceClient(); if (!svc || !orgId) return { memories: 0, entities: 0 };
+  /* One plan check for the whole run, rather than one per entity written. */
+  if (!(await memoryWriteAllowed(orgId))) return { memories: 0, entities: 0, gated: true };
   let entities = 0;
   const lines: string[] = [];
   const pick = (o: any, keys: string[]) => { for (const k of keys) if (o?.[k]) return String(o[k]); return ""; };
@@ -419,7 +453,7 @@ export async function ingestBusinessData(orgId: string, author?: string | null) 
         already never throws, so the old `.catch()` was decoration. What was
         missing was reading the return value.
       */
-      const cid = await upsertEntity(orgId, name, "customer", pick(c, ["segment", "notes"]) || undefined);
+      const cid = await upsertEntity(orgId, name, "customer", pick(c, ["segment", "notes"]) || undefined, { gated: true });
       if (cid) entities++;
       const bits = [pick(c, ["city", "location"]), pick(c, ["segment"]) && `segment ${pick(c, ["segment"])}`, pick(c, ["status"]), pick(c, ["notes"])].filter(Boolean);
       lines.push(`Customer ${name}${bits.length ? " — " + bits.join(", ") : ""}`);
@@ -430,7 +464,7 @@ export async function ingestBusinessData(orgId: string, author?: string | null) 
     for (const e of ((data as any[]) || [])) {
       const name = pick(e, ["name", "full_name"]); if (!name) continue;
       // Same as above: count the write, not the loop iteration.
-      const eid = await upsertEntity(orgId, name, "person", pick(e, ["role", "title"]) || undefined);
+      const eid = await upsertEntity(orgId, name, "person", pick(e, ["role", "title"]) || undefined, { gated: true });
       if (eid) entities++;
       const bits = [pick(e, ["role", "title"]), pick(e, ["department", "dept"])].filter(Boolean);
       lines.push(`Team member ${name}${bits.length ? " — " + bits.join(", ") : ""}`);
@@ -463,11 +497,14 @@ export async function ingestBusinessData(orgId: string, author?: string | null) 
   */
 
   let memories = 0;
+  let engineFailed = false;
   if (lines.length) {
     const res = await extractMemories(orgId, lines.join("\n"), author ?? null);
     memories = res.count;
+    engineFailed = Boolean((res as any).engineFailed);
   }
-  return { memories, entities };
+  /* `engineFailed`: the model step (the part the credits pay for) did not run. */
+  return { memories, entities, engineFailed };
 }
 
 /** Cluster memories into themes (qualitative analysis). */
@@ -479,6 +516,7 @@ export async function clusterThemes(orgId: string) {
   const prompt = `Cluster these business memories into 4-7 themes. Return ONLY a JSON array of {"theme":"short name","summary":"one line","count":approx_number}. Order by importance.\n\nMEMORIES:\n${corpus}`;
   let out = "";
   try { out = await runCortex([{ role: "user", content: prompt }], ""); } catch { return []; }
+  if (isEngineFailure(out)) return [];
   const arr = firstJson(out);
   return Array.isArray(arr) ? arr.slice(0, 7) : [];
 }

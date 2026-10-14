@@ -3,6 +3,7 @@ import { getUserAndOrg } from "@/lib/data";
 import { buildAgentsForBusiness } from "@/lib/agents/runtime";
 import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundIfCharged } from "@/lib/credits";
+import { hasRole } from "@/lib/roles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,10 +13,13 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const { user, orgId } = await getUserAndOrg();
   if (!orgId) return NextResponse.json({ ok: false, error: "No workspace." });
+  /* Designing agents writes them to the workspace via the service client — RLS cannot stop a viewer. */
+  if (!(await hasRole("analyst"))) return NextResponse.json({ ok: false, count: 0, agents: [], error: "Designing agents needs the analyst role or higher." }, { status: 403 });
 
   const b = await req.json().catch(() => ({} as any));
-  const business = String((b as any).business || "").trim();
-  const goals = String((b as any).goals || "");
+  /* Capped before the charge: this text goes straight into a paid prompt. */
+  const business = String((b as any).business || "").trim().slice(0, 2_000);
+  const goals = String((b as any).goals || "").slice(0, 2_000);
 
   const gate = await chargeForMode("report");
   if (!gate.ok) { const d = creditDenial(gate, "Designing agents"); return NextResponse.json(d.body, { status: d.status }); }

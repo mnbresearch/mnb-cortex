@@ -5,6 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Send, RefreshCw, Globe, Sparkles, Loader2 } from "lucide-react";
 
+/* An /api/ai reply that is not `ok: true` is an ERROR, whatever its `text`
+   says — show it as one, never as the analysis (or the email body). */
+function aiFailure(j: any): string {
+  const t = j && typeof j.text === "string" && j.text.trim() ? j.text.trim()
+    : j && typeof j.error === "string" && j.error.trim() ? j.error.trim() : "";
+  return t || "The AI did not return an answer. Try again in a moment.";
+}
+
 async function call(op: string, extra: Record<string, string> = {}) {
   const r = await fetch("/api/email", {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -69,7 +77,14 @@ export function EmailConsole() {
         body: JSON.stringify({ mode: "outreach", input: `Write a short, warm business email. Subject/idea: ${subject || body}. Return only the email body, no headings.` }),
       });
       const j = await r.json();
-      if (j.text) setBody(j.text.replace(/^#+ .*$/gm, "").replace(/\*\*/g, "").trim());
+      /* Only a successful reply goes into the email body. A failure's `text`
+         is an error message ("Could not run the AI…"), and inserting it here
+         meant it could be sent to a customer as the email itself. */
+      if (j && j.ok === true && typeof j.text === "string" && j.text.trim()) {
+        setBody(j.text.replace(/^#+ .*$/gm, "").replace(/\*\*/g, "").trim());
+      } else {
+        setMsg(aiFailure(j));
+      }
     } catch { setMsg("Could not reach the AI."); } finally { setAiBusy(false); }
   }
 

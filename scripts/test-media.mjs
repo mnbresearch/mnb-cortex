@@ -28,7 +28,10 @@ const dir = mkdtempSync(join(tmpdir(), "media-"));
 const src = read("src/lib/media.ts")
   .replace(/^import ["']server-only["'];?\s*$/m, "")
   .replace(/^import \{ serviceClient \} from .*$/m, "const serviceClient = () => globalThis.__svc;")
-  .replace(/^import \{ grantCredits \} from .*$/m, "const grantCredits = async (...a) => { globalThis.__grants.push(a); return 0; };");
+  .replace(/^import \{ grantCredits[^}]*\} from .*$/m,
+    "const grantCredits = async (...a) => { if (globalThis.__grantThrows) { globalThis.__grantThrows--; throw new Error('grant rpc down'); } globalThis.__grants.push(a); return 0; };\n" +
+    "const resolvePayerOrgId = async (orgId) => (globalThis.__payer || { payerOrgId: orgId, pooledFor: null });\n" +
+    "const refundReason = (mode, pooledFor) => pooledFor ? `refund:${String(mode).toLowerCase()}:client:${pooledFor}` : `refund:${String(mode).toLowerCase()}`;");
 writeFileSync(join(dir, "media.ts"), src);
 const M = await import(pathToFileURL(join(dir, "media.ts")).href);
 
@@ -93,6 +96,34 @@ const job = (over = {}) => ({ id: "11111111-1111-4111-8111-111111111111", org_id
   const s2 = await M.settleVideoJob(fresh[0], async () => ({ state: "running" }), async () => null, { giveUpAfterMs: 3600_000 });
   check(s2.state === "running" && globalThis.__grants.length === 0, "timeout: a young job is left running");
 }
+/* ── refunds land, go to whoever paid, and are retried if the grant fails ── */
+{
+  /* The grant throws once: the row must NOT stay "refunded", and the next settle must retry and pay exactly once. */
+  globalThis.__grants = []; globalThis.__grantThrows = 1; const rows = [job()];
+  globalThis.__svc = fakeSvc(rows, []);
+  const s1 = await M.settleVideoJob(rows[0], async () => ({ state: "error", error: "veo failed" }), async () => null);
+  check(s1.state === "error" && s1.refunded === false && globalThis.__grants.length === 0, "refund: a grant that throws is not reported as refunded", JSON.stringify(s1));
+  check(rows[0].status === "failed" && rows[0].refunded === false, "refund: a failed grant releases the claim so it can be retried", JSON.stringify(rows[0]));
+  const s2 = await M.settleVideoJob({ ...rows[0] }, async () => ({ state: "error", error: "x" }), async () => null);
+  check(s2.refunded === true && globalThis.__grants.length === 1 && rows[0].refunded === true, "refund: the next settle retries the refund and records it", JSON.stringify({ s2, g: globalThis.__grants }));
+  const s3 = await M.settleVideoJob({ ...rows[0] }, async () => ({ state: "error", error: "x" }), async () => null);
+  check(s3.refunded === true && globalThis.__grants.length === 1, "refund: the retry never pays twice");
+  globalThis.__grantThrows = 0;
+}
+{
+  /* A Practice-pooled client: the firm paid, so the firm is refunded, and the ledger reason names the client. */
+  globalThis.__grants = []; globalThis.__payer = { payerOrgId: "firm-9", pooledFor: "org-1" }; const rows = [job()];
+  globalThis.__svc = fakeSvc(rows, []);
+  await M.settleVideoJob(rows[0], async () => ({ state: "error", error: "veo failed" }), async () => null);
+  check(globalThis.__grants.length === 1 && globalThis.__grants[0][0] === "firm-9" && /:client:org-1$/.test(globalThis.__grants[0][2]), "refund: a pooled clip is refunded to the firm that paid", JSON.stringify(globalThis.__grants));
+  delete globalThis.__payer;
+}
+{
+  const mediaSrc = read("src/lib/media.ts");
+  const del = mediaSrc.slice(mediaSrc.indexOf("export async function deleteMedia"), mediaSrc.indexOf("export function fromDataUrl"));
+  check(/const \{ error: rmErr \} = await svc\.storage\.from\(BUCKET\)\.remove/.test(del) && /if \(rmErr\)[^\n]*return \{ ok: false/.test(del)
+    && del.indexOf("rmErr") < del.indexOf('.from("media_assets").delete()'), "delete: a failed storage remove keeps the row instead of orphaning the file");
+}
 check(M.isMissingTable({ code: "42P01", message: 'relation "media_assets" does not exist' }) && M.isMissingTable({ code: "PGRST205", message: "Could not find the table 'public.media_assets' in the schema cache" }), "fallback: a missing table is recognised (pre-migration behaviour kicks in)");
 check(!M.isMissingTable({ code: "23505", message: "duplicate key" }), "fallback: a real error is not mistaken for a missing table");
 const d = M.fromDataUrl("data:image/jpeg;base64,/9j/4AAQ");
@@ -118,6 +149,8 @@ const post = route.slice(route.indexOf("export async function POST"), route.inde
 const get = route.slice(route.indexOf("export async function GET"));
 check(/createMedia\(\{[\s\S]*status: "running", operation: started\.operation/.test(post), "wiring: every started video is recorded as a job");
 check(/charged: Boolean\(gate\.ok && gate\.enforced\)/.test(post), "wiring: the job knows whether it was paid for");
+check(/if \(!job\.id && !job\.missing\) \{\s*await refundIfCharged\(gate, "agent_video"\);\s*return NextResponse\.json\(\{ ok: false/.test(post)
+  && post.indexOf("!job.id && !job.missing") < post.indexOf("ok: true,\n    operation"), "wiring: a job that could not be recorded is refunded, not reported as started");
 check(/aspect,[\s\S]*style/.test(post) && /b\.style === "ugc"/.test(post), "wiring: aspect and style reach the prompt");
 check(/enterOrgAiKeys\(await loadOrgAiKeys\(orgId\)\)/.test(get), "wiring: status and download use the workspace's own key");
 check(/jobByOperation\(orgId, op\)/.test(get) && /if \(!job\.missing\) return NextResponse\.json\(\{ ok: false, state: "error", error: "That video job was not found in this workspace\." \}, \{ status: 404 \}\)/.test(get), "wiring: another workspace's job is refused");

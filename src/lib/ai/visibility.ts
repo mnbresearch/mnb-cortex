@@ -55,24 +55,55 @@ const NEUTRAL_SYSTEM =
 type EngineAnswer = { answer: string; engine: string; grounded: boolean; chunks: any[] };
 const NO_ANSWER: EngineAnswer = { answer: "", engine: "none", grounded: false, chunks: [] };
 
+/*
+  A bound on every engine call. The prompts run six at a time inside a
+  60-second route; one hung request used to hold the whole route until the
+  platform killed it, which also skipped the route's refund. A call that
+  times out is simply "no answer" from that engine, and is reported as such.
+*/
+const ENGINE_TIMEOUT_MS = 20_000;
+const timeout = () => AbortSignal.timeout(ENGINE_TIMEOUT_MS);
+
+/**
+ * The Groq engine's label, from the model actually configured. It was
+ * hardcoded "Llama 3.3" while the default model is openai/gpt-oss-120b — the
+ * report named a model we were not running.
+ */
+export function groqEngineLabel(model: string = groqModel()): string {
+  const id = String(model || "").split("/").pop() || "Groq model";
+  return id;
+}
+
+/**
+ * One Gemini generateContent call, walking geminiTextModels() past a 404 (a
+ * retired model name) exactly as cortex.ts does, rather than trusting
+ * whichever name happens to be first.
+ */
+async function geminiGenerate(key: string, body: unknown): Promise<any | null> {
+  for (const model of geminiTextModels()) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
+      method: "POST", signal: timeout(), headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (r.ok) return r.json();
+    if (r.status !== 404) return null;   // a real error — do not burn the other models
+  }
+  return null;
+}
+
 /* ---------------------------------------------------------------- engines */
 
 async function askGemini(prompt: string): Promise<EngineAnswer> {
   const key = aiKey("GEMINI_API_KEY");
   if (!key) return NO_ANSWER;
-  const model = geminiTextModels()[0];
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: NEUTRAL_SYSTEM }] },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        tools: [{ google_search: {} }],
-        generationConfig: generationConfig(STANDARD, { temperature: 0.3 }),
-      }),
+    const j = await geminiGenerate(key, {
+      system_instruction: { parts: [{ text: NEUTRAL_SYSTEM }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: generationConfig(STANDARD, { temperature: 0.3 }),
     });
-    if (!r.ok) return NO_ANSWER;
-    const j = await r.json();
+    if (!j) return NO_ANSWER;
     const cand = j?.candidates?.[0];
     const answer = (cand?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim();
     if (!answer) return NO_ANSWER;
@@ -105,7 +136,7 @@ async function askOpenAI(prompt: string): Promise<EngineAnswer> {
   const model = process.env.OPENAI_VISIBILITY_MODEL || openaiModel();
   try {
     const r = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
+      method: "POST", signal: timeout(),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model,
@@ -136,10 +167,11 @@ async function askGroq(prompt: string): Promise<EngineAnswer> {
   const key = aiKey("GROQ_API_KEY");
   if (!key) return NO_ANSWER;
   try {
+    const model = groqModel();
     const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      method: "POST", signal: timeout(), headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: groqModel(),
+        model,
         messages: [{ role: "system", content: NEUTRAL_SYSTEM }, { role: "user", content: prompt }],
         temperature: 0.3,
       }),
@@ -148,7 +180,7 @@ async function askGroq(prompt: string): Promise<EngineAnswer> {
     const j = await r.json();
     const answer = (j?.choices?.[0]?.message?.content || "").trim();
     if (!answer) return NO_ANSWER;
-    return { answer, engine: "Llama 3.3 · model knowledge", grounded: false, chunks: [] };
+    return { answer, engine: `${groqEngineLabel(model)} · model knowledge`, grounded: false, chunks: [] };
   } catch { return NO_ANSWER; }
 }
 
@@ -336,7 +368,7 @@ export async function runVisibility(
   for (const [id, count] of tried) {
     const answered = raw.some((r) => r.job.engine.id === id && r.ans.answer);
     if (!answered) {
-      const label = id === "gemini" ? "Gemini" : id === "openai" ? "ChatGPT" : "Llama 3.3";
+      const label = id === "gemini" ? "Gemini" : id === "openai" ? "ChatGPT" : groqEngineLabel();
       perEngine.set(`${label} · no answer`, { engine: `${label} · no answer`, grounded: false, prompts: count, mentions: 0, answered: false });
     }
   }
@@ -407,18 +439,13 @@ Give a short, prioritised plan to get this brand named in those answers. Lead wi
 
   const key = aiKey("GEMINI_API_KEY");
   if (!key) return "";
-  const model = geminiTextModels()[0];
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: sys }] },
-        contents: [{ role: "user", parts: [{ text: ask }] }],
-        generationConfig: generationConfig(STANDARD, { temperature: 0.4 }),
-      }),
+    const j = await geminiGenerate(key, {
+      system_instruction: { parts: [{ text: sys }] },
+      contents: [{ role: "user", parts: [{ text: ask }] }],
+      generationConfig: generationConfig(STANDARD, { temperature: 0.4 }),
     });
-    if (!r.ok) return "";
-    const j = await r.json();
+    if (!j) return "";
     return (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim();
   } catch { return ""; }
 }

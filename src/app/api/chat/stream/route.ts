@@ -17,6 +17,23 @@ export const dynamic = "force-dynamic";
  * user just sees a button that did nothing.
  */
 export const maxDuration = 60;
+
+/*
+  The whole conversation is re-sent to a paid model on every turn. Bounded
+  server-side, before the charge: the last 30 turns, 8,000 characters each,
+  only user/assistant roles. A client cannot inject a "system" turn or ship an
+  unbounded history on our bill.
+*/
+const MAX_TURNS = 30;
+const MAX_TURN_CHARS = 8_000;
+function capMessages(raw: unknown): { role: "user" | "assistant"; content: string }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((m: any) => m && (m.role === "user" || m.role === "assistant"))
+    .slice(-MAX_TURNS)
+    .map((m: any) => ({ role: m.role, content: String(m.content ?? "").slice(0, MAX_TURN_CHARS) }));
+}
+
 export async function POST(req: Request) {
   /*
     Hoisted for the refund in the catch.
@@ -31,14 +48,18 @@ export async function POST(req: Request) {
   */
   let gate: ChargeResult | null = null;
   try {
-    const { messages } = await req.json();
+    const { messages: rawMessages } = await req.json();
+    const messages = capMessages(rawMessages);
+    if (!messages.some((m) => m.role === "user" && m.content.trim())) {
+      return new Response("Ask a question first — nothing was sent, so nothing was charged.", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }
     gate = await chargeForMode("chat");
     if (!gate.ok) {
       const d = creditDenial(gate, "Asking Cortex");
       return new Response(d.body.error, { status: d.status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
     const context = await getBusinessContext();
-    const lastUser = Array.isArray(messages) ? [...messages].reverse().find((m: any) => m?.role === "user")?.content : "";
+    const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
     const { orgId } = await getUserAndOrg();
     const mem = await recallContext(orgId, String(lastUser || ""), 8);
     const charged = gate;

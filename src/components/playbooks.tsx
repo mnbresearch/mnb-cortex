@@ -21,18 +21,24 @@ const PLAYS: Play[] = [
   { id: "resilience", title: "Recession-proof the business", desc: "Reduce fragility", mode: "risk", prompt: "How do I make this business more resilient to a downturn? Reduce fixed costs, diversify revenue and customers, protect cash. Give a prioritised plan." },
 ];
 
-async function run(p: Play): Promise<string> {
+/* `ok` decides whether the text is a playbook or an explanation of why there is none. */
+async function run(p: Play): Promise<{ ok: boolean; text: string }> {
   const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: p.mode, input: p.prompt }) });
-  const j = await r.json(); return j.text || "No response.";
+  const j = await r.json();
+  const text = j.text || j.error || "";
+  return { ok: r.ok && j.ok !== false && Boolean(j.text), text: text || "No response." };
 }
 
 export function Playbooks() {
   const [active, setActive] = useState<Play | null>(null);
   const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   async function open(p: Play) {
-    setActive(p); setOut(""); setLoading(true);
-    try { setOut(await run(p)); } catch { setOut("Network error reaching the AI."); } finally { setLoading(false); }
+    setActive(p); setOut(""); setFailed(false); setLoading(true);
+    try { const res = await run(p); setOut(res.text); setFailed(!res.ok); }
+    catch { setOut("Network error reaching the AI."); setFailed(true); }
+    finally { setLoading(false); }
   }
 
   if (active) {
@@ -44,8 +50,12 @@ export function Playbooks() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> The Cortex is writing your playbook…</div>
         ) : (
           <>
-            <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />
-            {out && (
+            <div role={failed ? "alert" : undefined} className={`rounded-lg border p-4 text-sm leading-relaxed ${failed ? "border-danger/40 bg-danger/5" : "bg-background/50"}`} dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />
+            {/* A failure is not a playbook: nothing to save, only a retry. */}
+            {out && failed && (
+              <Button type="button" onClick={() => open(active)}><Sparkles className="h-4 w-4" /> Try again</Button>
+            )}
+            {out && !failed && (
               <SafeForm action={saveArtifact} className="flex flex-wrap items-center gap-2 pt-1">
                 <input type="hidden" name="mode" value="strategy" />
                 <input type="hidden" name="content" value={out} />

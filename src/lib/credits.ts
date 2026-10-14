@@ -2,7 +2,7 @@ import "server-only";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { getUserAndOrg } from "@/lib/data";
 import { isSuperAdmin } from "@/lib/superadmin";
-import { PLAN_CREDITS, creditCost, IMAGE_WEEKLY, VIDEO_WEEKLY, TRIAL_CREDITS } from "@/lib/config";
+import { PLAN_CREDITS, creditCost, IMAGE_WEEKLY, VIDEO_WEEKLY, TRIAL_CREDITS, PLANS } from "@/lib/config";
 
 const RESET_DAYS = 30;
 
@@ -59,8 +59,37 @@ export type CreditState = {
   and there is no COGS for us to recover. Callers that branch on `reason` must
   treat it alongside ok:true, not with the failures.
 */
-export type ChargeReason = "anonymous" | "insufficient" | "lapsed" | "own-key";
-export type ChargeResult = { ok: boolean; enforced: boolean; cost: number; balance: number; reason?: ChargeReason };
+/*
+  "unavailable" is a refusal for a metering failure we cannot classify as the
+  migration simply not being there yet (see isMissingFunction) — the charge
+  could not be made, so the action must not run for free.
+*/
+export type ChargeReason = "anonymous" | "insufficient" | "lapsed" | "own-key" | "unavailable";
+/*
+  `payerOrgId` is whose balance was actually debited — the workspace itself,
+  or the Practice firm funding it. Refunds MUST go back to it: refunding the
+  session's workspace instead hands a pooled client credits it never paid and
+  leaves the firm short. `pooledFor` is the client id when pooled.
+*/
+export type ChargeResult = { ok: boolean; enforced: boolean; cost: number; balance: number; reason?: ChargeReason; payerOrgId?: string; pooledFor?: string | null };
+
+/**
+ * True only for "this RPC does not exist (yet)": PostgREST's PGRST202 or
+ * Postgres's undefined_function (42883). That is the half-migrated database
+ * the fail-open rule exists for. Any OTHER error — a timeout, a permissions
+ * problem, a constraint — used to fall into the same `allow` branch, which made
+ * every transient database fault a window of free AI.
+ */
+export function isMissingFunction(err: unknown): boolean {
+  const code = String((err as any)?.code || "");
+  if (code === "PGRST202" || code === "42883") return true;
+  return /could not find the function/i.test(String((err as any)?.message || ""));
+}
+
+/** The refusal when metering itself failed. Nothing was debited. */
+function unavailable(cost: number): ChargeResult {
+  return { ok: false, enforced: true, cost, balance: 0, reason: "unavailable" };
+}
 
 // The entitlement rules live in their own dependency-free module so they can be
 // unit-tested (`npm run test:entitlement`). Re-exported here because that is
@@ -263,7 +292,9 @@ export async function chargeOrgForMode(
   try {
     const superAdmin = opts?.superAdmin === true;
     const { data: org, error } = await svc.from("organizations").select("*").eq("id", orgId).single();
-    if (error) return { ok: true, enforced: false, cost, balance: 0 };
+    /* An unreadable workspace row is not "metering not migrated" — select("*")
+       cannot fail on a missing column — so it must not mean free AI. */
+    if (error || !org) { console.error(`[credits] could not read org ${orgId} to charge ${mode} —`, error?.message); return unavailable(cost); }
     const plan = String((org as any)?.plan || "starter").toLowerCase();
     const status = statusOf(org);
     const override = (org as any)?.credits_allowance;
@@ -302,7 +333,56 @@ export async function chargeOrgForMode(
     // payment, and each action is priced with margin built in.
     //
     // Only a workspace that is BOTH lapsed and out of credits is refused.
-    const balanceNow = Number((org as any)?.credits ?? 0);
+    /*
+      PRACTICE POOLING — resolved FIRST, before any entitlement decision.
+
+      The Practice plan sells 27,750 credits alongside 25 client workspaces,
+      and every firm reads that as one budget. `practice_org_id` names the firm
+      that funds this workspace. It can only have been written by
+      cortex_practice_claim(), which proves owner/admin rank in the firm AND
+      membership of the client — so the link itself is trustworthy. What is NOT
+      trusted is that it is still valid: resolvePayer() re-reads the firm's
+      plan and status on every charge, so a firm that downgrades, lapses or is
+      suspended stops funding its clients that moment.
+
+      WHY FIRST. The lapse/balance test below used to read the CLIENT's own
+      status and credits, and only then resolve the payer. A firm-provisioned
+      client is typically `starter`, expired, 0 credits — so every AI action
+      inside it was refused as "plan ended" while the firm paying for it had
+      thousands of credits. generationGate() already resolved the payer first;
+      this now matches it. The lapse and balance checks apply to the PAYER.
+
+      Every uncertain branch resolves back to "this workspace pays for itself",
+      which is the behaviour before pooling existed. A bug here must never fail
+      open into a stranger's balance.
+    */
+    let payerOrgId = orgId;
+    let pooledFor: string | null = null;
+    let payerRow: any = org;
+    let payerStatus = status;
+    let payerPlan = plan;
+    const linkedFirmId = (org as any)?.practice_org_id;
+    if (linkedFirmId) {
+      try {
+        const { data: firmRow } = await svc.from("organizations").select("*").eq("id", linkedFirmId).single();
+        const decision = resolvePayer(
+          { id: orgId, plan, status },
+          firmRow ? { id: String((firmRow as any).id), plan: String((firmRow as any).plan || ""), status: statusOf(firmRow) } : null,
+        );
+        if (decision.pooled && firmRow) {
+          payerOrgId = decision.payerOrgId;
+          pooledFor = orgId;
+          payerRow = firmRow;
+          payerStatus = statusOf(firmRow);
+          payerPlan = String((firmRow as any)?.plan || "").toLowerCase();
+        }
+      } catch { /* unreadable firm → this workspace pays for itself */ }
+    }
+    const payerOverride = (payerRow as any)?.credits_allowance;
+    const payerHasOverride = typeof payerOverride === "number" && payerOverride !== 0;
+    const payerAllowance = pooledFor ? planAllowance(payerPlan, payerStatus, payerOverride) : allowance;
+
+    const balanceNow = Number((payerRow as any)?.credits ?? 0);
     /*
       AN OPERATOR SUSPENSION OUTRANKS BOTH ESCAPE HATCHES.
 
@@ -313,10 +393,12 @@ export async function chargeOrgForMode(
       carried on spending. See isHardStopped() in entitlement.ts for what that
       cost. Checked FIRST, and unconditionally.
     */
-    if (isHardStopped(status)) {
+    /* A suspension of THIS workspace is a decision about it, whoever pays. */
+    if (isHardStopped(status) || isHardStopped(payerStatus)) {
       return { ok: false, enforced: true, cost, balance: balanceNow, reason: "lapsed" };
     }
-    if (isLapsed(status) && !hasOverride && balanceNow < cost) {
+    /* The clock and the balance belong to the payer. */
+    if (isLapsed(payerStatus) && !(pooledFor ? payerHasOverride : hasOverride) && balanceNow < cost) {
       return { ok: false, enforced: true, cost, balance: balanceNow, reason: "lapsed" };
     }
 
@@ -350,54 +432,12 @@ export async function chargeOrgForMode(
     }
 
     /*
-      PRACTICE POOLING — resolved here, immediately before the debit.
-
-      The Practice plan sells 27,750 credits alongside 25 client workspaces,
-      and every firm reads that as one budget. It was not: this called
-      charge_credits with the CURRENT org, so a partner working inside a client
-      was refused for credits that client never had.
-
-      `practice_org_id` names the firm that funds this workspace. It can only
-      have been written by cortex_practice_claim(), which proves owner/admin
-      rank in the firm AND membership of the client — so the link itself is
-      trustworthy. What is NOT trusted is that it is still valid: resolvePayer()
-      re-reads the firm's plan and status on every charge, so a firm that
-      downgrades, lapses or is suspended stops funding its clients that moment
-      rather than whenever someone remembers to unlink them.
-
-      Every uncertain branch resolves back to "this workspace pays for itself",
-      which is the behaviour before pooling existed. A bug here must never fail
-      open into a stranger's balance.
+      Top up the PAYER's allowance. sync_allowance rolls the monthly grant;
+      pointing it at the client of a pooled charge would hand that workspace a
+      separate allowance of its own — a double grant out of nothing.
     */
-    let payerOrgId = orgId;
-    let pooledFor: string | null = null;
-    const linkedFirmId = (org as any)?.practice_org_id;
-    if (linkedFirmId) {
-      try {
-        const { data: firmRow } = await svc.from("organizations").select("*").eq("id", linkedFirmId).single();
-        const decision = resolvePayer(
-          { id: orgId, plan, status },
-          firmRow ? { id: String((firmRow as any).id), plan: String((firmRow as any).plan || ""), status: statusOf(firmRow) } : null,
-        );
-        if (decision.pooled) {
-          payerOrgId = decision.payerOrgId;
-          pooledFor = orgId;
-          /*
-            Top the FIRM's allowance up, not the client's. sync_allowance is
-            what rolls the monthly grant; pointing it at the client here would
-            hand a pooled workspace its own separate allowance — which is the
-            same double-grant bug as refunding an unenforced charge.
-          */
-          const firmPlan = String((firmRow as any)?.plan || "").toLowerCase();
-          const firmAllowance = planAllowance(firmPlan, statusOf(firmRow), (firmRow as any)?.credits_allowance);
-          if (firmAllowance > 0) {
-            await syncAllowance(svc, payerOrgId, firmAllowance, "firm");
-          }
-        }
-      } catch { /* unreadable firm → this workspace pays for itself */ }
-    }
-
-    if (!pooledFor && allowance > 0) { await syncAllowance(svc, orgId, allowance, "own"); }
+    if (pooledFor) { if (payerAllowance > 0) await syncAllowance(svc, payerOrgId, payerAllowance, "firm"); }
+    else if (allowance > 0) { await syncAllowance(svc, orgId, allowance, "own"); }
 
     const { data: nb, error: rpcErr } = await svc.rpc("charge_credits", {
       p_org: payerOrgId,
@@ -410,7 +450,12 @@ export async function chargeOrgForMode(
       p_reason: pooledFor ? pooledReason(mode, pooledFor) : "ai:" + String(mode || "").toLowerCase(),
       p_meta: pooledFor ? { pooled: true, client_org_id: pooledFor } : {},
     });
-    if (rpcErr) return { ok: true, enforced: false, cost, balance: 0 }; // rpc missing → allow
+    if (rpcErr) {
+      /* Only a charge_credits that does not exist yet (pre-migration) may run unmetered. */
+      if (isMissingFunction(rpcErr)) return { ok: true, enforced: false, cost, balance: 0 };
+      console.error(`[credits] charge_credits failed for ${payerOrgId} (${mode}) —`, rpcErr.message);
+      return unavailable(cost);
+    }
 
     const bal = Number(nb);
     if (bal < 0) {
@@ -418,12 +463,43 @@ export async function chargeOrgForMode(
          credits" would be true of the client and useless to the firm that
          actually ran out. */
       const { data: cur } = await svc.from("organizations").select("credits").eq("id", payerOrgId).single();
-      return { ok: false, enforced: true, cost, balance: Number((cur as any)?.credits ?? 0), reason: "insufficient" };
+      return { ok: false, enforced: true, cost, balance: Number((cur as any)?.credits ?? 0), reason: "insufficient", payerOrgId, pooledFor };
     }
-    return { ok: true, enforced: true, cost, balance: bal };
-  } catch {
-    return { ok: true, enforced: false, cost, balance: 0 };
+    return { ok: true, enforced: true, cost, balance: bal, payerOrgId, pooledFor };
+  } catch (e: any) {
+    /* An unexpected throw is not a missing migration: nothing was charged, and nothing runs free. */
+    console.error(`[credits] charge threw for ${orgId} (${mode}) —`, e?.message);
+    return unavailable(cost);
   }
+}
+
+/**
+ * Who pays for an AI action in `orgId` right now: the workspace itself, or the
+ * Practice firm funding it. The same resolution chargeOrgForMode() performs,
+ * for refund paths that did not keep the charge result (a video job settled
+ * from the poll or the nightly sweep). Every uncertain branch → the workspace.
+ */
+export async function resolvePayerOrgId(orgId: string): Promise<{ payerOrgId: string; pooledFor: string | null }> {
+  const self = { payerOrgId: orgId, pooledFor: null as string | null };
+  try {
+    const svc = serviceClient();
+    if (!svc || !orgId) return self;
+    const { data: org } = await svc.from("organizations").select("*").eq("id", orgId).single();
+    const firmId = (org as any)?.practice_org_id;
+    if (!org || !firmId) return self;
+    const { data: firmRow } = await svc.from("organizations").select("*").eq("id", firmId).single();
+    const decision = resolvePayer(
+      { id: orgId, plan: String((org as any).plan || "starter").toLowerCase(), status: statusOf(org) },
+      firmRow ? { id: String((firmRow as any).id), plan: String((firmRow as any).plan || ""), status: statusOf(firmRow) } : null,
+    );
+    return decision.pooled ? { payerOrgId: decision.payerOrgId, pooledFor: orgId } : self;
+  } catch { return self; }
+}
+
+/** The ledger reason for a refund — carries the client id when the firm paid, like the charge did. */
+export function refundReason(mode: string, pooledFor?: string | null): string {
+  const m = String(mode || "").toLowerCase();
+  return pooledFor ? `refund:${m}:client:${pooledFor}` : `refund:${m}`;
 }
 
 /**
@@ -431,7 +507,7 @@ export async function chargeOrgForMode(
  * Only call this after chargeForMode() actually enforced a charge — it grants the
  * cost straight back to the current workspace so a failed run is never billed.
  */
-export async function refundForMode(mode: string): Promise<void> {
+export async function refundForMode(mode: string, payer?: { payerOrgId?: string; pooledFor?: string | null }): Promise<void> {
   /*
     Nothing in here may throw.
 
@@ -446,8 +522,16 @@ export async function refundForMode(mode: string): Promise<void> {
     const cost = creditCost(mode);
     if (cost <= 0) return;
     const { user, orgId } = await getUserAndOrg();
-    if (!orgId) return;
-    await grantCredits(orgId, cost, "refund:" + String(mode || "").toLowerCase(), user?.id);
+    /*
+      BACK TO WHOEVER PAID. A pooled charge debited the Practice firm, so the
+      refund goes to the firm. With no charge result in hand (older call
+      sites), the payer is resolved the same way the charge resolved it.
+    */
+    const who = payer?.payerOrgId
+      ? { payerOrgId: payer.payerOrgId, pooledFor: payer.pooledFor ?? null }
+      : (orgId ? await resolvePayerOrgId(orgId) : null);
+    if (!who?.payerOrgId) return;
+    await grantCredits(who.payerOrgId, cost, refundReason(mode, who.pooledFor), user?.id);
   } catch { /* best effort — never mask the caller's own error */ }
 }
 
@@ -494,7 +578,7 @@ export async function refundIfCharged(gate: ChargeResult | null | undefined, mod
   const g = gate as ChargeResult & { [REFUNDED]?: boolean };
   if (g[REFUNDED]) return;
   g[REFUNDED] = true;
-  await refundForMode(mode);
+  await refundForMode(mode, { payerOrgId: gate.payerOrgId, pooledFor: gate.pooledFor ?? null });
 }
 
 /** Add credits to a workspace via the audited RPC (used by top-up + super-admin). */
@@ -606,9 +690,17 @@ async function generationGate(kind: "image" | "video"): Promise<ImageGate> {
     const limit = payg ? (table.payg ?? 0) : (table[plan] ?? 0);
     if (limit < 0) return { allowed: true, used: 0, limit: -1, plan, active: true };
     if (limit === 0) {
+      /*
+        Not "isn't included on the {plan} plan": with payg at 0, a LAPSED
+        workspace holding credits landed here and was told about a plan it no
+        longer has, as if credits could have bought it. Name the cheapest
+        current plan whose weekly cap is above zero (read from the same tables,
+        so it moves when they do), and say plainly that packs don't include it.
+      */
+      const needs = PLANS.find((p) => !/retired/i.test(p.name) && (IMAGE_WEEKLY[p.id] ?? 0) > 0 && (VIDEO_WEEKLY[p.id] ?? 0) > 0)?.name ?? "a higher plan";
       return {
         allowed: false, used: 0, limit: 0, plan, active: true,
-        reason: `${kind === "video" ? "Video" : "Image"} generation isn't included on the ${plan} plan — upgrade to unlock it.`,
+        reason: `Image and video generation need ${needs} or above — credit packs don't include it.`,
       };
     }
 

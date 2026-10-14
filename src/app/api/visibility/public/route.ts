@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+/* Every field below is interpolated into a model prompt, a lead row and an email. */
+const MAX_FIELD = 120;
 
 /**
  * Public AI Visibility teaser — the only endpoint that runs a model without a
@@ -21,11 +23,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export async function POST(req: Request) {
   try {
     const b = await req.json().catch(() => ({} as any));
-    const name = String(b.name || "").trim();
-    const email = String(b.email || "").trim();
-    const brand = String(b.brand || "").trim();
-    const category = String(b.category || "").trim();
-    const location = String(b.location || "").trim();
+    const name = String(b.name || "").trim().slice(0, MAX_FIELD);
+    const email = String(b.email || "").trim().slice(0, 254);
+    const brand = String(b.brand || "").trim().slice(0, MAX_FIELD);
+    const category = String(b.category || "").trim().slice(0, MAX_FIELD);
+    const location = String(b.location || "").trim().slice(0, MAX_FIELD);
     if (!name || !email || !brand) return NextResponse.json({ ok: false, error: "Name, email and brand are required." }, { status: 200 });
     if (!EMAIL_RE.test(email)) return NextResponse.json({ ok: false, error: "Enter a valid email address." }, { status: 200 });
 
@@ -36,7 +38,8 @@ export async function POST(req: Request) {
       return NextResponse.json({
         ok: false, rateLimited: true,
         error: global
-          ? "The free visibility check is at capacity for today. Please try again tomorrow, or start a trial for unlimited checks."
+          /* Same wording as the per-email cap: there is no trial to start (TRIAL_DAYS is 0). */
+          ? "The free visibility check is at capacity for today. Please try again tomorrow, or create a workspace to run them whenever you like."
           /*
             There is no free trial to start — TRIAL_DAYS is 0. Offering one in
             a rate-limit message is the same false claim the landing page
@@ -97,6 +100,18 @@ export async function POST(req: Request) {
        at one engine and three calls. See runVisibility's note. */
     const report = await runVisibility(brand, [], defaultPrompts(category, location), 3, { crossCheck: 0 });
     const shown = report.results.filter((r) => r.mentioned).length;
+    /*
+      NO ENGINE ANSWERED → NO SCORE. The paid route has refused this case for
+      a long time; this one did not, so a visitor whose check never reached a
+      model was shown "0/100 — nearly invisible", and the operator was emailed
+      the same fabricated zero. The lead is still kept and still notified —
+      they are a real prospect — but nobody is told a score that was never
+      measured.
+    */
+    const noEngine = report.engine === "none";
+    const scoreLine = noEngine
+      ? "AI Visibility score: not measured — no answer engine responded, so the visitor was told the check could not run."
+      : `AI Visibility score: ${report.score}/100 (${shown}/${report.results.length} answers)`;
 
     // Notify the operator so warm leads surface immediately.
     let notified = false;
@@ -108,13 +123,15 @@ Name: ${name}
 Email: ${email}
 Brand: ${brand}
 Category: ${category || "—"}   Location: ${location || "—"}
-AI Visibility score: ${report.score}/100 (${shown}/${report.results.length} answers)
+${scoreLine}
 Engine: ${report.engine}
 
 See all leads: ${origin}/leads
 Reply to this email to reach ${name.split(" ")[0] || "them"} directly.`;
-      await sendEmail(process.env.LEAD_NOTIFY_EMAIL || ADMIN_EMAIL, `AI Visibility lead: ${brand} — ${name}`, renderBrandedEmail(body, { preheader: `AI Visibility check by ${name}` }), { from: brandFrom(), replyTo: email });
-      notified = true;
+      /* sendEmail REPORTS failure ({ sent: false }) rather than throwing, so the result decides. */
+      const sent = await sendEmail(process.env.LEAD_NOTIFY_EMAIL || ADMIN_EMAIL, `AI Visibility lead: ${brand} — ${name}`, renderBrandedEmail(body, { preheader: `AI Visibility check by ${name}` }), { from: brandFrom(), replyTo: email });
+      notified = Boolean(sent?.sent);
+      if (!notified) console.error("[visibility] operator notification not sent —", sent?.reason);
     } catch (e: any) {
       console.error("[visibility] operator notification failed —", e?.message);
     }
@@ -143,13 +160,20 @@ Reply to this email to reach ${name.split(" ")[0] || "them"} directly.`;
             `only record of them.\n\n` +
             `Name: ${name}\nEmail: ${email}\nBrand: ${brand}\n` +
             `Category: ${category || "—"}   Location: ${location || "—"}\n` +
-            `Score: ${report.score}/100 (${shown}/${report.results.length} answers)\n\n` +
+            `${noEngine ? "Score: not measured (no answer engine responded)" : `Score: ${report.score}/100 (${shown}/${report.results.length} answers)`}\n\n` +
             `Add them to /leads by hand and check the leads table and email provider.`,
           email: false,
         });
       } catch (e: any) {
         console.error("[visibility] LEAD LOST and alert failed —", name, email, brand, e?.message);
       }
+    }
+
+    if (noEngine) {
+      return NextResponse.json({
+        ok: false,
+        error: "The visibility check could not run just now — no AI answer engine responded, so there is no score to show (a 0 here would be misleading, not a result). Please try again later.",
+      }, { status: 200 });
     }
 
     return NextResponse.json({

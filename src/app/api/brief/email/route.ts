@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { generateFor } from "@/lib/ai/cortex";
+import { generateFor, isEngineFailure } from "@/lib/ai/cortex";
 import { getBusinessContext } from "@/lib/data";
 import { sendEmail } from "@/lib/email";
 import { mdToHtml } from "@/lib/utils";
-import { chargeForMode, refundForMode } from "@/lib/credits";
+import { chargeForMode, refundIfCharged } from "@/lib/credits";
 import { creditDenial, requireWorkspace } from "@/lib/api-guard";
 import { isSuperAdmin } from "@/lib/superadmin";
 
@@ -41,14 +41,22 @@ export async function POST(req: Request) {
       // else: silently ignore the override and send to the account owner.
     }
     if (!to) {
-      if (gate.enforced) await refundForMode("brief");
+      await refundIfCharged(gate, "brief");
       return NextResponse.json({ ok: false, error: "Your account has no email address on file." }, { status: 200 });
     }
 
     const context = await getBusinessContext();
     const brief = await generateFor("brief", "", context);
-    if (!brief) {
-      if (gate.enforced) await refundForMode("brief");
+    /*
+      An engine failure comes back as TEXT ("I couldn't reach the AI engine…",
+      or the no-key setup hint), not as a throw or an empty string — so the old
+      `!brief` let it through: the customer was charged and emailed the error
+      message as their "daily brief". isEngineFailure catches both texts.
+      Refund (to whoever paid — refundIfCharged follows gate.payerOrgId), send
+      nothing, say so.
+    */
+    if (!brief || !brief.trim() || isEngineFailure(brief)) {
+      await refundIfCharged(gate, "brief");
       return NextResponse.json({ ok: false, error: "Could not generate the brief — please try again." }, { status: 200 });
     }
 
@@ -59,10 +67,10 @@ export async function POST(req: Request) {
     </div>`;
     const res = await sendEmail(to, "Your MNB Cortex daily brief", html);
     // Not delivered (no Resend key, provider rejection) → don't bill for it.
-    if (!res.sent && gate.enforced) await refundForMode("brief");
+    if (!res.sent) await refundIfCharged(gate, "brief");
     return NextResponse.json({ ok: true, sent: res.sent, to, reason: res.reason, preview: brief, charged: res.sent && gate.enforced ? gate.cost : 0, balance: gate.balance });
   } catch (e: any) {
-    if (gate.enforced) await refundForMode("brief");
+    await refundIfCharged(gate, "brief");
     return NextResponse.json({ ok: false, error: e?.message || "Failed" }, { status: 200 });
   }
 }

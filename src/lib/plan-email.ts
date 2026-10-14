@@ -2,7 +2,7 @@ import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { brandFrom } from "@/lib/branded-email";
 import { buildPriorities, type Priority } from "@/lib/ai/priorities";
-import { unsubToken } from "@/lib/weekly-update";
+import { unsubToken, unsubSigningAvailable } from "@/lib/weekly-update";
 import type { Budget } from "@/lib/cron-budget";
 
 // "Your plan for the week" — a per-workspace email built from the SAME prioritizer
@@ -176,6 +176,8 @@ export async function sendWeeklyPlans(opts?: { test?: boolean; now?: Date; budge
   if (!sb) return { skipped: true, reason: "no SUPABASE_SERVICE_ROLE_KEY" };
   const key = process.env.RESEND_API_KEY;
   if (!key) return { skipped: true, reason: "no RESEND_API_KEY" };
+  /* Every plan email carries a signed unsubscribe link; unsubToken() throws without a secret. */
+  if (!unsubSigningAvailable()) return { skipped: true, reason: "unsubscribe links cannot be signed (set LINK_SIGNING_SECRET or CRON_SECRET)" };
 
   const now = opts?.now ?? new Date();
   const week = istWeekKey(now);
@@ -305,8 +307,15 @@ export async function sendWeeklyPlans(opts?: { test?: boolean; now?: Date; budge
       ...((al as any[]) || []).map((x) => `- Alert (${x.severity}): ${String(x.body || x.title).slice(0, 220)}`),
     ];
     const ctx = ctxFromMetrics(m as any[]) + (extra.length ? `\n\nTHIS WEEK'S FINDINGS:\n${extra.join("\n")}` : "");
-    const { priorities } = await buildPriorities(ctx, true);
-    if (!priorities.length) continue;
+    /*
+      "rules" is the fixed fallback list used when the model call failed — the
+      same four items for every business. This email says "Based on your
+      numbers, here's what I'd focus on", so sending that list would present
+      generic advice as personal. Skip the workspace; the week stays unclaimed
+      so a later run can send the real plan.
+    */
+    const { priorities, mode } = await buildPriorities(ctx, true);
+    if (mode !== "ai" || !priorities.length) continue;
     considered++;
     processed++;
     if (test) { targets.push({ email: CONTACT, firstName: "there", plan: priorities }); break; }

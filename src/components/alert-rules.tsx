@@ -8,6 +8,15 @@ import { Sparkles, Plus, Trash2, BellRing, AlertTriangle, CheckCircle2, Loader2 
 import { mdToHtml } from "@/lib/utils";
 import { saveAlertRule, deleteAlertRule } from "@/lib/actions";
 
+/* An /api/ai reply that is not `ok: true` is an ERROR, whatever its `text`
+   says — show it as one, never as the analysis (or the email body). */
+function aiFailure(j: any): string {
+  const t = j && typeof j.text === "string" && j.text.trim() ? j.text.trim()
+    : j && typeof j.error === "string" && j.error.trim() ? j.error.trim() : "";
+  return t || "The AI did not return an answer. Try again in a moment.";
+}
+
+
 /**
  * Live KPI values for this workspace, passed in from the server.
  *
@@ -31,7 +40,7 @@ export function AlertRules({ metrics = [], rules = [] }: { metrics?: LiveMetric[
     [metrics],
   );
 
-  const [out, setOut] = useState(""); const [loading, setLoading] = useState(false);
+  const [out, setOut] = useState(""); const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
   // Draft state for the "add a rule" row only. Existing rules are server state
@@ -46,7 +55,7 @@ export function AlertRules({ metrics = [], rules = [] }: { metrics?: LiveMetric[
   const firing = evaluated.filter((r) => r.hit);
 
   async function advise() {
-    setLoading(true); setOut("");
+    setLoading(true); setOut(""); setErr("");
     const input = "These KPI alerts are currently breached:\n"
       + firing.map((r) => `- ${r.m?.label}: now ${r.m?.value}${r.m?.unit}, rule says alert when ${r.op} ${r.threshold}${r.m?.unit}`).join("\n")
       + "\nFor each breached alert, give the single most important action to take, in priority order.";
@@ -56,8 +65,8 @@ export function AlertRules({ metrics = [], rules = [] }: { metrics?: LiveMetric[
         body: JSON.stringify({ mode: "actions", input }),
       });
       const j = await res.json();
-      setOut(j.text || "No response.");
-    } catch { setOut("Network error reaching the AI."); }
+      if (j && j.ok === true && typeof j.text === "string" && j.text.trim()) setOut(j.text); else setErr(aiFailure(j));
+    } catch { setErr("Network error reaching the AI."); }
     finally { setLoading(false); }
   }
 
@@ -149,6 +158,7 @@ export function AlertRules({ metrics = [], rules = [] }: { metrics?: LiveMetric[
           </Button>
         )}
         {out && <div className="rounded-lg border bg-background/50 p-4 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(out) }} />}
+        {err && <p role="alert" className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger">{err}</p>}
 
         <p className="text-xs text-muted-foreground">
           Rules are saved to your workspace, so your team sees the same ones and they follow you between devices.

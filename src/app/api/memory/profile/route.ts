@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUserAndOrg } from "@/lib/data";
-import { getProfile, regenerateProfile } from "@/lib/memory";
+import { getProfile, regenerateProfile, listMemories } from "@/lib/memory";
+import { hasRole } from "@/lib/roles";
 import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundIfCharged } from "@/lib/credits";
 
@@ -34,6 +35,16 @@ export async function GET() {
 export async function POST() {
   const { orgId } = await getUserAndOrg();
   if (!orgId) return NextResponse.json({ ok: false, error: "No workspace." });
+  if (!(await hasRole("analyst"))) return NextResponse.json({ ok: false, profile_md: null, error: "Rebuilding the company profile needs the analyst role or higher." }, { status: 403 });
+  /*
+    NO MEMORIES, NO MODEL CALL, NO CHARGE. regenerateProfile() answers a
+    workspace with nothing remembered with a fixed placeholder sentence; that
+    was billed at the strategy price.
+  */
+  const existing = await listMemories(orgId, { limit: 1 }).catch(() => [] as any[]);
+  if (!existing.length) {
+    return NextResponse.json({ ok: false, profile_md: null, needsMore: true, error: "There are no memories to build a profile from yet. Capture a few facts, decisions or preferences first — you have not been charged." });
+  }
   const gate = await chargeForMode("strategy");
   if (!gate.ok) { const d = creditDenial(gate, "Rebuilding your profile"); return NextResponse.json(d.body, { status: d.status }); }
 

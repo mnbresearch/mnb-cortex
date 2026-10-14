@@ -121,7 +121,8 @@ const ENT = [
   check(/if \(out !== null\) return vault\.restore\(out\)/.test(cx), "wiring: the answer is restored before the owner sees it");
   check((cx.match(/runTool\(fname, vault\.restoreDeep\(/g) || []).length === 2, "wiring: both tool loops restore the model's arguments before a lookup");
   check((cx.match(/vault\.redactDeep\(forModel\(result, guard\)\)/g) || []).length === 2, "wiring: both tool loops redact results before the model sees them");
-  check((cx.match(/guard, vault\);/g) || []).length === 2, "wiring: both OpenAI-compatible providers get the vault");
+  /* `deadline` rides along since model fetches became time-bounded (cortex.ts fetchSignal). */
+  check((cx.match(/guard, vault(?:, deadline)?\);/g) || []).length === 2, "wiring: both OpenAI-compatible providers get the vault");
   for (const [f, needle] of [
     ["src/lib/ai/bankstatement.ts", /vaultFor\(null, \{ keepAmounts: true \}\)[\s\S]*callJson\(buildPrompt\(vault\.redact\(scan\.text\)\)\)/],
     ["src/lib/ai/gst.ts", /vaultFor\(null, \{ keepAmounts: true \}\)[\s\S]*callJson\(buildPrompt\(vault\.redact\(scan\.text\)\)\)/],

@@ -1,6 +1,7 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
-import { generateFor } from "@/lib/ai/cortex";
+import { generateFor, isEngineFailure } from "@/lib/ai/cortex";
+import type { ChargeResult } from "@/lib/credits";
 import { withOrgAiKeys } from "@/lib/ai/byo";
 import { recomputeMetrics } from "@/lib/metrics";
 import { sendEmail } from "@/lib/email";
@@ -52,6 +53,37 @@ export const ACTIONS: { verb: string; arg: string; does: string }[] = [
   */
   { verb: "agent", arg: "<agent-id> <brief>", does: "Run a ready-made text agent on your own numbers and save its output" },
 ];
+
+/** Why a metered step was skipped — only the reason the charge actually gave. */
+function skippedFor(gate: ChargeResult): string {
+  if (gate.reason === "lapsed") return "Skipped: this workspace has no active plan or credits.";
+  if (gate.reason === "insufficient") return `Skipped: not enough credits (needs ${gate.cost}).`;
+  /* "unavailable" (metering itself failed) or anything unrecognised: we do not
+     know it was the balance, so we do not say so. Nothing was debited. */
+  return "Skipped: credits could not be checked right now — nothing was charged.";
+}
+
+/**
+ * Give back a workflow step's charge when it produced nothing.
+ *
+ * Direct grant, not refundIfCharged(): that path reads the session
+ * (getUserAndOrg), and workflows also run unattended from the cron, where
+ * there is no session — the refund would be silently skipped. Back to
+ * gate.payerOrgId: a pooled charge debited the Practice firm, and refunding
+ * the client instead would mint credits it never paid for. Only a charge that
+ * succeeded AND was enforced took money.
+ */
+async function refundWorkflowCharge(gate: ChargeResult, mode: string, orgFallback?: string): Promise<void> {
+  if (!gate.ok || !gate.enforced || !(gate.cost > 0)) return;
+  const payer = gate.payerOrgId ?? orgFallback;
+  if (!payer) { console.error("[workflows] refund skipped: no payer on the charge result"); return; }
+  try {
+    const { grantCredits, refundReason } = await import("@/lib/credits");
+    await grantCredits(payer, gate.cost, refundReason(mode, gate.pooledFor ?? null));
+  } catch (e: any) {
+    console.error(`[workflows] refund of ${gate.cost} credits to ${payer} failed (the ledger shows the charge):`, e?.message);
+  }
+}
 
 function parse(step: string): { verb: string; rest: string } {
   const t = String(step || "").trim();
@@ -162,19 +194,16 @@ export async function executeWorkflow(
           const { chargeOrgForMode } = await import("@/lib/credits");
           const gate = await chargeOrgForMode(orgId, mode.toLowerCase());
           if (!gate.ok) {
-            results.push({
-              step: raw,
-              ok: false,
-              detail: gate.reason === "lapsed"
-                ? "Skipped: this workspace has no active plan or credits."
-                : `Skipped: not enough credits (needs ${gate.cost}).`,
-            });
+            results.push({ step: raw, ok: false, detail: skippedFor(gate) });
             break;
           }
           const text = await withOrgAiKeys(orgId, () => generateFor(mode.toLowerCase(), tail.join(" "), context));
-          const okAi = Boolean(text) && !/^I couldn't reach the AI engine/.test(text);
+          /* isEngineFailure catches BOTH engine texts — unreachable and the
+             no-key hint. The old regex missed the second, so a workspace with
+             no AI key was billed and "Generated and saved" the setup hint. */
+          const okAi = Boolean(text && text.trim()) && !isEngineFailure(text);
           /* No answer, no bill — the same rule every interactive AI route follows. */
-          if (!okAi && gate.enforced) { try { const { grantCredits } = await import("@/lib/credits"); await grantCredits(orgId, gate.cost, `refund:${mode.toLowerCase()}`); } catch { /* ledger shows the charge */ } }
+          if (!okAi) await refundWorkflowCharge(gate, mode.toLowerCase(), orgId);
           let saved = false;
           if (okAi) {
             // strategy_docs is (framework, question, content jsonb) — an insert
@@ -208,10 +237,10 @@ export async function executeWorkflow(
             results.push({ step: raw, ok: false, detail: `"${agentId}" is not a text agent this workspace can run.` });
             break;
           }
-          const { chargeOrgForMode, grantCredits } = await import("@/lib/credits");
+          const { chargeOrgForMode } = await import("@/lib/credits");
           const gate = await chargeOrgForMode(orgId, "document");
           if (!gate.ok) {
-            results.push({ step: raw, ok: false, detail: gate.reason === "lapsed" ? "Skipped: this workspace has no active plan or credits." : `Skipped: not enough credits (needs ${gate.cost}).` });
+            results.push({ step: raw, ok: false, detail: skippedFor(gate) });
             break;
           }
           /* The brief fills the agent's main field; the workspace's own KPIs and this run's findings are appended. */
@@ -223,10 +252,10 @@ export async function executeWorkflow(
             + (numbers ? `\n\n---\nThis business's own numbers (use them; do not invent others):\n${numbers}` : "")
             + (facts.length ? `\n\nFindings from earlier steps of this workflow:\n${facts.map((f) => `- ${f}`).join("\n")}` : "");
           const text = await withOrgAiKeys(orgId, () => runReasoning(prompt));
-          const okAgent = Boolean(text && text.trim()) && !/^I couldn't reach the AI engine/.test(text);
+          const okAgent = Boolean(text && text.trim()) && !isEngineFailure(text);
           if (!okAgent) {
             /* Nothing produced, nothing billed. */
-            if (gate.enforced) { try { await grantCredits(orgId, gate.cost, "refund:document"); } catch { /* ledger shows the charge */ } }
+            await refundWorkflowCharge(gate, "document", orgId);
             results.push({ step: raw, ok: false, detail: "The agent could not produce anything — not charged." });
             break;
           }

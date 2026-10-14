@@ -114,13 +114,46 @@ export function hasAIKey(): boolean {
   an outsider wrote (a pasted Google review, a synced shopper name) reached a
   model that could create actions. Only the chat stream passes tools: true.
 */
-export type RunOptions = { tools?: boolean };
+/*
+  `deadlineAt` (epoch ms) bounds the WHOLE call — every provider, every retry,
+  every tool round. Without it a hung provider held the request until the
+  platform killed the function, and a killed function never reaches the
+  caller's refund. Default: DEFAULT_RUN_BUDGET_MS from now.
+*/
+export type RunOptions = { tools?: boolean; deadlineAt?: number };
 
 /** The first words of the answer runCortex gives when no provider answered — callers refund on it. */
 export const ENGINE_UNREACHABLE = "I couldn't reach the AI engine.";
 
+/** The first words of the setup hint runCortex gives when NO provider key is configured. */
+export const ENGINE_NOT_CONFIGURED = "**The AI engine isn't configured yet";
+
+/**
+ * True when runCortex()/generateFor() returned its own failure text rather
+ * than an answer — no provider answered, or none is configured.
+ *
+ * runCortex returns a string either way (a dozen callers outside the billed
+ * routes render it directly), so every BILLED caller must ask this before it
+ * treats the text as a product: refund, return ok:false, save nothing.
+ */
+export function isEngineFailure(text: string | null | undefined): boolean {
+  const t = String(text ?? "").trimStart();
+  return t.startsWith(ENGINE_UNREACHABLE) || t.startsWith(ENGINE_NOT_CONFIGURED);
+}
+
+/** Ceiling for one model fetch, and the default for a whole runCortex call. */
+const FETCH_TIMEOUT_MS = 25_000;
+const DEFAULT_RUN_BUDGET_MS = 45_000;
+
+/** An abort signal for one fetch: the per-fetch ceiling, or whatever is left of the run's deadline. */
+function fetchSignal(deadline?: number): AbortSignal {
+  const left = deadline ? deadline - Date.now() : FETCH_TIMEOUT_MS;
+  return AbortSignal.timeout(Math.max(1_000, Math.min(FETCH_TIMEOUT_MS, left)));
+}
+
 export async function runCortex(messages: Msg[], context: string, profile: GenProfile = STANDARD, opts: RunOptions = {}): Promise<string> {
   if (!hasAIKey()) return fallback(messages); // genuinely unconfigured — show the setup hint
+  const deadline = opts.deadlineAt ?? Date.now() + DEFAULT_RUN_BUDGET_MS;
 
   // The workspace's own instructions, resolved HERE because every AI feature in
   // the product funnels through this function — chat, agents, reports, Deep
@@ -162,7 +195,7 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
   context2 = `${fence("business snapshot", vault.redact(context))}${vault.redact(extra)}`;
   const outbound: Msg[] = messages.map((m) => ({ ...m, content: vault.redact(m.content) }));
 
-  for (const provider of providerChain()) {
+  outer: for (const provider of providerChain()) {
     // Retry the SAME provider only for genuinely transient trouble. A 429 is not
     // transient on this timescale: free-tier quotas reset on a 60-second window,
     // so three retries 3.5 seconds apart cannot clear it and each one spends
@@ -171,7 +204,12 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
     // three cases the right move is to hand over to the next provider at once.
     const attempts = 3;
     for (let i = 0; i < attempts; i++) {
-      const out = await runOnce(provider, outbound, context2, profile, toolOrg, toolUser, vault);
+      /* Out of time: stop and report, so the caller can still refund. */
+      if (Date.now() > deadline - 1_500) {
+        lastFailure = { provider, detail: "the AI provider did not answer in time" };
+        break outer;
+      }
+      const out = await runOnce(provider, outbound, context2, profile, toolOrg, toolUser, vault, deadline);
       if (out !== null) return vault.restore(out);
 
       const st = lastFailure?.status;
@@ -186,7 +224,7 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
 }
 
 /** One model call. Returns null on a transient/failed call so the caller can retry. */
-async function runOnce(provider: string, messages: Msg[], context: string, profile: GenProfile, toolOrg?: string | null, toolUser?: string | null, vault: Vault = NO_REDACTION): Promise<string | null> {
+async function runOnce(provider: string, messages: Msg[], context: string, profile: GenProfile, toolOrg?: string | null, toolUser?: string | null, vault: Vault = NO_REDACTION, deadline?: number): Promise<string | null> {
   const sys = systemPrompt(context);
   /* One guard per answer: what this run read, and whether any of it looked like instructions. */
   const guard = newRunGuard();
@@ -228,7 +266,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
       // the next one rather than taking the whole product down.
       for (const model of geminiTextModels()) {
         let r = await fetch(geminiUrl(model, aiKey("GEMINI_API_KEY")!), {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: buildBody(!thinkingUnsupported),
+          method: "POST", signal: fetchSignal(deadline), headers: { "Content-Type": "application/json" }, body: buildBody(!thinkingUnsupported),
         });
 
         /*
@@ -248,7 +286,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
             console.warn(`[cortex] ${model} rejected thinkingConfig; retrying without it and disabling for this process.`);
             thinkingUnsupported = true;
             r = await fetch(geminiUrl(model, aiKey("GEMINI_API_KEY")!), {
-              method: "POST", headers: { "Content-Type": "application/json" }, body: buildBody(false),
+              method: "POST", signal: fetchSignal(deadline), headers: { "Content-Type": "application/json" }, body: buildBody(false),
             });
           }
         }
@@ -286,7 +324,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
             contents = [...contents, { role: "user", parts: responses }];
 
             const follow = await fetch(geminiUrl(model, aiKey("GEMINI_API_KEY")!), {
-              method: "POST", headers: { "Content-Type": "application/json" },
+              method: "POST", signal: fetchSignal(deadline), headers: { "Content-Type": "application/json" },
               body: buildBody(!thinkingUnsupported),
             });
             if (!follow.ok) break;   // keep whatever we already have
@@ -312,7 +350,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
             const pending = (j?.candidates?.[0]?.content?.parts || []);
             if (pending.some((p: any) => p?.functionCall)) contents = [...contents, { role: "model", parts: pending }, { role: "user", parts: pending.filter((p: any) => p?.functionCall).map((p: any) => ({ functionResponse: { name: String(p.functionCall.name), response: { ok: false, error: "No more lookups this turn — answer with what you have." } } })) }];
             const last = await fetch(geminiUrl(model, aiKey("GEMINI_API_KEY")!), {
-              method: "POST", headers: { "Content-Type": "application/json" }, body: buildBody(!thinkingUnsupported, true),
+              method: "POST", signal: fetchSignal(deadline), headers: { "Content-Type": "application/json" }, body: buildBody(!thinkingUnsupported, true),
             });
             if (last.ok) {
               const lj = await last.json();
@@ -339,16 +377,16 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
     }
     // ---- Groq (FREE: console.groq.com) — OpenAI-compatible ----
     if (provider === "groq" && aiKey("GROQ_API_KEY")) {
-      return await openaiCompatible("groq", "https://api.groq.com/openai/v1/chat/completions", aiKey("GROQ_API_KEY")!, groqModel(), sys, messages, toolOrg, toolUser, guard, vault);
+      return await openaiCompatible("groq", "https://api.groq.com/openai/v1/chat/completions", aiKey("GROQ_API_KEY")!, groqModel(), sys, messages, toolOrg, toolUser, guard, vault, deadline);
     }
     // ---- OpenAI ----
     if (provider === "openai" && aiKey("OPENAI_API_KEY")) {
-      return await openaiCompatible("openai", "https://api.openai.com/v1/chat/completions", aiKey("OPENAI_API_KEY")!, openaiModel(), sys, messages, toolOrg, toolUser, guard, vault);
+      return await openaiCompatible("openai", "https://api.openai.com/v1/chat/completions", aiKey("OPENAI_API_KEY")!, openaiModel(), sys, messages, toolOrg, toolUser, guard, vault, deadline);
     }
     // ---- Anthropic ----
     if (provider === "anthropic" && aiKey("ANTHROPIC_API_KEY")) {
       const r = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json", "x-api-key": aiKey("ANTHROPIC_API_KEY")!, "anthropic-version": "2023-06-01" },
+        method: "POST", signal: fetchSignal(deadline), headers: { "Content-Type": "application/json", "x-api-key": aiKey("ANTHROPIC_API_KEY")!, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: anthropicModel(), max_tokens: 1024, system: sys, messages }),
       });
       if (!r.ok) return await note("anthropic", r);
@@ -381,6 +419,7 @@ const TOOLS_UNSUPPORTED = new Set<string>();
 async function openaiCompatible(
   label: string, url: string, key: string, model: string, sys: string, messages: Msg[],
   toolOrg?: string | null, toolUser?: string | null, guard: RunGuard = newRunGuard(), vault: Vault = NO_REDACTION,
+  deadline?: number,
 ): Promise<string | null> {
   const useTools = Boolean(toolOrg);
   let convo: any[] = [{ role: "system", content: sys }, ...messages];
@@ -389,7 +428,7 @@ async function openaiCompatible(
   let lastText: string | null = null;
   for (let round = 0; round < 4; round++) {
     let r = await fetch(url, {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      method: "POST", signal: fetchSignal(deadline), headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({ model, messages: convo, temperature: 0.4, ...(tools && offerTools ? { tools, tool_choice: "auto" } : {}) }),
     });
     /*
@@ -405,7 +444,7 @@ async function openaiCompatible(
       offerTools = false;
       const cleaned = convo.filter((m: any) => m.role !== "tool" && !(m.role === "assistant" && m.tool_calls));
       r = await fetch(url, {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        method: "POST", signal: fetchSignal(deadline), headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
         body: JSON.stringify({ model, messages: cleaned, temperature: 0.4 }),
       });
     }
@@ -454,7 +493,7 @@ async function note(provider: string, r: Response): Promise<null> {
  * It now says plainly that the AI is not configured, and nothing else.
  */
 function fallback(_messages: Msg[]): string {
-  return `**The AI engine isn't configured yet, so I can't analyse your business.**
+  return `${ENGINE_NOT_CONFIGURED}, so I can't analyse your business.**
 
 No AI provider key is set on this deployment, which means I have no model to reason with — and I'm not going to make up numbers about your company.
 
@@ -490,7 +529,7 @@ export async function streamCortex(messages: Msg[], context: string, hooks: { on
     if (orgId) {
       const full = await runCortex(messages, context, STANDARD, { tools: true });
       /* No provider answered: the person got no answer, so they pay for none. */
-      if (full.startsWith(ENGINE_UNREACHABLE)) { try { await hooks.onEngineFailure?.(); } catch { /* refund is best-effort; the ledger keeps the charge visible */ } }
+      if (isEngineFailure(full)) { try { await hooks.onEngineFailure?.(); } catch { /* refund is best-effort; the ledger keeps the charge visible */ } }
       return new ReadableStream<Uint8Array>({
         async start(c) {
           const words = full.split(/(?<=\s)/);
@@ -521,6 +560,8 @@ export async function streamCortex(messages: Msg[], context: string, hooks: { on
     try {
       const upstream = await fetch(openaiLike.url, {
         method: "POST",
+        /* The whole stream, not just the connect: the route's budget is 60s. */
+        signal: AbortSignal.timeout(50_000),
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiLike.key}` },
         body: JSON.stringify({ model: openaiLike.model, stream: true, temperature: 0.4, messages: [{ role: "system", content: sys }, ...messages] }),
       });
@@ -551,6 +592,7 @@ export async function streamCortex(messages: Msg[], context: string, hooks: { on
     } catch { /* fall through */ }
   }
   const full = await runCortex(messages, context);
+  if (isEngineFailure(full)) { try { await hooks.onEngineFailure?.(); } catch { /* best-effort */ } }
   return new ReadableStream<Uint8Array>({ start(c) { c.enqueue(enc.encode(full)); c.close(); } });
 }
 
@@ -627,7 +669,7 @@ Order by impact-to-effort. Give 6-9 actions. Be concrete and numeric.`,
 ## Elasticity & competitor risk
 ## Expected margin & revenue impact (quantified)
 ## Rollout plan (comms + timing)
-Consider GST and the recent competitor price cut. Details (may be blank):`,
+Consider GST and any competitor pricing the owner mentions. Details (may be blank):`,
   negotiate: `You are a procurement/negotiation coach for an Indian SME. For the supplier/customer situation, produce markdown with:
 ## Your leverage & their leverage
 ## Target, walk-away & opening position (numbers)
@@ -675,8 +717,8 @@ Keep it India-appropriate, specific, and tied to the business where relevant. Br
 ## Their likely next move
 ## How we should respond (specific plays)
 ## What to monitor
-Ground it in the BUSINESS SNAPSHOT (e.g. the rival's recent 8% price cut). Details:`,
-  loan: `You are a CFO advising an Indian SME owner on debt/funding. Using the BUSINESS SNAPSHOT (cash runway ~5 months), assess the loan/funding described. Produce markdown with:
+Ground it in the BUSINESS SNAPSHOT where relevant; do not assume competitor moves the owner has not described. Details:`,
+  loan: `You are a CFO advising an Indian SME owner on debt/funding. Using the BUSINESS SNAPSHOT (read cash and runway from it; if they are not there, say so rather than assuming), assess the loan/funding described. Produce markdown with:
 ## Should you take it? (yes / no / yes-with-conditions)
 ## Impact on cash & runway (quantified, INR)
 ## Can you service the EMI? (coverage vs monthly profit)
@@ -688,7 +730,7 @@ Be direct and numeric. Details:`,
 ## Overall verdict
 ## Red flags
 ## Actions (renegotiate, add backup, consolidate)
-Ground it in the BUSINESS SNAPSHOT where relevant (e.g. RM-204 single-source risk). Details:`,
+Ground it in the BUSINESS SNAPSHOT where relevant (e.g. any single-source dependency it shows). Details:`,
   sop: `You are an operations expert writing a Standard Operating Procedure (SOP) for an Indian SME. For the process described, produce a clear markdown SOP with:
 ## Purpose
 ## Scope & owner
@@ -751,6 +793,15 @@ Flag anything about liability, indemnity, termination, payment terms, IP, non-co
 Ground it in the BUSINESS SNAPSHOT where relevant. Customer details:`,
 };
 
+/**
+ * True when `mode` has its own prompt. generateFor() falls back to the pulse
+ * prompt for anything else — so a route that PRICES by mode must reject an
+ * unknown one before charging, or the client picks the price and gets a pulse.
+ */
+export function hasModePrompt(mode: string): boolean {
+  return Object.prototype.hasOwnProperty.call(MODE_PROMPTS, String(mode || ""));
+}
+
 export async function generateFor(mode: string, input: string, context: string): Promise<string> {
   const p = MODE_PROMPTS[mode] || MODE_PROMPTS.pulse;
   const user = mode === "pulse" ? p : `${p}\n\n${input}`;
@@ -790,21 +841,38 @@ const FOCUS_LABELS: Record<string, string> = {
  * This is deliberately "deeper" than a single-shot mode: the model reasons over its
  * own conclusions before recommending and drafting the first action.
  */
-export async function runDeepDive(focus: string, question: string, context: string): Promise<DeepDiveSection[]> {
+/*
+  ALL THREE PASSES OR NOTHING, AND WITHIN THE ROUTE'S BUDGET.
+
+  The passes run in sequence under one 60-second function. A pass that came
+  back as runCortex's own failure text used to be fed into the next pass as if
+  it were a diagnosis, and all three sections were billed. And three slow
+  passes could outlive the function, which the platform kills without running
+  the route's refund. So: one shared deadline, no pass started without enough
+  time left for it, and any failed pass returns [] — the route refunds on that.
+*/
+const DEEP_DIVE_MIN_PASS_MS = 8_000;
+
+export async function runDeepDive(focus: string, question: string, context: string, opts: { deadlineAt?: number } = {}): Promise<DeepDiveSection[]> {
   const label = FOCUS_LABELS[focus] || FOCUS_LABELS.finance;
   const topic = question.trim() ? question.trim() : label;
   const sections: DeepDiveSection[] = [];
+  const deadlineAt = opts.deadlineAt ?? Date.now() + 50_000;
+  const timeLeft = () => deadlineAt - Date.now() >= DEEP_DIVE_MIN_PASS_MS;
 
   // Pass 1 — Diagnose
+  if (!timeLeft()) return [];
   const diagnosis = await runCortex([{ role: "user", content:
 `Run a deep diagnostic on ${topic}. Use ONLY the business snapshot; quantify in INR (lakh/crore). Markdown, no preamble:
 ## What's happening
 2–4 sharp, quantified observations.
 ## Why it's happening
-The root causes, ranked, and mechanical (which SKU, cost, customer or process). Keep it tight.` }], context);
+The root causes, ranked, and mechanical (which SKU, cost, customer or process). Keep it tight.` }], context, STANDARD, { deadlineAt });
+  if (isEngineFailure(diagnosis) || !diagnosis.trim()) return [];
   sections.push({ key: "diagnosis", title: "Situation & root cause", body: diagnosis });
 
   // Pass 2 — Decide (reasons over the diagnosis)
+  if (!timeLeft()) return [];
   const options = await runCortex([{ role: "user", content:
 `This is your diagnosis of ${topic}:
 
@@ -814,10 +882,12 @@ Now make the call. Markdown:
 ## Options
 Exactly three options. For each: the upside, the risk, and the rough INR impact.
 ## Recommendation
-Pick ONE and justify it in two lines.` }], context);
+Pick ONE and justify it in two lines.` }], context, STANDARD, { deadlineAt });
+  if (isEngineFailure(options) || !options.trim()) return [];
   sections.push({ key: "options", title: "Options & recommendation", body: options });
 
   // Pass 3 — Execute (reasons over diagnosis + recommendation)
+  if (!timeLeft()) return [];
   const plan = await runCortex([{ role: "user", content:
 `Diagnosis and recommendation for ${topic}:
 
@@ -829,7 +899,8 @@ Turn the recommendation into execution. Markdown:
 ## 30-day plan
 A week-by-week plan. For each week: the action, the owner, and the metric that proves it worked.
 ## First action, drafted
-Write the single highest-impact artifact to start now — an email, WhatsApp message, or purchase order — fully written and ready to send or approve.` }], context);
+Write the single highest-impact artifact to start now — an email, WhatsApp message, or purchase order — fully written and ready to send or approve.` }], context, STANDARD, { deadlineAt });
+  if (isEngineFailure(plan) || !plan.trim()) return [];
   sections.push({ key: "plan", title: "30-day plan & first action", body: plan });
 
   return sections;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUserAndOrg } from "@/lib/data";
-import { ingestBusinessData } from "@/lib/memory";
+import { ingestBusinessData, canWriteMemory, memoryUpgradeMessage } from "@/lib/memory";
+import { hasRole } from "@/lib/roles";
 import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundIfCharged } from "@/lib/credits";
 
@@ -12,6 +13,9 @@ export const maxDuration = 60;
 export async function POST() {
   const { user, orgId } = await getUserAndOrg();
   if (!orgId) return NextResponse.json({ ok: false, error: "No workspace." });
+  if (!(await hasRole("analyst"))) return NextResponse.json({ ok: false, memories: 0, entities: 0, error: "Teaching Cortex needs the analyst role or higher." }, { status: 403 });
+  /* Plan gate before the charge: ingest only writes memories and entities. */
+  if (!(await canWriteMemory(orgId))) return NextResponse.json({ ok: false, upgrade: true, memories: 0, entities: 0, error: await memoryUpgradeMessage() });
   const gate = await chargeForMode("report");
   if (!gate.ok) { const d = creditDenial(gate, "Ingesting your data"); return NextResponse.json(d.body, { status: d.status }); }
 
@@ -25,6 +29,19 @@ export async function POST() {
   */
   try {
     const res = await ingestBusinessData(orgId, user?.id ?? null);
+    /*
+      The credits pay for the MODEL step — turning the data into memories.
+      Entities are plain upserts with no model call, so "N entities, 0
+      memories because the engine failed" is not the report that was paid
+      for: refund it, keep the entities, and say what happened.
+    */
+    if (res && (res as any).engineFailed && !res.memories) {
+      await refundIfCharged(gate, "report");
+      return NextResponse.json({
+        ok: false, memories: 0, entities: res.entities,
+        error: `The AI engine could not be reached, so no memories were written${res.entities ? ` (${res.entities} customer and team names were still recorded)` : ""}. Try again in a moment. Your credits have not been used.`,
+      });
+    }
     if (!res || (!res.memories && !res.entities)) {
       await refundIfCharged(gate, "report");
       return NextResponse.json({

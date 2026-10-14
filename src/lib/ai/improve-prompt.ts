@@ -1,5 +1,5 @@
 import "server-only";
-import { runCortex } from "@/lib/ai/cortex";
+import { runCortex, isEngineFailure } from "@/lib/ai/cortex";
 import { FAST } from "@/lib/ai/generation";
 
 /*
@@ -103,6 +103,9 @@ ${context}${SHARED_RULES}`;
   } catch {
     return "";
   }
+  /* runCortex's own "couldn't reach the engine" text is not a brief — cleaned,
+     it would be returned (and billed) as the improved prompt. */
+  if (isEngineFailure(out)) return "";
 
   return cleanImprovedBrief(out, raw);
 }

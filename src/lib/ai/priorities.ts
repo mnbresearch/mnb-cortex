@@ -4,6 +4,7 @@ import { geminiTextModels } from "@/lib/ai/models";
 import { aiKey } from "@/lib/ai/byo";
 import { generationConfig, FAST, STANDARD, EXTRACT } from "@/lib/ai/generation";
 import { groqModel } from "@/lib/ai/model-defaults";
+import { doNotCache } from "@/lib/ai/cache";
 
 // "What should I do next?" — the guided command layer that turns 130+ tools into
 // the 3–5 that matter for THIS business right now. Grounded in the workspace's
@@ -43,12 +44,24 @@ const SETUP: Priority[] = [
   { title: "See if AI recommends you", why: "Check whether AI assistants name your business to buyers.", tool: TOOLS.visibility.label, href: TOOLS.visibility.href, urgency: "low" },
 ];
 
+/*
+  THE MODEL-FAILURE FALLBACK IS A GENERIC LIST, AND SAYS SO.
+
+  These four are the same for every business. They used to be returned under
+  headings like "Your top priorities, chosen … for you" and emailed as "Based
+  on your numbers, here's what I'd focus on" — a fixed list presented as
+  personal advice. Each `why` now states that it is a general starting point,
+  the result is never cached (doNotCache below), and the weekly plan email
+  does not send it at all (plan-email.ts skips mode "rules").
+*/
+const GENERIC_NOTE = "General starting point — your personalised list could not be built just now.";
 const RULES: Priority[] = [
-  { title: "Run a Deep Dive on cash", why: "Get a root-cause read and a costed 30-day plan for your cash position.", tool: TOOLS.deepdive.label, href: TOOLS.deepdive.href, urgency: "high" },
+  { title: "Run a Deep Dive on cash", why: `${GENERIC_NOTE} Get a root-cause read and a costed 30-day plan for your cash position.`, tool: TOOLS.deepdive.label, href: TOOLS.deepdive.href, urgency: "high" },
   { title: "Chase your overdue invoices", why: "See a chase-first list ranked by amount and days overdue.", tool: TOOLS.receivables.label, href: TOOLS.receivables.href, urgency: "high" },
   { title: "Check your runway", why: "Know how many months of cash you have at the current burn.", tool: TOOLS.runway.label, href: TOOLS.runway.href, urgency: "medium" },
   { title: "Ask Cortex what to fix first", why: "A grounded answer on the single highest-impact move this week.", tool: TOOLS.chat.label, href: TOOLS.chat.href, urgency: "medium" },
 ];
+const rulesResult = () => doNotCache({ priorities: RULES, mode: "rules" as const });
 
 function safeArray(t: string): any[] | null {
   if (!t) return null;
@@ -122,7 +135,7 @@ ${context.slice(0, 6000)}`;
   /* DLP: the business data is tokenised before it leaves; the priorities come back with real names. */
   const vault = await vaultFor();
   const raw = vault.restoreDeep(await callJson(vault.redact(prompt), sys));
-  if (!raw || !raw.length) return { priorities: RULES, mode: "rules" };
+  if (!raw || !raw.length) return rulesResult();
 
   const out: Priority[] = [];
   for (const r of raw) {
@@ -136,5 +149,5 @@ ${context.slice(0, 6000)}`;
     out.push({ title, why, tool: t.label, href: t.href, urgency });
     if (out.length >= 5) break;
   }
-  return out.length ? { priorities: out, mode: "ai" } : { priorities: RULES, mode: "rules" };
+  return out.length ? { priorities: out, mode: "ai" } : rulesResult();
 }

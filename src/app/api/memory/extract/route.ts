@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getUserAndOrg } from "@/lib/data";
-import { extractMemories } from "@/lib/memory";
+import { extractMemories, canWriteMemory, memoryUpgradeMessage } from "@/lib/memory";
+import { hasRole } from "@/lib/roles";
+
+/* Generous for a pasted conversation or document; extractMemories reads 6,000 of it. */
+const MAX_TEXT = 12_000;
 import { creditDenial } from "@/lib/api-guard";
 import { chargeForMode, refundIfCharged } from "@/lib/credits";
 
@@ -32,10 +36,16 @@ export async function POST(req: Request) {
   // Read the body and validate BEFORE charging. extractMemories() returns
   // { count: 0 } for empty text without calling a model, so charging first
   // billed the customer for submitting an empty box.
+  if (!(await hasRole("analyst"))) return NextResponse.json({ ok: false, count: 0, items: [], error: "Saving to Cortex Memory needs the analyst role or higher." }, { status: 403 });
   const b = await req.json().catch(() => ({} as any));
-  const text = String((b as any).text || "");
+  const text = String((b as any).text || "").slice(0, MAX_TEXT);
   if (!text.trim()) {
     return NextResponse.json({ ok: false, count: 0, items: [], error: "Paste some text first — nothing was analysed, so you have not been charged." });
+  }
+
+  /* The plan gate BEFORE the charge and the model call — not discovered after both. */
+  if (!(await canWriteMemory(orgId))) {
+    return NextResponse.json({ ok: false, upgrade: true, count: 0, items: [], error: await memoryUpgradeMessage() });
   }
 
   const gate = await chargeForMode("document");
@@ -45,7 +55,10 @@ export async function POST(req: Request) {
     const res = await extractMemories(orgId, text, user?.id ?? null);
     if (!res || !res.count) {
       await refundIfCharged(gate, "document");
-      return NextResponse.json({ ok: false, count: 0, items: [], error: "Nothing worth remembering was found in that text. Your credits have not been used." });
+      const why = (res as any)?.engineFailed
+        ? "The AI engine could not be reached, so nothing was analysed — try again in a moment."
+        : "Nothing worth remembering was found in that text.";
+      return NextResponse.json({ ok: false, count: 0, items: [], error: `${why} Your credits have not been used.` });
     }
     return NextResponse.json({ ok: true, ...res });
   } catch (e: any) {
