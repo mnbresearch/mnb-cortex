@@ -29,10 +29,10 @@ export const ARTICLES: Article[] = [
     readTime: "6 min read",
     tag: "Cash flow",
     sections: [
-      { h: "Measuring DSO", p: "DSO = (accounts receivable ÷ total credit sales) × number of days in the period. If you have ₹30 lakh outstanding on ₹1.8 crore of quarterly credit sales, your DSO is about 45 days. Track it monthly — the trend matters more than the absolute number." },
+      { h: "Measuring DSO", p: "DSO = (accounts receivable ÷ total credit sales) × number of days in the period. If you have ₹30 lakh outstanding on ₹1.8 crore of credit sales in a 90-day quarter, your DSO is 30 ÷ 180 × 90 = 15 days; ₹90 lakh outstanding on the same sales would be 45 days. Track it monthly — the trend matters more than the absolute number." },
       { h: "The 80/20 of collections", p: "Most overdue cash sits with a handful of accounts. Sort receivables by age and size, and work the oldest, largest balances first. A weekly 30-minute 'chase-first' routine on the top ten overdue invoices usually recovers more than a blanket reminder to everyone." },
       { h: "Make paying you easy", p: "Send invoices the day work is done, not month-end. Put clear due dates and payment links on every invoice. Offer a small early-payment discount where your margin allows. Set polite, automatic reminders at day 3, day 15 and day 30 so chasing isn't personal — it's just the system." },
-      { h: "How Cortex helps", p: "Cortex builds your receivables aging automatically, ranks who to chase first by impact, and drafts the reminder messages for you to approve. It also tracks your DSO over time so you can see the needle move." },
+      { h: "How Cortex helps", p: "Cortex builds your receivables aging automatically, ranks who to chase first by impact, and drafts the reminder messages for you to approve. It also works out your current DSO from your receivables and recent sales, so you can check it each month and see the needle move." },
     ],
   },
   {

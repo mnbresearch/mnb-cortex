@@ -63,9 +63,9 @@ export const CALCULATOR_SEO: Record<string, CalcSeo> = {
     keywords: ["gst late fee calculator", "gstr 3b late fee", "gst interest 18 percent", "nil return late fee"],
   },
   "/itc": {
-    title: "GST Input Tax Credit Set-off Calculator — the order ITC must be used",
+    title: "GST Input Tax Credit Set-off Calculator — IGST, CGST and SGST utilisation",
     description:
-      "Apply your IGST, CGST and SGST credit in the order the law requires and see what cash you still have to pay. Free, no signup.",
+      "Apply your IGST, CGST and SGST credit within the set-off rules (Rule 88A), splitting IGST credit to leave the least cash to pay, and see what you still owe. Free, no signup.",
     keywords: ["itc set off calculator", "gst input tax credit order", "igst cgst sgst utilisation"],
   },
   "/tds": {
@@ -75,9 +75,9 @@ export const CALCULATOR_SEO: Record<string, CalcSeo> = {
     keywords: ["tds calculator", "194c tds rate", "194j tds", "tds threshold limit", "tds without pan"],
   },
   "/advance-tax": {
-    title: "Advance Tax Calculator — the four instalments and 234B/234C interest",
+    title: "Advance Tax Calculator — the four instalments and 234C interest",
     description:
-      "See what is due on 15 June, 15 September, 15 December and 15 March, and the section 234B and 234C interest if you have already missed one. Free, no signup.",
+      "See what is due on 15 June, 15 September, 15 December and 15 March, the section 234C interest on any you have missed, and the monthly rate 234B would run at. Free, no signup.",
     keywords: ["advance tax calculator", "advance tax instalment dates", "234c interest calculator", "234b interest"],
   },
   "/tax": {
@@ -87,9 +87,9 @@ export const CALCULATOR_SEO: Record<string, CalcSeo> = {
     keywords: ["income tax calculator india", "old vs new regime", "income tax slabs", "surcharge cess calculator"],
   },
   "/depreciation": {
-    title: "Depreciation Calculator — WDV and straight line, Companies Act and Income Tax",
+    title: "Depreciation Calculator — written-down value and straight line",
     description:
-      "Written-down value or straight line, with the block rates the Income Tax Act uses and the useful lives the Companies Act sets, plus a year-by-year schedule. Free, no signup.",
+      "Written-down value or straight line: enter the cost, salvage value, useful life and rate (your Income Tax block rate or Companies Act useful life) and get a year-by-year schedule. Free, no signup.",
     keywords: ["depreciation calculator", "wdv depreciation", "companies act depreciation rates", "income tax block rates"],
   },
 
@@ -97,7 +97,7 @@ export const CALCULATOR_SEO: Record<string, CalcSeo> = {
   "/gratuity": {
     title: "Gratuity Calculator — the 15/26 formula and the ₹20 lakh cap",
     description:
-      "Enter last drawn salary and years of service and see the gratuity payable under the Payment of Gratuity Act, with the five-year rule and the statutory ceiling applied. Free, no signup.",
+      "Enter last drawn wages and years of service and see the gratuity payable under the Code on Social Security, 2020 — the five-year rule, one year for fixed-term employees, and the ₹20 lakh ceiling. Free, no signup.",
     keywords: ["gratuity calculator", "gratuity formula 15 26", "gratuity 5 years rule", "gratuity exemption limit"],
   },
   "/epf": {
@@ -185,9 +185,9 @@ export const CALCULATOR_SEO: Record<string, CalcSeo> = {
     keywords: ["dscr calculator", "debt service coverage ratio", "business loan eligibility india", "dscr for bank loan"],
   },
   "/buyvslease": {
-    title: "Buy vs Lease Calculator — equipment and vehicles, after tax",
+    title: "Buy vs Lease Calculator — equipment and vehicles, cost of capital",
     description:
-      "Compare buying outright against leasing over the same period, including depreciation, interest and the tax treatment of each. Free, no signup.",
+      "Compare the cost of buying against leasing over the same period on a cost-of-capital basis. Tax effects such as the depreciation shield are not modelled — the page says so. Free, no signup.",
     keywords: ["buy vs lease calculator", "equipment lease vs buy india", "vehicle lease or purchase business"],
   },
   "/rentvsbuy": {

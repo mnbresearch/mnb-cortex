@@ -3,17 +3,35 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
 
-// India GST input-tax-credit set-off order (post-2019 Rule 88A):
-//  IGST credit → IGST, then CGST, then SGST liability
-//  CGST credit → CGST, then IGST (never SGST)
-//  SGST credit → SGST, then IGST (never CGST)
-function setOff(liab: { igst: number; cgst: number; sgst: number }, cr: { igst: number; cgst: number; sgst: number }) {
+/*
+  India GST input-tax-credit set-off (s.49, s.49A, Rule 88A):
+    IGST credit -> IGST liability first; the balance against CGST and SGST
+                   IN ANY ORDER AND PROPORTION (Rule 88A), and it must be used
+                   up before any CGST or SGST credit is touched (s.49A)
+    CGST credit -> CGST, then IGST (never SGST)
+    SGST credit -> SGST, then IGST (never CGST)
+
+  This used to push IGST credit into CGST before SGST, always. That is ONE
+  legal order, not THE order — and it can cost cash: with CGST credit already
+  covering CGST, IGST spent there leaves SGST to be paid in cash while CGST
+  credit sits idle. The balance is now allocated to the head whose own credit
+  falls short first, which is what minimises cash and is what the rule allows.
+*/
+type Heads = { igst: number; cgst: number; sgst: number };
+function setOff(liab: Heads, cr: Heads) {
   const l = { ...liab }, c = { ...cr };
-  const apply = (head: "igst" | "cgst" | "sgst", from: "igst" | "cgst" | "sgst") => {
-    const used = Math.min(l[head], c[from]);
+  const apply = (head: keyof Heads, from: keyof Heads, cap = Infinity) => {
+    const used = Math.max(0, Math.min(l[head], c[from], cap));
     l[head] -= used; c[from] -= used;
   };
-  apply("igst", "igst"); apply("cgst", "igst"); apply("sgst", "igst");
+  apply("igst", "igst");
+  /* The shortfall each head would have after its own credit — fill those first. */
+  const gapC = Math.max(0, l.cgst - c.cgst);
+  const gapS = Math.max(0, l.sgst - c.sgst);
+  apply("cgst", "igst", gapC);
+  apply("sgst", "igst", gapS);
+  /* s.49A: any IGST credit left must still be used before CGST/SGST credit. */
+  apply("cgst", "igst"); apply("sgst", "igst");
   apply("cgst", "cgst"); apply("igst", "cgst");
   apply("sgst", "sgst"); apply("igst", "sgst");
   return { cash: l, carry: c };
@@ -70,7 +88,7 @@ export function ItcSetoff() {
             ))}
           </tbody>
         </table>
-        <p className="text-xs text-muted-foreground mt-3">Follows the standard set-off order (IGST credit first, then CGST/SGST against their own heads). CGST and SGST credit can never offset each other. Confirm final figures on the GST portal before filing GSTR-3B.</p>
+        <p className="text-xs text-muted-foreground mt-3">IGST credit goes against IGST first; the balance is split between CGST and SGST in whichever proportion leaves the least cash to pay, which Rule 88A permits, and is used up before CGST/SGST credit. CGST and SGST credit can never offset each other. Confirm final figures on the GST portal before filing GSTR-3B.</p>
       </Card>
     </div>
   );

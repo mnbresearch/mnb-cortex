@@ -36,7 +36,13 @@
  * Verified against cleartax.in/s/income-tax-slabs on 6 September 2026.
  */
 
-export const RATES_AS_OF = "FY 2026-27 (AY 2027-28)";
+/*
+  "Tax year", not "AY". From 1 April 2026 the Income-tax Act, 2025 replaces the
+  1961 Act and drops the previous-year / assessment-year pair for a single
+  "tax year". The slabs above are unchanged by the switch; the stamp said
+  "AY 2027-28", a term the governing Act no longer uses.
+*/
+export const RATES_AS_OF = "tax year 2026-27 (FY 2026-27, Income-tax Act, 2025)";
 
 /** [upper bound of the band, rate]. The last band is unbounded. */
 export type Slab = [number, number];
@@ -193,8 +199,15 @@ export function computeTax(
     them ₹61,500 — which is not true, and is exactly the sort of thing a person
     makes a decision on.
   */
+  /*
+    NEW REGIME ONLY. The 87A marginal relief is in the proviso added for the
+    new regime (s.115BAC); the old regime's ₹5 lakh rebate has none — at
+    ₹5,10,000 old-regime taxable income the tax is the full ₹14,500 + cess
+    (₹15,080), not ₹10,000. Applying it to both understated old-regime tax
+    just past ₹5 lakh and could flip the regime comparison.
+  */
   let marginalRelief = false;
-  if (taxable > reb.upTo) {
+  if (regime === "new" && taxable > reb.upTo) {
     const excess = taxable - reb.upTo;
     if (afterRebate > excess) { afterRebate = excess; marginalRelief = true; }
   }
@@ -211,4 +224,45 @@ export function computeTax(
     total: Math.round(afterRebate + sur.surcharge + cess),
     marginalRelief: marginalRelief || sur.relieved,
   };
+}
+
+/* ===========================================================================
+   TDS — the arithmetic behind components/tds-calc.tsx.
+
+   Here rather than in the component so scripts/test-statutory-fixes.mjs can
+   execute it: the 194Q defect (TDS on the whole ₹60L instead of the ₹10L above
+   the threshold) was arithmetic, and only an executed test catches arithmetic.
+   =========================================================================== */
+
+export type TdsSection = {
+  code: string;
+  label: string;
+  rate: number;
+  /** The limit TDS applies ABOVE ("exceeds" in every section here — not "reaches"). */
+  threshold: number;
+  /** Annual aggregate threshold, where the section has one as well (194C). */
+  annual?: number;
+  /**
+   * What `threshold` is measured against, which decides what the amount input means:
+   *   payment — one payment (194C, which also has the annual aggregate)
+   *   year    — everything paid to this payee in the financial year
+   *   month   — rent for a month or part of a month (194I, from FY 2025-26)
+   *   excess  — the year's purchases; TDS only on the part ABOVE the threshold (194Q)
+   */
+  basis: "payment" | "year" | "month" | "excess";
+  /** No-PAN rate where the Act sets one other than "at least 20%" (194Q: 5%). */
+  noPan?: number;
+  note?: string;
+};
+
+export function computeTds(s: TdsSection, amount: number, hasPan: boolean) {
+  const amt = Math.max(0, Number.isFinite(amount) ? amount : 0);
+  /* "Exceeds" in every section: a payment of exactly the threshold attracts nothing. */
+  const applies = amt > s.threshold;
+  /* s.206AA: at least 20% without a PAN — except where the Act sets its own rate (194Q: 5%). */
+  const rate = hasPan ? s.rate : s.noPan ?? Math.max(s.rate, 20);
+  /* 194Q taxes only the part above ₹50 lakh; every other section taxes the whole amount. */
+  const base = s.basis === "excess" ? Math.max(0, amt - s.threshold) : amt;
+  const tds = applies ? Math.round(base * rate / 100) : 0;
+  return { applies, rate, base, tds, net: amt - tds };
 }

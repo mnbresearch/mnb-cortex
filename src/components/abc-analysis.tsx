@@ -25,13 +25,21 @@ export function AbcAnalysis({ seed }: { seed?: Item[] } = {}) {
 
   const calc = useMemo(() => {
     const sorted = [...items].sort((a, b) => b.value - a.value);
-    const total = sorted.reduce((s, i) => s + i.value, 0) || 1;
+    const total = sorted.reduce((s, i) => s + Math.max(0, i.value || 0), 0) || 1;
     let cum = 0;
     const rows = sorted.map((it) => {
-      cum += it.value;
+      /*
+        Classed by where the item STARTS on the cumulative curve, not where it
+        ends. Using the end put a single SKU worth 90% of stock value in class
+        B — the most valuable item in the business, filed as mid-tier — because
+        it alone carries the running total past 80%. The item that crosses a
+        boundary belongs to the class it crosses from.
+      */
+      const before = (cum / total) * 100;
+      cum += Math.max(0, it.value || 0);
       const cumPct = (cum / total) * 100;
-      const cls = cumPct <= 80 ? "A" : cumPct <= 95 ? "B" : "C";
-      return { ...it, pct: (it.value / total) * 100, cumPct, cls };
+      const cls = before < 80 ? "A" : before < 95 ? "B" : "C";
+      return { ...it, pct: (Math.max(0, it.value || 0) / total) * 100, cumPct, cls };
     });
     const counts = { A: rows.filter((r) => r.cls === "A").length, B: rows.filter((r) => r.cls === "B").length, C: rows.filter((r) => r.cls === "C").length };
     return { rows, total, counts };

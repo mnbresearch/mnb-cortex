@@ -97,8 +97,12 @@ console.log(`\nTDS — rates and thresholds, FY ${FY}`);
 
   // The two that were wrong, and cost real money.
   expect("194H", 2, 20000, "was 5% / ₹15,000, superseded Oct 2024");
-  expect("194I-land", 10, 600000, "was ₹2,40,000");
-  expect("194I-plant", 2, 600000, "was ₹2,40,000");
+  /* ₹50,000 for a month or part of a month since FY 2025-26 — compared with the
+     MONTHLY rent. It was ₹6,00,000 compared with one payment, which let a
+     ₹2,00,000 quarterly rent cheque through untaxed. */
+  expect("194I-land", 10, 50000, "a month — was ₹6,00,000 against a single payment");
+  expect("194I-plant", 2, 50000, "a month — was ₹6,00,000 against a single payment");
+  check("194I is measured per month", /code:\s*"194I-land"[^}]*basis:\s*"month"/.test(src));
   expect("194J", 10, 50000, "was ₹30,000");
   expect("194J-tech", 2, 50000, "was ₹30,000");
   expect("194A", 10, 50000, "was ₹40,000");
@@ -106,7 +110,7 @@ console.log(`\nTDS — rates and thresholds, FY ${FY}`);
   expect("194C", 2, 30000);
   expect("194C-ind", 1, 30000);
   expect("194Q", 0.1, 5000000);
-  expect("194", 10, 5000);
+  expect("194", 10, 10000, "Finance Act 2025, from 1 April 2025 — was ₹5,000");
 
   console.log("\n  194C aggregate limit — the one that catches people out");
   check("194C carries the ₹1,00,000 annual aggregate", sections["194C"]?.annual === 100000);
@@ -141,7 +145,12 @@ console.log(`\nTDS — rates and thresholds, FY ${FY}`);
     /payment\s*\n?\s*code|payment code/.test(src) && /unchanged/.test(src));
 
   console.log("\n  No-PAN handling");
-  check("section 206AA floors the rate at 20%", /Math\.max\(s\.rate,\s*20\)/.test(src));
+  /* The arithmetic moved to lib/tax-slabs.ts (computeTds) so it can be executed;
+     the executed checks are in scripts/test-statutory-fixes.mjs. */
+  const slabsSrc = readFileSync(join(ROOT, "src", "lib", "tax-slabs.ts"), "utf8");
+  check("section 206AA floors the rate at 20%", /Math\.max\(s\.rate,\s*20\)/.test(slabsSrc));
+  check("...except 194Q, where the no-PAN rate is 5%", /code:\s*"194Q"[^}]*noPan:\s*5\b/.test(src));
+  check("the calculator computes through lib/tax-slabs", /computeTds\(/.test(src));
 }
 
 /* ========================================================================= */
@@ -204,13 +213,16 @@ console.log("\nEPF / EPS / ESI — one ladder, two pages");
 }
 
 /* ========================================================================= */
-console.log("\nGRATUITY — Payment of Gratuity Act");
+console.log("\nGRATUITY — Code on Social Security, 2020 (in force 21 Nov 2025)");
 /* ========================================================================= */
 {
   const src = read("gratuity-calc.tsx");
-  check("uses (salary x 15 x years) / 26", /salary \* 15 \* totalYears\) \/ 26/.test(src));
+  check("uses (wages x 15 x years) / 26", /wages \* 15 \* totalYears\) \/ 26/.test(src));
   check("caps at the ₹20,00,000 statutory ceiling", /2_000_000|20000000/.test(src));
-  check("requires 5 continuous years", /years >= 5/.test(src));
+  check("requires 5 continuous years for a regular employee", /fixedTerm \? 1 : 5/.test(src) && /years >= minYears/.test(src));
+  check("...and 1 year for a fixed-term employee", /fixedTerm \? 1 : 5/.test(src));
+  check("wages are at least 50% of total remuneration", /total \* 0\.5/.test(src));
+  check("cites the Code, not the repealed 1972 Act as current", /Code on Social Security/.test(src));
   check("rounds up a final year of 6 months or more", /months >= 6/.test(src));
   check("tells the user when the cap bit", /capped/.test(src));
   check("mentions the death/disability exception", /death.?\/?.?disability|death or disability/i.test(src));

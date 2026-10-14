@@ -16,8 +16,9 @@
   that most lines on the compliance page are not theirs has learned to skim it,
   which is exactly when the one that IS theirs goes past.
 
-  Six questions, asked once, turn nineteen rules into the three or four that
-  are actually theirs.
+  Seven questions, asked once, turn the national calendar into the handful of
+  rules that are actually theirs. (The seventh, composition, is the only way
+  CMP-08 and GSTR-4 can ever read as "applies" rather than "check".)
 
   ============================================================================
   THE SAFETY RULES. THIS IS TAX COMPLIANCE, SO HIDING IS DANGEROUS.
@@ -66,6 +67,8 @@ export type StatutoryProfile = {
   audit: YesNoUnknown;
   /** Required to deduct or collect tax UNDER GST — GSTR-7 / GSTR-8. */
   gstTds: YesNoUnknown;
+  /** Registered under the GST composition scheme (CMP-08 quarterly, GSTR-4 annual). */
+  composition: YesNoUnknown;
 };
 
 /**
@@ -82,6 +85,7 @@ export const UNKNOWN_PROFILE: StatutoryProfile = {
   company: "unknown",
   audit: "unknown",
   gstTds: "unknown",
+  composition: "unknown",
 };
 
 /** Has the owner actually answered anything? */
@@ -102,15 +106,47 @@ export type Applicability = "applies" | "excluded" | "unknown";
 */
 type Gate = (p: StatutoryProfile) => Applicability;
 
+/*
+  The monthly GSTR-1 / GSTR-3B. A composition taxpayer files neither (CMP-08
+  and GSTR-4 instead), so an explicit composition "yes" hides them — but only
+  that: "unknown" or "no" hides nothing. And if the owner ALSO said they file
+  monthly, the two answers contradict each other, so neither wins and the
+  rule stays shown ("unknown") with its condition.
+*/
 const gstMonthlyOnly: Gate = (p) =>
-  p.gst === "monthly" ? "applies"
+  p.gst === "monthly" ? (p.composition === "yes" ? "unknown" : "applies")
     : p.gst === "none" || p.gst === "qrmp" ? "excluded"
-      : "unknown";
+      : p.composition === "yes" ? "excluded"
+        : "unknown";
 
 const gstQrmpOnly: Gate = (p) =>
   p.gst === "qrmp" ? "applies"
     : p.gst === "none" || p.gst === "monthly" ? "excluded"
       : "unknown";
+
+/*
+  Registered at all. Used where being GST-registered is necessary but not
+  sufficient (GSTR-6 needs an ISD registration; GSTR-9 has a turnover
+  exemption that moves year to year) — so "none" hides it and everything else
+  leaves it at "unknown", shown with its condition.
+*/
+const gstRegistered: Gate = (p) => (p.gst === "none" ? "excluded" : "unknown");
+
+/*
+  Composition scheme (CMP-08, GSTR-4). An explicit composition "yes" makes
+  them "applies" — and wins over any GST-cadence answer, because showing a
+  filing on contradictory answers is the safe side. Otherwise they hide on an
+  answer that rules composition out: composition "no", not registered, a
+  monthly filer, or QRMP (a composition dealer neither files monthly returns
+  nor uses QRMP). "unknown" stays shown.
+*/
+const gstComposition: Gate = (p) =>
+  p.composition === "yes" ? "applies"
+    : p.composition === "no" || p.gst === "none" || p.gst === "monthly" || p.gst === "qrmp" ? "excluded"
+      : "unknown";
+
+/* MSME-1 is a company filing, and not every company has one — so "yes" stays "unknown". */
+const companyOnly: Gate = (p) => (p.company === "no" ? "excluded" : "unknown");
 
 const yesNo = (key: keyof StatutoryProfile): Gate => (p) => {
   const v = p[key];
@@ -131,6 +167,17 @@ const GATES: Record<string, Gate> = {
     condition for anyone who is one.
   */
   iff: gstQrmpOnly,
+  /* The QRMP quarterly returns — what a QRMP filer has INSTEAD of the monthly pair. */
+  "gstr1-qrmp": gstQrmpOnly,
+  "gstr3b-qrmp": gstQrmpOnly,
+  /* GSTR-6 used to share a rule with IFF and so was hidden from every monthly
+     filer, ISD or not. It is its own rule now, hidden only if not registered. */
+  gstr6: gstRegistered,
+  gstr9: gstRegistered,
+  cmp08: gstComposition,
+  gstr4: gstComposition,
+  "msme1-h1": companyOnly,
+  "msme1-h2": companyOnly,
   /* Deducting tax UNDER GST is its own registration, not implied by filing. */
   gstr7: yesNo("gstTds"),
 
@@ -143,6 +190,7 @@ const GATES: Record<string, Gate> = {
   "tds-q2": yesNo("tds"),
   "tds-q3": yesNo("tds"),
   "tds-q4": yesNo("tds"),
+  "tds-march": yesNo("tds"),
 
   /* ---- ROC ------------------------------------------------------------- */
   roc: yesNo("company"),
@@ -156,7 +204,7 @@ const GATES: Record<string, Gate> = {
     page. `audit === "yes"` excludes the non-audit date and vice versa.
 
     Both stay visible at "unknown", because guessing this one wrong is the
-    worst outcome in the file: the two dates are three months apart, so hiding
+    worst outcome in the file: the two dates are two months apart, so hiding
     the right one means missing the return by a quarter.
   */
   itr: (p) => (p.audit === "no" ? "applies" : p.audit === "yes" ? "excluded" : "unknown"),
@@ -191,12 +239,30 @@ export function excludedBecause(ruleId: string, p: StatutoryProfile): string | n
     case "gstr3b":
       return p.gst === "none"
         ? "you told us this business is not GST-registered"
-        : "you told us you file GST under QRMP, so the monthly returns are not yours";
+        : p.gst === "qrmp"
+          ? "you told us you file GST under QRMP, so the monthly returns are not yours"
+          : "you told us you are under the GST composition scheme, which files CMP-08 and GSTR-4 instead of the monthly returns";
     case "pmt06":
     case "iff":
+    case "gstr1-qrmp":
+    case "gstr3b-qrmp":
       return p.gst === "none"
         ? "you told us this business is not GST-registered"
         : "you told us you file GST monthly, not under QRMP";
+    case "gstr6":
+    case "gstr9":
+      return "you told us this business is not GST-registered";
+    case "cmp08":
+    case "gstr4":
+      if (p.composition === "no") return "you told us you are not under the GST composition scheme";
+      return p.gst === "none"
+        ? "you told us this business is not GST-registered"
+        : p.gst === "monthly"
+          ? "you told us you file GST monthly, which composition taxpayers do not"
+          : "you told us you file under QRMP (monthly payment), which composition taxpayers do not";
+    case "msme1-h1":
+    case "msme1-h2":
+      return "you told us this is not a company registered with the MCA";
     case "gstr7":
       return "you told us you do not deduct or collect tax under GST";
     case "pf":
@@ -206,6 +272,7 @@ export function excludedBecause(ruleId: string, p: StatutoryProfile): string | n
     case "tds-q2":
     case "tds-q3":
     case "tds-q4":
+    case "tds-march":
       return "you told us you do not deduct TDS";
     case "roc":
     case "mgt7":
@@ -248,10 +315,11 @@ export function parseProfile(raw: unknown): StatutoryProfile {
   out.company = yn(o.company);
   out.audit = yn(o.audit);
   out.gstTds = yn(o.gstTds);
+  out.composition = yn(o.composition);
   return out;
 }
 
-/** The questions, in the order they should be asked. One screen, six answers. */
+/** The questions, in the order they should be asked. One screen, seven answers. */
 export const PROFILE_QUESTIONS: Array<{
   key: keyof StatutoryProfile;
   question: string;
@@ -261,11 +329,21 @@ export const PROFILE_QUESTIONS: Array<{
   {
     key: "gst",
     question: "How do you file GST?",
-    help: "QRMP means you file returns quarterly but pay tax monthly. If you are not sure which you are on, leave it — nothing will be hidden.",
+    help: "QRMP means you file returns quarterly but pay tax monthly. On the composition scheme? Leave this as \"I'm not sure\" and answer the composition question instead. If you are not sure which you are on, leave it — nothing will be hidden.",
     options: [
       { value: "monthly", label: "Monthly (GSTR-1 and GSTR-3B every month)" },
       { value: "qrmp", label: "QRMP (quarterly returns, monthly payment)" },
       { value: "none", label: "Not GST-registered" },
+      { value: "unknown", label: "I'm not sure" },
+    ],
+  },
+  {
+    key: "composition",
+    question: "Are you registered under the GST composition scheme?",
+    help: "Composition taxpayers file CMP-08 every quarter and GSTR-4 once a year, instead of the monthly GSTR-1 and GSTR-3B. Answering yes shows those two and hides the monthly pair; if you are not sure, leave it — nothing will be hidden.",
+    options: [
+      { value: "yes", label: "Yes — composition scheme" },
+      { value: "no", label: "No" },
       { value: "unknown", label: "I'm not sure" },
     ],
   },
@@ -302,7 +380,7 @@ export const PROFILE_QUESTIONS: Array<{
   {
     key: "audit",
     question: "Are your accounts subject to a tax audit under section 44AB?",
-    help: "Your CA will know. It decides whether your income tax return is due on 31 July or 31 October — three months apart, so both dates stay visible until you tell us.",
+    help: "Your CA will know (44AB is the 1961-Act number; the Income-tax Act, 2025 renumbers it, the audit is the same). It decides whether your income tax return is due on 31 August (31 July if you have no business income) or 31 October — two months apart, so both dates stay visible until you tell us.",
     options: [
       { value: "yes", label: "Yes — audited" },
       { value: "no", label: "No — not audited" },

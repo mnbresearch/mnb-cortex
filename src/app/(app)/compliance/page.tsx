@@ -165,7 +165,7 @@ export default async function Compliance() {
           <StatutoryProfileForm profile={profile} />
         </Section>
 
-        <Section title="Every month" desc="Recurring monthly obligations (dates are typical; verify for your category)">
+        <Section title="Monthly and quarter-linked" desc="Recurring monthly obligations, and the QRMP and composition dates that fall only in certain months (verify for your category)">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {monthlyRules.map((r) => (
               <Card key={r.id} className="p-4 flex items-start gap-3">

@@ -62,10 +62,17 @@ export function AdvanceTax({ seed }: { seed?: WorkspaceSeed } = {}) {
 
   const schedule = presumptive ? PRESUMPTIVE_SCHEDULE : SCHEDULE;
 
+  /*
+    Measured from today. Interest on a date that has not passed yet is a
+    projection — "if nothing more is paid by then" — not a charge. On 14
+    October this page used to show ₹12,120 of 234C in red when only ₹4,320
+    related to dates already behind the owner.
+  */
   const m = useMemo(() => computeAdvanceTax({
     tax,
     presumptive,
     payments: schedule.map((s) => ({ by: s.by, paidCumulative: paid[s.by] ?? 0 })),
+    today: new Date(),
   }), [tax, presumptive, paid, schedule]);
 
   /* Recomputed on every render rather than memoised on a date: the component
@@ -152,8 +159,8 @@ export function AdvanceTax({ seed }: { seed?: WorkspaceSeed } = {}) {
                       className="w-28 rounded-md border bg-background px-2 h-8 text-sm text-right outline-none focus:ring-2 focus:ring-ring"
                     />
                   </td>
-                  <td className={`py-2 text-right tabular-nums ${r.interest > 0 ? "text-danger font-medium" : "text-muted-foreground"}`}>
-                    {r.interest > 0 ? inr(r.interest) : "—"}
+                  <td className={`py-2 text-right tabular-nums ${r.interest > 0 && r.passed ? "text-danger font-medium" : "text-muted-foreground"}`}>
+                    {r.interest > 0 ? (r.passed ? inr(r.interest) : <span title="Projected — this date has not passed">{inr(r.interest)} if unpaid</span>) : "—"}
                   </td>
                 </tr>
               ))}
@@ -177,10 +184,12 @@ export function AdvanceTax({ seed }: { seed?: WorkspaceSeed } = {}) {
           <div className="font-semibold">What a shortfall costs</div>
           <div className="grid sm:grid-cols-3 gap-3">
             <Stat
-              label="Interest under 234C"
+              label="234C so far"
               value={inr(m.interest234C)}
               tone={m.interest234C > 0 ? "bad" : "good"}
-              sub="Deferment within the year"
+              sub={m.projected234C > 0
+                ? `On dates already passed. Another ${inr(m.projected234C)} if the remaining instalments go unpaid (projected)`
+                : "On dates already passed"}
             />
             <Stat
               label="Still unpaid"
@@ -189,21 +198,24 @@ export function AdvanceTax({ seed }: { seed?: WorkspaceSeed } = {}) {
               sub={anyPaid ? "After what you entered above" : "Nothing entered as paid yet"}
             />
             <Stat
-              label="234B accrues at"
+              label={m.interest234B.projected ? "234B would accrue at" : "234B accrues at"}
               value={m.interest234B.applies ? `${inr(m.interest234B.perMonth)}/mo` : "—"}
-              tone={m.interest234B.applies ? "bad" : "good"}
+              tone={m.interest234B.applies ? (m.interest234B.projected ? "warn" : "bad") : "good"}
               sub={m.interest234B.applies
-                ? `On ${inr(m.interest234B.principal)}, from 1 April`
-                : "You are at or above 90% — 234B does not apply"}
+                ? m.interest234B.projected
+                  ? `Projection: on ${inr(m.interest234B.principal)} from 1 April after the year ends, if it ends with these payments`
+                  : `On ${inr(m.interest234B.principal)}, from 1 April`
+                : "Payments entered reach 90% — 234B would not apply"}
             />
           </div>
           <p className="text-xs text-muted-foreground">
             <b>234C</b> is a fixed charge for paying an instalment late: 1% a month for three months on each of the
-            first three shortfalls, one month on the last. It is final once the date passes.
+            first three shortfalls, one month on the last. It is final once the date passes; for dates still ahead the
+            figure is a projection of what it will cost if nothing more is paid by then.
             {" "}
             <b>234B</b> is different — it applies only if your advance tax came to less than 90% of the year&apos;s
-            liability, and it runs at 1% a month from 1 April until you actually pay. We show the monthly rate rather
-            than a total, because the total depends on a date only you know.
+            liability, and it runs at 1% a month from 1 April after the year ends until you actually pay. Mid-year it is a
+            projection. We show the monthly rate rather than a total, because the total depends on a date only you know.
           </p>
         </Card>
       )}

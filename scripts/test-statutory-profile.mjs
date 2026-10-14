@@ -89,15 +89,17 @@ t("R1.6 answering ONE question hides only that question's rules", () => {
     the ids that answer is allowed to touch.
   */
   const allowed = {
-    gst: ["gstr1", "gstr3b", "pmt06", "iff"],
+    gst: ["gstr1", "gstr3b", "pmt06", "iff", "gstr1-qrmp", "gstr3b-qrmp", "gstr6", "gstr9", "cmp08", "gstr4"],
     employees: ["pf"],
-    tds: ["tds", "tds-q1", "tds-q2", "tds-q3", "tds-q4"],
-    company: ["roc", "mgt7"],
+    tds: ["tds", "tds-q1", "tds-q2", "tds-q3", "tds-q4", "tds-march"],
+    company: ["roc", "mgt7", "msme1-h1", "msme1-h2"],
     /* The audit answer governs three rules, not two: the audit report itself
        (30 Sep), the return that follows it (31 Oct), and the non-audit return
        it displaces (31 Jul). */
     audit: ["itr", "itr-audit", "tax-audit-report"],
     gstTds: ["gstr7"],
+    /* Composition "yes" hides only the monthly pair; "no" hides only CMP-08 / GSTR-4. */
+    composition: ["gstr1", "gstr3b", "cmp08", "gstr4"],
   };
   for (const q of PROFILE_QUESTIONS) {
     for (const o of q.options) {
@@ -290,9 +292,11 @@ t("R3.5 a quarterly TDS return's -next form is also gated", () => {
    ======================================================================== */
 
 const CADENCE = {
-  monthly: { applies: ["gstr1", "gstr3b"], excluded: ["pmt06", "iff"] },
-  qrmp: { applies: ["pmt06", "iff"], excluded: ["gstr1", "gstr3b"] },
-  none: { applies: [], excluded: ["gstr1", "gstr3b", "pmt06", "iff"] },
+  monthly: { applies: ["gstr1", "gstr3b"], excluded: ["pmt06", "iff", "gstr1-qrmp", "gstr3b-qrmp", "cmp08", "gstr4"] },
+  /* A QRMP filer has quarterly returns INSTEAD of the monthly pair — hiding the
+     monthly ones without showing these left them with no GSTR-3B at all. */
+  qrmp: { applies: ["pmt06", "iff", "gstr1-qrmp", "gstr3b-qrmp"], excluded: ["gstr1", "gstr3b", "cmp08", "gstr4"] },
+  none: { applies: [], excluded: ["gstr1", "gstr3b", "pmt06", "iff", "gstr1-qrmp", "gstr3b-qrmp", "gstr6", "gstr9", "cmp08", "gstr4"] },
 };
 
 t("G1 each GST cadence shows its own returns and hides the others", () => {
@@ -309,7 +313,8 @@ t("G1 each GST cadence shows its own returns and hides the others", () => {
 
 t("G2 'not registered' hides all four GST returns and nothing else GST-ish", () => {
   const { hidden } = splitByProfile(everyDeadline, P({ gst: "none" }));
-  assert.deepEqual(hidden.map((h) => h.id).sort(), ["gstr1", "gstr3b", "iff", "pmt06"]);
+  assert.deepEqual(hidden.map((h) => h.id).sort(),
+    ["cmp08", "gstr1", "gstr1-qrmp", "gstr3b", "gstr3b-qrmp", "gstr4", "gstr6", "gstr9", "iff", "pmt06"]);
   /* GSTR-7/8 is a SEPARATE registration. Not being a normal GST filer does
      not settle it, and asserting otherwise could hide a real filing. */
   assert.equal(applicability("gstr7", P({ gst: "none" })), "unknown");
@@ -529,9 +534,10 @@ t("W1 a QRMP proprietorship with two staff sees a short, correct list", () => {
   const h = hidden.map((d) => d.id).sort();
   /* Hidden: monthly GST returns, GST TDS, both ROC filings, and — because they
      told us they are not under audit — both the audit report and the audit ITR. */
-  assert.deepEqual(h, ["gstr1", "gstr3b", "gstr7", "itr-audit", "mgt7", "roc", "tax-audit-report"]);
-  /* Shown: their quarterly GST, PF, all five TDS obligations, advance tax, ITR. */
-  for (const id of ["pmt06", "iff", "pf", "tds", "tds-q1", "tds-q4", "itr", "adv-q1"]) {
+  assert.deepEqual(h, ["cmp08", "gstr1", "gstr3b", "gstr4", "gstr7", "itr-audit", "mgt7",
+    "msme1-h1", "msme1-h2", "roc", "tax-audit-report"]);
+  /* Shown: their quarterly GST (returns AND payments), PF, TDS, advance tax, ITR. */
+  for (const id of ["pmt06", "iff", "gstr1-qrmp", "gstr3b-qrmp", "pf", "tds", "tds-q1", "tds-q4", "tds-march", "itr", "adv-q1"]) {
     assert.ok(s.includes(id), `${id} should be shown`);
   }
   assert.equal(s.length + h.length, ALL_IDS.length);
@@ -542,7 +548,7 @@ t("W2 a monthly Pvt Ltd under audit sees the other half", () => {
   const p = { gst: "monthly", employees: "yes", tds: "yes", company: "yes", audit: "yes", gstTds: "no" };
   const { shown, hidden } = splitByProfile(everyDeadline, p);
   const h = hidden.map((d) => d.id).sort();
-  assert.deepEqual(h, ["gstr7", "iff", "itr", "pmt06"]);
+  assert.deepEqual(h, ["cmp08", "gstr1-qrmp", "gstr3b-qrmp", "gstr4", "gstr7", "iff", "itr", "pmt06"]);
   const s = shown.map((d) => d.id);
   for (const id of ["gstr1", "gstr3b", "roc", "mgt7", "itr-audit", "pf"]) {
     assert.ok(s.includes(id), `${id} should be shown`);
@@ -717,6 +723,21 @@ t("C7 the save action validates against the question options", () => {
    ======================================================================== */
 
 const MIGRATION = "../supabase/migrations/2026_zzzf_statutory_profile.sql";
+/*
+  The seventh key, `composition`, has its own constraint in a later, purely
+  additive migration (nothing in zzzf is dropped or rewritten). Q2/Q3 check the
+  zzzf body against the six keys it was written for; Q4/Q5 read whichever
+  body owns the key; Q6 checks the composition constraint itself.
+*/
+const MIGRATION_COMPOSITION = "../supabase/migrations/2026_zzzz_h_statutory_profile_composition.sql";
+const ZZZF_KEYS = Object.keys(UNKNOWN_PROFILE).filter((k) => k !== "composition");
+const constraintBody = (key) => {
+  const file = key === "composition" ? MIGRATION_COMPOSITION : MIGRATION;
+  const name = key === "composition" ? "organizations_statutory_profile_composition check" : "organizations_statutory_profile_shape check";
+  const sql = readFileSync(new URL(file, import.meta.url), "utf8");
+  const i = sql.indexOf(name);
+  return i < 0 ? "" : sql.slice(i, sql.indexOf("end $$", i));
+};
 
 t("Q1 the migration adds the column idempotently", () => {
   const sql = readFileSync(new URL(MIGRATION, import.meta.url), "utf8");
@@ -731,8 +752,8 @@ t("Q2 every field clause in the CHECK is parenthesised", () => {
   assert.ok(i > 0, "could not find the constraint");
   const body = sql.slice(i, sql.indexOf("end $$", i));
   const pairs = [...body.matchAll(/->>'(\w+)'\)\s+is null or/g)].map((m) => m[1]);
-  assert.equal(pairs.length, Object.keys(UNKNOWN_PROFILE).length,
-    `found ${pairs.length} field clauses for ${Object.keys(UNKNOWN_PROFILE).length} fields`);
+  assert.equal(pairs.length, ZZZF_KEYS.length,
+    `found ${pairs.length} field clauses for ${ZZZF_KEYS.length} fields`);
   for (const f of pairs) {
     /*
       The bracket must open BEFORE the field's own reference, not after the
@@ -754,8 +775,8 @@ t("Q3 the CHECK joins its clauses with AND, never OR", () => {
   const joins = body.replace(/is null or/g, "").match(/\bor\b/g) || [];
   assert.equal(joins.length, 0, `${joins.length} stray OR(s) between field clauses`);
   const ands = body.match(/^\s+and \(\(/gm) || [];
-  assert.equal(ands.length, Object.keys(UNKNOWN_PROFILE).length - 1,
-    `${ands.length} AND joins for ${Object.keys(UNKNOWN_PROFILE).length} fields`);
+  assert.equal(ands.length, ZZZF_KEYS.length - 1,
+    `${ands.length} AND joins for ${ZZZF_KEYS.length} fields`);
 });
 
 t("Q4 the CHECK accepts exactly the values the parser accepts", () => {
@@ -765,10 +786,8 @@ t("Q4 the CHECK accepts exactly the values the parser accepts", () => {
     throws at the database; if looser, the column holds values the app treats
     as unknown, which shows every deadline and is baffling to debug.
   */
-  const sql = readFileSync(new URL(MIGRATION, import.meta.url), "utf8");
-  const i = sql.indexOf("organizations_statutory_profile_shape check");
-  const body = sql.slice(i, sql.indexOf("end $$", i));
   for (const f of Object.keys(UNKNOWN_PROFILE)) {
+    const body = constraintBody(f);
     const m = body.match(new RegExp(`->>'${f}'\\)\\s+in \\(([^)]*)\\)`));
     assert.ok(m, `no value list for ${f}`);
     const sqlVals = m[1].split(",").map((v) => v.trim().replace(/^'|'$/g, "")).sort();
@@ -791,10 +810,8 @@ t("Q5 the question options are a subset of what the CHECK allows", () => {
     reads a comment as if it were the schema is worse than no test, so every
     assertion in this block reads `body`.
   */
-  const sql = readFileSync(new URL(MIGRATION, import.meta.url), "utf8");
-  const start = sql.indexOf("organizations_statutory_profile_shape check");
-  const body = sql.slice(start, sql.indexOf("end $$", start));
   for (const q of PROFILE_QUESTIONS) {
+    const body = constraintBody(q.key);
     const m = body.match(new RegExp(`->>'${q.key}'\\)\\s+in \\(([^)]*)\\)`));
     assert.ok(m, `no value list for ${q.key} in the constraint`);
     const allowed = m[1].split(",").map((v) => v.trim().replace(/^'|'$/g, ""));
@@ -803,6 +820,51 @@ t("Q5 the question options are a subset of what the CHECK allows", () => {
         `the form offers ${q.key}="${o.value}" but the constraint rejects it`);
     }
   }
+});
+
+t("Q6 the composition constraint is additive, parenthesised and idempotent", () => {
+  const sql = readFileSync(new URL(MIGRATION_COMPOSITION, import.meta.url), "utf8");
+  const body = constraintBody("composition");
+  assert.ok(body.length > 0, "could not find the composition constraint");
+  assert.ok(/\(\(statutory_profile->>'composition'\)\s+is null or \(statutory_profile->>'composition'\)\s+in \('yes','no','unknown'\)\)/.test(body),
+    "the composition clause is not the parenthesised yes/no/unknown guard");
+  assert.ok(/if not exists \(\s*select 1 from pg_constraint where conname = 'organizations_statutory_profile_composition'/.test(sql), "not idempotent");
+  assert.ok(!/drop constraint|drop column|alter column/i.test(sql.replace(/\/\*[\s\S]*?\*\//g, "")), "must not drop or rewrite anything");
+});
+
+/* ========================================================================
+   COMPOSITION — the only way CMP-08 / GSTR-4 can read as "applies"
+   ======================================================================== */
+
+t("C1 composition yes: CMP-08 and GSTR-4 apply; the monthly pair is hidden with a reason", () => {
+  const p = P({ composition: "yes" });
+  assert.equal(applicability("cmp08", p), "applies");
+  assert.equal(applicability("gstr4", p), "applies");
+  assert.equal(applicability("gstr1", p), "excluded");
+  assert.equal(applicability("gstr3b", p), "excluded");
+  assert.ok(/composition scheme/.test(excludedBecause("gstr3b", p)), excludedBecause("gstr3b", p));
+});
+
+t("C2 composition unknown hides nothing; composition no hides only CMP-08 / GSTR-4", () => {
+  const u = P({ composition: "unknown" });
+  for (const id of ["gstr1", "gstr3b", "cmp08", "gstr4"]) assert.equal(applicability(id, u), "unknown", id);
+  const n = P({ composition: "no" });
+  assert.equal(applicability("cmp08", n), "excluded");
+  assert.equal(applicability("gstr4", n), "excluded");
+  assert.equal(applicability("gstr1", n), "unknown");
+  assert.equal(applicability("gstr3b", n), "unknown");
+  assert.ok(excludedBecause("cmp08", n).startsWith("you told us you are not under the GST composition scheme"));
+});
+
+t("C3 contradictory answers never hide: composition yes + monthly keeps every one shown", () => {
+  const p = P({ composition: "yes", gst: "monthly" });
+  for (const id of ["gstr1", "gstr3b", "cmp08", "gstr4"]) assert.notEqual(applicability(id, p), "excluded", id);
+});
+
+t("C4 the stored answer round-trips, and junk decays to unknown", () => {
+  assert.equal(parseProfile({ composition: "yes" }).composition, "yes");
+  assert.equal(parseProfile({ composition: "YES" }).composition, "unknown");
+  assert.equal(parseProfile({}).composition, "unknown");
 });
 
 /* ======================================================================== */

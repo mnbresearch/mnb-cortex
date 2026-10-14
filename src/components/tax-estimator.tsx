@@ -15,16 +15,21 @@ import { orDefault, seedSource, type WorkspaceSeed } from "@/lib/seed-types";
 /*
   Income seeded from recorded annual net profit.
 
-  For the proprietorships and partnerships that make up most of this
-  product's users, business profit IS the income these slabs apply to. For a
-  private limited company it is not — the company pays corporate tax and the
-  director takes a salary. The banner names the assumption rather than
-  leaving the reader to discover it from a wrong number.
+  For a proprietorship, business profit IS the income these slabs apply to.
+  For a partnership firm it is not — a firm pays a flat 30% (plus surcharge and
+  cess), not individual slabs — and for a private limited company the company
+  pays corporate tax and the director takes a salary. The banner used to say
+  "proprietorship or partnership"; it now names only the case that is true.
+
+  And business profit is not salary: the standard deduction is for salary
+  income, so when the figure is seeded from profit "Salaried" starts OFF.
+  It used to start on, quietly taking ₹75,000 off a proprietor's income.
 */
 export function TaxEstimator({ seed }: { seed?: WorkspaceSeed } = {}) {
   const [income, setIncome] = useState(orDefault(seed?.netProfitAnnual, 1_500_000));
   const [regime, setRegime] = useState<"new" | "old">("new");
-  const [salaried, setSalaried] = useState(true);
+  const seededFromProfit = seedSource(seed, "netProfitAnnual") === "yours";
+  const [salaried, setSalaried] = useState(!seededFromProfit);
   const [ded80c, setDed80c] = useState(150_000);
   const [otherDed, setOtherDed] = useState(0);
 
@@ -37,7 +42,9 @@ export function TaxEstimator({ seed }: { seed?: WorkspaceSeed } = {}) {
       ...r,
       effective: income ? (r.total / income) * 100 : 0,
       takeHome: income - r.total,
-      /* Advance tax instalments: 15 / 45 / 75 / 100% cumulative. */
+      /* Advance tax: due 15 / 45 / 75 / 100% CUMULATIVE, so each instalment pays
+         15 / 30 / 30 / 25% of the year's tax. The tiles show what to pay on each
+         date, labelled with both, so neither reading is mistaken for the other. */
       adv: [0.15, 0.30, 0.30, 0.25].map((p) => r.total * p),
     };
   }, [income, regime, salaried, deductions]);
@@ -59,7 +66,7 @@ export function TaxEstimator({ seed }: { seed?: WorkspaceSeed } = {}) {
       <ExampleFigures
         source={seedSource(seed, "netProfitAnnual")}
         what="income"
-        note="Taken as your recorded annual net profit, which is the taxable income for a proprietorship or partnership. If you trade through a company, replace it with your salary — these are individual slabs."
+        note="Taken as your recorded annual net profit, which is the taxable income for a proprietorship. A partnership firm pays a flat 30% rather than these slabs, and if you trade through a company, replace it with your salary — these are individual slabs. Business profit is not salary, so the standard deduction starts off."
       />
     <div className="grid lg:grid-cols-2 gap-4">
       <Card className="p-5 space-y-3">
@@ -78,7 +85,8 @@ export function TaxEstimator({ seed }: { seed?: WorkspaceSeed } = {}) {
         )}
         <p className="text-xs text-muted-foreground">
           Rates as of <b>{RATES_AS_OF}</b>. Slabs, standard deduction, 87A rebate, marginal relief, surcharge and cess are modelled;
-          HRA, LTA and capital-gains rates are not. An estimate, not advice — confirm with your CA.
+          HRA, LTA and capital-gains rates are not. "87A" and "80C" are the familiar 1961-Act section numbers; the Income-tax
+          Act, 2025 renumbers them from 1 April 2026. An estimate, not advice — confirm with your CA.
         </p>
       </Card>
 
@@ -117,9 +125,9 @@ export function TaxEstimator({ seed }: { seed?: WorkspaceSeed } = {}) {
         </div>
 
         <div>
-          <div className="text-xs text-muted-foreground mb-1">Advance tax instalments (15 Jun / Sep / Dec / Mar)</div>
+          <div className="text-xs text-muted-foreground mb-1">Advance tax — pay on each date (cumulative share in brackets)</div>
           <div className="grid grid-cols-4 gap-2">
-            {m.adv.map((a, i) => <div key={i} className="rounded-lg border p-2 text-center"><div className="text-[10px] text-muted-foreground">{["15%", "45%", "75%", "100%"][i]}</div><div className="font-semibold text-xs">{inr(a)}</div></div>)}
+            {m.adv.map((a, i) => <div key={i} className="rounded-lg border p-2 text-center"><div className="text-[10px] text-muted-foreground">{["15 Jun (15%)", "15 Sep (45%)", "15 Dec (75%)", "15 Mar (100%)"][i]}</div><div className="font-semibold text-xs">{inr(a)}</div></div>)}
           </div>
         </div>
       </Card>

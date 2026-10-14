@@ -104,10 +104,41 @@ const { STATUTORY_CATALOGUE, nextOccurrence, statutoryRule } = await import("../
      never publish — and a rule that exists but has no page is invisible in
      exactly the way this whole exercise is meant to fix. */
   const covered = new Set(DEADLINE_TOPICS.flatMap((t) => t.ids));
+  /*
+    Rules added for CAL-1/CAL-2/CAL-3 (quarterly QRMP returns, GSTR-6 split out
+    of IFF, CMP-08, GSTR-4, GSTR-9, MSME-1, the 30 April TDS date). They are
+    listed on the /deadlines hub, which renders the whole catalogue, but their
+    topic pages live in src/lib/deadline-seo.ts, which another change owns.
+    Named here, one by one, so the gap is visible rather than the check being
+    loosened — and the second loop fails if one gets a page and stays listed.
+  */
+  const AWAITING_TOPIC = new Set([]);
   for (const r of STATUTORY_CATALOGUE) {
+    if (AWAITING_TOPIC.has(r.id) && !covered.has(r.id)) {
+      check(true, `statutory rule "${r.id}" awaits a topic page (listed on the hub)`);
+      continue;
+    }
     check(covered.has(r.id), `statutory rule "${r.id}" (${r.name}) is covered by a page`);
   }
+  for (const id of AWAITING_TOPIC) {
+    check(!covered.has(id), `"${id}" now has a topic page — remove it from AWAITING_TOPIC`);
+    check(!!statutoryRule(id), `"${id}" in AWAITING_TOPIC is a real rule`);
+  }
   check(getDeadlineTopic("nope") === null, "an unknown deadline slug resolves to null");
+
+  /* Follow-ups: whenText prefers whenLabel, and the PMT-06 page no longer says the payment "stays monthly". */
+  const pmt = statutoryRule("pmt06");
+  check(pmt && whenText(pmt) === pmt.whenLabel, "whenText() returns the rule's whenLabel first (PMT-06)", pmt && whenText(pmt));
+  const q3b = statutoryRule("gstr3b-qrmp");
+  check(q3b && /22nd or 24th/.test(whenText(q3b)), "whenText(GSTR-3B quarterly) says 22nd or 24th, not one day", q3b && whenText(q3b));
+  const pmtTopic = DEADLINE_TOPICS.find((t) => t.ids.includes("pmt06"));
+  const pmtText = pmtTopic ? [pmtTopic.title, pmtTopic.description, pmtTopic.standfirst].join(" ") : "";
+  check(pmtTopic && !/stays monthly|pay monthly/i.test(pmtText) && /first two months/i.test(pmtText),
+    "PMT-06 page: only months 1 and 2 of a quarter, never 'stays monthly'", pmtText);
+  const g9 = DEADLINE_TOPICS.find((t) => t.ids.includes("gstr9"));
+  check(g9 && /year by year/i.test(g9.standfirst) && /₹2 crore/.test(g9.standfirst), "GSTR-9 page says the ₹2 crore exemption is renewed year by year");
+  const q3bTopic = DEADLINE_TOPICS.find((t) => t.ids.includes("gstr3b-qrmp"));
+  check(q3bTopic && /state/i.test(q3bTopic.standfirst), "GSTR-3B quarterly page says the day depends on the state");
 }
 
 /* ------ whenText and nextOccurrence agree with the rule they describe ----- */
@@ -115,7 +146,12 @@ const { STATUTORY_CATALOGUE, nextOccurrence, statutoryRule } = await import("../
   for (const r of STATUTORY_CATALOGUE) {
     const t = whenText(r);
     check(t.includes(String(r.day)), `whenText("${r.id}") contains the real day ${r.day}`, t);
-    if (r.cadence === "monthly") check(/every month/.test(t), `"${r.id}" reads as monthly`, t);
+    /* What the pages actually print: whenLabel first, then whenText. A rule that
+       only falls due in some months (PMT-06, IFF, the QRMP returns) must never
+       read "every month" — on 14 Oct 2026 that promised a PMT-06 on 25 Oct. */
+    const shown = r.whenLabel ?? t;
+    if (r.cadence === "monthly" && !r.months) check(/every month/.test(shown), `"${r.id}" reads as monthly`, shown);
+    if (r.months) check(!/every month/.test(shown), `"${r.id}" does not claim to be due every month`, shown);
 
     const next = nextOccurrence(r.id, new Date("2026-06-10T12:00:00+05:30"));
     check(next instanceof Date && !isNaN(next.getTime()), `nextOccurrence("${r.id}") returns a date`);
@@ -146,6 +182,7 @@ const { STATUTORY_CATALOGUE, nextOccurrence, statutoryRule } = await import("../
     const ordinals = live.match(/\b\d{1,2}(st|nd|rd|th)\b/g) || [];
     check(ordinals.length === 0, `${f} hardcodes no ordinal date`, ordinals.join(", "));
     check(/whenText\(/.test(live), `${f} renders dates through whenText()`);
+    check(/r\.whenLabel \?\? whenText\(r\)/.test(live), `${f} prefers the rule's whenLabel over whenText()`);
   }
 
   /* appliesIf has to actually reach the screen on the detail page. */

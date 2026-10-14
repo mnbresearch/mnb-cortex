@@ -76,7 +76,7 @@ export default function DeadlinePage({ params }: { params: { slug: string } }) {
         name: `When is the ${topic.h1.toLowerCase()}?`,
         acceptedAnswer: {
           "@type": "Answer",
-          text: rules.map((r) => `${r.name}: ${whenText(r)}. ${r.what}.`).join(" "),
+          text: rules.map((r) => `${r.name}: ${r.whenLabel ?? whenText(r)}. ${r.what}.`).join(" "),
         },
       },
       {
@@ -133,7 +133,8 @@ export default function DeadlinePage({ params }: { params: { slug: string } }) {
                   <div className="border-t bg-primary/[0.04] p-5 lg:p-6 flex flex-wrap items-center gap-x-8 gap-y-3">
                     <div>
                       <div className="eyebrow text-primary">Falls due</div>
-                      <div className="font-display text-2xl tracking-tightest mt-1 tabular-nums">{whenText(r)}</div>
+                      {/* `whenLabel` first: PMT-06 and IFF are not due every month. */}
+                      <div className="font-display text-2xl tracking-tightest mt-1 tabular-nums">{r.whenLabel ?? whenText(r)}</div>
                     </div>
                     <div className="min-w-0 flex-1">
                       {/*
@@ -172,9 +173,11 @@ export default function DeadlinePage({ params }: { params: { slug: string } }) {
               <div>
                 <div className="font-display text-xl tracking-tightest">Stop tracking this by hand.</div>
                 <p className="text-sm text-muted-foreground mt-1.5 leading-6">
-                  Cortex watches every statutory date that applies to you alongside your receivables, your payables and the
-                  MSME 45-day clock — and emails you before one costs you money, rather than after. Upload a Tally, Vyapar
-                  or Busy export and it reads your numbers as they come.
+                  {/* Used to promise an email before each date. No scheduled email
+                      carries statutory deadlines, so it now says what ships. */}
+                  Cortex shows the statutory dates that apply to you on your dashboard and compliance calendar, ahead of the
+                  day, alongside your receivables, your payables and the MSME 45-day clock. Upload a Tally, Vyapar or Busy
+                  export and it reads your numbers as they come.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   <Link href="/health-check" className="inline-flex items-center gap-2 rounded-full border px-5 h-11 text-sm font-medium hover:bg-accent transition-colors">

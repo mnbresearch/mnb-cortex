@@ -20,9 +20,11 @@ export function RentVsBuy() {
 
     // Buy path: EMI over horizon + down payment − equity/appreciation recovered on sale.
     const loan = Math.max(price - down, 0);
-    const mr = rate / 100 / 12, n = tenure * 12;
+    /* Guard: a zero tenure made n = 0 and the EMI NaN (0 / 0), which then
+       poisoned every figure below. Held to 1–600 months. */
+    const mr = Math.max(0, rate || 0) / 100 / 12, n = Math.min(600, Math.max(1, Math.round((tenure || 0) * 12)));
     const emi = mr === 0 ? loan / n : loan * mr * Math.pow(1 + mr, n) / (Math.pow(1 + mr, n) - 1);
-    const monthsHeld = years * 12;
+    const monthsHeld = Math.max(0, Math.round((years || 0) * 12));
     const emiPaid = emi * Math.min(monthsHeld, n);
     // Outstanding balance after horizon
     let bal = loan;

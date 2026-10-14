@@ -53,9 +53,12 @@ export const INDUSTRIES: Industry[] = [
     tagline: "Grow orders without burning margin.",
     pains: ["CAC keeps rising and payback is unclear", "Discounts quietly eat your margin", "You don't know which SKUs actually make money"],
     fixes: [
-      { tool: "Marketing funnel + ROAS allocator", href: "/funnel" },
+      /* Was "+ ROAS allocator": /funnel computes CAC and ROAS for one funnel; it allocates nothing. */
+      { tool: "Marketing funnel: CAC & ROAS", href: "/funnel" },
       { tool: "Discount impact & Pricing Optimizer", href: "/discount" },
-      { tool: "Customer LTV, RFM & churn", href: "/ltv" },
+      /* /ltv is the lifetime-value model only; RFM is its own page, so it gets its own line. */
+      { tool: "Customer lifetime value", href: "/ltv" },
+      { tool: "RFM customer segments", href: "/rfm" },
       { tool: "Inventory ABC & reorder planning", href: "/abc" },
     ],
     outcome: "Spend on what pays back, price with confidence, and keep your best customers.",
@@ -90,7 +93,8 @@ export const INDUSTRIES: Industry[] = [
     pains: ["Hundreds of SKUs on razor-thin margins", "Credit risk spread across many dealers", "Cash locked in the working-capital cycle"],
     fixes: [
       { tool: "Payables & DPO with early-pay discounts", href: "/payables" },
-      { tool: "DSCR & credit exposure by account", href: "/dscr" },
+      /* Was "credit exposure by account": /dscr is one business-level ratio, not per account. */
+      { tool: "DSCR & borrowing capacity", href: "/dscr" },
       { tool: "Cash conversion cycle simulator", href: "/ccc" },
       { tool: "Vendor scorecards", href: "/vendors" },
       { tool: "GST ITC set-off", href: "/itc", calc: true },
@@ -162,7 +166,9 @@ export const INDUSTRIES: Industry[] = [
     tagline: "Grow enrolments, keep them enrolled.",
     pains: ["Lead-to-admission conversion is leaky", "Batch profitability is unclear", "Drop-offs mid-course hurt revenue"],
     fixes: [
-      { tool: "Marketing funnel & lead scoring", href: "/funnel" },
+      /* Lead scoring is real but lives at /leads, not /funnel. */
+      { tool: "Marketing funnel & CAC", href: "/funnel" },
+      { tool: "Lead scoring", href: "/leads" },
       { tool: "Project/batch profitability", href: "/projects" },
       { tool: "Churn (drop-off) predictor", href: "/churn" },
       { tool: "Customer LTV", href: "/ltv" },
@@ -236,7 +242,8 @@ export const INDUSTRIES: Industry[] = [
     fixes: [
       { tool: "Inventory turnover & holding cost", href: "/inventory-turns" },
       { tool: "GST ITC set-off", href: "/itc", calc: true },
-      { tool: "GST filing status & compliance", href: "/gst" },
+      /* Was "filing status": /gst shows the filing calendar, it has no view of what was filed. */
+      { tool: "GST filing calendar & compliance dates", href: "/gst" },
       { tool: "Reorder Optimizer", href: "/reorder" },
       { tool: "Inventory ABC analysis", href: "/abc" },
     ],

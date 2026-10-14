@@ -57,23 +57,90 @@ export type Deadline = {
   appliesIf: string;
 };
 
-/** Monthly obligations, by day of month. */
-const MONTHLY: Array<{ id: string; day: number; name: string; what: string; severity: Deadline["severity"]; appliesIf: string }> = [
-  { id: "tds", day: 7, name: "TDS / TCS deposit", what: "Tax deducted last month must be paid",
-    severity: "high", appliesIf: "you deducted TDS or collected TCS last month" },
+/*
+  QUARTER-SHAPED RULES ARE NOT MONTHLY RULES.
+
+  PMT-06 and IFF used to sit here as plain "every month" rules, so on 14 October
+  the calendar announced a PMT-06 due on 25 October — a date that does not
+  exist. Under QRMP the tax for the first two months of a quarter is paid by
+  PMT-06 (and the optional IFF uploaded) on the 25th / 13th of the FOLLOWING
+  month; the third month's tax goes with the quarterly GSTR-3B instead, and the
+  13th after a quarter is the quarterly GSTR-1, not an IFF. And a QRMP filer,
+  whose monthly GSTR-1/3B are (correctly) hidden, was shown no quarterly return
+  at all.
+
+  `months` lists the calendar months (1-12) a rule actually falls due in. A
+  rule without it falls due every month. Quarters are the Indian FY quarters
+  (Apr-Jun, Jul-Sep, Oct-Dec, Jan-Mar), so:
+    after months 1 and 2 of a quarter  -> May, Jun, Aug, Sep, Nov, Dec, Feb, Mar
+    the month after a quarter ends     -> Jan, Apr, Jul, Oct
+  `whenLabel` is the human phrasing for anything "Nth of every month" would
+  misdescribe; every surface that prints a rule's date should prefer it.
+*/
+const AFTER_QRMP_MONTHS_1_2 = [2, 3, 5, 6, 8, 9, 11, 12];
+const AFTER_QUARTER_END = [1, 4, 7, 10];
+
+type MonthlyRule = {
+  id: string; day: number; name: string; what: string; severity: Deadline["severity"]; appliesIf: string;
+  months?: number[]; whenLabel?: string; dayLabel?: string;
+};
+
+/** Monthly (and month-in-quarter) obligations, by day of month. */
+const MONTHLY: MonthlyRule[] = [
+  /*
+    The 7th is right for eleven months of TDS and for all twelve of TCS. Tax
+    DEDUCTED in March is due on 30 April instead (its own rule, "tds-march",
+    below) — TCS collected in March is still due on 7 April, which is why this
+    rule keeps its April occurrence rather than moving it.
+  */
+  { id: "tds", day: 7, name: "TDS / TCS deposit",
+    what: "Tax deducted or collected last month must be paid — except TDS deducted in March, which is due 30 April",
+    severity: "high", appliesIf: "you deducted TDS or collected TCS last month",
+    whenLabel: "7th of every month (TDS deducted in March: 30 April)" },
   { id: "gstr7", day: 10, name: "GSTR-7 / GSTR-8", what: "TDS/TCS under GST",
     severity: "low", appliesIf: "you are required to deduct or collect tax under GST" },
   { id: "gstr1", day: 11, name: "GSTR-1", what: "Outward supplies for last month",
     severity: "high", appliesIf: "you file GST monthly" },
-  { id: "iff", day: 13, name: "GSTR-6 / IFF", what: "Input service distributor return, or QRMP invoice upload",
-    severity: "low", appliesIf: "you are an ISD, or file under QRMP" },
+  { id: "gstr6", day: 13, name: "GSTR-6", what: "Input service distributor return for last month",
+    severity: "low", appliesIf: "you are registered as an Input Service Distributor (ISD)" },
+  { id: "iff", day: 13, name: "IFF (optional)",
+    what: "Optional upload of B2B invoices for the first or second month of a quarter, so your buyers can claim the credit early",
+    severity: "low", appliesIf: "you file under QRMP and want to pass credit to buyers before the quarter ends",
+    months: AFTER_QRMP_MONTHS_1_2,
+    whenLabel: "13th of the month after the first and second months of each quarter" },
+  { id: "gstr1-qrmp", day: 13, name: "GSTR-1 (quarterly)", what: "Outward supplies for the quarter just ended",
+    severity: "high", appliesIf: "you file under QRMP",
+    months: AFTER_QUARTER_END,
+    whenLabel: "13th of the month after each quarter (January, April, July, October)" },
   { id: "pf", day: 15, name: "PF & ESI", what: "Provident fund and ESI contributions",
     severity: "high", appliesIf: "you have employees covered by EPF or ESI" },
+  { id: "cmp08", day: 18, name: "CMP-08", what: "Quarterly statement and tax payment under the composition scheme",
+    severity: "high", appliesIf: "you are registered under the GST composition scheme",
+    months: AFTER_QUARTER_END,
+    whenLabel: "18th of the month after each quarter (January, April, July, October)" },
   { id: "gstr3b", day: 20, name: "GSTR-3B", what: "Summary return and the GST payment itself",
     severity: "high", appliesIf: "you file GST monthly" },
-  { id: "pmt06", day: 25, name: "PMT-06", what: "GST payment for the quarter's first two months",
-    severity: "medium", appliesIf: "you file under QRMP" },
+  /*
+    22nd OR 24th, by the state the GSTIN is registered in. Cortex does not know
+    the state, so the rule is dated from the 22nd — the earlier of the two, so a
+    warning is never late — and says plainly that it may be the 24th.
+  */
+  { id: "gstr3b-qrmp", day: 22, name: "GSTR-3B (quarterly)",
+    what: "Quarterly summary return and the third month's tax — due the 22nd or the 24th depending on your state; Cortex warns from the 22nd",
+    severity: "high", appliesIf: "you file under QRMP",
+    months: AFTER_QUARTER_END, dayLabel: "22/24",
+    whenLabel: "22nd or 24th (depending on your state) of the month after each quarter" },
+  { id: "pmt06", day: 25, name: "PMT-06",
+    what: "GST payment for the first or second month of a quarter — the third month's tax is paid with the quarterly GSTR-3B",
+    severity: "medium", appliesIf: "you file under QRMP",
+    months: AFTER_QRMP_MONTHS_1_2,
+    whenLabel: "25th of the month after the first and second months of each quarter" },
 ];
+
+/** Does a month-of-year rule fall due in calendar month `m` (1-12)? */
+function fallsIn(r: { months?: number[] }, m: number): boolean {
+  return !r.months || r.months.includes(m);
+}
 
 /**
  * Annual and quarterly obligations, as (month, day) with month 1-indexed.
@@ -113,7 +180,9 @@ const LEAD_DAYS: Record<string, number> = {
   mgt7: 30,
   /* Instalments need the year's liability estimated first. */
   "adv-q1": 15, "adv-q2": 15, "adv-q3": 15, "adv-q4": 15,
-  "tds-q1": 15, "tds-q2": 15, "tds-q3": 15, "tds-q4": 15,
+  "tds-q1": 15, "tds-q2": 15, "tds-q3": 15, "tds-q4": 15, "tds-march": 15,
+  /* Annual returns built from a closed year's books. */
+  gstr9: 30, gstr4: 15, "msme1-h1": 15, "msme1-h2": 15,
 };
 
 const FIXED: Array<{ id: string; month: number; day: number; name: string; what: string; severity: Deadline["severity"]; appliesIf: string }> = [
@@ -125,7 +194,15 @@ const FIXED: Array<{ id: string; month: number; day: number; name: string; what:
     severity: "medium", appliesIf: "your annual tax liability will exceed ₹10,000" },
   { id: "adv-q4", month: 3, day: 15, name: "Advance tax — final instalment", what: "100% of the year's liability",
     severity: "high", appliesIf: "your annual tax liability will exceed ₹10,000" },
-  { id: "itr", month: 7, day: 31, name: "Income Tax Return", what: "Non-audit cases",
+  /*
+    31 AUGUST, NOT 31 JULY, for non-audit business and professional income.
+    Finance Act 2026 moved the due date for these returns (ITR-3 / ITR-4) a
+    month later, permanently, from the returns filed in 2026. Returns with no
+    business income (ITR-1 / ITR-2) stay at 31 July — said in `what`, because
+    a proprietor's spouse on salary still has the earlier date.
+  */
+  { id: "itr", month: 8, day: 31, name: "Income Tax Return",
+    what: "Non-audit cases with business or professional income (31 July if there is no business income)",
     severity: "high", appliesIf: "your accounts are not subject to audit" },
   /*
     THE AUDIT REPORT IS NOT THE RETURN. They are a month apart.
@@ -142,7 +219,7 @@ const FIXED: Array<{ id: string; month: number; day: number; name: string; what:
     Both dates now exist separately, and test-statutory.mjs pins the gap.
   */
   { id: "tax-audit-report", month: 9, day: 30, name: "Tax audit report (44AB)",
-    what: "Form 3CA/3CB with 3CD, signed and uploaded by your auditor — due a month before the return, not with it",
+    what: "Signed and uploaded by your auditor — due a month before the return, not with it. \"44AB\" is the 1961-Act section; the Income-tax Act, 2025 renumbers it and its forms from tax year 2026-27, the audit itself remains",
     severity: "high", appliesIf: "your turnover crosses the 44AB audit threshold" },
   { id: "itr-audit", month: 10, day: 31, name: "ITR with tax audit", what: "The return itself, in audit cases — a month after the audit report",
     severity: "high", appliesIf: "your turnover crosses the 44AB audit threshold" },
@@ -158,6 +235,18 @@ const FIXED: Array<{ id: string; month: number; day: number; name: string; what:
     severity: "medium", appliesIf: "you deduct TDS" },
   { id: "tds-q4", month: 5, day: 31, name: "TDS return (Q4)", what: "24Q / 26Q for January–March",
     severity: "medium", appliesIf: "you deduct TDS" },
+  /* The one month the 7th is wrong for TDS. See the "tds" rule above. */
+  { id: "tds-march", month: 4, day: 30, name: "TDS deposit for March", what: "Tax deducted in March — due 30 April, not 7 April",
+    severity: "high", appliesIf: "you deducted TDS in March" },
+  { id: "gstr4", month: 4, day: 30, name: "GSTR-4 (composition)", what: "Annual return under the composition scheme, for the year just ended",
+    severity: "medium", appliesIf: "you are registered under the GST composition scheme" },
+  { id: "gstr9", month: 12, day: 31, name: "GSTR-9", what: "GST annual return for the previous financial year",
+    severity: "medium",
+    appliesIf: "you are a regular GST taxpayer — small taxpayers (turnover up to ₹2 crore) have been exempted year by year, so check the current notification" },
+  { id: "msme1-h2", month: 4, day: 30, name: "MSME-1 (October–March)", what: "Half-yearly return to the ROC of dues to micro and small suppliers",
+    severity: "medium", appliesIf: "you are a company with dues to micro or small enterprises outstanding beyond 45 days" },
+  { id: "msme1-h1", month: 10, day: 31, name: "MSME-1 (April–September)", what: "Half-yearly return to the ROC of dues to micro and small suppliers",
+    severity: "medium", appliesIf: "you are a company with dues to micro or small enterprises outstanding beyond 45 days" },
 ];
 
 /* ===========================================================================
@@ -189,6 +278,15 @@ export type StatutoryRule = {
   day: number;
   /** 1-indexed month, for annual rules only. */
   month?: number;
+  /**
+   * Monthly rules only: the calendar months (1-12) it falls due in. Absent
+   * means every month. PMT-06, IFF and the quarterly QRMP returns carry it.
+   */
+  months?: number[];
+  /** Human phrasing of the due date where "Nth of every month" would be wrong. */
+  whenLabel?: string;
+  /** Short day label where the day is not one number (GSTR-3B quarterly: 22/24). */
+  dayLabel?: string;
 };
 
 export const STATUTORY_CATALOGUE: StatutoryRule[] = [
@@ -217,7 +315,30 @@ const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep
  * so the next table that needs a label cannot start a third copy.
  */
 export function ruleWhen(r: StatutoryRule): string {
-  return r.cadence === "monthly" ? `day ${r.day}` : `${r.day} ${MONTH_ABBR[(r.month ?? 1) - 1]}`;
+  if (r.cadence !== "monthly") return `${r.day} ${MONTH_ABBR[(r.month ?? 1) - 1]}`;
+  const day = `day ${r.dayLabel ?? r.day}`;
+  if (!r.months || r.months.length === 12) return day;
+  /* Name the months it falls in, or — when that is most of them — the ones it does not. */
+  if (r.months.length <= 6) return `${day} · ${r.months.map((m) => MONTH_ABBR[m - 1]).join("/")}`;
+  const not = Array.from({ length: 12 }, (_, i) => i + 1).filter((m) => !r.months!.includes(m));
+  return `${day} · not ${not.map((m) => MONTH_ABBR[m - 1]).join("/")}`;
+}
+
+/**
+ * The due date as a sentence — "20th of every month", "15 June", or the rule's
+ * own `whenLabel` where a bare day would misdescribe it (PMT-06 is not due
+ * every month). Public pages should print this, or prefer `whenLabel` first.
+ */
+export function ruleWhenLong(r: StatutoryRule): string {
+  if (r.whenLabel) return r.whenLabel;
+  const ord = (n: number) => {
+    const s = ["th", "st", "nd", "rd"], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  if (r.cadence === "monthly") return `${ord(r.day)} of every month`;
+  const months = ["", "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"];
+  return `${r.day} ${months[r.month || 1]}`;
 }
 
 /**
@@ -234,9 +355,16 @@ export function nextOccurrence(id: string, now = new Date()): Date | null {
   const today = istDate(y, m, d);
 
   if (r.cadence === "monthly") {
-    const thisMonth = istDate(y, m, r.day);
-    if (thisMonth.getTime() >= today.getTime()) return thisMonth;
-    return istDate(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1, r.day);
+    /* Walk forward month by month; a quarter-shaped rule skips the months it
+       does not fall in, so the answer is never a date that does not exist. */
+    for (let k = 0; k <= 12; k++) {
+      const mm = ((m - 1 + k) % 12) + 1;
+      const yy = y + Math.floor((m - 1 + k) / 12);
+      if (!fallsIn(r, mm)) continue;
+      const due = istDate(yy, mm, r.day);
+      if (due.getTime() >= today.getTime()) return due;
+    }
+    return null;
   }
 
   const thisYear = istDate(y, r.month as number, r.day);
@@ -397,10 +525,11 @@ export function upcomingDeadlines(withinDays = 10, now = new Date()): Deadline[]
     would look broken exactly when the next GSTR-1 is nine days out.
   */
   for (const r of MONTHLY) {
-    push(r.id, r.name, r.what, istDate(y, m, r.day), r.severity, r.appliesIf);
     const nm = m === 12 ? 1 : m + 1;
     const ny = m === 12 ? y + 1 : y;
-    push(`${r.id}-next`, r.name, r.what, istDate(ny, nm, r.day), r.severity, r.appliesIf);
+    /* Only in the months the rule actually falls due — see AFTER_QRMP_MONTHS_1_2. */
+    if (fallsIn(r, m)) push(r.id, r.name, r.what, istDate(y, m, r.day), r.severity, r.appliesIf);
+    if (fallsIn(r, nm)) push(`${r.id}-next`, r.name, r.what, istDate(ny, nm, r.day), r.severity, r.appliesIf);
   }
 
   /* Fixed dates: this calendar year and the next, for the same wrap reason. */

@@ -18,16 +18,20 @@ export function AbTestCalc() {
   const [bC, setBC] = useState(300);
 
   const m = useMemo(() => {
+    /* Conversions above visitors (or anything negative) is not a test result —
+       it produced rates over 100% and a confident "significant". Flagged, and
+       no verdict is given until the inputs are possible. */
+    const invalid = aV < 0 || bV < 0 || aC < 0 || bC < 0 || aC > aV || bC > bV || aV + bV === 0;
     const pa = aV > 0 ? aC / aV : 0;
     const pb = bV > 0 ? bC / bV : 0;
     const uplift = pa > 0 ? (pb - pa) / pa * 100 : 0;
-    const pPool = (aC + bC) / (aV + bV);
-    const se = Math.sqrt(pPool * (1 - pPool) * (1 / aV + 1 / bV));
+    const pPool = invalid ? 0 : (aC + bC) / (aV + bV);
+    const se = invalid || aV <= 0 || bV <= 0 ? 0 : Math.sqrt(pPool * (1 - pPool) * (1 / aV + 1 / bV));
     const z = se > 0 ? (pb - pa) / se : 0;
     const pValue = 2 * (1 - normCdf(Math.abs(z)));
     const confidence = (1 - pValue) * 100;
-    const significant = pValue < 0.05;
-    return { pa, pb, uplift, z, pValue, confidence, significant };
+    const significant = !invalid && pValue < 0.05;
+    return { pa, pb, uplift, z, pValue, confidence, significant, invalid };
   }, [aV, aC, bV, bC]);
 
   const F = (label: string, value: number, set: (n: number) => void) => (
@@ -52,7 +56,9 @@ export function AbTestCalc() {
       </div>
 
       <div className={`rounded-lg border p-4 text-sm ${m.significant ? "border-success/30 bg-success/5" : "border-warning/30 bg-warning/5"}`}>
-        {m.significant
+        {m.invalid
+          ? <span className="text-warning"><b>Check the inputs.</b> Conversions cannot exceed visitors, and neither can be negative — no verdict until they are possible.</span>
+          : m.significant
           ? <span className="text-success"><b>Statistically significant.</b> Variant {winner} wins at {m.confidence.toFixed(0)}% confidence — you can act on this result.</span>
           : <span className="text-warning"><b>Not yet significant.</b> The difference could be noise ({m.confidence.toFixed(0)}% confidence). Keep the test running or gather more data before deciding.</span>}
       </div>

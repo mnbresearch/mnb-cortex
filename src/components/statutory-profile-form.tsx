@@ -5,7 +5,7 @@ import { SafeForm } from "@/components/safe-form";
 import { SubmitButton } from "@/components/form-buttons";
 
 /*
-  SIX QUESTIONS THAT TURN INDIA'S CALENDAR INTO THIS BUSINESS'S.
+  SEVEN QUESTIONS THAT TURN INDIA'S CALENDAR INTO THIS BUSINESS'S.
 
   A server component with a plain <form action={serverAction}> and native
   <select>s — deliberately, not for want of polish:

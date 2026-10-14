@@ -9,7 +9,8 @@ import { inr } from "@/lib/utils";
  * WHAT WAS WRONG.
  *
  * The cap was a flat ₹10,000 for everybody. Section 47's cap is turnover-linked
- * (CBIC notification 20/2021), and nil returns have a much lower one:
+ * (CBIC notification 19/2021-Central Tax for GSTR-3B; 20/2021 is the GSTR-1
+ * notification, which this used to cite), and nil returns have a much lower one:
  *
  *   nil return                            ₹500      <- was ₹10,000
  *   AATO up to ₹1.5 crore                 ₹2,000    <- was ₹10,000
@@ -44,7 +45,9 @@ import { inr } from "@/lib/utils";
   broken promise. scripts/test-statutory.mjs now fails if this stamp drifts
   more than 18 months behind the clock.
 */
-const RATES_AS_OF = "CBIC notification 20/2021 · last verified September 2026";
+/* 19/2021-CT is the GSTR-3B late-fee notification; 20/2021 (cited here until
+   October 2026) is the one for GSTR-1. */
+const RATES_AS_OF = "CBIC notification 19/2021-Central Tax · last verified October 2026";
 
 const TURNOVER_BANDS = [
   { label: "Up to ₹1.5 crore", cap: 2_000 },
@@ -69,9 +72,13 @@ export function GstLateFee() {
     const cap = nil ? NIL_CAP : TURNOVER_BANDS[band].cap;
     const lateFee = Math.min(rawFee, cap);
 
-    /* Interest under s.50 runs at 18% p.a. on the tax paid late. A nil return
-       has no tax, so no interest — only the fee. */
-    const interest = nil ? 0 : Math.round(taxDue * 0.18 * (d / 365));
+    /* Interest under s.50 runs at 18% p.a. on the tax paid late — and, by the
+       proviso to s.50(1), only on the part paid in CASH (net of ITC), which is
+       what the input asks for. A nil return has no tax, so no interest — only
+       the fee. Clamped: a negative "tax payable" used to produce negative
+       interest, i.e. a late return that earned money. */
+    const cashTax = Math.max(0, Number.isFinite(taxDue) ? taxDue : 0);
+    const interest = nil ? 0 : Math.round(cashTax * 0.18 * (d / 365));
 
     return {
       perDay, rawFee, cap, lateFee, interest,
@@ -79,7 +86,7 @@ export function GstLateFee() {
          showing it as its own line stops "Total to pay" reading as if the
          penalty were ₹1.2 lakh. */
       penalty: lateFee + interest,
-      total: lateFee + interest + (nil ? 0 : Math.max(taxDue, 0)),
+      total: lateFee + interest + (nil ? 0 : cashTax),
       capped: rawFee > lateFee,
     };
   }, [taxDue, days, nil, band]);
@@ -94,7 +101,7 @@ export function GstLateFee() {
     <div className="space-y-4">
       <Card className="p-5 space-y-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {F("Tax payable", taxDue, setTaxDue)}
+          {F("Tax payable in cash (net of ITC)", taxDue, setTaxDue)}
           {F("Days late", days, setDays, "#")}
           <label className="flex items-end gap-2 text-sm pb-2"><input type="checkbox" checked={nil} onChange={(e) => setNil(e.target.checked)} className="h-4 w-4" /> Nil return (no tax)</label>
         </div>
@@ -142,11 +149,13 @@ export function GstLateFee() {
         <p>
           GSTR-3B late fee is ₹50/day (₹25 CGST + ₹25 SGST), or ₹20/day (₹10 + ₹10) for nil returns.
           The maximum is ₹500 for a nil return, and otherwise {inr(2000)} / {inr(5000)} / {inr(10000)} by
-          annual aggregate turnover. Interest runs at 18% p.a. under section 50 on the tax paid late.
+          annual aggregate turnover. Interest runs at 18% p.a. under section 50 on the tax paid late — on the net
+          cash liability, not on tax settled from input tax credit.
         </p>
         <p>
           <b>{RATES_AS_OF}.</b> Amnesty and reduced-fee schemes for specific periods can lower this further,
-          and GSTR-1, GSTR-9 and GSTR-4 have their own caps — confirm the exact figure on the GST portal before paying.
+          GSTR-1 carries the same per-day fee and caps (notification 20/2021) but no interest; GSTR-9 and GSTR-4 have their
+          own caps — confirm the exact figure on the GST portal before paying.
         </p>
       </Card>
     </div>

@@ -50,7 +50,7 @@ export const dynamic = "force-dynamic";
 */
 
 /** The rules a GST-and-compliance page should lead with, in filing order. */
-const GST_RULE_IDS = ["tds", "gstr7", "gstr1", "iff", "pf", "gstr3b", "pmt06"];
+const GST_RULE_IDS = ["tds", "gstr7", "gstr1", "gstr1-qrmp", "gstr6", "iff", "pf", "cmp08", "gstr3b", "gstr3b-qrmp", "pmt06"];
 
 const tone: Record<string, string> = {
   high: "bg-danger/10 text-danger border-danger/20",

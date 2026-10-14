@@ -132,5 +132,12 @@ export async function latestWorkbench<T = any>(kind: WorkbenchKind): Promise<Wor
  */
 export async function canSaveWorkbench(): Promise<boolean> {
   const { user, orgId } = await getUserAndOrg();
-  return Boolean(user && orgId);
+  if (!user || !orgId) return false;
+  /*
+    Signed in is not enough. saveWorkbenchEntry / deleteWorkbenchEntry require
+    the analyst role (requireWriteOrg), so a viewer was shown a Save button
+    whose only possible outcome was an error. Same rank the action enforces.
+  */
+  const { hasRole } = await import("@/lib/roles");
+  return hasRole("analyst");
 }

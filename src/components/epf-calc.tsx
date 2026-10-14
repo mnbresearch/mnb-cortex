@@ -81,7 +81,10 @@ export function EpfCalc() {
           <Row k={`ESI (0.75%)${m.esiApplies ? "" : " — N/A"}`} v={inr(m.empESI)} />
         </Card>
         <Card className="p-5"><div className="font-semibold mb-2">Employer (over and above salary)</div>
-          <Row k="EPF (3.67%)" v={inr(m.erEPF)} />
+          {/* 3.67% only while the PF wage is at or under ₹15,000; above it (with
+              "contribute above the ceiling" on) EPS stays capped and the EPF share
+              grows, so the label is computed rather than fixed. */}
+          <Row k={`EPF (${m.pfWage > 0 ? ((m.erEPF / m.pfWage) * 100).toFixed(2) : "3.67"}% of PF wage)`} v={inr(m.erEPF)} />
           <Row k="EPS pension (8.33%, capped ₹15k wage)" v={inr(m.eps)} />
           <Row k={`ESI (3.25%)${m.esiApplies ? "" : " — N/A"}`} v={inr(m.erESI)} />
         </Card>

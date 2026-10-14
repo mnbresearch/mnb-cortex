@@ -12,13 +12,20 @@ export function Depreciation() {
 
   const rows = useMemo(() => {
     const out: { year: number; open: number; dep: number; close: number }[] = [];
-    let book = cost;
-    for (let y = 1; y <= life; y++) {
+    /* Guards: a salvage above cost made every year's depreciation negative, and a
+       zero or fractional life divided by zero. Salvage is held inside [0, cost],
+       life to whole years from 1 to 100, the WDV rate to 0–100%. */
+    const c = Math.max(0, cost || 0);
+    const sv = Math.min(Math.max(0, salvage || 0), c);
+    const n = Math.min(100, Math.max(1, Math.floor(life || 1)));
+    const r = Math.min(100, Math.max(0, rate || 0));
+    let book = c;
+    for (let y = 1; y <= n; y++) {
       let dep: number;
-      if (method === "slm") dep = (cost - salvage) / life;
-      else dep = book * (rate / 100);
-      dep = Math.min(dep, book - salvage);
-      const open = book; book = Math.max(salvage, book - dep);
+      if (method === "slm") dep = (c - sv) / n;
+      else dep = book * (r / 100);
+      dep = Math.max(0, Math.min(dep, book - sv));
+      const open = book; book = Math.max(sv, book - dep);
       out.push({ year: y, open, dep, close: book });
     }
     return out;
@@ -66,6 +73,7 @@ export function Depreciation() {
             </tbody>
           </table>
         </div>
+        {salvage > cost && <p className="text-xs text-warning">Salvage value is above the asset cost, so it is treated as equal to cost — nothing to depreciate.</p>}
         <p className="text-xs text-muted-foreground">WDV front-loads depreciation (bigger tax shield early); SLM spreads it evenly. Indian companies commonly use WDV under the Income Tax Act. Confirm the correct rate/block with your CA.</p>
       </Card>
     </div>

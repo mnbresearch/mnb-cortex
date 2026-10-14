@@ -2,17 +2,11 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inr } from "@/lib/utils";
+import { computeTds, type TdsSection } from "@/lib/tax-slabs";
 
-type Section = {
-  code: string;
-  label: string;
-  rate: number;
-  /** Single-payment threshold. */
-  threshold: number;
-  /** Annual aggregate threshold, where the section has one as well. */
-  annual?: number;
-  note?: string;
-};
+/* The section shape and the arithmetic live in lib/tax-slabs.ts, so the
+   statutory tests execute the real computation instead of pattern-matching it. */
+type Section = TdsSection;
 
 /*
   TDS rates and thresholds, current for FY 2025-26.
@@ -79,18 +73,41 @@ export const ACT_NOTE =
   + "code you quote when depositing TDS or filing the return have changed. Confirm "
   + "the new code before you file.";
 
+/*
+  THREE THRESHOLDS THAT WERE WRONG IN KIND, NOT JUST IN AMOUNT (audit, Oct 2026).
+
+    194Q  TDS was applied to the WHOLE purchase once it crossed ₹50 lakh. The
+          section taxes only the amount by which the year's purchases from the
+          seller EXCEED ₹50 lakh: ₹60L of purchases is 0.1% of ₹10L = ₹1,000,
+          not ₹6,000. And without a PAN the rate is 5% (s.206AA), not 20%.
+    194I  The threshold was ₹6,00,000 compared with a single payment. Since
+          FY 2025-26 it is ₹50,000 for a month or part of a month, so the input
+          is now the monthly rent and the test is against ₹50,000.
+    194   Dividend: ₹5,000 -> ₹10,000 (Finance Act 2025, from 1 April 2025).
+
+  And every comparison is now "exceeds" (`>`), which is what each section
+  says; `>=` deducted on a payment of exactly the threshold.
+*/
 const SECTIONS: Section[] = [
-  { code: "194C", label: "Contractor / sub-contractor (company)", rate: 2, threshold: 30000, annual: 100000 },
-  { code: "194C-ind", label: "Contractor (individual / HUF)", rate: 1, threshold: 30000, annual: 100000 },
-  { code: "194J", label: "Professional fees", rate: 10, threshold: 50000 },
-  { code: "194J-tech", label: "Technical services (194J)", rate: 2, threshold: 50000 },
-  { code: "194I-land", label: "Rent — land / building", rate: 10, threshold: 600000, note: "₹50,000 a month" },
-  { code: "194I-plant", label: "Rent — plant / machinery", rate: 2, threshold: 600000, note: "₹50,000 a month" },
-  { code: "194H", label: "Commission / brokerage", rate: 2, threshold: 20000 },
-  { code: "194Q", label: "Purchase of goods (over ₹50L)", rate: 0.1, threshold: 5000000 },
-  { code: "194", label: "Dividend", rate: 10, threshold: 5000 },
-  { code: "194A", label: "Interest from a bank / post office", rate: 10, threshold: 50000, note: "₹1,00,000 if the payee is a senior citizen" },
+  { code: "194C", label: "Contractor / sub-contractor (company)", rate: 2, threshold: 30000, annual: 100000, basis: "payment" },
+  { code: "194C-ind", label: "Contractor (individual / HUF)", rate: 1, threshold: 30000, annual: 100000, basis: "payment" },
+  { code: "194J", label: "Professional fees", rate: 10, threshold: 50000, basis: "year" },
+  { code: "194J-tech", label: "Technical services (194J)", rate: 2, threshold: 50000, basis: "year" },
+  { code: "194I-land", label: "Rent — land / building", rate: 10, threshold: 50000, basis: "month", note: "the limit is ₹50,000 of rent for a month or part of a month" },
+  { code: "194I-plant", label: "Rent — plant / machinery", rate: 2, threshold: 50000, basis: "month", note: "the limit is ₹50,000 of rent for a month or part of a month" },
+  { code: "194H", label: "Commission / brokerage", rate: 2, threshold: 20000, basis: "year" },
+  { code: "194Q", label: "Purchase of goods (over ₹50L)", rate: 0.1, threshold: 5000000, basis: "excess", noPan: 5, note: "applies only if the buyer's turnover last year exceeded ₹10 crore, and only to purchases above ₹50 lakh from one seller in the year" },
+  { code: "194", label: "Dividend", rate: 10, threshold: 10000, basis: "year" },
+  { code: "194A", label: "Interest from a bank / post office", rate: 10, threshold: 50000, basis: "year", note: "₹1,00,000 if the payee is a senior citizen" },
 ];
+
+/** What the amount box means for a section — the threshold is meaningless without it. */
+const AMOUNT_LABEL: Record<Section["basis"], string> = {
+  payment: "Payment amount",
+  year: "Paid to this payee in the financial year (including this payment)",
+  month: "Rent for the month",
+  excess: "Purchases from this seller in the financial year (including this one)",
+};
 
 export function TdsCalc() {
   const [sec, setSec] = useState(SECTIONS[0].code);
@@ -99,10 +116,7 @@ export function TdsCalc() {
 
   const m = useMemo(() => {
     const s = SECTIONS.find((x) => x.code === sec)!;
-    const applies = amount >= s.threshold;
-    const rate = hasPan ? s.rate : Math.max(s.rate, 20); // no PAN → 20% (194Q etc. min 20%/5%)
-    const tds = applies ? Math.round(amount * rate / 100) : 0;
-    return { s, applies, rate, tds, net: amount - tds };
+    return { s, ...computeTds(s, amount, hasPan) };
   }, [sec, amount, hasPan]);
 
   const I = "rounded-md border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring";
@@ -113,7 +127,7 @@ export function TdsCalc() {
           <select className={I + " w-full mt-1"} value={sec} onChange={(e) => setSec(e.target.value)}>
             {SECTIONS.map((s) => <option key={s.code} value={s.code}>{s.code.split("-")[0]} · {s.label}</option>)}
           </select></label>
-        <label className="block"><span className="text-sm text-muted-foreground">Payment amount</span>
+        <label className="block"><span className="text-sm text-muted-foreground">{AMOUNT_LABEL[m.s.basis]}</span>
           <div className="flex items-center gap-1 mt-1 rounded-lg border bg-background px-3 h-10 focus-within:ring-2 focus-within:ring-ring"><span className="text-xs text-muted-foreground">₹</span>
             <input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className="flex-1 bg-transparent text-sm outline-none" /></div></label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={hasPan} onChange={(e) => setHasPan(e.target.checked)} className="h-4 w-4" /> Payee has furnished PAN</label>
@@ -125,22 +139,32 @@ export function TdsCalc() {
         </div>
         {!m.applies && (
           <p className="text-xs text-warning">
-            Below the ₹{m.s.threshold.toLocaleString("en-IN")} threshold for {m.s.code.split("-")[0]} — no TDS on this single payment.
+            Not above the ₹{m.s.threshold.toLocaleString("en-IN")} {m.s.basis === "month" ? "monthly " : m.s.basis === "payment" ? "" : "annual "}limit
+            for {m.s.code.split("-")[0]} — no TDS {m.s.basis === "payment" ? "on this single payment" : m.s.basis === "month" ? "on this month's rent" : "yet"}.
             {m.s.annual
-              ? ` But once you have paid this vendor ₹${m.s.annual.toLocaleString("en-IN")} in the financial year, TDS applies to the whole amount — including the payments you did not deduct on.`
-              : " Watch the annual aggregate for this payee."}
+              ? ` But once you have paid this vendor more than ₹${m.s.annual.toLocaleString("en-IN")} in the financial year, TDS applies to the whole amount — including the payments you did not deduct on.`
+              : m.s.basis === "year" || m.s.basis === "excess" ? " Re-check as payments to this payee add up over the year." : ""}
+          </p>
+        )}
+        {m.applies && m.s.basis === "excess" && (
+          <p className="text-xs text-muted-foreground">
+            TDS is on {inr(m.base)} — only the part above ₹{m.s.threshold.toLocaleString("en-IN")}, not the whole amount.
           </p>
         )}
         {m.s.note && <p className="text-xs text-muted-foreground">Note: {m.s.note}.</p>}
-        {!hasPan && <p className="text-xs text-danger">No PAN → Section 206AA applies a higher rate (min 20%).</p>}
+        {!hasPan && (
+          <p className="text-xs text-danger">
+            No PAN → section 206AA applies a higher rate{m.s.noPan !== undefined ? ` (${m.s.noPan}% for ${m.s.code.split("-")[0]})` : " (at least 20%)"}.
+          </p>
+        )}
       </Card>
 
       <Card className="p-5">
         <div className="font-semibold mb-2">Common TDS rates</div>
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-muted-foreground border-b"><th className="py-2 font-medium">Section</th><th className="py-2 font-medium">Payment</th><th className="py-2 font-medium text-right">Rate</th><th className="py-2 font-medium text-right">Threshold</th></tr></thead>
+          <thead><tr className="text-left text-muted-foreground border-b"><th className="py-2 font-medium">Section</th><th className="py-2 font-medium">Payment</th><th className="py-2 font-medium text-right">Rate</th><th className="py-2 font-medium text-right">Above</th></tr></thead>
           <tbody>{SECTIONS.map((s) => (
-            <tr key={s.code} className="border-b last:border-0"><td className="py-1.5 font-medium">{s.code.split("-")[0]}</td><td className="py-1.5 text-muted-foreground">{s.label}</td><td className="py-1.5 text-right">{s.rate}%</td><td className="py-1.5 text-right text-muted-foreground tabular-nums">₹{s.threshold.toLocaleString("en-IN")}</td></tr>
+            <tr key={s.code} className="border-b last:border-0"><td className="py-1.5 font-medium">{s.code.split("-")[0]}</td><td className="py-1.5 text-muted-foreground">{s.label}</td><td className="py-1.5 text-right">{s.rate}%</td><td className="py-1.5 text-right text-muted-foreground tabular-nums">₹{s.threshold.toLocaleString("en-IN")}{s.basis === "month" ? "/mo" : s.basis === "payment" ? "" : "/yr"}</td></tr>
           ))}</tbody>
         </table>
         <p className="text-xs text-muted-foreground mt-3">

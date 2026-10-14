@@ -76,7 +76,9 @@ export function AnonToolBar() {
       <div className="max-w-[1400px] mx-auto px-5 lg:px-7 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
         <span className="font-medium">{name} is free — no account needed.</span>
         <span className="text-muted-foreground">
-          It is one of 29 tools inside MNB Cortex, which watches your receivables and deadlines and emails you before they cost you money.
+          {/* No scheduled email includes statutory deadlines, so this no
+              longer says Cortex emails them — it shows them in the app. */}
+          It is one of 29 tools inside MNB Cortex, which watches your receivables and statutory deadlines and shows them on your dashboard and compliance calendar.
         </span>
         <span className="flex items-center gap-2 ml-auto">
           <Link href="/health-check" className="rounded-full border h-8 px-3 inline-flex items-center text-xs font-medium hover:bg-accent transition-colors">

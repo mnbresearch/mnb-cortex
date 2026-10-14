@@ -56,7 +56,10 @@ export function industrySeo(slug: string): IndustrySeo | null {
       on 27 pages at once.
     */
     title: `${i.name} — cash, receivables & GST early warning for Indian ${n} businesses`,
-    description: `${i.tagline} Cortex watches what usually goes wrong in ${n} — ${midSentence(i.pains[0])} — against your own Tally, Vyapar or Busy exports, and warns you before it costs you.`,
+    /* Used to say Cortex "watches" the trade's first pain — no-shows, crop
+       yields, rising CAC — which it does not. What it watches is the money
+       side, from the owner's own exports; the pain is named as the context. */
+    description: `${i.tagline} Cortex reads your own Tally, Vyapar or Busy exports and warns you early on cash, receivables and GST dates — the money side of problems like ${midSentence(i.pains[0])}.`,
     standfirst: i.tagline,
   };
 }

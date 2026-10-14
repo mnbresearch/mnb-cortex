@@ -22,11 +22,17 @@ import { STATUTORY_CATALOGUE } from "@/lib/statutory";
 */
 
 const url = "https://cortex.mnbresearch.com/deadlines";
+/*
+  "Every … date" was not true: state professional-tax dates are not here, and
+  until CAL-3 neither were GSTR-9, CMP-08, GSTR-4, MSME-1 or the quarterly
+  QRMP GSTR-3B. The claim is now the one the catalogue supports — the national
+  dates — and the page says what it leaves out.
+*/
 const description =
-  "Every GST, TDS, PF, advance tax, ITR and ROC date an Indian business has to keep, on one page — with who each one actually applies to.";
+  "The national GST, TDS, PF, advance tax, ITR, ROC and MSME-1 dates an Indian business has to keep, on one page — with who each one actually applies to.";
 
 export const metadata = {
-  title: "Indian statutory compliance calendar — every due date | MNB Cortex",
+  title: "Indian statutory compliance calendar — national due dates | MNB Cortex",
   description,
   alternates: { canonical: url },
   openGraph: { title: "Indian statutory compliance calendar", description, url, type: "website" as const },
@@ -65,7 +71,8 @@ export default function DeadlinesHub() {
           <div className="text-xs text-muted-foreground mt-1">Applies if {r.appliesIf}</div>
         </div>
         <div className="shrink-0 text-right">
-          <div className="font-display text-lg tracking-tightest tabular-nums">{whenText(r)}</div>
+          {/* `whenLabel` first: PMT-06 and the QRMP returns are not "every month". */}
+          <div className="font-display text-lg tracking-tightest tabular-nums">{r.whenLabel ?? whenText(r)}</div>
           {t && <div className="text-xs text-primary mt-0.5">Read more</div>}
         </div>
       </>
@@ -88,9 +95,9 @@ export default function DeadlinesHub() {
           <div className="eyebrow">Compliance calendar</div>
           <Kinetic as="h1" text={"Every date that\ncosts you if you miss it."} className="font-display display-1 tracking-tightest mt-5" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            The {STATUTORY_CATALOGUE.length} statutory obligations an Indian business is measured against — GST, TDS, PF and
-            ESI, advance tax, the income tax return and the ROC filings. Each one says who it actually applies to, because
-            most of them will not apply to you.
+            {STATUTORY_CATALOGUE.length} national statutory obligations an Indian business is measured against — GST, TDS, PF and
+            ESI, advance tax, the income tax return, the ROC filings and MSME-1. Each one says who it actually applies to, because
+            most of them will not apply to you. State dates such as professional tax vary by state and are not listed here.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/health-check" className="inline-flex items-center gap-2 rounded-full border px-6 h-12 text-sm font-medium hover:bg-accent transition-colors">
@@ -108,7 +115,7 @@ export default function DeadlinesHub() {
           <Reveal>
             <div className="flex items-baseline gap-3 mb-4">
               <span className="row-meta text-sm tabular-nums text-muted-foreground">01</span>
-              <h2 className="font-display text-2xl lg:text-3xl tracking-tightest">Every month</h2>
+              <h2 className="font-display text-2xl lg:text-3xl tracking-tightest">Monthly, and the quarter-linked GST dates</h2>
             </div>
             <div className="rounded-2xl border overflow-hidden grid gap-px bg-border">
               {monthly.map((r) => <Row key={r.id} r={r} />)}
@@ -122,7 +129,7 @@ export default function DeadlinesHub() {
           <Reveal>
             <div className="flex items-baseline gap-3 mb-4 mt-6">
               <span className="row-meta text-sm tabular-nums text-muted-foreground">02</span>
-              <h2 className="font-display text-2xl lg:text-3xl tracking-tightest">Once or four times a year</h2>
+              <h2 className="font-display text-2xl lg:text-3xl tracking-tightest">Quarterly, half-yearly and annual</h2>
             </div>
             <div className="rounded-2xl border overflow-hidden grid gap-px bg-border">
               {annual.map((r) => <Row key={r.id} r={r} />)}
@@ -140,7 +147,7 @@ export default function DeadlinesHub() {
               <Link key={t.slug} href={`/deadlines/${t.slug}`} className="rounded-2xl border p-5 bg-card hover:border-primary/40 transition-colors">
                 <div className="font-display text-lg tracking-tightest">{t.h1}</div>
                 <div className="text-xs text-muted-foreground mt-1.5">
-                  {rulesFor(t).map((r) => whenText(r)).join(" · ")}
+                  {rulesFor(t).map((r) => r.whenLabel ?? whenText(r)).join(" · ")}
                 </div>
               </Link>
             ))}
@@ -159,8 +166,13 @@ export default function DeadlinesHub() {
               would have gone silently wrong the day that rule moved. Caught by
               scripts/test-seo-pages.mjs, which is exactly what it is for.
             */}
-            Cortex watches these dates against your own numbers — the receivables that fund the payment, the suppliers past
-            the MSME 45-day mark, the cash that has to be there on the day — and emails you before it costs you.
+            {/*
+              It used to end "and emails you before it costs you". No scheduled
+              email carries statutory deadlines, so that was a promise the
+              product does not keep. This says what it does.
+            */}
+            Cortex shows the dates that apply to you on your dashboard and compliance calendar, ahead of the day, next to your
+            own numbers — the receivables that fund the payment, the suppliers past the MSME 45-day mark.
           </p>
           <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
             <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>

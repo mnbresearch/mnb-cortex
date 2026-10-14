@@ -24,16 +24,20 @@ export function DscrCalc({ seed }: { seed?: WorkspaceSeed } = {}) {
   const [minDscr, setMinDscr] = useState(1.25);
 
   const m = useMemo(() => {
+    /* Guard: a minimum DSCR of 0 divided by zero and offered an infinite loan.
+       Below or at zero there is no lending test to apply, so no capacity is
+       shown until a real ratio is entered. Tenure is held to at least a month. */
+    const validMin = minDscr > 0;
     // Income available for NEW debt after keeping min DSCR on total
-    const maxTotalService = noi / minDscr;
+    const maxTotalService = validMin ? Math.max(0, noi) / minDscr : 0;
     const availForNew = Math.max(maxTotalService - existingDebt, 0);
     // Convert annual capacity into a loan principal (standard EMI/annuity)
-    const r = rate / 100 / 12;
-    const n = tenure * 12;
+    const r = Math.max(0, rate || 0) / 100 / 12;
+    const n = Math.max(1, Math.round((tenure || 0) * 12));
     const monthlyCapacity = availForNew / 12;
     const eligible = r === 0 ? monthlyCapacity * n : monthlyCapacity * (1 - Math.pow(1 + r, -n)) / r;
     const currentDscr = existingDebt > 0 ? noi / existingDebt : Infinity;
-    return { availForNew, eligible: Math.max(eligible, 0), currentDscr, monthlyCapacity };
+    return { availForNew, eligible: Number.isFinite(eligible) ? Math.max(eligible, 0) : 0, currentDscr, monthlyCapacity, validMin };
   }, [noi, existingDebt, rate, tenure, minDscr]);
 
   const F = (label: string, value: number, set: (n: number) => void, prefix = "₹") => (
@@ -57,6 +61,7 @@ export function DscrCalc({ seed }: { seed?: WorkspaceSeed } = {}) {
           {F("New loan tenure", tenure, setTenure, "yrs")}
           {F("Lender min DSCR", minDscr, setMinDscr, "×")}
         </div>
+        {!m.validMin && <p className="text-xs text-warning">Enter the lender&apos;s minimum DSCR (above 0) to estimate a loan — at 0 there is no test to size it against.</p>}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <Stat label="Current DSCR" value={m.currentDscr === Infinity ? "∞" : `${m.currentDscr.toFixed(2)}×`} cls={m.currentDscr >= minDscr ? "text-success" : "text-danger"} />
           <Stat label="Room for new EMI / mo" value={inr(m.monthlyCapacity)} />

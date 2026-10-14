@@ -14,6 +14,79 @@ const R0: Round[] = [
   { id: "r1", name: "Seed", raise: 20_000_000, preMoney: 80_000_000, esop: 10 },
 ];
 
+/* @pure-start capTableModel — executed by scripts/test-statutory-fixes.mjs, so keep it free of React and imports. */
+/**
+ * The dilution waterfall, round by round.
+ *
+ * THE ESOP POOL IS SIZED PRE-MONEY, THEN THE ROUND IS PRICED.
+ *
+ * This used to price the investor's shares first and top the pool up
+ * afterwards, so the pool diluted the new investor too: a ₹2 Cr raise at ₹8 Cr
+ * pre-money with a 10% pool came out 72 / 18 / 10 instead of the 70 / 20 / 10
+ * the term sheet means. The standard ("pre-money option pool") reading is that
+ * the investor gets raise / post-money and the pool top-up comes out of the
+ * existing holders. Solved directly, with T existing shares, E the existing
+ * pool, i = raise / post-money and e the target pool share:
+ *
+ *   post-round shares  S = (T - E) / (1 - i - e)
+ *   pool top-up        P = e*S - E   (never negative)
+ *   price per share    = pre-money / (T + P)
+ *   investor shares    = raise / price          (= i*S)
+ */
+type CapRound = { name: string; raise: number; preMoney: number; esop: number };
+export type CapStep = { name: string; founderPct: number; investorPct: number; esopPct: number; postMoney: number; price: number; poolCapped: boolean };
+
+export function capTableModel(founderShares: number, rounds: CapRound[]) {
+  let totalShares = founderShares;
+  const founder = founderShares;
+  let esopPool = 0;
+  const investors: { name: string; shares: number }[] = [];
+  const steps: CapStep[] = [];
+
+  for (const r0 of rounds) {
+    const r = { ...r0, raise: Math.max(0, Number(r0.raise) || 0), preMoney: Math.max(0, Number(r0.preMoney) || 0) };
+    const postMoney = r.preMoney + r.raise;
+    /*
+      A zero pre-money is an incomplete form, not a modelling case: it used to
+      turn every percentage on the page into "NaN%". No shares are issued, so
+      the round is a no-op for the investor and every figure stays finite.
+    */
+    const i = r.preMoney > 0 && totalShares > 0 ? r.raise / postMoney : 0;
+    const e = Math.min(Math.max(0, Number(r.esop) || 0), 100) / 100;
+
+    let poolAdd = 0;
+    let poolCapped = false;
+    if (e > 0) {
+      const denom = 1 - i - e;
+      if (denom > 0) {
+        const post = (totalShares - esopPool) / denom;
+        poolAdd = Math.max(0, e * post - esopPool);
+      } else {
+        /* Investor share + pool share at or above 100% cannot be satisfied. */
+        poolCapped = true;
+      }
+    }
+    const preRound = totalShares + poolAdd;
+    const pricePerShare = r.preMoney > 0 && preRound > 0 ? r.preMoney / preRound : 0;
+    const newInvestorShares = pricePerShare > 0 ? r.raise / pricePerShare : 0;
+
+    totalShares = preRound + newInvestorShares;
+    esopPool += poolAdd;
+    investors.push({ name: r.name, shares: newInvestorShares });
+    const invTotal = investors.reduce((s, x) => s + x.shares, 0);
+    steps.push({
+      name: r.name,
+      founderPct: totalShares > 0 ? (founder / totalShares) * 100 : 0,
+      investorPct: totalShares > 0 ? (invTotal / totalShares) * 100 : 0,
+      esopPct: totalShares > 0 ? (esopPool / totalShares) * 100 : 0,
+      postMoney, price: pricePerShare, poolCapped,
+    });
+  }
+  const last = steps[steps.length - 1];
+  return { steps, last, totalShares, founder, esopPool, investors };
+}
+/* @pure-end */
+
 /**
  * A DILUTION MODEL THAT SURVIVES CLOSING THE TAB.
  *
@@ -57,7 +130,14 @@ export function CapTable({
     fd.set("title", name);
     fd.set("data", JSON.stringify({ founderShares, rounds } satisfies CapTableData));
     startTransition(async () => {
-      const r = await saveWorkbenchEntry(fd);
+      /*
+        A throw here (a role below analyst, a dropped connection, a server
+        error) used to escape to the route error page and take the unsaved
+        model with it. Caught and shown inline; the rounds stay on screen.
+      */
+      let r: Awaited<ReturnType<typeof saveWorkbenchEntry>>;
+      try { r = await saveWorkbenchEntry(fd); }
+      catch (e) { setNote(`That did not save: ${e instanceof Error ? e.message : "something went wrong"}. Your model is still here.`); return; }
       if (r && !r.ok) { setNote(r.error); return; }
       setScenarioName("");
       setNote(`Saved "${name}".`);
@@ -75,7 +155,9 @@ export function CapTable({
     const fd = new FormData();
     fd.set("kind", "captable"); fd.set("id", String(s.id));
     startTransition(async () => {
-      const r = await deleteWorkbenchEntry(fd);
+      let r: Awaited<ReturnType<typeof deleteWorkbenchEntry>>;
+      try { r = await deleteWorkbenchEntry(fd); }
+      catch (e) { setNote(`That was not removed: ${e instanceof Error ? e.message : "something went wrong"}.`); return; }
       if (r && !r.ok) { setNote(r.error); return; }
       setSaved((xs) => xs.filter((x) => String(x.id) !== String(s.id)));
       setNote(`Removed "${s.title}".`);
@@ -119,69 +201,7 @@ export function CapTable({
     setNote(`Loaded "${s.title}". Editing here does not change the saved copy — save again under a new name to keep both.`);
   }
 
-  const model = useMemo(() => {
-    let totalShares = founderShares;
-    let founder = founderShares;
-    let esopPool = 0;
-    const investors: { name: string; shares: number }[] = [];
-    const steps: { name: string; founderPct: number; investorPct: number; esopPct: number; postMoney: number; price: number }[] = [];
-
-    for (const r of rounds) {
-      const postMoney = r.preMoney + r.raise;
-      // ESOP top-up (pre-money, dilutes founders): add pool to reach r.esop% post
-      const targetEsopShares = 0; // simplified: treat esop as a % added to pool below
-      /*
-        A ZERO PRE-MONEY TURNED EVERY PERCENTAGE ON THE PAGE INTO "NaN%".
-
-        Clear the Pre-money cell (plain type="number"; `upd()` does
-        `Number("")` → 0) and the chain is:
-
-          pricePerShare     = 0 / 10,000,000      = 0
-          newInvestorShares = raise / 0           = Infinity
-          totalShares                             = Infinity
-          investorPct       = Infinity / Infinity = NaN
-          esopPct           = Infinity / Infinity = NaN
-
-        The summary then read "Investors NaN%" and "ESOP pool NaN%" while
-        "Founders now own" read a confident 0.0% (finite / Infinity), and the
-        ownership bar got `width: NaN%` and collapsed.
-
-        The existing guard at load() — `Number(r?.preMoney) || 0` — was aimed
-        at this and cannot reach it: it maps a NaN arriving from a saved
-        scenario to 0, and 0 is precisely the input that regenerates NaN
-        through the live edit path. The fix has to sit at the arithmetic.
-
-        A round at zero pre-money is not a modelling case to approximate; it is
-        an incomplete form. Issuing no shares leaves the round a no-op, the
-        founders' percentage unchanged, and every figure finite — so the page
-        stays readable while the owner is still typing.
-      */
-      const pricePerShare = r.preMoney > 0 && totalShares > 0 ? r.preMoney / totalShares : 0;
-      const newInvestorShares = pricePerShare > 0 ? r.raise / pricePerShare : 0;
-      // ESOP: expand pool so esop% of post-round belongs to pool
-      let poolAdd = 0;
-      const preRoundTotal = totalShares + newInvestorShares;
-      if (r.esop > 0) {
-        // pool should be esop% of final; solve: (esopPool+poolAdd)/(preRoundTotal+poolAdd) = esop/100
-        const e = r.esop / 100;
-        poolAdd = Math.max(0, (e * preRoundTotal - esopPool) / (1 - e));
-      }
-      totalShares = preRoundTotal + poolAdd;
-      esopPool += poolAdd;
-      investors.push({ name: r.name, shares: newInvestorShares });
-      const invTotal = investors.reduce((s, i) => s + i.shares, 0);
-      steps.push({
-        name: r.name,
-        founderPct: (founder / totalShares) * 100,
-        investorPct: (invTotal / totalShares) * 100,
-        esopPct: (esopPool / totalShares) * 100,
-        postMoney, price: pricePerShare,
-      });
-      void targetEsopShares;
-    }
-    const last = steps[steps.length - 1];
-    return { steps, last, totalShares, founder, esopPool, investors };
-  }, [rounds, founderShares]);
+  const model = useMemo(() => capTableModel(founderShares, rounds), [rounds, founderShares]);
 
   function add() { setRounds((r) => [...r, { id: "r" + Date.now(), name: "Series " + String.fromCharCode(65 + r.length), raise: 50_000_000, preMoney: 250_000_000, esop: 0 }]); }
   function del(id: string) { setRounds((r) => r.filter((x) => x.id !== id)); }
@@ -285,7 +305,10 @@ export function CapTable({
             <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">ESOP pool</div><div className="text-xl font-bold">{model.last.esopPct.toFixed(1)}%</div></div>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">Simplified model (priced rounds, ESOP as post-round %). Real term sheets add liquidation preferences, SAFEs, anti-dilution and more — use this to build intuition, not for legal docs.</p>
+        {model.steps.some((s) => s.poolCapped) && (
+          <p className="text-xs text-warning">A round&apos;s investor share plus its ESOP pool reaches 100% or more, so that pool could not be sized — lower one of them.</p>
+        )}
+        <p className="text-xs text-muted-foreground">Simplified model (priced rounds; the ESOP % is the pool&apos;s share after the round, created before it is priced, so it dilutes existing holders and not the new investor). Real term sheets add liquidation preferences, SAFEs, anti-dilution and more — use this to build intuition, not for legal docs.</p>
       </Card>
     </div>
   );

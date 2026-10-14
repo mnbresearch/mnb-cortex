@@ -9,11 +9,14 @@ export function Amortization() {
   const [years, setYears] = useState(5);
 
   const m = useMemo(() => {
-    const n = years * 12;
-    const r = rate / 100 / 12;
-    const emi = r === 0 ? principal / n : (principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+    /* Guards: a zero tenure made n = 0 and the EMI Infinity (÷0); a negative
+       rate or loan has no meaning here. Tenure is held to 1–600 months. */
+    const P = Math.max(0, principal || 0);
+    const n = Math.min(600, Math.max(1, Math.round((years || 0) * 12)));
+    const r = Math.max(0, rate || 0) / 100 / 12;
+    const emi = r === 0 ? P / n : (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
     const rows: { i: number; interest: number; principal: number; balance: number }[] = [];
-    let bal = principal, totalInterest = 0;
+    let bal = P, totalInterest = 0;
     for (let i = 1; i <= n; i++) {
       const interest = bal * r;
       const princ = emi - interest;
@@ -21,7 +24,7 @@ export function Amortization() {
       totalInterest += interest;
       rows.push({ i, interest, principal: princ, balance: bal });
     }
-    return { emi, n, rows, totalInterest, totalPaid: emi * n };
+    return { emi, n, rows, totalInterest, totalPaid: emi * n, P };
   }, [principal, rate, years]);
 
   const F = (label: string, value: number, set: (n: number) => void, suffix = "₹") => (
@@ -34,12 +37,12 @@ export function Amortization() {
   // Yearly rollup for the chart + compact table
   const yearly = useMemo(() => {
     const out: { year: number; interest: number; principal: number; balance: number }[] = [];
-    for (let y = 0; y < years; y++) {
+    for (let y = 0; y < Math.ceil(m.n / 12); y++) {
       const slice = m.rows.slice(y * 12, y * 12 + 12);
       out.push({ year: y + 1, interest: slice.reduce((s, x) => s + x.interest, 0), principal: slice.reduce((s, x) => s + x.principal, 0), balance: slice[slice.length - 1]?.balance || 0 });
     }
     return out;
-  }, [m.rows, years]);
+  }, [m.rows, m.n]);
   const maxPay = Math.max(...yearly.map((y) => y.interest + y.principal), 1);
 
   return (
@@ -50,7 +53,8 @@ export function Amortization() {
           <Stat label="Monthly EMI" value={inr(m.emi)} highlight />
           <Stat label="Total interest" value={inr(m.totalInterest)} cls="text-danger" />
           <Stat label="Total repayment" value={inr(m.totalPaid)} />
-          <Stat label="Interest as % of loan" value={`${((m.totalInterest / principal) * 100).toFixed(0)}%`} />
+          {/* A zero loan made this NaN%. */}
+          <Stat label="Interest as % of loan" value={m.P > 0 ? `${((m.totalInterest / m.P) * 100).toFixed(0)}%` : "—"} />
         </div>
       </Card>
 

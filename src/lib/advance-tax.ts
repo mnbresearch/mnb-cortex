@@ -90,7 +90,8 @@ export const ADVANCE_TAX_AS_OF = "Advance-tax rules · last verified September 2
 /** Where these provisions live under the Income-tax Act, 2025. */
 export const ADVANCE_TAX_SECTION_NOTE =
   "From 1 April 2026 the deferment interest below sits in section 425 of the Income-tax Act, 2025. " +
-  "The familiar 234B/234C labels are kept because that is what notices and advisers still use.";
+  "The familiar 234B/234C (and 44AD/44ADA) labels are kept because that is what notices and advisers still use; " +
+  "the 2025 Act renumbers them and speaks of the \"tax year\" rather than the assessment year.";
 
 /** Advance tax is only payable once the year's liability crosses this. */
 export const ADVANCE_TAX_THRESHOLD = 10_000;
@@ -151,14 +152,29 @@ export type InstalmentResult = {
   withinTolerance: boolean;
   months: number;
   interest: number;
+  /**
+   * True once the instalment's date is behind us (IST), or always when no
+   * `today` was given. Interest on a row that has not passed is a PROJECTION —
+   * what it will cost if nothing more is paid by then — not a charge.
+   */
+  passed: boolean;
 };
 
 export type AdvanceTaxResult = {
   /** True when the year's liability is under the ₹10,000 threshold. */
   belowThreshold: boolean;
   rows: InstalmentResult[];
-  /** Total 234C interest across the instalments. */
+  /**
+   * 234C interest on instalments whose dates have PASSED. With no `today`
+   * every date counts as passed, which is the old behaviour.
+   */
   interest234C: number;
+  /**
+   * 234C on the dates still ahead, if nothing more is paid by them. Shown as a
+   * projection, never added to the charge: on 14 October the page used to
+   * print ₹12,120 in red when only ₹4,320 related to dates that had passed.
+   */
+  projected234C: number;
   /** Total paid by the end of the year, per the inputs given. */
   paidByYearEnd: number;
   /** Amount still unpaid at year end. */
@@ -174,8 +190,32 @@ export type AdvanceTaxResult = {
     principal: number;
     /** Rupees per month it accrues at. */
     perMonth: number;
+    /**
+     * True while the financial year is still running: 234B only starts on
+     * 1 April after the year ends, so mid-year it is what WILL accrue if the
+     * year closes with these payments — a projection, not a charge.
+     */
+    projected: boolean;
   };
 };
+
+const MONTH_INDEX: Record<string, number> = { Jun: 5, Sep: 8, Dec: 11, Mar: 2 };
+
+/** The FY start year an IST day belongs to — April to March. */
+function fyStartYearOf(today: Date): number {
+  const { y, m } = istToday(today);
+  return m >= 4 ? y : y - 1;
+}
+
+/** Has instalment `by` ("15 Jun") passed on `today`, in IST? The due day itself has not. */
+function instalmentPassed(by: string, today: Date): boolean {
+  const fy = fyStartYearOf(today);
+  const [dd, mon] = by.split(" ");
+  const mi = MONTH_INDEX[mon] ?? 2;
+  const due = Date.UTC(mi < 3 ? fy + 1 : fy, mi, Number(dd));
+  const { y, m, d } = istToday(today);
+  return Date.UTC(y, m - 1, d) > due;
+}
 
 const r2 = (n: number) => Math.round(n);
 
@@ -193,6 +233,12 @@ export function computeAdvanceTax(input: {
   payments?: PaymentByDate[];
   /** 44AD / 44ADA — one instalment by 15 March. */
   presumptive?: boolean;
+  /**
+   * The day to measure from, for the CURRENT financial year. Instalments whose
+   * dates have not passed are projections, not charges. Omit for the
+   * whole-year view (every date treated as passed).
+   */
+  today?: Date;
 }): AdvanceTaxResult {
   const tax = Math.max(0, Number(input.tax) || 0);
   const schedule = input.presumptive ? PRESUMPTIVE_SCHEDULE : SCHEDULE;
@@ -216,11 +262,13 @@ export function computeAdvanceTax(input: {
         by: s.by, pct: s.cum * 100,
         dueCumulative: 0, instalment: 0, paidCumulative: 0,
         shortfall: 0, withinTolerance: true, months: s.months, interest: 0,
+        passed: input.today ? instalmentPassed(s.by, input.today) : true,
       })),
       interest234C: 0,
+      projected234C: 0,
       paidByYearEnd: 0,
       unpaid: 0,
-      interest234B: { applies: false, principal: 0, perMonth: 0 },
+      interest234B: { applies: false, principal: 0, perMonth: 0, projected: Boolean(input.today) },
     };
   }
 
@@ -228,6 +276,7 @@ export function computeAdvanceTax(input: {
   let prevCum = 0;
   let runningPaid = 0;
   let interest234C = 0;
+  let projected234C = 0;
 
   for (const s of schedule) {
     const dueCumulative = r2(tax * s.cum);
@@ -247,12 +296,14 @@ export function computeAdvanceTax(input: {
        `reliefAmount` would understate every charge at the first two dates. */
     const shortfall = withinTolerance ? 0 : Math.max(0, dueCumulative - paidCumulative);
     const interest = r2(shortfall * INTEREST_RATE_PER_MONTH * s.months);
-    interest234C += interest;
+    /* Only a date that has passed has actually cost anything. */
+    const passed = input.today ? instalmentPassed(s.by, input.today) : true;
+    if (passed) interest234C += interest; else projected234C += interest;
 
     rows.push({
       by: s.by, pct: s.cum * 100,
       dueCumulative, instalment, paidCumulative,
-      shortfall, withinTolerance, months: s.months, interest,
+      shortfall, withinTolerance, months: s.months, interest, passed,
     });
   }
 
@@ -265,12 +316,16 @@ export function computeAdvanceTax(input: {
     belowThreshold: false,
     rows,
     interest234C: r2(interest234C),
+    projected234C: r2(projected234C),
     paidByYearEnd,
     unpaid,
     interest234B: {
       applies: applies234B,
       principal: applies234B ? unpaid : 0,
       perMonth: applies234B ? r2(unpaid * INTEREST_RATE_PER_MONTH) : 0,
+      /* Given a `today`, it is always inside the FY it measures — so the year
+         has not closed and 234B has not started. */
+      projected: Boolean(input.today),
     },
   };
 }

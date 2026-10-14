@@ -22,11 +22,16 @@ export function CommissionCalc({ seed }: { seed?: Rep[] } = {}) {
 
   const calc = useMemo(() => {
     const people = reps.map((r) => {
-      const attainment = r.quota > 0 ? (r.sales / r.quota) * 100 : 0;
-      const uptoQuota = Math.min(r.sales, r.quota);
-      const above = Math.max(0, r.sales - r.quota);
+      /* No quota (0 or blank) means no accelerator: everything is paid at the
+         base rate and attainment is undefined ("—"). It used to pay every rupee
+         at the accelerator rate and show 0% attainment. */
+      const hasQuota = r.quota > 0;
+      const attainment: number | null = hasQuota ? (r.sales / r.quota) * 100 : null;
+      const sales = Math.max(0, r.sales || 0);
+      const uptoQuota = hasQuota ? Math.min(sales, r.quota) : sales;
+      const above = hasQuota ? Math.max(0, sales - r.quota) : 0;
       const payout = uptoQuota * (baseRate / 100) + above * (accelRate / 100);
-      const effRate = r.sales > 0 ? (payout / r.sales) * 100 : 0;
+      const effRate = sales > 0 ? (payout / sales) * 100 : 0;
       return { ...r, attainment, payout, effRate };
     });
     return { people, total: people.reduce((s, p) => s + p.payout, 0), totalSales: people.reduce((s, p) => s + p.sales, 0) };
@@ -63,7 +68,7 @@ export function CommissionCalc({ seed }: { seed?: Rep[] } = {}) {
                 <td className="py-1.5 pr-2"><input className={I + " w-24"} value={p.name} onChange={(e) => upd(p.id, "name", e.target.value)} /></td>
                 <td className="py-1.5 pr-2"><input className={I + " w-28"} type="number" value={p.quota} onChange={(e) => upd(p.id, "quota", e.target.value)} /></td>
                 <td className="py-1.5 pr-2"><input className={I + " w-28"} type="number" value={p.sales} onChange={(e) => upd(p.id, "sales", e.target.value)} /></td>
-                <td className={`py-1.5 pr-2 font-medium ${p.attainment >= 100 ? "text-success" : p.attainment >= 80 ? "text-warning" : "text-danger"}`}>{p.attainment.toFixed(0)}%</td>
+                <td className={`py-1.5 pr-2 font-medium ${p.attainment === null ? "text-muted-foreground" : p.attainment >= 100 ? "text-success" : p.attainment >= 80 ? "text-warning" : "text-danger"}`}>{p.attainment === null ? "—" : `${p.attainment.toFixed(0)}%`}</td>
                 <td className="py-1.5 pr-2 text-muted-foreground">{p.effRate.toFixed(1)}%</td>
                 <td className="py-1.5"><div className="flex items-center gap-1"><span className="font-medium">{inr(p.payout)}</span><button onClick={() => del(p.id)} className="text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button></div></td>
               </tr>
