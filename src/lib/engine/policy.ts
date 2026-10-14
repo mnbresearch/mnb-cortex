@@ -250,9 +250,21 @@ export function gateVerdict(
   verdict: Verdict,
   def: ActionDef,
   policy: Policy | null,
-  who: { source: string; actorRole?: string | null; tainted?: boolean; suspicious?: readonly string[] },
+  who: { source: string; actorRole?: string | null; tainted?: boolean; suspicious?: readonly string[]; autonomy?: boolean },
 ): Verdict {
   if (verdict.verdict !== "auto") return verdict;
+  /*
+    6. THE PLAN STILL INCLUDES AUTONOMY. An auto rule for a money or outbound
+       action can only be SAVED on a plan with "autonomy" (savePolicy), but the
+       rule outlives the plan: after a downgrade or a lapse it kept firing. The
+       caller passes `autonomy: false` when the workspace's live plan does not
+       include it, and such actions then wait for a tap. Low-impact actions may
+       run on their own on any plan, as before. Undefined = not checked (pure
+       callers and tests that predate this).
+  */
+  if (who.autonomy === false && CAPPED_EFFECTS.has(def.effect)) {
+    return { verdict: "approve", reason: "Your plan no longer includes letting Cortex act on its own for customer messages and money, so this waits for your tap. Your rule is kept and works again if you upgrade." };
+  }
   if (who.suspicious && who.suspicious.length) {
     return { verdict: "approve", reason: `Cortex read text that looks like instructions to an AI (${who.suspicious.slice(0, 3).join("; ")}) before proposing this, so it waits for you. Check it is what you want.` };
   }

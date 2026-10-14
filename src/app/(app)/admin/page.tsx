@@ -4,7 +4,9 @@ import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getMembers, getInvites } from "@/lib/data";
+import { getMembers, getInvites, getUserAndOrg } from "@/lib/data";
+import { currentRole } from "@/lib/roles";
+import { AdminTeam } from "@/components/admin-team";
 import { inviteMember, cancelInvite } from "@/lib/actions";
 import { UserPlus, Plug, Mail, X } from "lucide-react";
 
@@ -17,6 +19,7 @@ const sampleMembers = [ { id: "s1", name: "You (Owner)", role: "owner" }, { id: 
 export default async function Admin() {
   const { rows: members, live } = await getMembers();
   const { rows: invites } = await getInvites();
+  const [{ user }, { role: myRole }] = live ? await Promise.all([getUserAndOrg(), currentRole()]) : [{ user: null as any }, { role: "viewer" }];
   const list = live ? members : sampleMembers;
   const inp = "rounded-lg border bg-background px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-ring";
   return (
@@ -24,14 +27,20 @@ export default async function Admin() {
       <Topbar title="Admin & Permissions" subtitle="Team, roles & integrations" />
       <PageShell>
         <Section title="Team members" desc={live ? "Live members of your workspace" : "Sign in to manage your real team"}>
-          <div className="space-y-2">
-            {list.map((m: any) => (
-              <div key={m.id} className="flex items-center justify-between rounded-lg border p-3">
-                <div className="flex items-center gap-3"><div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-purple-500" /><div className="font-medium text-sm">{m.name}</div></div>
-                <Badge className="border-border capitalize">{m.role}</Badge>
-              </div>
-            ))}
-          </div>
+          {/* Admins and owners can now change a role or remove someone (rank
+              rules enforced by changeMemberRole/removeMember and RLS). */}
+          {live ? (
+            <AdminTeam members={list} myId={user?.id ?? null} myRole={String(myRole || "viewer")} />
+          ) : (
+            <div className="space-y-2">
+              {list.map((m: any) => (
+                <div key={m.id} className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="flex items-center gap-3"><div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-purple-500" /><div className="font-medium text-sm">{m.name}</div></div>
+                  <Badge className="border-border capitalize">{m.role}</Badge>
+                </div>
+              ))}
+            </div>
+          )}
           {live && (
             <SafeForm action={inviteMember} className="mt-4 flex flex-wrap items-end gap-2">
               <input name="email" type="email" required placeholder="teammate@company.com" className={`${inp} flex-1 min-w-[200px]`}  aria-label="teammate@company.com"/>

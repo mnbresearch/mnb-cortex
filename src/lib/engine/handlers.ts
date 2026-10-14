@@ -170,11 +170,26 @@ async function sendPaymentReminder(args: Record<string, unknown>, ctx: Ctx): Pro
     return { ok: false, error: `Collections did not draft a reminder for this invoice${why ? ` (this run: ${why})` : ""}. It may be inside the do-not-contact list, not yet past the first reminder day, or at the attempt cap.` };
   }
 
+  /*
+    THE CHANNEL THAT WAS APPROVED, OR NOTHING.
+
+    `find(channel) || drafts[0]` meant an approval for an EMAIL reminder could
+    send a WhatsApp one (or the reverse) whenever the requested channel had no
+    draft — a message on a channel the owner never agreed to. Now a missing
+    draft on the requested channel is a refusal that says why.
+  */
   const wantChannel = String(args.channel || "email");
   const { data: drafts } = await svc.from("collection_messages")
     .select("id, channel, status").eq("org_id", ctx.orgId).eq("thread_id", (thread as any).id).eq("status", "draft");
-  const draft = ((drafts as any[]) || []).find((d) => d.channel === wantChannel) || ((drafts as any[]) || [])[0];
-  if (!draft) return { ok: false, error: `No draft is waiting for this invoice — the last reminder may be too recent, or the thread is ${(thread as any).status}.` };
+  const all = (drafts as any[]) || [];
+  const draft = all.find((d) => d.channel === wantChannel);
+  if (!draft) {
+    if (all.length) {
+      const have = Array.from(new Set(all.map((d) => d.channel))).join(" and ");
+      return { ok: false, error: `No ${wantChannel} reminder was drafted for this invoice (the waiting draft is ${have}), so nothing was sent. Propose it again for ${have}, or add the customer's ${wantChannel === "email" ? "email address" : "phone number"}.` };
+    }
+    return { ok: false, error: `No draft is waiting for this invoice — the last reminder may be too recent, or the thread is ${(thread as any).status}.` };
+  }
 
   const { data: approvedRows, error: apErr } = await svc.from("collection_messages")
     .update({ status: "approved", approved_at: new Date().toISOString() })
@@ -182,7 +197,8 @@ async function sendPaymentReminder(args: Record<string, unknown>, ctx: Ctx): Pro
   if (apErr) return { ok: false, error: `Could not approve the draft: ${apErr.message}` };
   if (!approvedRows || approvedRows.length !== 1) return { ok: false, error: "The draft changed state before it could be approved." };
 
-  const sent = await sendApproved(ctx.orgId);
+  /* Only THIS message. Unscoped, the run sent every approved reminder in the workspace. */
+  const sent = await sendApproved(ctx.orgId, undefined, { onlyIds: [String(draft.id)] });
 
   const { data: after } = await svc.from("collection_messages").select("status, recipient, error").eq("id", draft.id).maybeSingle();
   const mineSent = String((after as any)?.status) === "sent";
@@ -192,7 +208,7 @@ async function sendPaymentReminder(args: Record<string, unknown>, ctx: Ctx): Pro
 
   return {
     ok: true,
-    summary: `${draft.channel} reminder sent for ${(inv as any).invoice_no || "the invoice"} to ${(after as any)?.recipient || (inv as any).party}.${sent.sent > 1 ? ` (${sent.sent - 1} other already-approved reminder${sent.sent === 2 ? "" : "s"} went out in the same run.)` : ""}`,
+    summary: `${draft.channel} reminder sent for ${(inv as any).invoice_no || "the invoice"} to ${(after as any)?.recipient || (inv as any).party}.`,
     result: { invoice_id: invoiceId, message_id: draft.id, channel: draft.channel, recipient: (after as any)?.recipient ?? null, run: sent },
     undo: null, // a sent message cannot be unsent
   };

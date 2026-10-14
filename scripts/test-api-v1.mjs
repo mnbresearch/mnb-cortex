@@ -116,7 +116,9 @@ for (const p of walk(out)) {
   writeFileSync(p, readFileSync(p, "utf8")
     .replace(/^import ["']server-only["'];?\s*$/m, "")
     .replace(/from "next\/server"/g, `from "${nextServer}"`)
-    .replace(/(from |import\()"@\/([a-zA-Z0-9_.\/-]+?)(\.ts)?"/g, (_, kw, m) => `${kw}"${up}/${m}.js"`));
+    .replace(/(from |import\()"@\/([a-zA-Z0-9_.\/-]+?)(\.ts)?"/g, (_, kw, m) => `${kw}"${up}/${m}.js"`)
+    /* Pure libs import each other as "./x.ts" (so tests can load them directly); the emitted JS needs ".js". */
+    .replace(/(from |import\()"(\.{1,2}\/[a-zA-Z0-9_.\/-]+?)\.ts"/g, (_, kw, m) => `${kw}"${m}.js"`));
 }
 /* Fakes for the two modules that would reach the network. */
 mkdirSync(join(out, "lib/supabase"), { recursive: true });
@@ -127,13 +129,19 @@ writeFileSync(join(out, "lib/ingest-scan.js"), `export async function flagSuspic
 
 /* ---- the fake database ---- */
 const A = "aaaaaaaa-0000-4000-8000-000000000001", B = "bbbbbbbb-0000-4000-8000-000000000002";
+const C = "cccccccc-0000-4000-8000-000000000003", D = "dddddddd-0000-4000-8000-000000000004", E = "eeeeeeee-0000-4000-8000-000000000005";
 const keyFor = (s) => "mnbc_" + s.padEnd(10, "0").slice(0, 10) + "_" + sha(s).slice(0, 64);
 const KEYS = {
   aRead: keyFor("aread"), aIngest: keyFor("aingest"), aRevoked: keyFor("arev"), aExpired: keyFor("aexp"), bRead: keyFor("bread"), aMetrics: keyFor("amet"),
+  cIngest: keyFor("cingest"), cRead: keyFor("cread"), dRead: keyFor("dread"), eLegacy: keyFor("elegacy"),
 };
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const db = {
-  organizations: [{ id: A, name: "Acme Synthetic", plan: "watchpro" }, { id: B, name: "Beta Synthetic", plan: "command" }],
+  /* A is on Practice (api + api_write). C is on Watch Pro (api, no api_write). D is on Command but its period ended. E is on Watch (no api). */
+  organizations: [{ id: A, name: "Acme Synthetic", plan: "practice" }, { id: B, name: "Beta Synthetic", plan: "command" },
+    { id: C, name: "Gamma Synthetic", plan: "watchpro", subscription_status: "active" },
+    { id: D, name: "Delta Synthetic", plan: "command", subscription_status: "active", subscription_ends_at: "2026-01-01T00:00:00Z", credits: 9000 },
+    { id: E, name: "Eps Synthetic", plan: "watch", subscription_status: "active" }],
   api_keys: [
     { id: uuid(901), org_id: A, key_hash: sha(KEYS.aRead), key_prefix: KEYS.aRead.slice(0, 15), scopes: ["invoices:read", "customers:read", "sales:read", "leads:read"], expires_at: null, revoked_at: null, last_used_at: null, label: "read" },
     { id: uuid(902), org_id: A, key_hash: sha(KEYS.aIngest), key_prefix: "p2", scopes: ["ingest:write"], expires_at: null, revoked_at: null, last_used_at: null },
@@ -141,6 +149,11 @@ const db = {
     { id: uuid(904), org_id: A, key_hash: sha(KEYS.aExpired), key_prefix: "p4", scopes: ["invoices:read"], expires_at: "2020-01-01T00:00:00Z", revoked_at: null, last_used_at: null },
     { id: uuid(905), org_id: B, key_hash: sha(KEYS.bRead), key_prefix: "p5", scopes: ["invoices:read", "customers:read"], expires_at: null, revoked_at: null, last_used_at: null },
     { id: uuid(906), org_id: A, key_hash: sha(KEYS.aMetrics), key_prefix: "p6", scopes: ["metrics:read"], expires_at: null, revoked_at: null, last_used_at: null },
+    { id: uuid(907), org_id: C, key_hash: sha(KEYS.cIngest), key_prefix: "p7", scopes: ["ingest:write"], expires_at: null, revoked_at: null, last_used_at: null },
+    { id: uuid(908), org_id: C, key_hash: sha(KEYS.cRead), key_prefix: "p8", scopes: ["invoices:read"], expires_at: null, revoked_at: null, last_used_at: null },
+    { id: uuid(909), org_id: D, key_hash: sha(KEYS.dRead), key_prefix: "p9", scopes: ["invoices:read"], expires_at: null, revoked_at: null, last_used_at: null },
+    /* A key from before scopes: LEGACY_SCOPES give it ingest:write on any plan — the capability check must still refuse it on Watch. */
+    { id: uuid(910), org_id: E, key_hash: sha(KEYS.eLegacy), key_prefix: "p10", expires_at: null, revoked_at: null, last_used_at: null },
   ],
   invoices: [], customers: [], sales_orders: [], leads: [],
   health_metrics: [{ org_id: A, metric_key: "dso", label: "DSO", value: 41, unit: "days", delta_pct: 2, status: "warn" }, { org_id: B, metric_key: "dso", label: "DSO", value: 99, unit: "days", delta_pct: 0, status: "bad" }],
@@ -281,7 +294,18 @@ const call = async (mod, method, path, key, init = {}) => {
   r = await call(ing, "POST", "/api/v1/ingest", KEYS.aIngest, { body: "x".repeat(10), headers: { "content-length": String(6 * 1024 * 1024) } });
   check(r.status === 413 && r.body.code === "payload_too_large", "ingest: declared body over 5 MB → 413 before parsing");
 
-  check((globalThis.__rl || []).some((x) => x.key === `api:read:${uuid(901)}` && x.limit === K.hourlyLimit("watchpro", "read")) &&
+  /* THE PLAN AT USE TIME (audit P0-8): a key keeps no power its workspace's live plan does not include. */
+  r = await call(ing, "POST", "/api/v1/ingest", KEYS.cIngest, { body, headers: { "content-type": "application/json" } });
+  check(r.status === 403 && /Pushing data in/.test(r.body?.error || ""), "plan: Watch Pro (no api_write) cannot push data in, even with an ingest key", JSON.stringify(r.body));
+  r = await call(inv, "GET", "/api/v1/invoices", KEYS.cRead);
+  check(r.status === 200, "plan: …but Watch Pro can still read (api)");
+  r = await call(inv, "GET", "/api/v1/invoices", KEYS.dRead);
+  check(r.status === 403 && /plan has ended/i.test(r.body?.error || ""), "plan: a LAPSED Command workspace's key is refused, credits notwithstanding", JSON.stringify(r.body));
+  r = await call(ing, "POST", "/api/v1/ingest", KEYS.eLegacy, { body, headers: { "content-type": "application/json" } });
+  check(r.status === 403, "plan: a pre-scopes key (legacy ingest:write) on Watch is refused", JSON.stringify(r.body));
+  check(usage.some((u) => u.p_key === uuid(909) && u.p_ok === false), "plan: refusals are counted as denied usage");
+
+  check((globalThis.__rl || []).some((x) => x.key === `api:read:${uuid(901)}` && x.limit === K.hourlyLimit("practice", "read")) &&
         (globalThis.__rl || []).every((x) => !Object.values(KEYS).some((k) => x.key.includes(k))),
     "rate limit: bucket is the key's row id at the plan's allowance — the secret never becomes a bucket name");
   globalThis.__overLimit = true;
@@ -316,7 +340,7 @@ const call = async (mod, method, path, key, init = {}) => {
   const acts = read("src/lib/actions.ts");
   const fn = (name) => { const i = acts.indexOf(`export async function ${name}`); const j = acts.indexOf("\nexport ", i + 10); return acts.slice(i, j); };
   const gen = fn("generateApiKey"), rot = fn("rotateApiKey"), rev = fn("revokeApiKey");
-  check(/requireRole\("admin"\)/.test(gen) && /apiKeyGate\(orgId, "issue an API key"\)/.test(gen) && /planIncludes\(plan, "api"\)/.test(gen), "create: admin + second factor + plan");
+  check(/requireRole\("admin"\)/.test(gen) && /apiKeyGate\(orgId, "issue an API key"\)/.test(gen) && /requireCapability\(orgId, "api"/.test(gen), "create: admin + second factor + plan (live)");
   check(/svc\.from\("api_keys"\)\.insert/.test(gen) && !/sb\.from\("api_keys"\)\.insert/.test(gen), "create: written by the service role (browser writes are revoked)");
   check(/key_hash: k\.hash/.test(gen) && !/key: k\.key,/.test(gen.split("return { key: k.key")[0]), "create: only the hash is stored; plaintext only in the return value");
   check(/normaliseScopes/.test(gen) && /SCOPE_PRESETS\.read/.test(gen) && /expiryFrom/.test(gen), "create: scopes filtered to the catalogue, read-only default, expiry chosen");

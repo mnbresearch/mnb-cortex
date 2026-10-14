@@ -4,7 +4,7 @@ import { PageShell } from "@/components/page-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ExportButton } from "@/components/export-button";
-import { getLeads } from "@/lib/data";
+import { getLeads, getTableStats } from "@/lib/data";
 import { deleteLead, addLead, convertLead } from "@/lib/actions";
 import { CollapsibleForm, Field } from "@/components/forms";
 import Link from "next/link";
@@ -13,7 +13,16 @@ import { scoreLead } from "@/lib/lead-score";
 
 export const dynamic = "force-dynamic";
 export default async function Leads() {
-  const { rows: raw, live } = await getLeads();
+  /*
+    getLeads() lists the latest 200 and swallows its own read error, so a
+    failed query used to render "No leads yet". getTableStats counts EVERY
+    lead in this workspace and reports `error` — so the page can say "couldn't
+    load" instead of "none", and "latest 200 of N" instead of a bare 200.
+  */
+  const [{ rows: raw, live }, stats] = await Promise.all([getLeads(), getTableStats("leads", "id")]);
+  const total = stats.rows.length;
+  const loadFailed = live && (Boolean(stats.error) || (raw.length === 0 && total > 0));
+  const partial = live && !loadFailed && total > raw.length;
   /* Scored and sorted: open leads hottest first, converted ones last. */
   const isConverted = (l: any) => Boolean(l.converted_customer_id) || /· converted$/.test(String(l.source || ""));
   const rows = raw.map((l: any) => ({ ...l, _s: scoreLead(l), _c: isConverted(l) }))
@@ -35,11 +44,20 @@ export default async function Leads() {
         {live && (
           <Card>
             <div className="flex items-center justify-between p-5 pb-3">
-              <div><h3 className="font-semibold flex items-center gap-2"><Inbox className="h-4 w-4 text-primary" /> Inbox</h3><p className="text-xs text-muted-foreground">{rows.length} lead{rows.length === 1 ? "" : "s"} · scored by a fixed rule (contact details, business email, source, how recent) — hover a score for the reasons</p></div>
+              <div><h3 className="font-semibold flex items-center gap-2"><Inbox className="h-4 w-4 text-primary" /> Inbox</h3><p className="text-xs text-muted-foreground">{partial ? <>Showing the latest {rows.length.toLocaleString("en-IN")} of {stats.truncated ? "more than " : ""}{total.toLocaleString("en-IN")} leads</> : <>{rows.length} lead{rows.length === 1 ? "" : "s"}</>} · scored by a fixed rule (contact details, business email, source, how recent) — hover a score for the reasons</p></div>
               <ExportButton rows={rows} filename="leads.csv" columns={["name", "email", "phone", "plan", "source", "created_at"]} />
             </div>
             <div className="px-2 pb-2 overflow-x-auto">
-              {rows.length === 0 ? (
+              {loadFailed ? (
+                /* Not "No leads yet": the read failed, and saying "none" to an
+                   owner with a full inbox is the worse error. */
+                <div className="m-2 rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm" role="alert">
+                  <p className="font-medium">Couldn&apos;t load your leads just now.</p>
+                  <p className="text-muted-foreground mt-1">
+                    Nothing has been deleted. Reload the page; if it keeps failing{stats.error ? <>, the database said: <span className="font-mono text-xs">{stats.error}</span></> : "."}
+                  </p>
+                </div>
+              ) : rows.length === 0 ? (
                 /*
                   This used to read "No leads yet. Share your pricing page:
                   /pricing" — a link to MNB's OWN pricing page, shown to a

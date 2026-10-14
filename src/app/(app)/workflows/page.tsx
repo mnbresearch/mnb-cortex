@@ -50,8 +50,20 @@ export default async function Workflows() {
 
         <CollapsibleForm title="New workflow (write the steps yourself)" action={addWorkflow}>
           <Field name="name" label="Workflow name" required />
-          <SelectField name="trigger" label="Trigger" options={["schedule","event","manual"]} />
-          <Field name="steps" label="Steps (comma-separated)" placeholder="recompute, receivables, email Daily digest" aria-label="recompute, receivables, email Daily digest" />
+          {/* "event" was offered here and nothing ever runs it — only the daily
+              schedule and the Run button execute workflows. Removed rather
+              than left as a trigger that silently never fires. */}
+          <SelectField name="trigger" label="Trigger (schedule = daily, manual = when you press Run)" options={["schedule","manual"]} />
+          {/* One step per line, not comma-separated: a comma split broke
+              `propose` steps with JSON arguments and email subjects with
+              commas. The server checks every line with the same validator as
+              "Automate this" and says which step is wrong. */}
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-2 lg:col-span-3">
+            Steps — one per line, each starting with a word from the list above
+            <textarea name="steps" rows={4} required
+              className="rounded-lg border bg-background px-3 py-2 text-sm w-full outline-none focus:ring-2 focus:ring-ring font-mono"
+              placeholder={"recompute\nreceivables\nemail Daily digest"} />
+          </label>
         </CollapsibleForm>
 
         <div className="grid md:grid-cols-2 gap-3">

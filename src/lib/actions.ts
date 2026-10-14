@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { fail, type ActionResult } from "@/lib/action-result";
 import { istTodayISO, daysPastDueIST } from "@/lib/statutory";
+import { isPastDueReceivable } from "@/lib/money-rules";
 import { DEAL_STAGES, STAGE_WEIGHT } from "@/lib/lead-score";
 
 async function requireOrg() {
@@ -227,7 +228,13 @@ export async function updateOrgProfile(fd: FormData): Promise<ActionResult | voi
     patch.name = nm;
   }
   const industry = str(fd.get("industry")); if (industry) patch.industry = industry;
-  const rev = num(fd.get("annual_revenue_cr")); if (rev) patch.annual_revenue_cr = rev;
+  /* A field the form sent EMPTY means "clear it" — it used to be ignored, so a
+     wrong revenue figure could be changed but never removed. Absent = untouched. */
+  if (fd.has("annual_revenue_cr")) {
+    const raw = str(fd.get("annual_revenue_cr"));
+    if (!raw) patch.annual_revenue_cr = null;
+    else { const rev = num(raw); if (rev) patch.annual_revenue_cr = rev; }
+  }
   const currency = str(fd.get("currency")); if (currency) patch.currency = currency;
   /*
     BRANDING IS PLAN-GATED, AND THE GATE IS SERVER-SIDE.
@@ -465,10 +472,12 @@ export async function sendReminderAI(): Promise<ActionResult | void> {
   */
   const today = istTodayISO();
   const { data: rows } = await sb.from("invoices")
-    .select("party,amount,due_date,status").eq("org_id", orgId).eq("type", "receivable")
+    .select("party,amount,due_date,status,type").eq("org_id", orgId)
     .or("status.is.null,status.not.ilike.paid").limit(500);
+  /* lib/money-rules.ts — the dashboard's rule: untyped invoices are
+     receivables, "overdue" status (any case) is past due, payables never are. */
   const overdue = ((rows as any[]) || [])
-    .filter((i) => i.status === "overdue" || (i.due_date && String(i.due_date) < today))
+    .filter((i) => isPastDueReceivable(i, today))
     .sort((a, b) => Number(b.amount) - Number(a.amount));
 
   if (!overdue.length) {
@@ -678,14 +687,28 @@ export async function patchWorkbenchEntry(fd: FormData): Promise<ActionResult | 
 }
 
 // ---- Workflows ----
-export async function addWorkflow(fd: FormData) {
+export async function addWorkflow(fd: FormData): Promise<ActionResult | void> {
   const orgId = await requireWriteOrg();
   await requireCapability(orgId, "workflows", "Workflow automation");
+  /*
+    ONE STEP PER LINE, AND THE SAME VALIDATOR AS "AUTOMATE THIS".
+
+    Steps were split on commas, which broke the two step kinds that naturally
+    contain one: `propose <action> {"a":1,"b":2}` became three junk steps, and
+    `email Sales, collections and cash` lost its subject after "Sales". And the
+    hand-written form skipped validateWorkflowPlan entirely, so a typo saved
+    cleanly and failed every night. A trigger of "event" was accepted too,
+    though nothing ever runs one.
+  */
+  const steps = String(fd.get("steps") ?? "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const { validateWorkflowPlan } = await import("@/lib/engine/automation");
+  const { automationDeps } = await import("@/lib/engine/automation-server");
+  const v = validateWorkflowPlan({ name: str(fd.get("name")), trigger: str(fd.get("trigger")) || "manual", steps }, automationDeps());
+  if (!v.ok) return fail(`Not saved — ${v.problems.slice(0, 3).join(" ")}`);
   const sb = await createClient();
-  const steps = str(fd.get("steps")).split(",").map((s) => s.trim()).filter(Boolean);
   const { error } = await sb.from("workflows").insert({
-    org_id: orgId, name: str(fd.get("name")), trigger: str(fd.get("trigger")) || "manual",
-    steps, is_active: true });
+    org_id: orgId, name: v.plan.name, trigger: v.plan.trigger,
+    steps: v.plan.steps, is_active: true });
   if (error) throw new Error(error.message);
   revalidatePath("/workflows");
 }
@@ -737,11 +760,9 @@ export async function runWorkflow(fd: FormData): Promise<ActionResult | void> {
     lib/workflows.ts, but metering is not the same as entitlement: this is a
     feature somebody is or is not paying for, and both verbs have to agree.
 
-    Deliberately NOT applied to the scheduled runner. Existing automation that a
-    customer set up while entitled keeps working after a downgrade — the message
-    in requireCapability promises exactly that ("anything you have already set
-    up keeps working"), and silently stopping a nightly job is how a billing
-    conversation becomes a churn event.
+    The scheduled runner now applies the same check (workflow-schedule.ts):
+    a lapsed or downgraded workspace's nightly workflows pause with the plan,
+    and requireCapability no longer promises otherwise.
   */
   await requireCapability(orgId, "workflows", "Workflow automation");
   const id = str(fd.get("id")); const name = str(fd.get("name"));
@@ -947,6 +968,15 @@ export type ImportOutcome = {
    * somebody a clean bill of health over ₹40 L of overdue invoices.
    */
   analysed?: boolean;
+  /**
+   * URL path only: what flattenExport did to the file before import — title
+   * rows skipped, totals ignored, and vouchers LEFT OUT (receipts, payments,
+   * journals; purchases too when importing sales orders). The file path shows
+   * this from its own preview; the URL path had no preview, so "left out N
+   * vouchers" was never said and a short import read as data loss.
+   */
+  note?: string;
+  skippedVouchers?: Record<string, number>;
 };
 
 export async function importRows(fd: FormData): Promise<ImportOutcome> {
@@ -1057,9 +1087,20 @@ export async function importFromUrl(fd: FormData): Promise<ImportOutcome> {
       exposure with it. Exactly the bug accounting-export.ts was written to stop,
       still live on this path because the fix was applied in the component.
     */
-    const flat = flattenExport(parseCsvGrid(await res.text()));
+    /* `{ table }` so a sales-order import drops purchase vouchers — a
+       purchase is not revenue. Without it a Day Book imported as sales
+       orders counted every supplier bill as a sale. */
+    const flat = flattenExport(parseCsvGrid(await res.text()), { table });
+    const flatInfo = { note: flat.note, ...(flat.skippedVouchers ? { skippedVouchers: flat.skippedVouchers } : {}) };
     const rows = flat.rows;
-    if (!rows.length) return { inserted: 0, error: "No rows found at that URL" };
+    if (!rows.length) {
+      return {
+        inserted: 0, ...flatInfo,
+        error: flat.skippedVouchers
+          ? `Nothing to import at that URL: ${flat.note}`
+          : "No rows found at that URL",
+      };
+    }
     /*
       THE SAME IMPORT, WITH NONE OF THE FIXES.
 
@@ -1120,6 +1161,7 @@ export async function importFromUrl(fd: FormData): Promise<ImportOutcome> {
       matched: match.matched,
       totalCols: match.total,
       missing: match.missing,
+      ...flatInfo,
       ...accountForRows(rows.length, capped, wrote.written),
       warning: topWarning(analysis.insights),
       analysed: analysis.ok,
@@ -1155,18 +1197,37 @@ export async function importFromUrl(fd: FormData): Promise<ImportOutcome> {
    has been moved into api/integrations/sync/route.ts. That was a real gap:
    without it the numbers on screen stayed stale after a successful sync.
 */
-export async function deleteLead(fd: FormData) {
-  const { user, orgId } = await getUserAndOrg();
-  if (!orgId) throw new Error("Sign in to use this feature.");
+export async function deleteLead(fd: FormData): Promise<ActionResult | void> {
+  /*
+    MANAGER, like every other delete (2026_tenancy.sql: delete needs rank 3).
+    There was no role check at all, and the leads delete policy was any-member
+    — so a viewer could erase the workspace's enquiries. The database now
+    agrees (2026_zzzz_b_leads_rank_gates.sql).
+  */
+  const { orgId } = await requireRole("manager");
+  const { user } = await getUserAndOrg();
   const id = str(fd.get("id"));
+  if (!id) return fail("Nothing selected.");
   const isSuper = SUPER_ADMINS.includes(String(user?.email || "").toLowerCase());
   if (isSuper) {
+    /*
+      The operator path uses the service role, which ignores RLS — so it is
+      scoped here explicitly: a platform lead (org_id null, from our own
+      marketing pages) or this workspace's own. It used to delete ANY row in
+      any tenant by id.
+    */
     const svc = serviceClient();
-    if (svc) { const { error } = await svc.from("leads").delete().eq("id", id); if (error) throw new Error(error.message); revalidatePath("/leads"); return; }
+    if (svc) {
+      const { data, error } = await svc.from("leads").delete().eq("id", id).or(`org_id.is.null,org_id.eq.${orgId}`).select("id");
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) return fail("That lead was not removed — it is not a platform lead or one of this workspace's.");
+      revalidatePath("/leads"); return;
+    }
   }
   const sb = await createClient();
-  const { error } = await sb.from("leads").delete().eq("id", id).eq("org_id", orgId);
+  const { data, error } = await sb.from("leads").delete().eq("id", id).eq("org_id", orgId).select("id");
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0) return fail("That lead was not removed — it may already be gone, or your role cannot delete leads.");
   revalidatePath("/leads");
 }
 
@@ -1301,7 +1362,94 @@ export async function cancelInvite(fd: FormData) {
     refusal; at least a refusal can be read.
   */
   const { orgId } = await requireRole("admin"); const sb = await createClient();
-  await sb.from("invites").delete().eq("org_id", orgId).eq("id", str(fd.get("id")));
+  /* And the result is read: an error or a zero-row delete is not "cancelled". */
+  const { data, error } = await sb.from("invites").delete().eq("org_id", orgId).eq("id", str(fd.get("id"))).select("id");
+  if (error) return fail("Could not cancel that invite. It is still pending — try again.");
+  if (!data || data.length === 0) return fail("That invite was not cancelled — it may already have been accepted or removed. Reload to check.");
+  revalidatePath("/admin");
+}
+
+/* ---- Team: change a role, remove a member ----
+
+   There was no way to do either. /admin listed members with a read-only badge,
+   and the only code that deleted a membership was whole-workspace erasure — so
+   a departing employee kept full access until the owner deleted the company.
+
+   RANK RULES (checked here, and mirrored in RLS by 2026_zzzz_b_member_rank_gates.sql
+   plus the last-owner trigger from 2026_rls_privilege_fix.sql):
+     · only an admin or owner may manage members
+     · you may not act on someone ranked ABOVE you (an admin cannot touch an owner)
+     · you may not give anyone a role above your own
+     · the last owner can be neither demoted nor removed
+     · not on yourself here — leaving or stepping down is a separate decision
+   Every write reads its row back; a zero-row result is reported, not celebrated. */
+const MEMBER_ROLES = ["owner", "admin", "manager", "analyst", "viewer"] as const;
+
+async function memberTarget(orgId: string, userId: string) {
+  const sb = await createClient();
+  const { data, error } = await sb.from("memberships").select("user_id, role").eq("org_id", orgId).eq("user_id", userId).maybeSingle();
+  return { sb, row: data as any, error };
+}
+
+async function ownerCount(sb: any, orgId: string): Promise<number> {
+  const { data } = await sb.from("memberships").select("user_id, role").eq("org_id", orgId);
+  return ((data as any[]) || []).filter((m) => String(m.role || "").toLowerCase() === "owner").length;
+}
+
+export async function changeMemberRole(fd: FormData): Promise<ActionResult | void> {
+  const { orgId, role: myRole } = await requireRole("admin");
+  const { user } = await getUserAndOrg();
+  const target = str(fd.get("user_id"));
+  const newRole = str(fd.get("role")).toLowerCase();
+  if (!target) return fail("Choose a team member.");
+  if (!(MEMBER_ROLES as readonly string[]).includes(newRole)) return fail("Choose a valid role.");
+  if (target === user?.id) return fail("You cannot change your own role here. Ask another owner or admin.");
+  const mine = ROLE_RANK[myRole] || 0;
+  if ((ROLE_RANK[newRole] || 0) > mine) return fail(`You cannot give someone a role above your own (${myRole}).`);
+
+  const { sb, row, error: readErr } = await memberTarget(orgId, target);
+  if (readErr) return fail("Could not read that member. Nothing changed — try again.");
+  if (!row) return fail("That person is no longer a member of this workspace.");
+  const current = String(row.role || "viewer").toLowerCase();
+  if ((ROLE_RANK[current] || 0) > mine) return fail(`Only an owner can change an ${current}'s role.`);
+  if (current === newRole) return fail(`They are already ${newRole}.`);
+  if (current === "owner" && newRole !== "owner" && (await ownerCount(sb, orgId)) <= 1) {
+    return fail("This is the workspace's only owner. Make someone else an owner first.");
+  }
+
+  const { data, error } = await sb.from("memberships").update({ role: newRole }).eq("org_id", orgId).eq("user_id", target).select("user_id");
+  if (error) {
+    const lastOwner = /at least one owner/i.test(String(error.message || ""));
+    return fail(lastOwner ? "A workspace must keep at least one owner." : "Could not change that role. Nothing changed — try again.");
+  }
+  if (!data || data.length !== 1) return fail("The role did not change — your rank may not allow editing this member.");
+  await logActivity(orgId, "settings", `Changed a team member's role from ${current} to ${newRole}`);
+  revalidatePath("/admin");
+}
+
+export async function removeMember(fd: FormData): Promise<ActionResult | void> {
+  const { orgId, role: myRole } = await requireRole("admin");
+  const { user } = await getUserAndOrg();
+  const target = str(fd.get("user_id"));
+  if (!target) return fail("Choose a team member.");
+  if (target === user?.id) return fail("You cannot remove yourself here. Ask another owner or admin.");
+
+  const { sb, row, error: readErr } = await memberTarget(orgId, target);
+  if (readErr) return fail("Could not read that member. Nothing changed — try again.");
+  if (!row) return fail("That person is no longer a member of this workspace.");
+  const current = String(row.role || "viewer").toLowerCase();
+  if ((ROLE_RANK[current] || 0) > (ROLE_RANK[myRole] || 0)) return fail(`Only an owner can remove an ${current}.`);
+  if (current === "owner" && (await ownerCount(sb, orgId)) <= 1) {
+    return fail("This is the workspace's only owner and cannot be removed.");
+  }
+
+  const { data, error } = await sb.from("memberships").delete().eq("org_id", orgId).eq("user_id", target).select("user_id");
+  if (error) {
+    const lastOwner = /at least one owner/i.test(String(error.message || ""));
+    return fail(lastOwner ? "A workspace must keep at least one owner." : "Could not remove that member. Nothing changed — try again.");
+  }
+  if (!data || data.length !== 1) return fail("The member was not removed — your rank may not allow it.");
+  await logActivity(orgId, "settings", `Removed a team member (${current}) from the workspace`);
   revalidatePath("/admin");
 }
 
@@ -1410,8 +1558,12 @@ export async function moveDeal(fd: FormData): Promise<ActionResult | void> {
     // Dragged back OUT of won. Without this the sales order stayed "won" for
     // ever, so the pipeline and the revenue figure permanently disagreed and
     // nothing recomputed to reveal it.
-    const { error: unwinErr } = await sb.from("sales_orders").update({ status: "open" }).eq("org_id", orgId).eq("source_deal_id", id);
-    if (unwinErr) { console.error(`[moveDeal] reopen sales order failed: ${unwinErr.message}`); return fail("The deal moved, but its sales order could not be reopened, so revenue may still count it — check Sales."); }
+    /* To LOST, the order is lost too (metrics skip status "lost"); back to any
+       open stage it is reopened. Resetting a lost deal's order to "open" kept
+       it counted in Orders (MTD) as live work. */
+    const orderStatus = stage === "lost" ? "lost" : "open";
+    const { error: unwinErr } = await sb.from("sales_orders").update({ status: orderStatus }).eq("org_id", orgId).eq("source_deal_id", id);
+    if (unwinErr) { console.error(`[moveDeal] update sales order failed: ${unwinErr.message}`); return fail(`The deal moved, but its sales order could not be marked ${orderStatus}, so revenue may still count it — check Sales.`); }
     await recomputeQuietly(orgId);
     revalidatePath("/dashboard");
     revalidatePath("/sales");
@@ -1430,18 +1582,30 @@ export async function moveDeal(fd: FormData): Promise<ActionResult | void> {
  * workspace from using four of Watch Pro's six differentiators. planIncludes()
  * existed in config.ts with exactly one call site.
  *
- * Gates CREATION only, never use. An integration built under an older or higher
- * plan keeps running; cutting off a live webhook to enforce a price is how you
- * turn a billing conversation into a churn event.
+ * THE PLAN MUST ALSO BE LIVE. This read only `organizations.plan`, which
+ * keeps its value after a period lapses — so a lapsed Watch Pro or Command
+ * workspace that bought a credit pack to get past the paywall could still
+ * create API keys, webhooks, workflows, alert rules and white-label. Credits
+ * pay for AI work; they never renewed the plan. engine/plan-gate.ts decides
+ * both halves (plan includes it AND statusOf() is live, or a live Practice firm
+ * pools this client, or the operator's unlimited override).
+ *
+ * The message no longer promises "anything you have already set up keeps
+ * working": API keys, scheduled workflows and Autopilot rules now stop with
+ * the plan, so that sentence would be untrue.
  */
 async function requireCapability(orgId: string, cap: Parameters<typeof planIncludes>[1], what: string) {
+  const { capabilityVerdict, capabilityMessage } = await import("@/lib/engine/plan-gate");
   const sb = await createClient();
-  const { data } = await sb.from("organizations").select("plan").eq("id", orgId).maybeSingle();
-  if (!planIncludes(String((data as any)?.plan || ""), cap)) {
-    throw new Error(
-      `${what} is part of ${lowestPlanWith(cap)} and above. Anything you have already set up keeps working — upgrade under Billing to add more.`,
-    );
+  const { data } = await sb.from("organizations").select("*").eq("id", orgId).maybeSingle();
+  let firm: any = null;
+  const firmId = String((data as any)?.practice_org_id || "");
+  if (firmId && firmId !== orgId) {
+    /* The firm row is another tenant's: read it with the service role, only to decide this. */
+    try { const svc = serviceClient(); if (svc) firm = (await svc.from("organizations").select("*").eq("id", firmId).maybeSingle()).data; } catch { /* no firm → own state decides */ }
   }
+  const v = capabilityVerdict(data as any, cap, firm);
+  if (!v.ok) throw new Error(capabilityMessage(v, cap, what));
 }
 
 /*
@@ -1489,15 +1653,15 @@ export async function generateApiKey(fd: FormData): Promise<KeyIssue> {
   { const m = await apiKeyGate(orgId, "issue an API key"); if (m) return { key: null, error: m }; }
 
   /*
-    ENTITLEMENT. Gating CREATION only is deliberate: a key issued under an
-    older or higher plan keeps working, because cutting off a running
-    integration to enforce a price loses customers.
+    ENTITLEMENT — plan AND a live subscription (requireCapability). Keys are
+    now also refused at USE time when the plan lacks the API or has lapsed
+    (lib/api/auth.ts), so the old promise that issued keys carry on regardless
+    is gone: it is no longer true.
   */
   const { data: org } = await sb.from("organizations").select("plan").eq("id", orgId).single();
   const plan = String((org as any)?.plan || "");
-  if (!planIncludes(plan, "api")) {
-    return { key: null, error: `The public API is part of ${lowestPlanWith("api")} and above. Your existing keys keep working — upgrade under Billing to issue new ones.` };
-  }
+  try { await requireCapability(orgId, "api", "The public API"); }
+  catch (e: any) { return { key: null, error: e?.message || `The public API is part of ${lowestPlanWith("api")} and above.` }; }
 
   const K = await import("@/lib/api-keys");
   const scopes = K.normaliseScopes(fd.getAll("scopes").length ? fd.getAll("scopes") : K.SCOPE_PRESETS[str(fd.get("preset")) || "read"] || K.SCOPE_PRESETS.read);
@@ -1617,18 +1781,48 @@ export async function runAutopilot() {
     it the same shape as every other metered AI action in the product — and it
     had neither a charge nor a paywall, so a lapsed workspace could sit on it.
   */
-  const { chargeForMode } = await import("@/lib/credits");
+  const { chargeForMode, refundIfCharged } = await import("@/lib/credits");
   const gate = await chargeForMode("pulse");
   if (!gate.ok) {
     return fail(gate.reason === "lapsed"
       ? "Add credits or choose a plan to run an analysis."
       : `Not enough credits — an analysis costs ${gate.cost}.`);
   }
-  const ctx = await getBusinessContext();
-  const text = await generateFor("pulse", "", ctx);
+  /*
+    CHARGED, SO EVERY FAILURE AFTER THIS POINT REFUNDS.
+
+    It used to charge, call the engine, and insert whatever came back as an
+    "Autopilot analysis" alert with the insert's error ignored. When the engine
+    was unreachable, generateFor() returns its failure sentence as text — so
+    the customer paid for, and was shown under a yellow "analysis" banner, the
+    words "I couldn't reach the AI engine". And a failed insert still logged
+    "posted findings". Now: engine failure → refund + say so; insert failure
+    → refund + say so; only a stored analysis is reported as one.
+  */
+  let text = "";
+  try {
+    const ctx = await getBusinessContext();
+    text = await generateFor("pulse", "", ctx);
+  } catch {
+    await refundIfCharged(gate, "pulse");
+    return fail("The analysis could not run — your credits were returned. Try again in a few minutes.");
+  }
+  const cortex: any = await import("@/lib/ai/cortex");
+  const engineFailed = typeof cortex.isEngineFailure === "function"
+    ? Boolean(cortex.isEngineFailure(text))
+    : String(text || "").startsWith(String(cortex.ENGINE_UNREACHABLE || "I couldn't reach the AI engine."));
+  if (!String(text || "").trim() || engineFailed) {
+    await refundIfCharged(gate, "pulse");
+    return fail("The AI engine could not be reached, so no analysis was made and your credits were returned. Try again shortly.");
+  }
   const sb = await createClient();
-  await sb.from("alerts").insert({ org_id: orgId, severity: "yellow", module: "autopilot", title: "Autopilot analysis", body: text.slice(0, 400) });
-  await logActivity(orgId, "ai", "Autopilot ran a business analysis and posted findings");
+  const { error: insErr } = await sb.from("alerts").insert({ org_id: orgId, severity: "yellow", module: "autopilot", title: "Autopilot analysis", body: text.slice(0, 400) });
+  if (insErr) {
+    console.error("[runAutopilot] alert insert failed:", insErr.message);
+    await refundIfCharged(gate, "pulse");
+    return fail("The analysis ran but could not be saved, so your credits were returned. Try again.");
+  }
+  await logActivity(orgId, "ai", "Autopilot ran a business analysis and posted it to Notifications");
   ["/autopilot", "/dashboard", "/activity", "/alerts"].forEach((p) => revalidatePath(p));
 }
 
@@ -1648,9 +1842,8 @@ export async function createReportLink() {
     view of the company's finances, and nothing in the product would show an
     owner that it had happened.
 
-    Revoking deliberately stays at analyst: taking a link away is strictly
-    safer than leaving it up, and an analyst who created one before this change
-    must still be able to kill it without waiting for an admin.
+    Revoking needs manager — the rank the database requires to delete a
+    report_links row. (It used to say analyst; RLS refused that silently.)
   */
   const { orgId } = await requireRole("admin"); const sb = await createClient();
   /*
@@ -1673,10 +1866,23 @@ export async function createReportLink() {
   const { error } = await sb.from("report_links").insert({ org_id: orgId, token });
   if (error) throw new Error(error.message);
   revalidatePath("/reports");
+  revalidatePath("/billing");   // the share-link list lives on /billing
 }
-export async function revokeReportLink(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = await createClient();
-  await sb.from("report_links").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
+export async function revokeReportLink(fd: FormData): Promise<ActionResult | void> {
+  /*
+    MANAGER, matching RLS ("tenant delete report_links" needs rank >= 3,
+    2026_tenancy.sql). The note on createReportLink said revoking "stays at
+    analyst" — but for an analyst the delete matched zero rows, PostgREST
+    returned success, nothing checked, and the public link stayed live while
+    the button appeared to work. A silent no-op on a disclosure control is the
+    worst outcome, so the rank matches the database and the count is read back.
+  */
+  const { orgId } = await requireRole("manager"); const sb = await createClient();
+  const { data, error } = await sb.from("report_links").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId).select("id");
+  if (error) return fail("Could not remove that share link. It is still live — try again.");
+  if (!data || data.length === 0) return fail("That share link was not removed — it may already be gone. Reload to check it is no longer listed.");
+  await logActivity(orgId, "settings", "Revoked a public report share link");
+  revalidatePath("/billing");
   revalidatePath("/reports");
 }
 
@@ -1808,7 +2014,14 @@ export async function addLead(fd: FormData): Promise<ActionResult | void> {
  * even has a "lead" status that had no relationship to the `leads` table.
  */
 export async function convertLead(fd: FormData): Promise<ActionResult | void> {
-  const orgId = await requireWriteOrg(); const sb = await createClient();
+  /*
+    MANAGER. Converting writes to `leads`, and the only UPDATE policy on leads
+    (2026_zzzz_b_leads_rank_gates.sql) is manager+ — there was none at all
+    before, so the link update matched zero rows with no error and the lead
+    kept offering "Make customer" after the customer existed. Checked BEFORE
+    the customer insert, so a refusal leaves nothing half-done.
+  */
+  const { orgId } = await requireRole("manager"); const sb = await createClient();
   const id = str(fd.get("id"));
 
   const { data: lead, error: readErr } = await sb.from("leads")
@@ -1837,8 +2050,13 @@ export async function convertLead(fd: FormData): Promise<ActionResult | void> {
 
   /* Mark it converted; on a database without 2026_zzzv the link column is absent, so fall back to the source tag. */
   const tag = { source: `${(lead as any).source || "lead"} · converted` };
-  const { error: linkErr } = await sb.from("leads").update({ ...tag, converted_customer_id: (made as any)?.id ?? null }).eq("id", id).eq("org_id", orgId);
-  if (linkErr) await sb.from("leads").update(tag).eq("id", id).eq("org_id", orgId);
+  let { data: linked, error: linkErr } = await sb.from("leads").update({ ...tag, converted_customer_id: (made as any)?.id ?? null }).eq("id", id).eq("org_id", orgId).select("id");
+  if (linkErr) ({ data: linked, error: linkErr } = await sb.from("leads").update(tag).eq("id", id).eq("org_id", orgId).select("id"));
+  if (linkErr || !linked || linked.length !== 1) {
+    /* The customer exists; say exactly that rather than reporting success on a lead that still looks unconverted. */
+    revalidatePath("/customers"); revalidatePath("/leads");
+    return fail("The customer was created, but this lead could not be marked as converted — don't press Make customer again; check Customers.");
+  }
   await logActivity(orgId, "crud", `Converted lead ${(lead as any).name || (lead as any).email} to a customer`);
   await recomputeQuietly(orgId);
   revalidatePath("/leads");
@@ -1873,6 +2091,46 @@ export async function deleteGoal(fd: FormData) {
   const { orgId } = await requireRole("manager"); const sb = await createClient();
   const { error } = await sb.from("goals").delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
   if (error) throw new Error(error.message);
+  revalidatePath("/goals");
+}
+
+/**
+ * Edit a goal's target — and, for a goal tracked by hand, its current value.
+ *
+ * Goals could only be created and deleted, so a hand-tracked goal was frozen
+ * at whatever "current" was typed on day one and its ring never moved. A
+ * linked goal's current value is derived from the live KPI and is never
+ * written here, so an edit cannot make it disagree with the dashboard.
+ *
+ * Analyst+, matching "tenant update goals" (2026_tenancy_goals.sql); the row
+ * count is read back so a zero-row update is not reported as saved.
+ */
+export async function updateGoal(fd: FormData): Promise<ActionResult | void> {
+  const { orgId } = await requireRole("analyst"); const sb = await createClient();
+  const id = str(fd.get("id"));
+  if (!id) return fail("Nothing selected.");
+  const { data: before, error: readErr } = await sb.from("goals").select("id, metric_key").eq("id", id).eq("org_id", orgId).maybeSingle();
+  if (readErr) return fail("Could not read that goal. Nothing changed — try again.");
+  if (!before) return fail("That goal no longer exists — reload the page.");
+
+  const patch: Record<string, unknown> = {};
+  if (fd.has("name")) { const nm = str(fd.get("name")); if (!nm) return fail("A goal needs a name."); patch.name = nm.slice(0, 200); }
+  if (fd.has("target_val")) {
+    const t = parseFloat(String(fd.get("target_val") ?? ""));
+    if (!Number.isFinite(t)) return fail("Enter the target as a number.");
+    patch.target_val = t;
+  }
+  if (fd.has("current_val") && !(before as any).metric_key) {
+    const c = parseFloat(String(fd.get("current_val") ?? ""));
+    if (!Number.isFinite(c)) return fail("Enter the current value as a number.");
+    patch.current_val = c;
+  }
+  if (!Object.keys(patch).length) return fail("Nothing to change.");
+
+  const { data, error } = await sb.from("goals").update(patch).eq("id", id).eq("org_id", orgId).select("id");
+  if (error) return fail("Could not save that goal. Nothing changed — try again.");
+  if (!data || data.length !== 1) return fail("The goal did not save — your role may not allow editing goals.");
+  await logActivity(orgId, "crud", "Updated a goal");
   revalidatePath("/goals");
 }
 
@@ -1977,6 +2235,21 @@ export async function saveCollectionPolicy(fd: FormData): Promise<{ ok: boolean;
     whatsapp_lang: waLang,
     updated_at: new Date().toISOString(),
   };
+
+  /*
+    AUTO-SEND IS AUTOPILOT, AND AUTOPILOT IS A COMMAND CAPABILITY.
+
+    auto_send writes reminders straight to `approved`, so the next run emails
+    the customer's debtors with no human tap. Every other path that lets Cortex
+    contact a third party on its own is gated on "autonomy" (engine
+    server-actions autonomyGate); this one took the checkbox from the form on
+    any plan. prepareDrafts() re-checks at draft time too, so a policy saved
+    before a downgrade stops auto-approving with the plan.
+  */
+  if (patch.auto_send) {
+    try { await requireCapability(orgId, "autonomy", "Sending reminders without your approval"); }
+    catch (e: any) { return { ok: false, error: `${e?.message || "Auto-send is not on your plan."} Leave "send without approval" off — reminders will wait for your tap.` }; }
+  }
 
   const sb = await createClient();
   let { error } = await sb.from("collection_policies").upsert(patch, { onConflict: "org_id" });
@@ -2199,10 +2472,12 @@ export async function setVendorUdyam(fd: FormData): Promise<{ ok: boolean; error
   collections chase and global search all read the `invoices` table and sat
   empty for anyone billing through Cortex's own tool.
 
-  Saving is an UPSERT on (org_id, invoice_no), which already carries a unique
-  index. That is deliberate: pressing Save twice, or a double-submit on a slow
-  connection, must not create two receivables for one bill. Getting this wrong
-  overstates money owed, which is worse than losing the invoice.
+  (org_id, invoice_no) carries a unique index, and pressing Save twice, or a
+  double-submit on a slow connection, must not create two receivables for one
+  bill — that overstates money owed. But it must not REPLACE a different
+  customer's invoice either, which the old blind upsert did. saveInvoice now
+  reads the number first: same customer → update (status untouched); different
+  customer → refuse with the next free number.
 */
 
 export type InvoiceDoc = {
@@ -2224,7 +2499,7 @@ export type SavedInvoice = {
 /** Statuses the invoices table understands. Anything else is coerced. */
 const INVOICE_STATUS = new Set(["pending", "paid", "overdue"]);
 
-export async function saveInvoice(doc: InvoiceDoc): Promise<{ ok: boolean; error?: string }> {
+export async function saveInvoice(doc: InvoiceDoc): Promise<{ ok: boolean; error?: string; suggested?: string }> {
   let orgId: string;
   try { orgId = await requireWriteOrg(); }
   catch { return { ok: false, error: "Sign in to save this invoice." }; }
@@ -2240,43 +2515,118 @@ export async function saveInvoice(doc: InvoiceDoc): Promise<{ ok: boolean; error
   if (!(amount > 0)) return { ok: false, error: "The invoice total must be more than zero." };
 
   const sb = await createClient();
-  const { error } = await sb.from("invoices").upsert({
-    org_id: orgId,
-    invoice_no,
-    party,
-    amount,
+  const { sameParty } = await import("@/lib/engine/doc-number");
+
+  /*
+    NEVER OVERWRITE ANOTHER CUSTOMER'S INVOICE, AND NEVER REOPEN A PAID ONE.
+
+    This was a blind upsert on (org_id, invoice_no). The builder opened on
+    INV-0001 every time, so the second invoice anyone saved on the default
+    number silently replaced the first — a different customer's receivable,
+    gone, with "Saved" on screen. And the builder always sends status
+    "pending", so re-saving a PAID invoice to fix a typo reopened it: it went
+    back into receivables, DSO and the collections chase list.
+
+    Now: read the number first. Same customer → an edit (or a double-submit,
+    which must stay idempotent): update it, leaving status alone. Different
+    customer (or a payable on that number) → refuse and offer the next free
+    number. New → insert with is_demo:false, so "Remove sample data" can never
+    delete a real invoice.
+  */
+  const { data: found, error: readErr } = await sb.from("invoices")
+    .select("id, party, status, type").eq("org_id", orgId).eq("invoice_no", invoice_no).limit(1);
+  if (readErr) return { ok: false, error: "Could not check whether that invoice number is free, so nothing was saved. Try again." };
+  const prior: any = (found as any[] | null)?.[0] ?? null;
+
+  const conflict = async () => {
+    const suggested = await nextFreeNumber("invoices", "invoice_no", orgId, "INV-");
+    return {
+      ok: false as const,
+      error: `Invoice ${invoice_no} already exists for ${prior?.party || "another party"}. Saving would replace it, so nothing was saved.${suggested ? ` The next free number is ${suggested}.` : " Choose a different number."}`,
+      suggested: suggested || undefined,
+    };
+  };
+  if (prior && (!sameParty(prior.party, party) || (prior.type && prior.type !== "receivable"))) return conflict();
+
+  const full: Record<string, unknown> = {
+    party, amount,
     issue_date: doc.issue_date || null,
     due_date: doc.due_date || null,
-    status: INVOICE_STATUS.has(String(doc.status)) ? doc.status : "pending",
     type: "receivable",
     meta: doc.meta ?? null,
-  }, { onConflict: "org_id,invoice_no" });
+    is_demo: false,
+  };
+  /*
+    A missing `meta`/`issue_date`/`is_demo` column means this workspace's
+    database has not had the matching migration. Retry without them rather than
+    refusing to save: losing the reprintable copy is a far smaller harm than
+    telling a customer their invoice could not be saved at all.
+  */
+  const isMissingColumn = (e: any) => e?.code === "PGRST204" || e?.code === "42703" || /column .* does not exist/i.test(e?.message || "");
+  const lean = (p: Record<string, unknown>) => { const { meta, issue_date, is_demo, ...rest } = p; return rest; };
 
-  if (error) {
-    /*
-      A missing `meta` column means this workspace's database has not had
-      2026_invoice_documents applied. Retry without it rather than refusing to
-      save: losing the reprintable copy is a far smaller harm than telling a
-      customer their invoice could not be saved at all.
-    */
-    const missingColumn = error.code === "PGRST204" || error.code === "42703"
-      || /column .* does not exist/i.test(error.message || "");
-    if (!missingColumn) return { ok: false, error: error.message };
-
-    const retry = await sb.from("invoices").upsert({
-      org_id: orgId, invoice_no, party, amount,
-      due_date: doc.due_date || null,
-      status: INVOICE_STATUS.has(String(doc.status)) ? doc.status : "pending",
-      type: "receivable",
-    }, { onConflict: "org_id,invoice_no" });
-    if (retry.error) return { ok: false, error: retry.error.message };
+  if (prior) {
+    const run = (p: Record<string, unknown>) => sb.from("invoices").update(p).eq("id", prior.id).eq("org_id", orgId).select("id");
+    let r = await run(full);
+    if (r.error && isMissingColumn(r.error)) r = await run(lean(full));
+    if (r.error) return { ok: false, error: r.error.message };
+    if (!r.data || r.data.length !== 1) return { ok: false, error: "That invoice did not save — your role may not allow editing invoices. Nothing changed." };
+  } else {
+    const status = INVOICE_STATUS.has(String(doc.status)) ? doc.status : "pending";
+    const run = (p: Record<string, unknown>) => sb.from("invoices").insert({ org_id: orgId, invoice_no, status, ...p }).select("id");
+    let r = await run(full);
+    if (r.error && isMissingColumn(r.error)) r = await run(lean(full));
+    if (r.error) {
+      /* Lost a race for the number (a double-submit, or a colleague): decide again on what is there now. */
+      if (/duplicate key|unique/i.test(r.error.message || "") || r.error.code === "23505") {
+        const { data: again } = await sb.from("invoices").select("id, party, status, type").eq("org_id", orgId).eq("invoice_no", invoice_no).limit(1);
+        const now: any = (again as any[] | null)?.[0];
+        if (now && sameParty(now.party, party) && (!now.type || now.type === "receivable")) {
+          /* The same invoice was saved a moment ago — the double-submit case. Nothing more to write. */
+        } else {
+          return conflict();
+        }
+      } else {
+        return { ok: false, error: r.error.message };
+      }
+    }
   }
 
   // The whole point of saving: the numbers that read this table must move.
   await recomputeQuietly(orgId);
-  await logActivity(orgId, "crud", `Saved invoice ${invoice_no} for ${party}`);
+  await logActivity(orgId, "crud", `${prior ? "Updated" : "Saved"} invoice ${invoice_no} for ${party}`);
   for (const p of ["/invoice", "/receivables", "/cash13", "/ccc", "/data"]) revalidatePath(p);
   return { ok: true };
+}
+
+/**
+ * The next free document number in this workspace (INV-0001 → INV-0002 …).
+ * Reads EVERY number, not the latest fifty, so the suggestion is never one
+ * that already exists further down the list. Returns "" when it cannot read.
+ */
+async function nextFreeNumber(table: "invoices" | "quotes", col: "invoice_no" | "quote_no", orgId: string, prefix: string): Promise<string> {
+  try {
+    const sb: any = await createClient();
+    const { pageAll } = await import("@/lib/page-all");
+    const { nextDocNumber } = await import("@/lib/engine/doc-number");
+    const r = await pageAll<any>((from, to) => sb.from(table).select(`id, ${col}`).eq("org_id", orgId).order("id", { ascending: true }).range(from, to), { max: 50_000 });
+    if (r.error) return "";
+    return nextDocNumber(r.rows.map((x: any) => x[col]), prefix);
+  } catch { return ""; }
+}
+
+/** For the invoice builder: the number to start a new invoice on. */
+export async function suggestInvoiceNumber(): Promise<string> {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return "";
+  return nextFreeNumber("invoices", "invoice_no", orgId, "INV-");
+}
+
+/** For the quote builder: the number to start a new quote on. */
+export async function suggestQuoteNumber(): Promise<string> {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return "";
+  return nextFreeNumber("quotes", "quote_no", orgId, "QT-");
 }
 
 export async function listInvoices(): Promise<SavedInvoice[]> {
@@ -2302,7 +2652,7 @@ export async function listInvoices(): Promise<SavedInvoice[]> {
 
 export async function saveQuote(doc: {
   quote_no: string; party: string; amount: number; valid_until?: string | null; meta?: any;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; suggested?: string }> {
   let orgId: string;
   try { orgId = await requireWriteOrg(); }
   catch { return { ok: false, error: "Sign in to save this quote." }; }
@@ -2314,11 +2664,46 @@ export async function saveQuote(doc: {
   if (!party) return { ok: false, error: "Add the customer's name before saving." };
 
   const sb = await createClient();
-  const { error } = await sb.from("quotes").upsert({
-    org_id: orgId, quote_no, party, amount,
-    valid_until: doc.valid_until || null,
-    meta: doc.meta ?? null,
-  }, { onConflict: "org_id,quote_no" });
+  /*
+    SAME DEFECT AS saveInvoice, PLUS ONE.
+
+    The builder opened on QT-0001 and this upserted on (org_id, quote_no), so a
+    second quote on the default number replaced another customer's. And the
+    upsert REPLACED `meta` wholesale — which is where convertQuoteToInvoice
+    records converted_invoice_id. Re-saving an invoiced quote erased that
+    marker, "Invoice it" came back, and a second press put the same amount into
+    receivables twice. Now: different party → refuse with the next free
+    number; same party → update, MERGING meta so the conversion record survives.
+  */
+  const { sameParty } = await import("@/lib/engine/doc-number");
+  const { data: found, error: readErr } = await sb.from("quotes").select("id, party, meta").eq("org_id", orgId).eq("quote_no", quote_no).limit(1);
+  if (readErr) return { ok: false, error: "Could not check whether that quote number is free, so nothing was saved. Try again." };
+  const prior: any = (found as any[] | null)?.[0] ?? null;
+  if (prior && !sameParty(prior.party, party)) {
+    const suggested = await nextFreeNumber("quotes", "quote_no", orgId, "QT-");
+    return { ok: false, error: `Quote ${quote_no} already exists for ${prior.party || "another party"}. Saving would replace it, so nothing was saved.${suggested ? ` The next free number is ${suggested}.` : " Choose a different number."}`, suggested: suggested || undefined };
+  }
+
+  let error: any = null;
+  if (prior) {
+    const priorMeta = prior.meta && typeof prior.meta === "object" ? prior.meta : {};
+    const incoming = doc.meta && typeof doc.meta === "object" ? doc.meta : {};
+    /* Conversion bookkeeping is the server's, never the browser's: kept from the stored row. */
+    const meta = { ...priorMeta, ...incoming,
+      ...(priorMeta.converted_invoice_id ? { converted_invoice_id: priorMeta.converted_invoice_id } : {}),
+      ...(priorMeta.converted_at ? { converted_at: priorMeta.converted_at } : {}) };
+    const r = await sb.from("quotes").update({ party, amount, valid_until: doc.valid_until || null, meta })
+      .eq("id", prior.id).eq("org_id", orgId).select("id");
+    error = r.error;
+    if (!error && (!r.data || r.data.length !== 1)) return { ok: false, error: "That quote did not save — your role may not allow editing quotes. Nothing changed." };
+  } else {
+    const r = await sb.from("quotes").insert({
+      org_id: orgId, quote_no, party, amount,
+      valid_until: doc.valid_until || null,
+      meta: doc.meta ?? null,
+    });
+    error = r.error;
+  }
 
   /*
     DO NOT HAND THE CUSTOMER A POSTGRES STRING.
@@ -2590,10 +2975,17 @@ export async function moveTask(fd: FormData) {
 }
 
 export async function deleteTask(fd: FormData) {
-  const orgId = await requireWriteOrg(); const sb = await createClient();
-  const { error } = await sb.from("action_tasks")
-    .delete().eq("id", str(fd.get("id"))).eq("org_id", orgId);
+  /*
+    MANAGER, matching RLS (2026_write_rank_gates.sql: action_tasks delete needs
+    rank 3). At analyst the delete matched zero rows, returned no error, and the
+    board showed the task gone until the next reload. The count is read back;
+    the board catches the throw, restores the task and says why.
+  */
+  const { orgId } = await requireRole("manager"); const sb = await createClient();
+  const { data, error } = await sb.from("action_tasks")
+    .delete().eq("id", str(fd.get("id"))).eq("org_id", orgId).select("id");
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error("the task was not deleted — it may already be gone, or your role cannot delete tasks");
   revalidatePath("/action-center");
 }
 

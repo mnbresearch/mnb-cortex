@@ -1,7 +1,8 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { saveQuote, setQuoteStatus, convertQuoteToInvoice } from "@/lib/actions";
+import { saveQuote, setQuoteStatus, convertQuoteToInvoice, suggestQuoteNumber } from "@/lib/actions";
+import { nextDocNumber } from "@/lib/engine/doc-number";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -114,7 +115,17 @@ export function QuoteBuilder({ saved = [], orgName = null }: { saved?: any[]; or
   */
   const [from, setFrom] = useState({ name: orgName || "", detail: "" });
   const [to, setTo] = useState({ name: "", detail: "" });
-  const [meta, setMeta] = useState({ no: "QT-0001", date: new Date().toISOString().slice(0, 10), validity: 15 });
+  /* Not "QT-0001" every time — the same overwrite defect as the invoice
+     builder. Starts after the numbers on screen; the server then supplies the
+     next free one workspace-wide unless the owner has typed or saved one. */
+  const [meta, setMeta] = useState({ no: nextDocNumber(saved.map((q: any) => q.quote_no), "QT-"), date: new Date().toISOString().slice(0, 10), validity: 15 });
+  const numberTouched = useRef(false);
+  const [suggested, setSuggested] = useState("");
+  useEffect(() => {
+    let live = true;
+    suggestQuoteNumber().then((n) => { if (live && n && !numberTouched.current) setMeta((m) => ({ ...m, no: n })); }).catch(() => {});
+    return () => { live = false; };
+  }, [saved]);
   const [gst, setGst] = useState(18);
   const [notes, setNotes] = useState("50% advance, balance on delivery. Prices valid for the period above.");
   const [items, setItems] = useState<Item[]>([{ id: "1", desc: "", qty: 1, rate: 50000 }]);
@@ -151,6 +162,8 @@ export function QuoteBuilder({ saved = [], orgName = null }: { saved?: any[]; or
       return;
     }
     setSaving(true); setSaveMsg(null);
+    /* From the first save on, this number is THIS quote (re-saving edits it). */
+    numberTouched.current = true;
     try {
       // Validity is entered as a number of days; the table stores the date it
       // actually lapses, so an expiry can be queried without re-deriving it.
@@ -164,6 +177,7 @@ export function QuoteBuilder({ saved = [], orgName = null }: { saved?: any[]; or
       setSaveMsg(res.ok
         ? { ok: true, text: `Saved. ${meta.no} is kept in this workspace — it is not counted as money owed until you invoice it.` }
         : { ok: false, text: res.error || "Could not save." });
+      setSuggested(!res.ok && res.suggested ? res.suggested : "");
     } catch {
       setSaveMsg({ ok: false, text: "Could not reach the server. Your quote is still on screen." });
     } finally { setSaving(false); }
@@ -208,7 +222,7 @@ export function QuoteBuilder({ saved = [], orgName = null }: { saved?: any[]; or
         <div className="space-y-2"><div className="text-sm font-medium">To</div><input className={I + " w-full"} placeholder="Client name" aria-label="Client name" required value={to.name} onChange={(e) => setTo({ ...to, name: e.target.value })} /><input className={I + " w-full"} placeholder="Client details" aria-label="Client details" value={to.detail} onChange={(e) => setTo({ ...to, detail: e.target.value })} /></div>
       </div>
       <div className="flex flex-wrap gap-3 items-center">
-        <input className={I} value={meta.no} onChange={(e) => setMeta({ ...meta, no: e.target.value })} placeholder="Quote #" aria-label="Quote #" />
+        <input className={I} value={meta.no} onChange={(e) => { numberTouched.current = true; setMeta({ ...meta, no: e.target.value }); }} placeholder="Quote #" aria-label="Quote #" />
         <input className={I} type="date" value={meta.date} onChange={(e) => setMeta({ ...meta, date: e.target.value })} />
         <label className="text-sm text-muted-foreground flex items-center gap-1">Valid <input className={I + " w-16"} type="number" value={meta.validity} onChange={(e) => setMeta({ ...meta, validity: Number(e.target.value) })} /> days</label>
         <label className="text-sm text-muted-foreground flex items-center gap-1">GST <input aria-label="GST percent" aria-invalid={gstRateWarning(gst) ? true : undefined} className={I + " w-16" + (gstRateWarning(gst) ? " border-warning" : "")} type="number" value={gst} onChange={(e) => setGst(Number(e.target.value))} /> %</label>
@@ -243,6 +257,11 @@ export function QuoteBuilder({ saved = [], orgName = null }: { saved?: any[]; or
         <div className={`rounded-lg border p-3 text-sm flex items-start gap-2 ${saveMsg.ok ? "bg-success/10 text-success border-success/20" : "bg-danger/10 text-danger border-danger/20"}`}>
           {saveMsg.ok ? <Check className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}
           <span>{saveMsg.text}</span>
+          {!saveMsg.ok && suggested && (
+            <button type="button" className="ml-auto shrink-0 underline" onClick={() => { numberTouched.current = true; setMeta((m) => ({ ...m, no: suggested })); setSuggested(""); setSaveMsg(null); }}>
+              Use {suggested}
+            </button>
+          )}
         </div>
       )}
 

@@ -1,7 +1,8 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveInvoice, type SavedInvoice } from "@/lib/actions";
+import { saveInvoice, suggestInvoiceNumber, type SavedInvoice } from "@/lib/actions";
+import { nextDocNumber } from "@/lib/engine/doc-number";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Printer, Save, Check, Loader2, AlertCircle } from "lucide-react";
@@ -44,12 +45,27 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
   */
   const [seller, setSeller] = useState({ name: orgName || "", gstin: "", addr: "" });
   const [buyer, setBuyer] = useState({ name: "", gstin: "", addr: "" });
-  const [meta, setMeta] = useState({ no: "INV-0001", date: new Date().toISOString().slice(0, 10) });
+  /*
+    NOT "INV-0001" EVERY TIME. Every new invoice opened on the same number, and
+    saving on a number already in use replaced that invoice — another
+    customer's receivable. The first paint uses the next number after the ones
+    on screen; the server then supplies the next free number across the whole
+    workspace (unless the owner has already typed one), and saveInvoice refuses
+    a number that belongs to a different customer.
+  */
+  const [meta, setMeta] = useState({ no: nextDocNumber(saved.map((v) => v.invoice_no), "INV-"), date: new Date().toISOString().slice(0, 10) });
+  const numberTouched = useRef(false);
+  useEffect(() => {
+    let live = true;
+    suggestInvoiceNumber().then((n) => { if (live && n && !numberTouched.current) setMeta((m) => ({ ...m, no: n })); }).catch(() => {});
+    return () => { live = false; };
+  }, [saved]);
   const [intraState, setIntraState] = useState(true);
   const [items, setItems] = useState<Item[]>([{ id: "1", desc: "", qty: 1, rate: 1000, gst: 18 }]);
   const [due, setDue] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [suggested, setSuggested] = useState("");
 
   const totals = useMemo(() => {
     let sub = 0, tax = 0;
@@ -78,6 +94,10 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
     }
     setSaving(true);
     setSaveMsg(null);
+    /* From the first save on, this number is THIS invoice: the refresh after
+       saving must not swap in a new suggestion, or re-saving to fix a typo
+       would create a second receivable instead of editing the first. */
+    numberTouched.current = true;
     try {
       const res = await saveInvoice({
         invoice_no: meta.no,
@@ -85,6 +105,8 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
         amount: totals.grand,
         issue_date: meta.date || null,
         due_date: due || null,
+        /* Applies to a NEW invoice only — saving an existing one never changes
+           its status, so fixing a typo on a paid invoice cannot reopen it. */
         status: "pending",
         /*
           The whole document, so this invoice can be reopened and reprinted
@@ -107,6 +129,7 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
       setSaveMsg(res.ok
         ? { ok: true, text: `Saved. ${meta.no} now appears in Receivables and counts towards your DSO.` }
         : { ok: false, text: res.error || "Could not save." });
+      setSuggested(!res.ok && res.suggested ? res.suggested : "");
     } catch {
       setSaveMsg({ ok: false, text: "Could not reach the server. Your invoice is still on screen." });
     } finally { setSaving(false); }
@@ -176,7 +199,7 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
         </div>
       </div>
       <div className="flex flex-wrap gap-3 items-center">
-        <input className={I} value={meta.no} onChange={(e) => setMeta({ ...meta, no: e.target.value })} placeholder="Invoice #" aria-label="Invoice #" />
+        <input className={I} value={meta.no} onChange={(e) => { numberTouched.current = true; setMeta({ ...meta, no: e.target.value }); }} placeholder="Invoice #" aria-label="Invoice #" />
         <label className="text-sm flex items-center gap-1.5"><span className="text-muted-foreground">Issued</span>
           <input className={I} type="date" value={meta.date} onChange={(e) => setMeta({ ...meta, date: e.target.value })} /></label>
         {/* Due date drives receivables ageing and DSO. Without it a saved
@@ -229,6 +252,11 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
         <div className={`rounded-lg border p-3 text-sm flex items-start gap-2 ${saveMsg.ok ? "bg-success/10 text-success border-success/20" : "bg-danger/10 text-danger border-danger/20"}`}>
           {saveMsg.ok ? <Check className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}
           <span>{saveMsg.text}</span>
+          {!saveMsg.ok && suggested && (
+            <button type="button" className="ml-auto shrink-0 underline" onClick={() => { numberTouched.current = true; setMeta((m) => ({ ...m, no: suggested })); setSuggested(""); setSaveMsg(null); }}>
+              Use {suggested}
+            </button>
+          )}
         </div>
       )}
 

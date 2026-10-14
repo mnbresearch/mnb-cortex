@@ -10,7 +10,7 @@ import { updateStatus } from "@/lib/actions";
 import { inr } from "@/lib/utils";
 import { Check, ShieldCheck, X, Undo2, Bot, User, Workflow, Clock, Download, Settings2 } from "lucide-react";
 import { CATALOGUE_BY_KEY } from "@/lib/engine/catalogue";
-import { listProposals, autonomySuggestions, type Proposal } from "@/lib/engine/ledger";
+import { listProposals, autonomySuggestions, isStuck, STUCK_MESSAGE, type Proposal } from "@/lib/engine/ledger";
 import { approveProposal, rejectProposal, undoProposal, acceptAutonomy } from "@/lib/engine/server-actions";
 import { hasRole } from "@/lib/roles";
 
@@ -165,14 +165,23 @@ function safeDescribe(fn: (a: Record<string, unknown>) => string, args: Record<s
 
 export default async function Approvals() {
   const [{ pos, invoices, live }, { orgId }] = await Promise.all([getApprovals(), getUserAndOrg()]);
-  const [queue, history, isManager, isAdmin] = orgId
+  /*
+    `approved` and `executing` rows used to appear NOWHERE — not in the queue
+    (proposed only) and not in the history. One that a crash left half-done was
+    invisible, and proposing it again was answered "Already approved and
+    running." They are listed now: running if recent, "Interrupted" once past
+    the stuck threshold (ledger.isStuck). Proposing the same action again
+    closes an interrupted one as failed and records the retry.
+  */
+  const [queue, history, inFlight, isManager, isAdmin] = orgId
     ? await Promise.all([
         listProposals(orgId, { status: ["proposed"], limit: 50 }),
         listProposals(orgId, { status: ["done", "failed", "rejected", "undone", "blocked", "expired"], limit: 40 }),
+        listProposals(orgId, { status: ["approved", "executing"], limit: 30 }),
         hasRole("manager"),
         hasRole("admin"),
       ])
-    : [[], [], false, false];
+    : [[], [], [], false, false];
   /* Earned autonomy: offered to admins only, since only they can grant it. */
   const suggestions = orgId && isAdmin ? await autonomySuggestions(orgId).catch(() => []) : [];
   const canDecide = (p: Proposal) => {
@@ -207,6 +216,31 @@ export default async function Approvals() {
             ) : (
               <div className="space-y-3">{queue.map((p) => <ProposalCard key={p.id} p={p} canDecide={canDecide(p)} />)}</div>
             )}
+          </Section>
+        )}
+
+        {live && inFlight.length > 0 && (
+          <Section title="Running or interrupted" desc="Approved actions that have started. Anything here for more than 15 minutes did not finish — check whether it took effect, then propose it again to retry.">
+            <div className="space-y-2">
+              {inFlight.map((p) => {
+                const def = CATALOGUE_BY_KEY[p.action];
+                const stuck = isStuck(p);
+                return (
+                  <div key={p.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                    <div className="min-w-0 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{def?.title ?? p.action}</span>
+                        <span className={`text-xs uppercase tracking-wide ${stuck ? "text-destructive" : "text-muted-foreground"}`}>{stuck ? "interrupted" : "running"}</span>
+                        <span className="text-xs text-muted-foreground">{when(p.decided_at || p.created_at)}</span>
+                      </div>
+                      <div className="text-muted-foreground mt-0.5 break-words">
+                        {stuck ? STUCK_MESSAGE : (def ? safeDescribe(def.describe, p.args) : "")}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </Section>
         )}
 
@@ -247,14 +281,17 @@ export default async function Approvals() {
           </Card>
         )}
 
+        {/* Nothing here emails the supplier: the button only records the PO as
+            sent. It said "Approve & send" / "Approve to send to the supplier",
+            which promised a delivery that does not exist. */}
         {live && pos.length > 0 && (
-          <Section title="AI-drafted purchase orders" desc="Approve to send to the supplier">
+          <Section title="AI-drafted purchase orders" desc="Send the PO to your supplier yourself, then mark it as sent here. Cortex does not email suppliers.">
             <div className="space-y-2">
               {pos.map((p) => (
                 <div key={p.id} className="flex items-center justify-between rounded-lg border p-3">
                   <div><div className="font-medium text-sm">{p.po_no} · {p.item}</div><div className="text-xs text-muted-foreground">{p.supplier} · {p.qty} units · {inr(Number(p.amount))}</div></div>
                   <div className="flex items-center gap-2">
-                    <StatusButton table="purchase_orders" id={p.id} status="sent" label="Approve & send" />
+                    <StatusButton table="purchase_orders" id={p.id} status="sent" label="Mark as sent" />
                     <DeleteButton table="purchase_orders" id={p.id} path="/approvals" />
                   </div>
                 </div>

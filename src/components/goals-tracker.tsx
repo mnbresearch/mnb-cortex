@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Plus, Trash2, Target, Link2 } from "lucide-react";
 import { mdToHtml } from "@/lib/utils";
-import { saveGoal, deleteGoal } from "@/lib/actions";
+import { saveGoal, deleteGoal, updateGoal } from "@/lib/actions";
 
 /**
  * Quarterly targets, measured against the workspace's real KPIs.
@@ -118,9 +118,14 @@ export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]
               <input name="target_val" type="number" step="any" value={draftTarget} onChange={(e) => setDraftTarget(e.target.value)}
                 className="ml-2 w-24 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" required />
             </label>
+            {/* KEYED on the chosen metric. defaultValue/defaultChecked are read
+                once at mount, so changing the "Track" dropdown left the unit
+                and lower-is-better of the FIRST metric in place — a goal on
+                receivables could save as "higher is better". Remounting on
+                draftKey makes both follow the dropdown while staying editable. */}
             <label className="text-xs text-muted-foreground">
               Unit
-              <input name="unit" defaultValue={metrics.find((m) => m.key === draftKey)?.unit ?? ""}
+              <input key={`unit:${draftKey}`} name="unit" defaultValue={metrics.find((m) => m.key === draftKey)?.unit ?? ""}
                 className="ml-2 w-20 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </label>
             {!draftKey && (
@@ -131,7 +136,7 @@ export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]
               </label>
             )}
             <label className="text-xs text-muted-foreground inline-flex items-center gap-1">
-              <input type="checkbox" name="lower_is_better" value="1"
+              <input key={`lib:${draftKey}`} type="checkbox" name="lower_is_better" value="1"
                 defaultChecked={metrics.find((m) => m.key === draftKey)?.lowerBad ?? false} />
               Lower is better
             </label>
@@ -171,8 +176,31 @@ export function GoalsTracker({ goals = [], metrics = [] }: { goals?: SavedGoal[]
                 </div>
               )}
               {!g.linked && !g.awaitingMetric && (
-                <div className="text-xs text-muted-foreground mt-0.5">Tracked by hand — not linked to a KPI.</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Tracked by hand — not linked to a KPI. Update the current value below as it changes.</div>
               )}
+              {/* Goals could only be added or deleted, so a hand-tracked goal's
+                  "now" was frozen at whatever was typed on day one. A linked
+                  goal's current value comes from the live KPI and is not
+                  editable here. Keyed on the saved values so it refreshes. */}
+              <details className="mt-1.5 text-xs">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Edit</summary>
+                <SafeForm key={`${g.id}:${g.target}:${g.current}`} action={updateGoal} className="mt-2 flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="id" value={g.id} />
+                  <label className="text-muted-foreground">
+                    Target
+                    <input name="target_val" type="number" step="any" defaultValue={String(g.target)} required
+                      className="ml-2 w-24 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  </label>
+                  {!g.metric_key && (
+                    <label className="text-muted-foreground">
+                      Current
+                      <input name="current_val" type="number" step="any" defaultValue={String(g.current)} required
+                        className="ml-2 w-24 rounded-md border bg-background px-2 h-8 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                    </label>
+                  )}
+                  <Button type="submit" size="sm" variant="outline">Save</Button>
+                </SafeForm>
+              </details>
             </div>
             <SafeForm action={deleteGoal}>
               <input type="hidden" name="id" value={g.id} />

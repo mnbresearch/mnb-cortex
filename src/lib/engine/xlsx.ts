@@ -297,7 +297,8 @@ async function inventory(wb: ExcelJS.Workbook, orgId: string, biz: string) {
   Six sheets, every one of them from rows the workspace already holds:
     Overview     latest value of every KPI, with its period-over-period change
     Trend        the finance ledger, newest 24 months, with formulas for
-                 gross/net margin so the reader can see the arithmetic
+                 gross/net margin so the reader can see the arithmetic;
+                 unrecorded figures are left blank, never shown as ₹0
     Receivables  open receivables with live ageing (same formulas as the
                  standalone ageing export)
     Payables     open payables
@@ -338,27 +339,56 @@ async function misPack(wb: ExcelJS.Workbook, orgId: string, biz: string) {
   [34, 18, 8, 20, 10, 12].forEach((w, i) => (sum.getColumn(i + 1).width = w));
 
   // --- Trend: finance ledger
-  const { data: fl } = await svc.from("finance_ledger").select("period, revenue, cogs, opex, gross_profit, net_profit, cash_balance, receivables, payables, ebitda")
+  /*
+    select("*") rather than a column list: `net_cash_flow` only exists once
+    2026_zzzz_c_net_cash_flow.sql has run, and naming a missing column fails
+    the whole read — the pack would lose its Trend sheet on any database that
+    had not caught up.
+
+    UNKNOWN IS BLANK, NOT ₹0. net_profit is null unless a real profit figure was
+    recorded (the bank reader's money-in minus money-out now lives in
+    net_cash_flow, because it is not profit). `Number(null) || 0` printed a
+    confident "Net profit ₹0" — and a 0.0% net margin — for every month nobody
+    knew. Same for COGS, gross profit, cash and the positions.
+
+    `opex` is not operating expenses: lib/metrics.ts writes the monthly payroll
+    on file into it, for the current month only. The column says exactly that.
+  */
+  const { data: fl } = await svc.from("finance_ledger").select("*")
     .eq("org_id", orgId).order("period", { ascending: false }).limit(24);
   const ledger = (((fl as any[]) || []).slice().reverse());
+  const known = (v: any): number | null => {
+    if (v === null || v === undefined || v === "") return null;
+    const x = Number(v); return Number.isFinite(x) ? x : null;
+  };
   const tr = wb.addWorksheet("Trend");
   header(tr, [
     { header: "Period", key: "period", width: 12, fmt: "mmm yyyy" }, { header: "Revenue (₹)", key: "revenue", width: 16, fmt: INR },
-    { header: "COGS (₹)", key: "cogs", width: 16, fmt: INR }, { header: "Opex (₹)", key: "opex", width: 16, fmt: INR },
+    { header: "COGS (₹)", key: "cogs", width: 16, fmt: INR }, { header: "Monthly payroll on file (₹)", key: "opex", width: 22, fmt: INR },
     { header: "Gross profit (₹)", key: "gp", width: 16, fmt: INR }, { header: "Net profit (₹)", key: "np", width: 16, fmt: INR },
     { header: "Gross margin", key: "gm", width: 13, fmt: "0.0%" }, { header: "Net margin", key: "nm", width: 13, fmt: "0.0%" },
     { header: "Cash (₹)", key: "cash", width: 16, fmt: INR }, { header: "Receivables (₹)", key: "rec", width: 16, fmt: INR }, { header: "Payables (₹)", key: "pay", width: 16, fmt: INR },
+    { header: "Net cash flow (bank, ₹)", key: "ncf", width: 20, fmt: INR },
   ]);
   if (!ledger.length) tr.addRow({ period: "No monthly ledger rows yet — the Trend sheet fills in once sales or a bank statement have been imported." });
   ledger.forEach((r, i) => {
     const n = i + 2;
     tr.addRow({
-      period: r.period ? new Date(r.period) : null, revenue: Number(r.revenue) || 0, cogs: Number(r.cogs) || 0, opex: Number(r.opex) || 0,
-      gp: Number(r.gross_profit) || 0, np: Number(r.net_profit) || 0, cash: Number(r.cash_balance) || 0, rec: Number(r.receivables) || 0, pay: Number(r.payables) || 0,
+      period: r.period ? new Date(r.period) : null, revenue: known(r.revenue), cogs: known(r.cogs), opex: known(r.opex),
+      gp: known(r.gross_profit), np: known(r.net_profit), cash: known(r.cash_balance), rec: known(r.receivables), pay: known(r.payables),
+      ncf: known(r.net_cash_flow),
     });
-    tr.getCell(`G${n}`).value = { formula: `IF(B${n}=0,"",E${n}/B${n})`, result: undefined as any };
-    tr.getCell(`H${n}`).value = { formula: `IF(B${n}=0,"",F${n}/B${n})`, result: undefined as any };
+    // A blank profit cell must give a blank margin, not 0% (Excel reads a blank as 0).
+    tr.getCell(`G${n}`).value = { formula: `IF(OR(B${n}="",B${n}=0,E${n}=""),"",E${n}/B${n})`, result: undefined as any };
+    tr.getCell(`H${n}`).value = { formula: `IF(OR(B${n}="",B${n}=0,F${n}=""),"",F${n}/B${n})`, result: undefined as any };
   });
+  if (ledger.length) {
+    const noteRow = ledger.length + 3;
+    tr.getCell(`A${noteRow}`).value = "Blank means not recorded, not zero. Net profit appears only where a real profit figure was recorded. "
+      + "Net cash flow (bank) is money in minus money out from an imported bank statement — it is not profit. "
+      + "Monthly payroll on file is the staff payroll held when that month was current — it is not total operating expenses.";
+    tr.getCell(`A${noteRow}`).font = { italic: true };
+  }
 
   // --- Receivables ageing and payables: reuse the standalone builders
   await receivablesAgeing(wb, orgId, biz);

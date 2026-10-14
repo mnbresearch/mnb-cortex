@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import { serviceClient } from "@/lib/supabase/server";
 import { CATALOGUE_BY_KEY, isActionKey, validateArgs, type ActionDef } from "./catalogue";
 import { scanForInjection } from "@/lib/ai/untrusted";
-import { decide, gateVerdict, suggestAutonomy, normaliseCaps, requiresCaps, type Policy, type Usage, type Verdict } from "./policy";
+import { decide, gateVerdict, suggestAutonomy, normaliseCaps, requiresCaps, isHighImpact, type Policy, type Usage, type Verdict } from "./policy";
 import { HANDLERS, undoHandler } from "./handlers";
 import { signApproval, verifyApproval } from "./approval-sig";
 
@@ -91,6 +91,42 @@ function istMidnightISO(now = new Date()): string {
   const ist = new Date(now.getTime() + 5.5 * 3_600_000);
   const y = ist.getUTCFullYear(), m = ist.getUTCMonth(), d = ist.getUTCDate();
   return new Date(Date.UTC(y, m, d) - 5.5 * 3_600_000).toISOString();
+}
+
+/*
+  DOES THE LIVE PLAN STILL INCLUDE AUTONOMY?
+
+  Auto rules for money/outbound actions are refused at SAVE time below Command
+  (server-actions autonomyGate), but nothing re-checked when the rule FIRED —
+  so after a downgrade or a lapse, Cortex kept messaging customers and
+  touching money on its own. Asked at propose time and again just before
+  executing. An unreadable plan counts as "no": the action then waits for a
+  tap, which is always the safe direction.
+*/
+async function planAllowsAutonomy(orgId: string): Promise<boolean> {
+  try {
+    const { orgCapability } = await import("./plan-gate-server");
+    const r = await orgCapability(orgId, "autonomy");
+    return r.verdict.ok;
+  } catch { return false; }
+}
+
+/*
+  STUCK ROWS. A row is claimed approved → executing and then the handler runs;
+  if the process dies in between (a timeout, a deploy) the row sits in
+  `approved` or `executing` for ever — hidden from both the queue and the
+  history, and a same-day retry was told "Already approved and running".
+  Fifteen minutes is far beyond any handler's runtime.
+*/
+export const STUCK_AFTER_MS = 15 * 60 * 1000;
+export const STUCK_MESSAGE = "Interrupted: this started but never finished (the server stopped part-way). It may or may not have taken effect — check before running it again.";
+export function isStuck(p: Pick<Proposal, "status" | "decided_at" | "created_at" | "executed_at">, now = Date.now()): boolean {
+  const st = String(p.status || "");
+  if (st !== "approved" && st !== "executing") return false;
+  /* An undo in flight (done → executing) carries executed_at; that is not an unfinished run. */
+  if (st === "executing" && p.executed_at) return false;
+  const t = Date.parse(String(p.decided_at || p.created_at || ""));
+  return Number.isFinite(t) && now - t > STUCK_AFTER_MS;
 }
 
 export async function getPolicy(orgId: string, action: string): Promise<Policy | null> {
@@ -181,8 +217,10 @@ export async function propose(input: ProposeInput): Promise<ProposeOutcome> {
      customer note is stored and later read back into prompts. */
   const ownScan = scanForInjection([v.args, input.rationale ?? null, input.evidence ?? []]);
   const suspicious = Array.from(new Set([...(input.suspicious || []), ...ownScan.hits]));
+  /* Only asked when it could matter: an auto rule for a money/outbound action. */
+  const autonomy = (policy?.mode ?? def.defaultMode) === "auto" && isHighImpact(def) ? await planAllowsAutonomy(input.orgId) : undefined;
   const verdict = gateVerdict(decide(def, v.args, policy, usage), def, policy, {
-    source: input.source, actorRole: input.actorRole, tainted: input.tainted === true, suspicious,
+    source: input.source, actorRole: input.actorRole, tainted: input.tainted === true, suspicious, autonomy,
   });
 
   const row = {
@@ -195,15 +233,30 @@ export async function propose(input: ProposeInput): Promise<ProposeOutcome> {
     idempotency_key: key,
   };
 
-  const { data, error } = await svc.from("action_proposals").insert(row).select("*").maybeSingle();
-  if (error) {
-    if ((error as any).code === "23505") {
-      /* Scoped to this workspace: the key is unique across all of them, and an
-         unscoped read once handed org B org A's row as "already proposed". */
-      const { data: existing } = await svc.from("action_proposals").select("*").eq("idempotency_key", key).eq("org_id", input.orgId).maybeSingle();
-      if (existing) return { ok: true, duplicate: true, proposal: existing as Proposal, verdict: { verdict: (existing as any).policy_verdict, reason: "Already proposed today." } };
-      return { ok: false, error: "An identical proposal key exists in another workspace; nothing was created. Rename the step or try again." };
+  let { data, error } = await svc.from("action_proposals").insert(row).select("*").maybeSingle();
+  if (error && (error as any).code === "23505") {
+    /* Scoped to this workspace: the key is unique across all of them, and an
+       unscoped read once handed org B org A's row as "already proposed". */
+    const { data: existing } = await svc.from("action_proposals").select("*").eq("idempotency_key", key).eq("org_id", input.orgId).maybeSingle();
+    if (!existing) return { ok: false, error: "An identical proposal key exists in another workspace; nothing was created. Rename the step or try again." };
+    if (!isStuck(existing as Proposal)) {
+      return { ok: true, duplicate: true, proposal: existing as Proposal, verdict: { verdict: (existing as any).policy_verdict, reason: "Already proposed today." } };
     }
+    /*
+      The earlier one is STUCK (approved/executing, never finished). Close it
+      as failed — visibly, in the history — and move it off the key, so this
+      retry can be recorded and decided afresh instead of being told it is
+      "already running" all day. Conditional on it still being stuck.
+    */
+    const { data: closed } = await svc.from("action_proposals")
+      .update({ status: "failed", error: STUCK_MESSAGE, executed_at: new Date().toISOString(), idempotency_key: `${key}:stuck:${String((existing as any).id).slice(0, 8)}` })
+      .eq("id", (existing as any).id).eq("org_id", input.orgId).in("status", ["approved", "executing"]).select("id");
+    if (!closed || closed.length !== 1) {
+      return { ok: true, duplicate: true, proposal: existing as Proposal, verdict: { verdict: (existing as any).policy_verdict, reason: "Already proposed today." } };
+    }
+    ({ data, error } = await svc.from("action_proposals").insert(row).select("*").maybeSingle());
+  }
+  if (error) {
     return { ok: false, error: `Could not record the proposal: ${error.message}` };
   }
   if (!data) return { ok: false, error: "The proposal was not recorded." };
@@ -308,12 +361,34 @@ export async function execute(id: string, orgId: string, actorId: string | null,
     }
   }
 
+  /*
+    "NEVER" MEANS NEVER — CHECKED ON EVERY EXECUTION, NOT JUST THE AUTO PATH.
+
+    A human approval ran with recheckPolicy:false, so an action the owner had
+    since switched to "Never" on /approvals/rules still ran when someone
+    approved the queued card (or an approved row was retried). The owner's
+    block outranks an earlier approval. setPolicy() also blocks the queue when
+    a rule changes to "Never"; this is the backstop for anything in flight.
+  */
+  const currentPolicy = await getPolicy(orgId, def.key);
+  if (currentPolicy?.mode === "blocked") {
+    const why = `${def.title} is switched off for this workspace (your rule is "Never"), so it was not run.`;
+    await mark(id, orgId, { status: "blocked", policy_verdict: "blocked", policy_reason: `At execution: ${why}`, decided_at: null });
+    return { ok: false, error: why };
+  }
+
   if (opts.recheckPolicy) {
-    const [policy, usage] = await Promise.all([getPolicy(orgId, def.key), getUsage(orgId, def, p.args)]);
-    const again = decide(def, p.args, policy, usage);
+    const usage = await getUsage(orgId, def, p.args);
+    const again = decide(def, p.args, currentPolicy, usage);
     if (again.verdict !== "auto") {
       await mark(id, orgId, { status: again.verdict === "blocked" ? "blocked" : "proposed", policy_verdict: again.verdict, policy_reason: `At execution: ${again.reason}`, decided_at: null });
       return { ok: false, error: again.reason };
+    }
+    /* The auto path re-asks the PLAN too: a rule must not outlive the plan that allowed it. */
+    if (isHighImpact(def) && !(await planAllowsAutonomy(orgId))) {
+      const why = "Your plan no longer includes letting Cortex act on its own for customer messages and money, so this waits for your tap.";
+      await mark(id, orgId, { status: "proposed", policy_verdict: "approve", policy_reason: `At execution: ${why}`, decided_at: null });
+      return { ok: false, error: why };
     }
   }
 
@@ -392,16 +467,37 @@ export async function setPolicy(orgId: string, action: string, mode: Policy["mod
     updated_by: actorId, updated_at: new Date().toISOString(),
   }, { onConflict: "org_id,action" });
   if (error) return { ok: false, error: error.message };
+  /*
+    A rule changed to "Never" applies to what is ALREADY queued, not only to
+    what is proposed next. Waiting and approved-but-not-started rows for this
+    action are blocked now, with the reason on the card.
+  */
+  if (mode === "blocked") {
+    const { error: qErr } = await svc.from("action_proposals")
+      .update({ status: "blocked", policy_verdict: "blocked", policy_reason: `Blocked when the rule for ${def.title} was set to "Never".`, decided_at: null })
+      .eq("org_id", orgId).eq("action", action).in("status", ["proposed", "approved"]).select("id");
+    if (qErr) return { ok: false, error: `Rule saved, but the ${def.title} items already waiting could not be blocked: ${qErr.message}. They will still be refused when anyone tries to run them.` };
+  }
   return { ok: true };
 }
 
-/** Sweep: expire stale proposals. Called from the nightly cron. */
+/** Sweep: expire stale proposals, and close stuck ones. Called from the nightly cron. */
 export async function expireStale(orgId?: string): Promise<number> {
   const svc = svcOrThrow();
   let q = svc.from("action_proposals").update({ status: "expired" }).eq("status", "proposed").lt("expires_at", new Date().toISOString());
   if (orgId) q = q.eq("org_id", orgId);
   const { data } = await q.select("id");
-  return data?.length || 0;
+  /* Approved/executing for longer than STUCK_AFTER_MS and never finished: failed, visibly. Undo-in-flight rows (executed_at set) are left alone. */
+  let stuck = 0;
+  try {
+    const cutoff = new Date(Date.now() - STUCK_AFTER_MS).toISOString();
+    let sq = svc.from("action_proposals").update({ status: "failed", error: STUCK_MESSAGE })
+      .in("status", ["approved", "executing"]).is("executed_at", null).lt("decided_at", cutoff);
+    if (orgId) sq = sq.eq("org_id", orgId);
+    const { data: s } = await sq.select("id");
+    stuck = s?.length || 0;
+  } catch { /* the expiry above is the primary job */ }
+  return (data?.length || 0) + stuck;
 }
 
 /**
@@ -413,7 +509,10 @@ export function describeExisting(p: Proposal): { ok: boolean; message: string } 
   switch (p.status) {
     case "done": return { ok: true, message: "Already done earlier today — see Approvals history." };
     case "proposed": return { ok: true, message: "Already waiting for approval in Approvals." };
-    case "approved": case "executing": return { ok: true, message: "Already approved and running." };
+    case "approved": case "executing":
+      return isStuck(p)
+        ? { ok: false, message: STUCK_MESSAGE }
+        : { ok: true, message: "Already approved and running." };
     case "rejected": return { ok: false, message: "This exact action was rejected earlier today; it was not proposed again." };
     case "failed": return { ok: false, message: `This exact action failed earlier today${p.error ? `: ${p.error}` : ""}. Fix the cause and try tomorrow, or change the details.` };
     case "blocked": return { ok: false, message: p.policy_reason || "This action is blocked in this workspace." };

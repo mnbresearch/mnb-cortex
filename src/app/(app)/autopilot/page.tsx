@@ -63,8 +63,15 @@ export default async function Autopilot() {
             ) : <a href="/login" className="text-sm text-primary underline">Sign in to run</a>}
           </div>
         </Card>
-        <Section title="Recent Autopilot findings" desc="AI-generated analyses">
-          {findings.length === 0 ? <p className="text-sm text-muted-foreground">No findings yet. Run Autopilot to generate the first analysis.</p> : (
+        {/*
+          These rows come from the ACTIVITY log (type "ai"): one-line records
+          such as "Autopilot ran a business analysis and posted it to
+          Notifications". They were headed "Recent Autopilot findings — AI-
+          generated analyses", which they are not; the analyses themselves are
+          posted to Notifications. Labelled for what they are.
+        */}
+        <Section title="Recent AI activity" desc="A log of AI runs in this workspace. The analyses themselves appear in Notifications and on the dashboard.">
+          {findings.length === 0 ? <p className="text-sm text-muted-foreground">No AI runs logged yet. Run Autopilot to generate the first analysis.</p> : (
             <div className="space-y-2">
               {findings.slice(0, 15).map((f: any) => (
                 <div key={f.id} className="flex items-start gap-3 rounded-lg border p-3">

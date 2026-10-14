@@ -155,14 +155,26 @@ for (const [fn, what, why] of [
     "crypto.randomUUID or crypto.randomBytes");
 }
 
-/* Entitlement is checked at CREATION, and the message says existing keys live. */
+/*
+  Entitlement is checked at CREATION — plan AND a live subscription, through
+  requireCapability — and, since the API is now also refused at USE time when
+  the plan lacks it or has lapsed (lib/api/auth.ts), no refusal may promise
+  that "existing keys keep working": that sentence became untrue.
+*/
 const keyBody = body("generateApiKey");
-check(/planIncludes\(plan, "api"\)/.test(keyBody),
-  "generateApiKey checks the plan",
+check(/requireCapability\(orgId, "api"/.test(keyBody),
+  "generateApiKey checks the plan (and that it is live)",
   "this was the revenue leak: any plan could issue keys");
-check(/existing keys keep working/i.test(ACTIONS),
-  "…and the refusal tells the customer their existing keys still work",
-  "cutting off a running integration to enforce a price is how you lose a customer");
+/* The two plan-refusal sentences that became untrue. (KEY_MIGRATION_MSG's "Existing keys keep working." is about a missing migration, and is still true.) */
+check(!/Your existing keys keep working/.test(ACTIONS) && !/Anything you have already set up keeps working/.test(ACTIONS),
+  "…and no refusal claims existing keys or automation keep working",
+  "keys, scheduled workflows and Autopilot rules now stop with the plan — saying otherwise is untrue");
+{
+  const rc = ACTIONS.slice(ACTIONS.indexOf("async function requireCapability"), ACTIONS.indexOf("async function requireCapability") + 1500);
+  check(/capabilityVerdict\(/.test(rc),
+    "requireCapability decides through plan-gate (plan includes it AND status is live)",
+    "it read organizations.plan only, so a lapsed plan unlocked by a credit pack kept every capability");
+}
 
 console.log(`\ncapabilities: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {

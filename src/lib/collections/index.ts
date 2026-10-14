@@ -2,6 +2,7 @@ import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { normalizeCustomerName } from "@/lib/customer-match";
 import { daysPastDueIST } from "@/lib/statutory";
+import { isOpenReceivable, receivableStatus } from "@/lib/money-rules";
 import { draftReminder, containsForbidden, type Tone, type Channel } from "@/lib/collections/draft";
 
 /**
@@ -148,20 +149,46 @@ export async function findCandidates(orgId: string, policy?: Policy): Promise<Ca
   if (!svc) return [];
   const p = policy ?? await getPolicy(orgId);
 
+  /*
+    EVERY OPEN INVOICE, IN A STABLE ORDER — not the first 500 in whatever order
+    Postgres felt like. With `.limit(500)` and no order, a workspace with more
+    open invoices got a different arbitrary subset each run: "Ready to chase"
+    and its totals were wrong past 500, and the threads read was capped at 500
+    across ALL invoices ever chased, so an invoice with a live thread could be
+    treated as never chased (attempt caps and the minimum gap bypassed).
+    Now: page through every open invoice ordered by id, and fetch threads only
+    for those invoices, chunked.
+  */
   let invoices: any[] = [];
   try {
-    const { data } = await svc.from("invoices")
-      .select("id, invoice_no, party, amount, due_date, status")
-      .eq("org_id", orgId).eq("type", "receivable").or("status.is.null,status.not.ilike.paid")
-      .limit(500);
-    invoices = (data as any[]) || [];
+    const { pageAll } = await import("@/lib/page-all");
+    const r = await pageAll<any>((from, to) => svc.from("invoices")
+      .select("id, invoice_no, party, amount, due_date, status, type")
+      .eq("org_id", orgId).or("status.is.null,status.not.ilike.paid")
+      .order("id", { ascending: true }).range(from, to), { max: 20_000 });
+    if (r.error) return [];
+    /*
+      "Open receivable" is lib/money-rules.ts — the dashboard's rule. An
+      invoice with NO type counts as a receivable (the dashboard has always
+      counted it, so `.eq("type", "receivable")` here meant the dashboard said
+      ₹X was past due while collections had nothing to chase). A payable is
+      never a candidate: we chase money owed TO the customer, never by them.
+    */
+    invoices = r.rows.filter((inv) => isOpenReceivable(inv));
   } catch { return []; }
 
-  const [threadsRes, customersRes] = await Promise.all([
-    svc.from("collection_threads").select("id, invoice_id, attempts, status, last_sent_at").eq("org_id", orgId).limit(500),
-    svc.from("customers").select("name, company, email, phone").eq("org_id", orgId).limit(2000),
-  ]);
-  const threads = new Map(((threadsRes.data as any[]) || []).map((t) => [String(t.invoice_id), t]));
+  const ids = invoices.map((i) => String(i.id));
+  const threadRows: any[] = [];
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await svc.from("collection_threads")
+      .select("id, invoice_id, attempts, status, last_sent_at")
+      .eq("org_id", orgId).in("invoice_id", ids.slice(i, i + 200));
+    /* A failed thread read must not look like "never chased" — that would reopen every cap. */
+    if (error) return [];
+    threadRows.push(...(((data as any[]) || [])));
+  }
+  const customersRes = await svc.from("customers").select("name, company, email, phone").eq("org_id", orgId).limit(2000);
+  const threads = new Map(threadRows.map((t) => [String(t.invoice_id), t]));
 
   // Contact lookup by normalised name, so "Sharma Traders Pvt Ltd" on the
   // invoice finds "Sharma Traders" in the customer list.
@@ -201,7 +228,15 @@ export async function findCandidates(orgId: string, policy?: Policy): Promise<Ca
 
     let blockedBy: string | null = null;
 
-    if (!due) blockedBy = "No due date on this invoice";
+    /*
+      No due date → never chased, even when the owner marked it "overdue"
+      (which money-rules counts as past due on the dashboard). A reminder
+      states how late the payment is and waits first_after_days from the due
+      date; with no date both would be invented. Say what to fix instead.
+    */
+    if (!due) blockedBy = receivableStatus(inv) === "overdue"
+      ? "Marked overdue but has no due date — add the due date to chase it"
+      : "No due date on this invoice";
     else if (daysPastDue < p.first_after_days) {
       blockedBy = daysPastDue < 0
         ? "Not due yet"
@@ -256,6 +291,23 @@ export async function prepareDrafts(orgId: string, businessName: string, limit =
 
   const p = await getPolicy(orgId);
   if (!p.enabled) return { drafted: 0, skipped: 0, reasons: { "Collections is switched off": 1 } };
+
+  /*
+    AUTO-SEND NEEDS THE AUTONOMY CAPABILITY, CHECKED HERE — at draft time, every
+    run — not only when the policy was saved. A policy saved on Command keeps
+    `auto_send: true` after a downgrade or lapse; without this, reminders kept
+    being written straight to `approved` and sent to debtors with no human tap
+    on a plan that does not include that. Unreadable plan → treated as no
+    autonomy: the draft simply waits for approval, which is always safe.
+  */
+  let autoSend = p.auto_send === true;
+  if (autoSend) {
+    try {
+      const { orgCapability } = await import("@/lib/engine/plan-gate-server");
+      const cap = await orgCapability(orgId, "autonomy");
+      if (!cap.verdict.ok) autoSend = false;
+    } catch { autoSend = false; }
+  }
 
   const candidates = await findCandidates(orgId, p);
   let drafted = 0, skipped = 0;
@@ -318,7 +370,15 @@ export async function prepareDrafts(orgId: string, businessName: string, limit =
         org_id: orgId, invoice_id: c.invoiceId, party: c.party,
         amount: c.amount, due_date: c.dueDate, status: "open",
       }).select("id").single();
-      if (error || !data) { skipped++; continue; }
+      if (error || !data) {
+        /* Said, not swallowed: a skipped invoice with no reason looks like the feature ignoring it. */
+        skipped++;
+        const why = error && /duplicate key|unique/i.test(error.message || "")
+          ? "A reminder thread for this invoice already exists (created by another run) — it will be picked up next time"
+          : `Could not start a reminder thread${error?.message ? ` (${error.message.slice(0, 120)})` : ""}`;
+        reasons[why] = (reasons[why] || 0) + 1;
+        continue;
+      }
       threadId = String((data as any).id);
     }
 
@@ -345,10 +405,16 @@ export async function prepareDrafts(orgId: string, businessName: string, limit =
       channel, recipient: channel === "email" ? c.contact.email : c.contact.phone,
       subject, body,
       // auto_send still produces a row first; it is approved, not skipped.
-      status: p.auto_send ? "approved" : "draft",
-      approved_at: p.auto_send ? new Date().toISOString() : null,
+      // Only when the plan includes autonomy (autoSend above), never from the stored flag alone.
+      status: autoSend ? "approved" : "draft",
+      approved_at: autoSend ? new Date().toISOString() : null,
     });
-    if (msgErr) { skipped++; continue; }
+    if (msgErr) {
+      skipped++;
+      const why = `Could not save the drafted reminder${msgErr.message ? ` (${msgErr.message.slice(0, 120)})` : ""}`;
+      reasons[why] = (reasons[why] || 0) + 1;
+      continue;
+    }
     drafted++;
 
     /*
@@ -383,7 +449,7 @@ export type SendResult = { sent: number; failed: number; held: number; note?: st
  * Only `approved` messages. A draft is never sent, whatever else is true —
  * which is what makes the approval step meaningful rather than decorative.
  */
-export async function sendApproved(orgId: string, origin?: string): Promise<SendResult> {
+export async function sendApproved(orgId: string, origin?: string, opts?: { onlyIds?: string[] }): Promise<SendResult> {
   const svc = serviceClient();
   if (!svc) return { sent: 0, failed: 0, held: 0 };
 
@@ -463,10 +529,19 @@ export async function sendApproved(orgId: string, origin?: string): Promise<Send
   if (!gate.allowed) return { sent: 0, failed: 0, held: 0, note: gate.note };
   const room = gate.room;
 
-  const { data: queue } = await svc.from("collection_messages")
+  /*
+    `onlyIds` scopes a run to specific messages. Approving ONE payment
+    reminder from the action engine used to call this unscoped, so every
+    approved message in the workspace went out in the same run — reminders the
+    owner had approved for later, or not looked at since. An empty list sends
+    nothing (never "everything").
+  */
+  if (opts?.onlyIds && opts.onlyIds.length === 0) return { sent: 0, failed: 0, held: 0, note: "Nothing selected to send." };
+  let qb = svc.from("collection_messages")
     .select("id, thread_id, channel, recipient, subject, body, attempt")
-    .eq("org_id", orgId).eq("status", "approved")
-    .order("created_at", { ascending: true }).limit(room);
+    .eq("org_id", orgId).eq("status", "approved");
+  if (opts?.onlyIds) qb = qb.in("id", opts.onlyIds);
+  const { data: queue } = await qb.order("created_at", { ascending: true }).limit(room);
 
   let sent = 0, failed = 0, skipped = 0;
 

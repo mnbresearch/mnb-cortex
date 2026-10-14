@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { hasSupabase, serviceClient } from "@/lib/supabase/server";
 import { keyFromHeaders, plausibleKey, judgeKey, hourlyLimit, shouldTouch, type ApiScope, type KeyRow } from "@/lib/api-keys";
 import { requestId, type ErrorCode } from "@/lib/api/http";
+import { capabilityVerdict, capabilityMessage } from "@/lib/engine/plan-gate";
 
 /*
   ONE DOOR FOR EVERY /api/v1 CALL.
@@ -80,11 +81,45 @@ export async function apiAuth(
   }
   const k = row!;
 
+  /*
+    THE PLAN IS CHECKED ON EVERY CALL, NOT JUST WHEN THE KEY WAS MADE.
+
+    This read the plan only to size the rate limit. A key issued on Watch Pro
+    kept working after a downgrade to Watch, and after the subscription lapsed
+    entirely — and every pre-scopes key defaults to ingest:write (LEGACY_SCOPES)
+    on any plan, so a Watch workspace with an old key could push data in.
+    Now: the plan must include "api" — and "api_write" for a write — and be
+    live (engine/plan-gate.ts: statusOf() not lapsed, a live pooling firm, or
+    the operator's override). Refused with 403 and a sentence that says why.
+
+    A failed READ of the organisation fails OPEN with the floor limit, exactly
+    as before: a transient database error must not take down a paying
+    customer's integration. Only a row that was read and says "no" refuses.
+  */
   let plan = "";
+  let gateRefusal: string | null = null;
+  /* Only the READS are inside the try — the decision itself is never swallowed. */
+  let orgRow: any = null, orgRead = false, firm: any = null;
   try {
-    const { data } = await svc.from("organizations").select("plan").eq("id", k.org_id).maybeSingle();
-    plan = String((data as any)?.plan || "");
-  } catch { /* default limits */ }
+    const { data, error } = await svc.from("organizations").select("*").eq("id", k.org_id).maybeSingle();
+    if (!error) { orgRow = data; orgRead = true; }
+    const firmId = String((data as any)?.practice_org_id || "");
+    if (orgRead && firmId && firmId !== k.org_id) {
+      try { firm = (await svc.from("organizations").select("*").eq("id", firmId).maybeSingle()).data; } catch { /* own state decides */ }
+    }
+  } catch { /* default limits; fail open on an unreadable plan */ }
+  if (orgRead) {
+    plan = String(orgRow?.plan || "");
+    const caps = kind === "write" ? (["api", "api_write"] as const) : (["api"] as const);
+    for (const cap of caps) {
+      const v = capabilityVerdict(orgRow, cap, firm);
+      if (!v.ok) { gateRefusal = capabilityMessage(v, cap, cap === "api_write" ? "Pushing data in through the API" : "The public API"); break; }
+    }
+  }
+  if (gateRefusal) {
+    await bump(svc, k.org_id, k.id, endpoint, false);
+    return { ok: false, res: apiError(rid, 403, "insufficient_scope", `${gateRefusal} Nothing was done.`) };
+  }
 
   const limit = hourlyLimit(plan, kind);
   {

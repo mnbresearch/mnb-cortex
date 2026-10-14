@@ -2,7 +2,7 @@ import { Topbar } from "@/components/topbar";
 import { SafeForm } from "@/components/safe-form";
 import { PageShell } from "@/components/page-shell";
 import { CollapsibleForm, Field, SelectField, DeleteButton } from "@/components/forms";
-import { getPipeline } from "@/lib/data";
+import { getPipeline, getTableStats, LIST_LIMIT } from "@/lib/data";
 import { addDeal, moveDeal } from "@/lib/actions";
 import { inr } from "@/lib/utils";
 import { scorePipeline, pipelineSummary } from "@/lib/lead-score";
@@ -20,7 +20,16 @@ const demo = [
 ];
 
 export default async function Pipeline() {
-  const { rows, live } = await getPipeline();
+  /*
+    Two reads, on purpose. The board lists the latest LIST_LIMIT deals
+    (fetchRows); the headline KPIs and "Chase these first" are computed over
+    EVERY deal (getTableStats). Computing them from the 200-row list described
+    the newest 200 while reading as the whole pipeline.
+  */
+  const [{ rows, live, error, truncated }, stats] = await Promise.all([
+    getPipeline(),
+    getTableStats("sales_pipeline", "*"),
+  ]);
   // `live` is true for ANY signed-in workspace, so `live && rows.length ? rows : demo`
   // handed a real customer with no deals five invented ones — Horizon Mfg,
   // Gulf Imports, Metro Mart — scored and totalled into a "Pipeline value
@@ -32,7 +41,10 @@ export default async function Pipeline() {
   // Scored, ranked and explained — the "AI-ranked pipeline that tells you who
   // to chase" the marketing has always promised. Deterministic arithmetic, so
   // it costs nothing, never rate-limits, and gives the same answer twice.
-  const scored = scorePipeline(deals as any);
+  /* KPIs from every row when that read worked; the demo uses its own five. */
+  const kpiRows = isDemo ? deals : stats.error ? [] : stats.rows;
+  const kpiError = !isDemo && (error || stats.error);
+  const scored = scorePipeline(kpiRows as any);
   const sum = pipelineSummary(scored);
   const chase = scored.slice(0, 5);
   const byId = new Map(scored.map((d) => [String(d.id), d]));
@@ -46,7 +58,24 @@ export default async function Pipeline() {
             Sample pipeline — sign in and add your deals to see your own.
           </Card>
         )}
-        {!isDemo && deals.length === 0 && (
+        {/* A failed read is not "No deals yet" — that told an owner with a
+            full pipeline that they had none. */}
+        {kpiError && (
+          <Card className="p-4 border-danger/30 bg-danger/5 text-sm" role="alert">
+            <p className="font-medium">Couldn&apos;t load your deals just now.</p>
+            <p className="text-muted-foreground mt-1">
+              The figures below are not shown because they could not be computed. Reload the page; if it keeps failing, the
+              database said: <span className="font-mono text-xs">{String(error || stats.error)}</span>
+            </p>
+          </Card>
+        )}
+        {!isDemo && !kpiError && truncated && (
+          <Card className="p-3 text-xs text-muted-foreground">
+            The board shows the latest {LIST_LIMIT} of {stats.truncated ? "more than " : ""}{stats.rows.length.toLocaleString("en-IN")} deals.
+            The figures above the board count every deal.
+          </Card>
+        )}
+        {!isDemo && !kpiError && deals.length === 0 && (
           <Card className="p-8 text-center">
             <p className="text-sm font-medium">No deals yet</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
@@ -56,12 +85,12 @@ export default async function Pipeline() {
             </p>
           </Card>
         )}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {!kpiError && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Card className="p-4"><div className="text-sm text-muted-foreground">Open deals</div><div className="text-2xl font-semibold mt-1">{sum.count}</div></Card>
           <Card className="p-4"><div className="text-sm text-muted-foreground">Pipeline value</div><div className="text-2xl font-semibold mt-1">{inr(sum.gross)}</div></Card>
           <Card className="p-4"><div className="text-sm text-muted-foreground">Weighted forecast</div><div className="text-2xl font-semibold mt-1">{inr(sum.weighted)}</div><div className="text-xs text-muted-foreground">value × probability</div></Card>
           <Card className="p-4"><div className="text-sm text-muted-foreground">Going cold</div><div className="text-2xl font-semibold mt-1">{sum.stale}</div><div className="text-xs text-muted-foreground">untouched 45+ days</div></Card>
-        </div>
+        </div>}
 
         {chase.length > 0 && (
           <Card className="p-5">

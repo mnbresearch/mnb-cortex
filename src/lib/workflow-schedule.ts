@@ -41,6 +41,14 @@ const MIN_GAP_MS = 20 * 60 * 60 * 1000;
 
 /** Never run more than this many workflows in a single cron invocation. */
 const MAX_PER_RUN = 50;
+/*
+  How many due rows to READ per invocation. Larger than MAX_PER_RUN because
+  rows from workspaces that are not entitled are skipped without being
+  claimed (their last_run does not move), so they stay at the head of the
+  longest-waiting-first order. Reading only 50 would let fifty lapsed
+  workspaces' workflows starve every entitled one behind them.
+*/
+const READ_PER_RUN = 500;
 
 export type ScheduleResult = { considered: number; ran: number; failed: number };
 
@@ -58,14 +66,33 @@ export async function runScheduledWorkflows(budget?: Budget): Promise<ScheduleRe
       /* Longest-waiting first. Unordered, the same 50 rows could come back every
          night and a workspace's workflow past the 50th might never run. */
       .order("last_run", { ascending: true, nullsFirst: true })
-      .limit(MAX_PER_RUN);
+      .limit(READ_PER_RUN);
     rows = (data as any[]) || [];
   } catch { return { considered: 0, ran: 0, failed: 0 }; }
+
+  /*
+    ENTITLEMENT + THE WORKFLOWS CAPABILITY, PER WORKSPACE.
+
+    Creating and pressing Run were plan-gated; this nightly path was not, so a
+    workspace that downgraded off workflow automation, or whose plan lapsed,
+    kept having its scheduled workflows run — including email and WhatsApp
+    steps sent in its name. Same rule as the Run button (requireCapability):
+    plan includes "workflows" AND the subscription is live. If the plans cannot
+    be read at all, nothing runs tonight — skipped rows keep their last_run and
+    are due again tomorrow, which is the safe direction for a job that sends.
+  */
+  const { orgsWithCapability } = await import("@/lib/engine/plan-gate-server");
+  const gate = await orgsWithCapability(rows.map((r) => String(r.org_id)), "workflows");
+  if (gate.readError) {
+    console.error("[workflow-schedule] could not read workspace plans; no scheduled workflows ran this cycle");
+    return { considered: rows.length, ran: 0, failed: 0 };
+  }
+  const eligible = rows.filter((r) => gate.allowed.has(String(r.org_id))).slice(0, MAX_PER_RUN);
 
   let ran = 0, failed = 0;
   const now = Date.now();
 
-  for (const wf of rows) {
+  for (const wf of eligible) {
     // A workflow can contain an AI step, so budget for the slow case. Skipped
     // workflows keep their old last_run and are due again tomorrow.
     if (budget && !budget.ok(9_000)) break;
