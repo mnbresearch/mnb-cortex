@@ -69,6 +69,7 @@ function providerChain(): string[] {
   const chain: string[] = [];
   if (aiKey("GEMINI_API_KEY")) chain.push("gemini");
   if (aiKey("GROQ_API_KEY")) chain.push("groq");
+  if (aiKey("XAI_API_KEY") || aiKey("GROK_API_KEY")) chain.push("xai");
   if (aiKey("ANTHROPIC_API_KEY")) chain.push("anthropic");
   if (aiKey("OPENAI_API_KEY")) chain.push("openai");
   return chain.length ? chain : ["none"];
@@ -98,7 +99,7 @@ function describeFailure(f: ProviderFailure | null): string {
 
 /** True when at least one AI provider key is configured. */
 export function hasAIKey(): boolean {
-  return ["GROQ_API_KEY","GEMINI_API_KEY","OPENAI_API_KEY","ANTHROPIC_API_KEY"].some((n) => Boolean(aiKey(n)));
+  return ["GROQ_API_KEY","GEMINI_API_KEY","OPENAI_API_KEY","ANTHROPIC_API_KEY","XAI_API_KEY","GROK_API_KEY"].some((n) => Boolean(aiKey(n)));
 }
 
 /**
@@ -379,9 +380,16 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
     if (provider === "groq" && aiKey("GROQ_API_KEY")) {
       return await openaiCompatible("groq", "https://api.groq.com/openai/v1/chat/completions", aiKey("GROQ_API_KEY")!, groqModel(), sys, messages, toolOrg, toolUser, guard, vault, deadline);
     }
-    // ---- OpenAI ----
+    // ---- xAI / Grok (console.x.ai) — OpenAI-compatible ----
+    const grokKey = aiKey("XAI_API_KEY") || aiKey("GROK_API_KEY");
+    if ((provider === "xai" || provider === "grok") && grokKey) {
+      const model = process.env.XAI_MODEL || process.env.GROK_MODEL || "grok-2-latest";
+      return await openaiCompatible("xai", "https://api.x.ai/v1/chat/completions", grokKey, model, sys, messages, toolOrg, toolUser, guard, vault, deadline);
+    }
+    // ---- OpenAI (or custom OpenAI-compatible endpoint e.g. Ollama, vLLM) ----
     if (provider === "openai" && aiKey("OPENAI_API_KEY")) {
-      return await openaiCompatible("openai", "https://api.openai.com/v1/chat/completions", aiKey("OPENAI_API_KEY")!, openaiModel(), sys, messages, toolOrg, toolUser, guard, vault, deadline);
+      const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
+      return await openaiCompatible("openai", `${baseUrl}/chat/completions`, aiKey("OPENAI_API_KEY")!, openaiModel(), sys, messages, toolOrg, toolUser, guard, vault, deadline);
     }
     // ---- Anthropic ----
     if (provider === "anthropic" && aiKey("ANTHROPIC_API_KEY")) {

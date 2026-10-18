@@ -63,10 +63,12 @@ const addedCols = new Map(); // "table.col" -> file
 for (const f of runFiles) {
   const sql = readFileSync(join(ROOT, "supabase", f), "utf8");
 
-  for (const m of sql.matchAll(/create\s+table\s+if\s+not\s+exists\s+([a-z_]+)/gi)) {
-    if (!created.has(m[1])) created.set(m[1], f);
+  for (const m of sql.matchAll(/create\s+table\s+if\s+not\s+exists\s+(?:public\.)?([a-z_]+)/gi)) {
+    const table = m[1];
+    if (table.includes("_backup_") || table === "public") continue;
+    if (!created.has(table)) created.set(table, f);
   }
-  for (const m of sql.matchAll(/alter\s+table\s+([a-z_]+)\s+add\s+column\s+if\s+not\s+exists\s+([a-z_]+)/gi)) {
+  for (const m of sql.matchAll(/alter\s+table\s+(?:public\.)?([a-z_]+)\s+add\s+column\s+if\s+not\s+exists\s+([a-z_]+)/gi)) {
     const key = `${m[1]}.${m[2]}`;
     if (!addedCols.has(key)) addedCols.set(key, f);
   }
