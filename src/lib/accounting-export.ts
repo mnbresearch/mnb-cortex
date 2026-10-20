@@ -28,7 +28,7 @@
 
 export type Detected = {
   /** Which tool the file looks like it came from. */
-  source: "tally" | "vyapar" | "busy" | "generic";
+  source: "tally" | "vyapar" | "busy" | "zoho" | "generic";
   /** Zero-based index of the row that holds the real column headers. */
   headerRow: number;
   /** Rows above the header that were skipped (titles, date ranges). */
@@ -102,6 +102,7 @@ export function detectSource(grid: string[][], headerRow: number): Detected["sou
   const hdr = (grid[headerRow] || []).map(norm);
 
   if (top.includes("daybook") || top.includes("tally") || (hdr.includes("particulars") && hdr.includes("vouchertype"))) return "tally";
+  if (top.includes("zoho") || (hdr.includes("invoicenumber") && (hdr.includes("customername") || hdr.includes("balancedue")))) return "zoho";
   if (top.includes("vyapar") || (hdr.includes("partyname") && hdr.includes("invoicenumber"))) return "vyapar";
   if (top.includes("busy") && hdr.length > 2) return "busy";
   // Debit + Credit with Particulars is Tally's shape even without a title row.
@@ -295,7 +296,7 @@ export function flattenExport(grid: string[][], opts: { table?: string } = {}): 
     }
   }
 
-  const label = { tally: "Tally", vyapar: "Vyapar", busy: "Busy", generic: "spreadsheet" }[source];
+  const label = { tally: "Tally", vyapar: "Vyapar", busy: "Busy", zoho: "Zoho Books", generic: "spreadsheet" }[source] || "accounting";
   const bits: string[] = [`Read as a ${label} export`];
   if (skippedTitles.length) bits.push(`skipped ${skippedTitles.length} title row(s)`);
   if (droppedTotals) bits.push(`ignored ${droppedTotals} total/blank row(s)`);

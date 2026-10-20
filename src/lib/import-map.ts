@@ -71,7 +71,7 @@ export const COLUMN_ALIASES: Record<string, Record<string, string[]>> = {
   invoices: {
     invoice_no: ["invoice_no", "invoiceno", "invoicenumber", "invoice", "billno", "billnumber", "voucherno", "vouchernumber", "docno", "id"],
     party: ["party", "partyname", "customer", "customername", "particulars", "client", "vendor", "supplier", "name", "account"],
-    amount: ["amount", "total", "value", "netamount", "grandtotal", "invoiceamount", "billamount", "amt", "totalamount", "debit"],
+    amount: ["amount", "total", "value", "netamount", "grandtotal", "invoiceamount", "billamount", "amt", "totalamount", "debit", "balancedue", "balance"],
     /*
       The date the bill was RAISED, which is what the MSME 45-day clock and the
       ageing run from. It was missing here, so every imported invoice fell back
@@ -81,7 +81,7 @@ export const COLUMN_ALIASES: Record<string, Record<string, string[]>> = {
     */
     issue_date: ["issue_date", "issuedate", "invoicedate", "billdate", "voucherdate", "date", "dated", "transactiondate"],
     due_date: ["due_date", "duedate", "due", "paymentdue", "duson", "maturitydate"],
-    status: ["status", "paymentstatus", "state", "paid"],
+    status: ["status", "paymentstatus", "state", "paid", "invoicestatus"],
     type: ["type", "kind", "direction", "category"],
   },
   inventory_items: {
