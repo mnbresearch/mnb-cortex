@@ -7,6 +7,8 @@ import { VendorClassifier } from "@/components/vendor-classifier";
 import { AgreementToggle } from "./agreement-toggle";
 import { getUserAndOrg } from "@/lib/data";
 import { AlertTriangle, Info, HelpCircle } from "lucide-react";
+import { MsmeForm1Export } from "@/components/msme-form1-export";
+import { type DelayedBill } from "@/lib/msme-form1";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,19 @@ export default async function Msme() {
   const normName = (s: string) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const agreementByName = new Map<string, "yes" | "no" | "unknown">(
     vendors.map((v: any) => [normName(v.name), v.written_agreement_recorded_at ? (v.has_written_agreement ? "yes" : "no") : "unknown"]));
+
+  const delayedBills: DelayedBill[] = exp.rows
+    .filter((r) => r.past_window && COVERED.has(r.udyam_category))
+    .map((r, idx) => ({
+      invoiceNo: `EXP-${idx + 1}-${r.party.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase()}`,
+      party: r.party,
+      udyamCategory: r.udyam_category as any,
+      issueDate: new Date(Date.now() - r.oldest_days * 86400000).toISOString().slice(0, 10),
+      dueDate: new Date(Date.now() - Math.max(0, r.oldest_days - r.window_days) * 86400000).toISOString().slice(0, 10),
+      amount: r.total_amount,
+      daysDelayed: Math.max(1, r.oldest_days - r.window_days),
+      hasWrittenAgreement: agreementByName.get(normName(r.party)) === "yes",
+    }));
 
   return (
     <>
@@ -131,6 +146,8 @@ export default async function Msme() {
                 Confirm with your chartered accountant before filing.
               </div>
             </Card>
+
+            <MsmeForm1Export bills={delayedBills} />
 
             {exp.rows.length > 0 && (
               <Section title="By supplier" desc="Covered and overdue first, then oldest">
