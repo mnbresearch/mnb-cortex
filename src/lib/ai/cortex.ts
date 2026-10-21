@@ -558,10 +558,12 @@ export async function streamCortex(messages: Msg[], context: string, hooks: { on
   // call emitted as a single chunk — the user watched an empty box for the whole
   // generation. With a Groq key present the reply now actually streams.
   const chain = providerChain();
-  const provider = chain.find((c) => (c === "groq" && aiKey("GROQ_API_KEY")) || (c === "openai" && aiKey("OPENAI_API_KEY"))) || chain[0];
+  const grokKey = aiKey("GROK_API_KEY") || aiKey("XAI_API_KEY");
+  const provider = chain.find((c) => (c === "groq" && aiKey("GROQ_API_KEY")) || ((c === "xai" || c === "grok") && grokKey) || (c === "openai" && aiKey("OPENAI_API_KEY"))) || chain[0];
   const sys = systemPrompt(fence("business snapshot", context));
   const openaiLike =
     (provider === "groq" && aiKey("GROQ_API_KEY")) ? { url: "https://api.groq.com/openai/v1/chat/completions", key: aiKey("GROQ_API_KEY")!, model: groqModel() } :
+    ((provider === "xai" || provider === "grok") && grokKey) ? { url: "https://api.x.ai/v1/chat/completions", key: grokKey, model: envKey("XAI_MODEL") || "grok-2-latest" } :
     (provider === "openai" && aiKey("OPENAI_API_KEY")) ? { url: "https://api.openai.com/v1/chat/completions", key: aiKey("OPENAI_API_KEY")!, model: openaiModel() } : null;
 
   if (openaiLike) {

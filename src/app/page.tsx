@@ -31,7 +31,7 @@ import { HealthCheckClient } from "@/components/health-check-client";
   question comes after, for the reader still there.
 */
 const FAQS = [
-  { q: "How long does setup take?", a: "Minutes, not weeks. Create the workspace, drop in a CSV export from Tally, Vyapar, Busy or your spreadsheet, and the first finding appears on that same screen. There is no column mapping, no configuration and nobody to book a call with. If you'd rather not use your own file yet, load a sample dataset in one click." },
+  { q: "How long does setup take?", a: "Minutes, not weeks. Create the workspace, drop in a CSV export from Tally, Zoho Books, Vyapar, Busy or your spreadsheet, and the first finding appears on that same screen. There is no column mapping, no configuration and nobody to book a call with. If you'd rather not use your own file yet, load a sample dataset in one click." },
   { q: "What do I have to do every day?", a: "Nothing. Cortex re-reads your numbers overnight on its own. You get two short planned emails a week — your weekly brief and the three things worth your attention — and beyond that it only writes to you when something needs a decision or has gone wrong. You don't have to log in to keep it working." },
   { q: "Do I have to stop using Tally or my accountant?", a: "No. Keep both. Cortex never becomes your books and never writes to them — it reads an export and sits on top. Your accountant carries on exactly as before, and most of them prefer a client who spots the 45-day MSME problem before year end." },
   { q: "Will it contact my customers on its own?", a: "Not unless you let it. Chasing ships switched off. When you turn it on, Cortex writes each message in your business's name and holds it for your approval — and stops the moment the invoice is marked paid. There is a setting to let it send unattended, off by default, and it's yours to decide." },
@@ -115,7 +115,7 @@ const HOW = [
   {
     n: "01",
     t: "Send it the file you already have",
-    d: "Export from Tally, Vyapar, Busy or your spreadsheet and drop the CSV in. Cortex reads your column names itself — there is no mapping screen, nothing to configure, nothing to type in again.",
+    d: "Export from Tally, Zoho Books, Vyapar, Busy or your spreadsheet and drop the CSV in. Cortex reads your column names itself — there is no mapping screen, nothing to configure, nothing to type in again.",
     you: "Two minutes. Or load a sample and skip even that.",
     /* UI chrome, not business data — the words this screen genuinely prints.
        No rupee figures: an invented number in a mockup is still an invented
@@ -133,10 +133,10 @@ const HOW = [
   {
     n: "03",
     t: "Say yes",
-    d: "Cortex writes the chasing email in your business's name and shows it to you. You approve it, it sends, and it stops the moment that invoice is marked paid.",
+    d: "Cortex writes the chasing email in your business's name with an instant 0% fee Dynamic UPI QR code. You approve it, it sends, and it stops the moment that invoice is marked paid.",
     /* Kept to one line at card width so the three chip rows sit level. */
     you: "One click — and it ships switched off.",
-    chip: ["Draft", "Approve", "Sent"],
+    chip: ["Draft", "0% UPI QR", "Approve", "Sent"],
   },
 ];
 
@@ -157,10 +157,10 @@ const OLD_NEW = [
     past due" — but it is rendered in the app, which is where the honest
     version of this sentence now points.
   */
-  { old: "You find out a customer hasn't paid when you need the cash.", now: "Your overdue list is ranked worst-first and names who to chase — Cortex emails you when overdue money crosses ₹5 lakh (or your own line on Watch Pro), and puts reminders for the costliest bills in front of you to approve." },
+  { old: "You find out a customer hasn't paid when you need the cash.", now: "Your overdue list is ranked worst-first and names who to chase — Cortex emails you when overdue money crosses ₹5 lakh (or your own line on Watch Pro), with 0% fee Dynamic UPI QR links to collect directly to your bank account." },
   { old: "You pay a small supplier late and lose the deduction at year end.", now: "Its nightly run checks the MSME 45-day clock (43B(h)) and lists the micro and small suppliers past it, oldest first." },
   { old: "A GST or TDS date passes and you find out from a notice.", now: "Every statutory deadline that applies to you, warned before — not after." },
-  { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Vyapar and Busy files as they come." },
+  { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Zoho Books, Vyapar and Busy files as they come." },
   { old: "You're too busy running the business to sit and analyse it.", now: "One email on Monday: the three things worth your attention this week." },
   /*
     WAS a line about a CA opening thirty files. True, and it made a
@@ -235,7 +235,7 @@ const OBJECTIONS = [
   },
   {
     q: "My data is a mess. Will it cope?",
-    a: "It matches your column headings however you've spelled them, recognises Tally, Vyapar and Busy exports on sight, and tells you plainly which columns it couldn't find rather than quietly importing blanks.",
+    a: "It matches your column headings however you've spelled them, recognises Tally, Zoho Books, Vyapar, Busy and Marg ERP exports on sight, and tells you plainly which columns it couldn't find rather than quietly importing blanks.",
   },
   {
     /*
@@ -302,7 +302,7 @@ export default function Home() {
           />
 
           <p className="mt-7 text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto leading-8">
-            Send it one export from Tally, Vyapar or your spreadsheet. It watches your numbers every day and
+            Send it one export from Tally, Zoho Books, Vyapar or your spreadsheet. It watches your numbers every day and
             tells you <span className="text-foreground font-medium">who hasn&rsquo;t paid</span>,{" "}
             <span className="text-foreground font-medium">what&rsquo;s due</span> and{" "}
             <span className="text-foreground font-medium">what&rsquo;s about to run out</span>.
@@ -470,7 +470,7 @@ export default function Home() {
         and every item survives being asked "show me".
       */}
       <section className="py-6 border-y bg-secondary/30 font-display text-2xl lg:text-3xl tracking-tightest">
-        <Marquee items={["Tally exports", "Vyapar exports", "Busy exports", "Shopify", "Razorpay", "Stripe", "Google Sheets", "WhatsApp Business", "CSV"]} />
+        <Marquee items={["Tally exports", "Zoho Books", "Vyapar exports", "Busy exports", "Marg ERP", "Shopify", "0% Fee UPI QR", "Razorpay", "Stripe", "Google Sheets", "WhatsApp Business", "CSV"]} />
       </section>
 
       {/* ---------- THE PROBLEM ---------- */}
@@ -542,8 +542,7 @@ export default function Home() {
                 promise changes to match the behaviour rather than the other
                 way round.
               */}
-              Six questions. No signup, no card. We&rsquo;ll call once to walk you through it — tell us not to and we won&rsquo;t. You get a Business Health
-              Score out of 100, the specific areas putting you at risk, and exactly what to do about each one.
+              Six questions. No signup, no card. We&rsquo;ll call once to walk you through it — tell us not to and we won&rsquo;t. You get an audit-grade Solvency Score out of 100 covering 4 pillars (Runway, Receivables, Margins, MSME 43B(h) Defense), the specific areas putting you at risk, and exactly what to do about each one.
             </p>
             <ul className="mt-7 space-y-3 text-sm">
               {[
@@ -587,7 +586,7 @@ export default function Home() {
               <span className="text-primary">Cortex reads your own numbers every day, names the thing that is about to cost you money — the customer, the amount, the date — and then does something about it.</span>
             </p>
             <p className="mt-6 text-muted-foreground max-w-3xl leading-7">
-              It is the layer between your books and your business. You keep Tally, Vyapar or your spreadsheets;
+              It is the layer between your books and your business. You keep Tally, Zoho Books, Vyapar or your spreadsheets;
               Cortex is the part they were never built to do.
             </p>
           </Reveal>
@@ -652,7 +651,7 @@ export default function Home() {
               One night in your business, desk to desk.
             </h3>
             <p className="mt-2 text-muted-foreground max-w-2xl leading-7 text-sm">
-              Pick a kind of business. Each agent picks up where the last one left off — and the last desk is always yours.
+              Pick a kind of business. Each agent picks up where the last one left off — and the last desk is always yours. Need boardroom strategy? The Autonomous Executive Council convenes your Fractional CFO, COO, CRO, and Tax Counsel for unified C-suite verdicts.
             </p>
             <div className="mt-6"><AgentFloor /></div>
           </div>

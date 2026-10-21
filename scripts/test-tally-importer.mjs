@@ -76,7 +76,35 @@ console.log("=== Testing Universal Indian Accounting Importer ===");
   check(totalAmt === 770000, "Tally: imported sales sum to exactly ₹7,70,000");
 }
 
-// 3. Indian Date Parser Robustness
+// 3. Marg ERP Export Verification
+{
+  const MARG_EXPORT = [
+    ["Marg ERP 9+ — Pharma & Retail Solutions"],
+    ["Sales Register Summary"],
+    [],
+    ["Bill No.", "Date", "Ledger Name", "Net Amount", "Taxable Amt"],
+    ["MG-8801", "10-Oct-2026", "Apollo Medico Retail", "42,500.00", "36,000.00"],
+    ["MG-8802", "14-Oct-2026", "Fortis Pharmacy", "95,000.00", "80,500.00"],
+    ["Total", "", "", "1,37,500.00", "1,16,500.00"],
+  ];
+
+  const headerRow = findHeaderRow(MARG_EXPORT);
+  check(headerRow === 3, "Marg: found header row below title rows");
+
+  const source = detectSource(MARG_EXPORT, headerRow);
+  check(source === "marg", "Marg: correctly detected as marg source", `got: ${source}`);
+
+  const flat = flattenExport(MARG_EXPORT, { table: "invoices" });
+  check(flat.rows.length === 2, "Marg: total row dropped, 2 invoices kept");
+  check(flat.rows[0]["Bill No."] === "MG-8801", "Marg: invoice bill no preserved");
+
+  const resolved = resolveHeaders("invoices", Object.keys(flat.rows[0]));
+  check(Boolean(resolved.map.invoice_no), "Marg: Bill No. mapped to invoice_no");
+  check(Boolean(resolved.map.party), "Marg: Ledger Name mapped to party");
+  check(Boolean(resolved.map.amount), "Marg: Net Amount mapped to amount");
+}
+
+// 4. Indian Date Parser Robustness
 {
   check(parseIndianDate("15-Aug-2026") === "2026-08-15", "parseIndianDate: 15-Aug-2026");
   check(parseIndianDate("01/10/2026") === "2026-10-01", "parseIndianDate: 01/10/2026 (day-first)");
@@ -84,7 +112,7 @@ console.log("=== Testing Universal Indian Accounting Importer ===");
   check(parseIndianDate("invalid-date") === null, "parseIndianDate: invalid returns null");
 }
 
-// 4. Indian Amount Parser Robustness
+// 5. Indian Amount Parser Robustness
 {
   check(parseAmount("₹ 1,50,000.00") === "150000", "parseAmount: formatted Indian rupees");
   check(parseAmount("(45,000.50)") === "-45000.5", "parseAmount: accounting parentheses as negative");
@@ -97,6 +125,6 @@ if (failures.length) {
   for (const f of failures) console.log("  ✗ " + f);
   process.exit(1);
 } else {
-  console.log("  ✓ Universal Accounting Importer verified for Tally, Busy, Vyapar, and Zoho Books.");
+  console.log("  ✓ Universal Accounting Importer verified for Tally, Busy, Vyapar, Zoho Books, and Marg ERP.");
   process.exit(0);
 }

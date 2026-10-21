@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,6 +13,7 @@ import {
   FileCheck2,
   ArrowRight,
   Sparkles,
+  Building2,
 } from "lucide-react";
 import {
   type SolvencyScorecardResult,
@@ -34,21 +36,66 @@ export interface SolvencyScorecardProps {
   className?: string;
 }
 
+const PRESET_PROFILES = {
+  default: {
+    label: "Standard SME",
+    metrics: {
+      cashBalance: 24_00_000,
+      monthlyBurn: 6_00_000,
+      totalReceivables: 14_00_000,
+      overdueReceivables: 2_50_000,
+      dsoDays: 38,
+      grossMarginPct: 36,
+      advanceTaxPaidPct: 75,
+      hasGstDiscrepancy: false,
+    },
+  },
+  services: {
+    label: "IT / Services",
+    metrics: {
+      cashBalance: 32_00_000,
+      monthlyBurn: 7_50_000,
+      totalReceivables: 18_00_000,
+      overdueReceivables: 1_20_000,
+      dsoDays: 28,
+      grossMarginPct: 52,
+      advanceTaxPaidPct: 85,
+      hasGstDiscrepancy: false,
+    },
+  },
+  manufacturing: {
+    label: "Manufacturing",
+    metrics: {
+      cashBalance: 18_00_000,
+      monthlyBurn: 9_00_000,
+      totalReceivables: 35_00_000,
+      overdueReceivables: 8_50_000,
+      dsoDays: 54,
+      grossMarginPct: 24,
+      advanceTaxPaidPct: 60,
+      hasGstDiscrepancy: true,
+    },
+  },
+  distribution: {
+    label: "Wholesale / Retail",
+    metrics: {
+      cashBalance: 12_00_000,
+      monthlyBurn: 4_50_000,
+      totalReceivables: 22_00_000,
+      overdueReceivables: 4_80_000,
+      dsoDays: 42,
+      grossMarginPct: 16,
+      advanceTaxPaidPct: 70,
+      hasGstDiscrepancy: false,
+    },
+  },
+};
+
 export function SolvencyScorecardCard({ scorecard, metrics, className }: SolvencyScorecardProps) {
-  const result =
-    scorecard ??
-    (metrics
-      ? calculateSolvencyScore(metrics)
-      : calculateSolvencyScore({
-          cashBalance: 24_00_000,
-          monthlyBurn: 6_00_000,
-          totalReceivables: 14_00_000,
-          overdueReceivables: 2_50_000,
-          dsoDays: 38,
-          grossMarginPct: 36,
-          advanceTaxPaidPct: 75,
-          hasGstDiscrepancy: false,
-        }));
+  const [activeProfile, setActiveProfile] = useState<keyof typeof PRESET_PROFILES>("default");
+
+  const effectiveMetrics = metrics ?? PRESET_PROFILES[activeProfile].metrics;
+  const result = scorecard ?? calculateSolvencyScore(effectiveMetrics);
 
   function getStatusColor(status: HealthStatus) {
     switch (status) {
@@ -96,6 +143,29 @@ export function SolvencyScorecardCard({ scorecard, metrics, className }: Solvenc
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Industry Model Preset Switcher (when not pinned to external metrics) */}
+        {!metrics && (
+          <div className="flex items-center gap-1.5 rounded-lg border bg-muted/30 p-1 text-xs">
+            <span className="text-muted-foreground px-2 flex items-center gap-1 shrink-0 font-medium">
+              <Building2 className="h-3.5 w-3.5 text-primary" /> Sector Benchmark:
+            </span>
+            {(Object.keys(PRESET_PROFILES) as (keyof typeof PRESET_PROFILES)[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setActiveProfile(k)}
+                className={`flex-1 py-1 px-2 rounded-md font-medium transition-all text-center truncate ${
+                  activeProfile === k
+                    ? "bg-background shadow-xs text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {PRESET_PROFILES[k].label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Main Score Gauge */}
         <div className="rounded-xl border bg-muted/30 p-4 flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -124,108 +194,98 @@ export function SolvencyScorecardCard({ scorecard, metrics, className }: Solvenc
         </div>
 
         {/* 4 Pillars Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Liquidity */}
-          <div className="p-3 rounded-lg border bg-background space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-semibold">
-              <span className="flex items-center gap-1.5 text-foreground">
-                <Flame className="h-3.5 w-3.5 text-amber-500" /> Cash Runway &amp; Liquidity
+        <div className="grid sm:grid-cols-2 gap-3">
+          {/* 1. Liquidity */}
+          <div className="rounded-lg border p-3.5 bg-background space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold flex items-center gap-1.5 text-foreground">
+                <Flame className="h-3.5 w-3.5 text-primary" /> Cash Runway &amp; Burn
               </span>
-              <span className="font-mono text-muted-foreground">{result.dimensions.liquidity.score}/25</span>
+              <span className="font-mono font-bold">{result.dimensions.liquidity.score} / 25</span>
             </div>
             <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
               <div
-                className={`h-full rounded-full ${getStatusColor(result.dimensions.liquidity.status).split(" ")[1]}`}
+                className={`h-full ${getStatusColor(result.dimensions.liquidity.status)}`}
                 style={{ width: `${(result.dimensions.liquidity.score / 25) * 100}%` }}
               />
             </div>
-            <p className="text-[11px] text-muted-foreground leading-snug">{result.dimensions.liquidity.note}</p>
+            <p className="text-xs text-muted-foreground">{result.dimensions.liquidity.note}</p>
           </div>
 
-          {/* Receivables */}
-          <div className="p-3 rounded-lg border bg-background space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-semibold">
-              <span className="flex items-center gap-1.5 text-foreground">
-                <Clock className="h-3.5 w-3.5 text-blue-500" /> Receivables &amp; MSME 43B(h)
+          {/* 2. Receivables */}
+          <div className="rounded-lg border p-3.5 bg-background space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold flex items-center gap-1.5 text-foreground">
+                <Clock className="h-3.5 w-3.5 text-primary" /> Receivables &amp; 43B(h) Aging
               </span>
-              <span className="font-mono text-muted-foreground">{result.dimensions.receivables.score}/25</span>
+              <span className="font-mono font-bold">{result.dimensions.receivables.score} / 25</span>
             </div>
             <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
               <div
-                className={`h-full rounded-full ${getStatusColor(result.dimensions.receivables.status).split(" ")[1]}`}
+                className={`h-full ${getStatusColor(result.dimensions.receivables.status)}`}
                 style={{ width: `${(result.dimensions.receivables.score / 25) * 100}%` }}
               />
             </div>
-            <p className="text-[11px] text-muted-foreground leading-snug">{result.dimensions.receivables.note}</p>
+            <p className="text-xs text-muted-foreground">{result.dimensions.receivables.note}</p>
           </div>
 
-          {/* Margins */}
-          <div className="p-3 rounded-lg border bg-background space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-semibold">
-              <span className="flex items-center gap-1.5 text-foreground">
-                <TrendingUp className="h-3.5 w-3.5 text-emerald-500" /> Unit Economics &amp; Gross Margin
+          {/* 3. Margins */}
+          <div className="rounded-lg border p-3.5 bg-background space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold flex items-center gap-1.5 text-foreground">
+                <TrendingUp className="h-3.5 w-3.5 text-primary" /> Gross Margin Stability
               </span>
-              <span className="font-mono text-muted-foreground">{result.dimensions.margins.score}/25</span>
+              <span className="font-mono font-bold">{result.dimensions.margins.score} / 25</span>
             </div>
             <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
               <div
-                className={`h-full rounded-full ${getStatusColor(result.dimensions.margins.status).split(" ")[1]}`}
+                className={`h-full ${getStatusColor(result.dimensions.margins.status)}`}
                 style={{ width: `${(result.dimensions.margins.score / 25) * 100}%` }}
               />
             </div>
-            <p className="text-[11px] text-muted-foreground leading-snug">{result.dimensions.margins.note}</p>
+            <p className="text-xs text-muted-foreground">{result.dimensions.margins.note}</p>
           </div>
 
-          {/* Compliance */}
-          <div className="p-3 rounded-lg border bg-background space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-semibold">
-              <span className="flex items-center gap-1.5 text-foreground">
-                <FileCheck2 className="h-3.5 w-3.5 text-purple-500" /> Statutory Tax &amp; GST Defense
+          {/* 4. Compliance */}
+          <div className="rounded-lg border p-3.5 bg-background space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold flex items-center gap-1.5 text-foreground">
+                <FileCheck2 className="h-3.5 w-3.5 text-primary" /> Statutory Tax &amp; GST Defense
               </span>
-              <span className="font-mono text-muted-foreground">{result.dimensions.compliance.score}/25</span>
+              <span className="font-mono font-bold">{result.dimensions.compliance.score} / 25</span>
             </div>
             <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
               <div
-                className={`h-full rounded-full ${getStatusColor(result.dimensions.compliance.status).split(" ")[1]}`}
+                className={`h-full ${getStatusColor(result.dimensions.compliance.status)}`}
                 style={{ width: `${(result.dimensions.compliance.score / 25) * 100}%` }}
               />
             </div>
-            <p className="text-[11px] text-muted-foreground leading-snug">{result.dimensions.compliance.note}</p>
+            <p className="text-xs text-muted-foreground">{result.dimensions.compliance.note}</p>
           </div>
         </div>
 
-        {/* Critical Alerts */}
+        {/* Action Priority Banner */}
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-start gap-2.5 text-xs">
+          <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-semibold text-foreground">Immediate Financial Action:</span>
+            <p className="text-muted-foreground">{result.topAction}</p>
+          </div>
+        </div>
+
+        {/* Critical Alerts (if any) */}
         {result.criticalAlerts.length > 0 && (
-          <div className="p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 space-y-1.5">
-            <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-              <AlertTriangle className="h-3.5 w-3.5" /> High-Priority Solvency Attention Items
+          <div className="space-y-1.5 pt-1">
+            <div className="text-xs font-semibold text-rose-500 flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5" /> High-Risk Solvency Exposures ({result.criticalAlerts.length})
             </div>
-            <ul className="text-xs space-y-1 text-muted-foreground">
+            <ul className="text-xs text-muted-foreground space-y-1 pl-4 list-disc">
               {result.criticalAlerts.map((alert, i) => (
-                <li key={i} className="flex items-start gap-1.5">
-                  <span className="text-amber-500 font-bold">•</span>
-                  <span>{alert}</span>
-                </li>
+                <li key={i}>{alert}</li>
               ))}
             </ul>
           </div>
         )}
-
-        {/* Top Operational Action */}
-        <div className="p-3.5 rounded-lg border border-primary/20 bg-primary/5 flex flex-wrap items-center justify-between gap-2">
-          <div className="space-y-0.5">
-            <div className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-1">
-              <Sparkles className="h-3 w-3" /> Top Recommended COO Action
-            </div>
-            <p className="text-xs text-foreground font-medium">{result.topAction}</p>
-          </div>
-          <a
-            href="/receivables"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline shrink-0"
-          >
-            Take action <ArrowRight className="h-3 w-3" />
-          </a>
-        </div>
       </CardContent>
     </Card>
   );

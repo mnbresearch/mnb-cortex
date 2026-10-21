@@ -54,7 +54,7 @@ export function normalizeHeader(s: string): string {
 export const COLUMN_ALIASES: Record<string, Record<string, string[]>> = {
   sales_orders: {
     order_no: ["order_no", "orderno", "ordernumber", "order", "sono", "salesorderno", "voucherno", "vouchernumber", "invoiceno", "billno", "docno", "id", "srno", "sno"],
-    customer_name: ["customer_name", "customername", "customer", "party", "partyname", "particulars", "client", "clientname", "buyer", "name", "account"],
+    customer_name: ["customer_name", "customername", "customer", "party", "partyname", "ledgername", "ledger", "particulars", "client", "clientname", "buyer", "name", "account"],
     region: ["region", "state", "zone", "territory", "city", "location", "area", "branch"],
     product: ["product", "item", "itemname", "description", "productname", "sku", "goods", "service", "particular"],
     amount: ["amount", "total", "value", "netamount", "grandtotal", "invoiceamount", "billamount", "saleamount", "amt", "totalamount", "debit"],
@@ -70,7 +70,7 @@ export const COLUMN_ALIASES: Record<string, Record<string, string[]>> = {
   },
   invoices: {
     invoice_no: ["invoice_no", "invoiceno", "invoicenumber", "invoice", "billno", "billnumber", "voucherno", "vouchernumber", "docno", "id"],
-    party: ["party", "partyname", "customer", "customername", "particulars", "client", "vendor", "supplier", "name", "account"],
+    party: ["party", "partyname", "ledgername", "ledger", "customer", "customername", "particulars", "client", "vendor", "supplier", "name", "account"],
     amount: ["amount", "total", "value", "netamount", "grandtotal", "invoiceamount", "billamount", "amt", "totalamount", "debit", "balancedue", "balance"],
     /*
       The date the bill was RAISED, which is what the MSME 45-day clock and the

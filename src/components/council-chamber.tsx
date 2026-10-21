@@ -43,6 +43,10 @@ const PRESETS = [
     label: "Advance Tax Q3 Provisioning",
     statement: "Q3 advance tax installment is due December 15. How should we allocate cash reserves between advance tax statutory dues, pending vendor payments, and holiday marketing campaigns?",
   },
+  {
+    label: "0% Dynamic UPI vs 2% Gateway Commission",
+    statement: "We collect ₹65L monthly via card/netbanking gateways losing ~₹1.3L in 2% commissions and waiting T+2 for settlement. Should we switch to Cortex 0% fee Dynamic UPI QR links with instant direct bank settlement for all B2B customer invoices?",
+  },
 ];
 
 export function CouncilChamber({ initialContext = "" }: { initialContext?: string }) {
