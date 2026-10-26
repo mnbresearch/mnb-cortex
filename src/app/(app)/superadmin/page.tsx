@@ -11,6 +11,7 @@ import { FollowupPanel } from "@/components/followup-panel";
 import { statusOf, isLapsed } from "@/lib/entitlement";
 import { inr } from "@/lib/utils";
 import { ProvisionButton, JoinButton, GrantAccessForm, OrgManager, ProvisionCustomerForm, BackupButton } from "@/components/superadmin-panel";
+import { SuperAdminDemoCreator } from "@/components/superadmin-demo-creator";
 import { CollectionsKillSwitch } from "@/components/collections-killswitch";
 import { serviceClient } from "@/lib/supabase/server";
 import { ShieldAlert, Building2, Users, Activity, Lock, ExternalLink, IndianRupee, TrendingUp, Cpu, AlertTriangle } from "lucide-react";
@@ -738,6 +739,13 @@ export default async function SuperAdmin() {
               </table>
             </div>
           )}
+        </Section>
+
+        <Section
+          title="Create Custom 7-Day Demo Account"
+          desc="Select exact feature access, set starting credits, and provision with compulsory 7-day auto-expiry"
+        >
+          <SuperAdminDemoCreator />
         </Section>
 
         <Section title="Onboard a customer" desc="One click: create their workspace, set plan + credits, and email them an activation link">

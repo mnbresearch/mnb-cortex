@@ -4,6 +4,15 @@ import { isSuperAdmin } from "@/lib/superadmin";
 import { MY_BUSINESSES, PLANS } from "@/lib/config";
 import { sendEmail } from "@/lib/email";
 import { renderBrandedEmail, brandFrom, brandReplyTo } from "@/lib/branded-email";
+import {
+  calculateDemoExpiry,
+  generateDemoWelcomeEmail,
+  DEMO_PRESETS,
+  type DemoPresetId,
+  DEMO_DEFAULT_STARTING_CREDITS,
+  DEMO_TRIAL_DURATION_DAYS,
+} from "@/lib/demo-workspace";
+import { seedDemoWorkspace } from "@/lib/demo-seeder";
 
 // Plain server helpers (NOT server actions) — called from /api/superadmin.
 
@@ -431,4 +440,143 @@ Team MNB Cortex · MNB Research`;
   } catch { /* email is best-effort */ }
 
   return { ok: true, org_id: orgId, orgName, plan, credits, emailed, creditsWarning };
+}
+
+/**
+ * Super Admin: Provision a 7-day customized demo workspace.
+ *
+ * Configures exact feature access, 7-day strictly enforced trial duration,
+ * starting AI credits, optional pre-seeded sample data, and branded onboarding email.
+ */
+export async function provisionDemoCustomer(input: {
+  email: string;
+  name?: string;
+  company?: string;
+  industry?: string;
+  preset?: DemoPresetId;
+  features?: string[];
+  credits?: number;
+  durationDays?: number;
+  preSeedData?: boolean;
+}) {
+  await assertSuper();
+  const sb = serviceClient();
+  if (!sb) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set.");
+
+  const email = (input.email || "").toLowerCase().trim();
+  if (!email || !email.includes("@")) throw new Error("A valid email is required.");
+
+  const presetId = input.preset || "enterprise_full";
+  const foundPreset = DEMO_PRESETS.find((p) => p.id === presetId);
+  const features = Array.isArray(input.features) && input.features.length > 0
+    ? input.features
+    : (foundPreset ? foundPreset.featureIds : []);
+
+  const durationDays = typeof input.durationDays === "number" && input.durationDays > 0 ? input.durationDays : DEMO_TRIAL_DURATION_DAYS;
+  const credits = typeof input.credits === "number" && input.credits >= 0 ? Math.round(input.credits) : DEMO_DEFAULT_STARTING_CREDITS;
+
+  const { expiresAt } = calculateDemoExpiry(new Date(), durationDays);
+
+  const orgName = (input.company || "").trim()
+    || ((input.name || "").trim() ? `${(input.name as string).trim()} (Demo)` : `${email.split("@")[0]} (Demo)`);
+
+  // 1) Create the workspace with trial_ends_at = expiresAt
+  const { data: org, error: orgErr } = await sb.from("organizations")
+    .insert({
+      name: orgName,
+      industry: input.industry || "general",
+      currency: "INR",
+      plan: "enterprise",
+      accent: "gold",
+    })
+    .select("id").single();
+  if (orgErr) throw new Error(`Could not create demo workspace: ${orgErr.message}`);
+  const orgId = (org as any).id as string;
+
+  // 2) Set subscription_status: "trialing", trial_ends_at: expiresAt, and starting credits via manageOrg
+  let creditsWarning: string | undefined;
+  try {
+    const res = await manageOrg(orgId, {
+      plan: "enterprise",
+      subscription_status: "trialing",
+      extendTrialDays: durationDays,
+      creditsSet: credits,
+    });
+    creditsWarning = (res as any)?.creditsWarning;
+  } catch (e: any) {
+    creditsWarning = e?.message || "Could not set plan/credits automatically.";
+  }
+
+  // 3) Store demo workspace metadata in demo_workspaces table
+  try {
+    await sb.from("demo_workspaces").insert({
+      org_id: orgId,
+      email,
+      name: input.name || null,
+      company: input.company || null,
+      preset: presetId,
+      features,
+      duration_days: durationDays,
+      expires_at: expiresAt,
+      compulsory_upgrade: true,
+    });
+  } catch (e: any) {
+    console.error("[superadmin] demo_workspaces insert error:", e?.message);
+  }
+
+  // 4) Pre-signup owner invite so they own the demo workspace immediately upon login
+  const { error: invErr } = await sb.from("invites").insert({ org_id: orgId, email, role: "owner", status: "pending" });
+  if (invErr && invErr.code !== "23505") {
+    throw new Error(`Demo workspace "${orgName}" created, but invite for ${email} could not be saved (${invErr.message}).`);
+  }
+
+  // 5) If preSeedData enabled (default true), populate realistic demo figures
+  if (input.preSeedData !== false) {
+    try {
+      await seedDemoWorkspace(orgId);
+    } catch (e: any) {
+      console.error("[superadmin] demo seed failed:", e?.message);
+    }
+  }
+
+  // 6) Send branded demo welcome email
+  const appUrl = (process.env.APP_URL || "https://cortex.mnbresearch.com").replace(/\/$/, "");
+  const first = (input.name || "").trim().split(" ")[0] || "there";
+  const expiryFormatted = new Date(expiresAt).toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+
+  const emailBody = generateDemoWelcomeEmail({
+    recipientName: first,
+    email,
+    companyName: orgName,
+    presetName: foundPreset ? foundPreset.name : "Custom 7-Day Demo",
+    features,
+    expiresAtDateStr: expiryFormatted,
+    credits,
+    appUrl,
+  });
+
+  let emailed = false;
+  try {
+    const res = await sendEmail(
+      email,
+      `Your 7-Day MNB Cortex Demo is Ready (${orgName})`,
+      renderBrandedEmail(emailBody, { preheader: "Activate your 7-day MNB Cortex demo workspace" }),
+      { from: brandFrom(), replyTo: brandReplyTo() }
+    );
+    emailed = res.sent;
+  } catch { /* best effort */ }
+
+  return {
+    ok: true,
+    org_id: orgId,
+    orgName,
+    preset: presetId,
+    featuresCount: features.length,
+    expiresAt,
+    credits,
+    emailed,
+    creditsWarning,
+  };
 }

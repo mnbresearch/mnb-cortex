@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isSuperAdmin } from "@/lib/superadmin";
-import { provisionBusinesses, grantOrgAccess, joinOrg, manageOrg, recomputeOrg, provisionCustomer, setCollectionsSwitch, setCheckoutFollowupMode, sendCheckoutFollowupTest } from "@/lib/superadmin-actions";
+import { provisionBusinesses, grantOrgAccess, joinOrg, manageOrg, recomputeOrg, provisionCustomer, provisionDemoCustomer, setCollectionsSwitch, setCheckoutFollowupMode, sendCheckoutFollowupTest } from "@/lib/superadmin-actions";
 
 const num = (v: any) => (typeof v === "number" && isFinite(v) ? v : undefined);
 
@@ -23,6 +23,17 @@ export async function POST(req: Request) {
       plan: body.plan ? String(body.plan) : undefined,
       credits: num(body.credits),
       industry: body.industry ? String(body.industry) : undefined,
+    }));
+    if (op === "provisionDemo") return NextResponse.json(await provisionDemoCustomer({
+      email: String(body.email || ""),
+      name: body.name ? String(body.name) : undefined,
+      company: body.company ? String(body.company) : undefined,
+      industry: body.industry ? String(body.industry) : undefined,
+      preset: body.preset ? String(body.preset) as any : undefined,
+      features: Array.isArray(body.features) ? body.features.map(String) : undefined,
+      credits: num(body.credits),
+      durationDays: num(body.durationDays),
+      preSeedData: body.preSeedData !== false,
     }));
     if (op === "join") return NextResponse.json(await joinOrg(String(body.org_id || "")));
     if (op === "recompute") return NextResponse.json(await recomputeOrg(String(body.org_id || "")));

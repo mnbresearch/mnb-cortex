@@ -40,6 +40,8 @@ export type PaywallState = {
   credits: number;
   /** credits_allowance === -1, i.e. an unlimited override. */
   unlimited: boolean;
+  /** When true (e.g. 7-day demo workspaces), expiry locks out compulsorily regardless of leftover credits. */
+  compulsoryUpgrade?: boolean;
 };
 
 /**
@@ -57,10 +59,14 @@ export type PaywallState = {
  *    spend. Bought credits are the entitlement; there is no free tier, so a
  *    brand-new workspace is `expired` immediately and the balance is the only
  *    thing distinguishing a paying customer from a stranger.
+ *
+ *  - for demo accounts with `compulsoryUpgrade: true`, once the 7 days expire,
+ *    they are strictly locked out and must upgrade to continue.
  */
 export function isLocked(s: PaywallState): boolean {
   if (!s.enforceable) return false;
   if (s.blocked) return true;
+  if (s.compulsoryUpgrade && s.status === "expired") return true;
   const hasSpendableCredits = s.unlimited || s.credits > 0;
   return s.status === "expired" && !hasSpendableCredits;
 }

@@ -46,6 +46,8 @@ export type BillingStatus = {
    * "your CA firm" rather than printing a blank or a uuid.
    */
   pooledByName: string | null;
+  /** True when workspace is a 7-day custom demo workspace subject to compulsory upgrade upon expiry. */
+  isDemo?: boolean;
 };
 
 /**
@@ -56,7 +58,7 @@ export type BillingStatus = {
 export async function getBillingStatus(): Promise<BillingStatus> {
   const { user, orgId } = await getUserAndOrg();
   if (!user || !orgId) {
-    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, autorenewActive: false, plan: "starter", locked: false, credits: 0, pooledBy: null, pooledByName: null };
+    return { known: false, enforceable: false, status: "trialing", daysLeft: TRIAL_DAYS, trialEndsAt: null, subscriptionEndsAt: null, lapsedSubscription: false, autorenewActive: false, plan: "starter", locked: false, credits: 0, pooledBy: null, pooledByName: null, isDemo: false };
   }
   const sb = await createClient();
 
@@ -270,7 +272,17 @@ export async function getBillingStatus(): Promise<BillingStatus> {
 
     Anyone locked here genuinely has no plan and no credits.
   */
-  const locked = isLocked({ enforceable, status, blocked, credits, unlimited });
+  let isDemoWorkspace = false;
+  try {
+    const { serviceClient } = await import("@/lib/supabase/server");
+    const svc = serviceClient();
+    if (svc) {
+      const { data: demo } = await svc.from("demo_workspaces").select("org_id").eq("org_id", orgId).maybeSingle();
+      if (demo) isDemoWorkspace = true;
+    }
+  } catch { /* best effort */ }
+
+  const locked = isLocked({ enforceable, status, blocked, credits, unlimited, compulsoryUpgrade: isDemoWorkspace });
 
   return {
     known: true, enforceable, status, daysLeft,
@@ -279,5 +291,6 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     lapsedSubscription,
     autorenewActive: ["ACTIVE", "INITIALIZED"].includes(String(autorenewStatus || "").toUpperCase()),
     plan, locked, credits, pooledBy, pooledByName,
+    isDemo: isDemoWorkspace,
   };
 }
