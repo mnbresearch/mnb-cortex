@@ -9,6 +9,8 @@ import { getUserAndOrg } from "@/lib/data";
 import { AlertTriangle, Info, HelpCircle } from "lucide-react";
 import { MsmeForm1Export } from "@/components/msme-form1-export";
 import { type DelayedBill } from "@/lib/msme-form1";
+import { MsmeClause22Export } from "@/components/msme-clause22-export";
+import { type Clause22BillInput } from "@/lib/msme-clause22";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +57,16 @@ export default async function Msme() {
       daysDelayed: Math.max(1, r.oldest_days - r.window_days),
       hasWrittenAgreement: agreementByName.get(normName(r.party)) === "yes",
     }));
+
+  const clause22Bills: Clause22BillInput[] = exp.rows.map((r, idx) => ({
+    invoiceNo: `EXP-${idx + 1}-${r.party.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase()}`,
+    party: r.party,
+    udyamCategory: r.udyam_category as any,
+    invoiceDate: new Date(Date.now() - r.oldest_days * 86400000).toISOString().slice(0, 10),
+    dueDate: new Date(Date.now() - Math.max(0, r.oldest_days - r.window_days) * 86400000).toISOString().slice(0, 10),
+    amount: r.total_amount > 0 ? r.total_amount : r.other_amount,
+    hasWrittenAgreement: agreementByName.get(normName(r.party)) === "yes",
+  }));
 
   return (
     <>
@@ -148,6 +160,7 @@ export default async function Msme() {
             </Card>
 
             <MsmeForm1Export bills={delayedBills} />
+            <MsmeClause22Export bills={clause22Bills} />
 
             {exp.rows.length > 0 && (
               <Section title="By supplier" desc="Covered and overdue first, then oldest">

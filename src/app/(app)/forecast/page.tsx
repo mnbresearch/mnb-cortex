@@ -7,6 +7,8 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { AIPanel } from "@/components/ai-panel";
 import { ScenarioPlanner, type ScenarioBaseline } from "@/components/scenario-planner";
+import { StressTestSimulator } from "@/components/stress-test-simulator";
+import { TredsArbitrageCard } from "@/components/treds-arbitrage-card";
 import { TrendingUp, Wallet, AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -148,6 +150,20 @@ export default async function Forecast() {
         </div>
 
         <ScenarioPlanner baseline={baseline} />
+
+        <Section title="Working capital stress test" desc="Bank-grade adverse shock simulation, Altman Z'-score, and liquidity cliff modeling">
+          <StressTestSimulator
+            initialMetrics={{
+              monthlyRevenue: baseline.revenue ?? undefined,
+              cashReserve: baseline.cash ?? undefined,
+              grossMarginPct: baseline.margin ? Math.round(baseline.margin * 100) : undefined,
+            }}
+          />
+        </Section>
+
+        <Section title="RBI TReDS factoring arbitrage" desc="Instant 48-hour working capital release via institutional invoice auction">
+          <TredsArbitrageCard defaultAmount={baseline.revenue ? Math.round(baseline.revenue * 0.5) : undefined} />
+        </Section>
 
         <Section title="AI forecast" desc="A 90-day outlook built from the figures in this workspace">
           <AIPanel inputOptional mode="forecast" placeholder="Optional: focus the forecast (e.g. 'if we win the Dubai order' or 'cash only')" cta="Generate 90-day forecast" saveMode="strategy" />

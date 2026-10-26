@@ -12,6 +12,7 @@ import { getStatutoryProfile } from "@/lib/data";
 import { applicability, excludedBecause } from "@/lib/statutory-profile";
 import { GST_RATES, GST_RATES_AS_OF } from "@/lib/gst-rates";
 import { DEADLINE_TOPICS } from "@/lib/deadline-seo";
+import { GstSentinelCard } from "@/components/gst-sentinel-card";
 
 export const dynamic = "force-dynamic";
 
@@ -235,6 +236,13 @@ export default async function GST() {
             ]}
           />
           <p className="text-xs text-muted-foreground mt-2">General guidance only — confirm edge cases with your chartered accountant.</p>
+        </Section>
+
+        <Section
+          title="DRC-01B & DRC-01C Notice Sentinel"
+          desc="Rule 88C (GSTR-1 vs 3B) and Rule 88D (GSTR-3B vs 2B) automated risk scanner"
+        >
+          <GstSentinelCard />
         </Section>
 
         <Section title="GST rate slabs" desc={`Quick reference · ${GST_RATES_AS_OF}`}>
