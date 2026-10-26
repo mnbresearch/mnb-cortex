@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Printer, Save, Check, Loader2, AlertCircle } from "lucide-react";
 import { gstRateWarning } from "@/lib/gst-rates";
 import { escapeHtml as h } from "@/lib/utils";
+import { generateUpiQrSvg, validateVpa } from "@/lib/pay/upi";
 
 type Item = { id: string; desc: string; qty: number; rate: number; gst: number };
 const rupee = (n: number) => "₹" + (n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -43,7 +44,7 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
     The seller is now the workspace's real name. Everything else is a true
     placeholder, and save refuses until the buyer is named.
   */
-  const [seller, setSeller] = useState({ name: orgName || "", gstin: "", addr: "" });
+  const [seller, setSeller] = useState({ name: orgName || "", gstin: "", addr: "", upi: "" });
   const [buyer, setBuyer] = useState({ name: "", gstin: "", addr: "" });
   /*
     NOT "INV-0001" EVERY TIME. Every new invoice opened on the same number, and
@@ -150,7 +151,27 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
     h() is lib/utils' escapeHtml, the same helper the markdown renderer uses.
     Numbers through rupee() need no escaping; strings all do.
   */
-  function print() {
+  async function print() {
+    let upiBlock = "";
+    if (seller.upi && validateVpa(seller.upi).valid) {
+      try {
+        const svg = await generateUpiQrSvg({
+          payeeVpa: seller.upi,
+          payeeName: seller.name || "Merchant",
+          amount: totals.grand,
+          invoiceNo: meta.no,
+        }, { margin: 1 });
+        upiBlock = `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;padding:12px;border:1px dashed #cbd5e1;border-radius:8px">
+          <div>
+            <div style="font-weight:bold;font-size:13px">Scan & Pay via UPI (0% Fee)</div>
+            <div class="muted" style="margin-top:2px">Payee: ${h(seller.name)}</div>
+            <div class="muted">UPI VPA: ${h(seller.upi)}</div>
+            <div class="muted">Amount: ${rupee(totals.grand)}</div>
+          </div>
+          <div style="width:110px;height:110px">${svg}</div>
+        </div>`;
+      } catch {}
+    }
     const rows = items.map((it) => { const amt = it.qty * it.rate; return `<tr><td>${h(it.desc)}</td><td style="text-align:right">${it.qty}</td><td style="text-align:right">${rupee(it.rate)}</td><td style="text-align:right">${it.gst}%</td><td style="text-align:right">${rupee(amt)}</td></tr>`; }).join("");
     const taxRows = intraState
       ? `<tr><td colspan="4" style="text-align:right">CGST</td><td style="text-align:right">${rupee(totals.tax / 2)}</td></tr><tr><td colspan="4" style="text-align:right">SGST</td><td style="text-align:right">${rupee(totals.tax / 2)}</td></tr>`
@@ -175,6 +196,7 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
         ${taxRows}
         <tr><td colspan="4" style="text-align:right">Grand total</td><td style="text-align:right">${rupee(totals.grand)}</td></tr>
       </tfoot></table>
+      ${upiBlock}
       <p class="muted" style="margin-top:24px">This is a computer-generated invoice.</p>
       <script>window.onload=()=>window.print()</script>
     </body></html>`;
@@ -190,6 +212,7 @@ export function InvoiceGenerator({ saved = [], orgName = null }: { saved?: Saved
           <input className={I + " w-full"} value={seller.name} onChange={(e) => setSeller({ ...seller, name: e.target.value })} placeholder="Your company" aria-label="Your company" />
           <input className={I + " w-full"} value={seller.gstin} onChange={(e) => setSeller({ ...seller, gstin: e.target.value })} placeholder="GSTIN" aria-label="GSTIN" />
           <input className={I + " w-full"} value={seller.addr} onChange={(e) => setSeller({ ...seller, addr: e.target.value })} placeholder="Address / state" aria-label="Address / state" />
+          <input className={I + " w-full"} value={seller.upi} onChange={(e) => setSeller({ ...seller, upi: e.target.value })} placeholder="UPI ID / VPA for 0% QR (e.g. billing@okhdfcbank)" aria-label="UPI ID" />
         </div>
         <div className="space-y-2">
           <div className="text-sm font-medium">Buyer</div>

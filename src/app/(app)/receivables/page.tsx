@@ -1,6 +1,8 @@
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { ReceivablesAging } from "@/components/receivables-aging";
+import { MsmeSamadhaanDrawer } from "@/components/msme-samadhaan-drawer";
+import { type OverdueClaimInvoice } from "@/lib/msme-samadhaan";
 import { getUserAndOrg } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { daysPastDueIST, istTodayISO } from "@/lib/statutory";
@@ -222,6 +224,19 @@ export default async function Receivables() {
               </div>
             )}
             <ReceivablesAging seed={seed} totals={totals} creditSalesHint={creditSalesHint} />
+            <div className="mt-8">
+              <MsmeSamadhaanDrawer
+                invoices={open
+                  .filter((i) => i.pastDue && i.amount > 0)
+                  .map((i) => ({
+                    invoiceNo: `INV-${i.id.slice(0, 8).toUpperCase()}`,
+                    invoiceDate: new Date(Date.now() - Math.max(1, i.days) * 86400000).toISOString().slice(0, 10),
+                    dueDate: new Date(Date.now() - Math.max(0, i.days) * 86400000).toISOString().slice(0, 10),
+                    amount: i.amount,
+                    hasWrittenAgreement: false,
+                  }))}
+              />
+            </div>
           </>
         )}
       </PageShell>
