@@ -1,14 +1,12 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
-import { Moon, Sun, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
 import { Notifications } from "@/components/notifications";
 import { UserMenu } from "@/components/user-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Topbar({ title, subtitle }: { title: string; subtitle?: string }) {
-  const { theme, setTheme } = useTheme();
   const router = useRouter();
   const [q, setQ] = useState("");
   function ask(e: React.FormEvent) {
@@ -29,9 +27,7 @@ export function Topbar({ title, subtitle }: { title: string; subtitle?: string }
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask Cortex about your numbers…" aria-label="Ask Cortex about your numbers" className="flex-1 bg-transparent outline-none" />
         </form>
         <Notifications />
-        <Button variant="ghost" size="icon" aria-label="Switch between light and dark theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-          <Sun className="h-4 w-4 dark:hidden" /><Moon className="hidden h-4 w-4 dark:block" />
-        </Button>
+        <ThemeToggle />
         <UserMenu />
       </div>
     </header>

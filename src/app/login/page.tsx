@@ -8,6 +8,7 @@ import { GoogleSignIn } from "@/components/google-signin";
 import { beacon } from "@/components/track";
 import { safeNext } from "./safe-next";
 import { Mail, ArrowRight, Loader2, CheckCircle2, Eye, EyeOff, Lock, Sparkles } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type Mode = "signin" | "signup";
 
@@ -204,6 +205,9 @@ export default function Login() {
 
   return (
     <main className="relative min-h-screen grid place-items-center px-6 overflow-hidden">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
       <div className="grid-bg absolute inset-0" aria-hidden />
       <div className="aurora opacity-50" aria-hidden />
 

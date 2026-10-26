@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { Magnetic } from "@/components/loco";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV = [
   { href: "/features", label: "Features" },
@@ -85,6 +86,7 @@ export function PublicHeader() {
             costs credits, which is what "Start free" would have denied.
           */}
           <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
             <Link
               href="/login"
               className="inline-flex items-center rounded-full border px-3.5 sm:px-5 h-9 sm:h-10 text-sm font-medium hover:bg-accent transition-colors"
@@ -136,7 +138,10 @@ export function PublicHeader() {
         <div className="absolute inset-0 bg-foreground text-background flex flex-col">
           <div className="flex items-center justify-between px-5 h-16">
             <span className="font-semibold">MNB Cortex</span>
-            <button onClick={() => setOpen(false)} className="h-10 w-10 grid place-items-center rounded-full border border-background/30" aria-label="Close menu"><X className="h-5 w-5" /></button>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <button onClick={() => setOpen(false)} className="h-10 w-10 grid place-items-center rounded-full border border-background/30" aria-label="Close menu"><X className="h-5 w-5" /></button>
+            </div>
           </div>
           <nav className="flex-1 flex flex-col justify-center gap-2 px-6">
             {NAV.map((n) => (
