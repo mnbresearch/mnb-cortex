@@ -539,12 +539,28 @@ export async function provisionDemoCustomer(input: {
     }
   }
 
-  // 6) Send branded demo welcome email
+  // 6) Send branded demo welcome email (with direct 1-click magic link if supported)
   const appUrl = (process.env.APP_URL || "https://cortex.mnbresearch.com").replace(/\/$/, "");
   const first = (input.name || "").trim().split(" ")[0] || "there";
   const expiryFormatted = new Date(expiresAt).toLocaleDateString("en-IN", {
     day: "numeric", month: "short", year: "numeric",
   });
+
+  let magicLinkUrl: string | undefined;
+  try {
+    const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
+      type: "magiclink",
+      email,
+      options: {
+        redirectTo: `${appUrl}/auth/callback?next=/dashboard`,
+      },
+    });
+    if (!linkErr && linkData?.properties?.action_link) {
+      magicLinkUrl = linkData.properties.action_link;
+    }
+  } catch (e: any) {
+    console.warn("[superadmin] could not generate admin magic link:", e?.message);
+  }
 
   const emailBody = generateDemoWelcomeEmail({
     recipientName: first,
@@ -555,6 +571,7 @@ export async function provisionDemoCustomer(input: {
     expiresAtDateStr: expiryFormatted,
     credits,
     appUrl,
+    magicLinkUrl,
   });
 
   let emailed = false;

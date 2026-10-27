@@ -307,6 +307,7 @@ export function generateDemoWelcomeEmail(opts: {
   expiresAtDateStr: string;
   credits: number;
   appUrl: string;
+  magicLinkUrl?: string;
 }): string {
   const featureList = opts.features
     .map((fid) => {
@@ -315,6 +316,15 @@ export function generateDemoWelcomeEmail(opts: {
     })
     .filter(Boolean)
     .join("\n");
+
+  const directAccessSection = opts.magicLinkUrl
+    ? `Direct 1-Click Access (No password required):\n${opts.magicLinkUrl}\n\nOr sign in at:\n${opts.appUrl}/login?email=${encodeURIComponent(opts.email)}&demo=1`
+    : `To activate your workspace, sign in using this email address (${opts.email}):\n${opts.appUrl}/login?email=${encodeURIComponent(opts.email)}&demo=1`;
+
+  const loginInstructions = `How to sign in (no password has been preset):
+• One-Click Email Link: Click "Email me a one-time login link" on the login screen to sign in passwordless via email OTP.
+• Google Workspace: Click "Continue with Google" if your organization uses Google.
+• Choose Your Own Password: Click "Create account" to set your own secure password.`;
 
   return `Hi ${opts.recipientName},
 
@@ -328,8 +338,9 @@ Starting AI Credits: ${opts.credits.toLocaleString("en-IN")}
 Key Capabilities Configured For Your Workspace:
 ${featureList}
 
-To activate your workspace, sign in using this email address (${opts.email}):
-${opts.appUrl}/login
+${directAccessSection}
+
+${loginInstructions}
 
 Important Note on Demo Validity:
 This evaluation workspace is active for exactly 7 days. After the 7-day trial period, a compulsory plan upgrade is required to preserve your live data, configured rules, and historical intelligence.

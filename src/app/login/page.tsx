@@ -23,6 +23,7 @@ export default function Login() {
   const [notice, setNotice] = useState("");         // e.g. "confirm your email"
   const [linkSent, setLinkSent] = useState(false);
   const [next, setNext] = useState<string | null>(null); // sanitised ?next=
+  const [isDemoWelcome, setIsDemoWelcome] = useState(false);
   const configured = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
   /**
@@ -73,6 +74,9 @@ export default function Login() {
     try {
       const u = new URL(window.location.href);
       if (u.searchParams.get("mode") === "signup") setMode("signup");
+      const qEmail = u.searchParams.get("email");
+      if (qEmail) setEmail(qEmail.trim());
+      if (u.searchParams.get("demo") === "1") setIsDemoWelcome(true);
       /*
         ?next= carries where the visitor was going — /billing from a plan on
         /pricing, /usage from the credit packs, a feature route from /features.
@@ -246,6 +250,17 @@ export default function Login() {
                   <p className="text-xs text-muted-foreground">{mode === "signin" ? "Sign in to your workspace." : `Free to create · credits from ${SMALLEST_PACK_LABEL}.`}</p>
                 </div>
               </div>
+
+              {isDemoWelcome && (
+                <div className="mt-4 text-xs rounded-xl border border-primary/30 bg-primary/5 p-3 text-foreground space-y-1">
+                  <div className="font-semibold text-primary flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5" /> 7-Day Demo Workspace Ready
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed">
+                    No password is preset. Click <b>&ldquo;Email me a one-time login link&rdquo;</b> below for instant passwordless entry, use <b>Google</b>, or switch to <b>&ldquo;Create account&rdquo;</b> to choose a password.
+                  </p>
+                </div>
+              )}
 
               {notice && <div className="mt-4 text-sm rounded-lg border border-primary/30 bg-primary/5 p-3 text-primary">{notice}</div>}
 

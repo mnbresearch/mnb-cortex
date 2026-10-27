@@ -131,6 +131,23 @@ console.log("=== Testing Custom 7-Day Demo Account & Feature Customization Engin
   check(email.includes("2,500"), "Email mentions starting credits");
   check(email.includes("Section 43B(h)"), "Email lists customized modules");
   check(email.includes("compulsory plan upgrade is required"), "Email warns of compulsory upgrade upon expiry");
+  check(email.includes("How to sign in (no password has been preset):"), "Email explains passwordless sign-in options");
+  check(email.includes("email=aditya%40sharmaforgings.in&demo=1"), "Email pre-fills prospect email and demo flag in login URL");
+
+  // With direct 1-click magic link
+  const emailWithMagicLink = generateDemoWelcomeEmail({
+    recipientName: "Aditya",
+    email: "aditya@sharmaforgings.in",
+    companyName: "Sharma Forgings Pvt Ltd",
+    presetName: "CFO & Statutory Tax Compliance",
+    features: ["msme_43bh"],
+    expiresAtDateStr: "2 Nov 2026",
+    credits: 2500,
+    appUrl: "https://cortex.mnbresearch.com",
+    magicLinkUrl: "https://cortex.mnbresearch.com/auth/v1/verify?token=xyz123",
+  });
+  check(emailWithMagicLink.includes("Direct 1-Click Access (No password required):"), "Direct magic link header rendered");
+  check(emailWithMagicLink.includes("token=xyz123"), "Direct magic link URL included in body");
 }
 
 if (failures.length > 0) {
