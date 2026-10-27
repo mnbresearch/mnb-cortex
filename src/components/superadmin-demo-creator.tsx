@@ -18,6 +18,9 @@ import {
   Send,
   Sliders,
   CheckCircle2,
+  Copy,
+  ExternalLink,
+  AlertTriangle,
 } from "lucide-react";
 import {
   DEMO_FEATURE_CATALOGUE,
@@ -43,6 +46,8 @@ export function SuperAdminDemoCreator({ className }: { className?: string }) {
   const [preSeedData, setPreSeedData] = useState(true);
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<any>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   function handlePresetSelect(presetId: DemoPresetId) {
     setSelectedPreset(presetId);
@@ -102,9 +107,6 @@ export function SuperAdminDemoCreator({ className }: { className?: string }) {
 
       const data = await resp.json();
       setRes(data);
-      if (data.ok) {
-        setTimeout(() => location.reload(), 3000);
-      }
     } catch (err: any) {
       setRes({ ok: false, error: err?.message || "Failed to provision demo workspace." });
     } finally {
@@ -367,29 +369,128 @@ export function SuperAdminDemoCreator({ className }: { className?: string }) {
             </Button>
           </div>
 
-          {/* Feedback Display */}
+          {/* Feedback & Activation Diagnostics */}
           {res && (
             <div
-              className={`text-xs rounded-lg border p-3 ${
+              className={`text-xs rounded-xl border p-4 space-y-3 ${
                 res.ok
-                  ? "border-success/30 bg-success/5 text-foreground"
+                  ? "border-emerald-500/30 bg-emerald-500/5 text-foreground"
                   : "border-danger/30 bg-danger/5 text-danger"
               }`}
             >
               {res.ok ? (
-                <div className="space-y-1">
-                  <div className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                    <CheckCircle2 className="h-4 w-4" /> Demo Workspace &ldquo;{res.orgName}&rdquo; Successfully Created!
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 text-sm">
+                      <CheckCircle2 className="h-4 w-4" /> Demo Workspace &ldquo;{res.orgName}&rdquo; Ready!
+                    </div>
+                    <Badge className="text-[11px] font-mono">
+                      {Number(res.credits).toLocaleString("en-IN")} Credits &bull; Exactly 7 Days
+                    </Badge>
                   </div>
-                  <div>
-                    &bull; <b>{res.featuresCount} modules</b> enabled &bull; <b>{Number(res.credits).toLocaleString("en-IN")} AI credits</b> &bull; Valid until <b>{new Date(res.expiresAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</b>.
+
+                  <div className="text-muted-foreground text-xs">
+                    &bull; <b>{res.featuresCount} modules enabled</b> &bull; Valid until <b>{new Date(res.expiresAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</b> &bull; Compulsory upgrade upon expiry.
                   </div>
-                  <div className="text-muted-foreground">
-                    {res.emailed
-                      ? "Official branded activation email sent with 7-day validity notice."
-                      : "Workspace ready — activation email not sent (check SMTP configuration)."}
+
+                  {/* Email Delivery Diagnostic */}
+                  <div className={`p-3 rounded-lg border text-xs flex items-start gap-2.5 ${
+                    res.emailed
+                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-200"
+                      : "bg-amber-500/10 border-amber-500/20 text-amber-900 dark:text-amber-200"
+                  }`}>
+                    {res.emailed ? (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" />
+                        <div className="space-y-0.5">
+                          <div className="font-semibold">Activation email dispatched to {email}</div>
+                          <div className="text-[11px] opacity-80">Provider accepted delivery. If not in main inbox, advise prospect to check Spam/Promotions folder, or share the direct link below.</div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                        <div className="space-y-1">
+                          <div className="font-semibold">Automated email delivery not completed:</div>
+                          <div className="text-[11px] font-mono bg-background/60 p-1.5 rounded border border-amber-500/30">
+                            {res.emailReason || "Email provider unconfigured (check RESEND_API_KEY) or sender domain pending verification."}
+                          </div>
+                          <div className="text-[11px] font-medium pt-0.5 text-foreground">
+                            👉 You can share the direct activation link below directly with the prospect via WhatsApp or email:
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                </div>
+
+                  {/* Direct Activation URL Card */}
+                  {res.directLoginUrl && (
+                    <div className="rounded-lg border bg-card p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+                          <Sparkles className="h-3.5 w-3.5 text-primary" /> Direct Instant Activation Link:
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(res.directLoginUrl);
+                              setCopiedLink(true);
+                              setTimeout(() => setCopiedLink(false), 2500);
+                            }}
+                            className="px-2.5 py-1 rounded bg-primary text-primary-foreground hover:opacity-90 text-[11px] font-medium inline-flex items-center gap-1 transition-all"
+                          >
+                            {copiedLink ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                            {copiedLink ? "Copied!" : "Copy Link"}
+                          </button>
+                          <a
+                            href={res.directLoginUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded border hover:bg-accent text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
+                          >
+                            <ExternalLink className="h-3 w-3" /> Test Link
+                          </a>
+                        </div>
+                      </div>
+                      <input
+                        readOnly
+                        value={res.directLoginUrl}
+                        className="w-full text-[11px] font-mono bg-muted/30 border rounded px-2.5 py-1.5 text-foreground select-all outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {/* Full Email Copy Option */}
+                  {res.welcomeEmailText && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(res.welcomeEmailText);
+                          setCopiedEmail(true);
+                          setTimeout(() => setCopiedEmail(false), 2500);
+                        }}
+                        className="text-xs text-primary hover:underline inline-flex items-center gap-1.5 font-medium"
+                      >
+                        {copiedEmail ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copiedEmail ? "Copied Email Message to Clipboard!" : "Copy Full Welcome Email (for WhatsApp or direct email)"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRes(null);
+                          setEmail("");
+                          setName("");
+                          setCompany("");
+                        }}
+                        className="text-xs text-muted-foreground hover:text-foreground font-medium"
+                      >
+                        Provision another demo &rarr;
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div>Error: {res.error || "Provisioning failed."}</div>
               )}

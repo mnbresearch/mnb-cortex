@@ -575,6 +575,7 @@ export async function provisionDemoCustomer(input: {
   });
 
   let emailed = false;
+  let emailReason: string | undefined;
   try {
     const res = await sendEmail(
       email,
@@ -583,7 +584,16 @@ export async function provisionDemoCustomer(input: {
       { from: brandFrom(), replyTo: brandReplyTo() }
     );
     emailed = res.sent;
-  } catch { /* best effort */ }
+    if (!res.sent) {
+      emailReason = res.reason;
+      console.warn("[superadmin] demo welcome email rejected or failed:", { to: email, reason: res.reason, state: res.state });
+    }
+  } catch (e: any) {
+    emailReason = e?.message || "Failed to dispatch email";
+    console.error("[superadmin] demo welcome email threw:", e?.message);
+  }
+
+  const directLoginUrl = magicLinkUrl || `${appUrl}/login?email=${encodeURIComponent(email)}&demo=1`;
 
   return {
     ok: true,
@@ -594,6 +604,9 @@ export async function provisionDemoCustomer(input: {
     expiresAt,
     credits,
     emailed,
+    emailReason,
+    directLoginUrl,
+    welcomeEmailText: emailBody,
     creditsWarning,
   };
 }
