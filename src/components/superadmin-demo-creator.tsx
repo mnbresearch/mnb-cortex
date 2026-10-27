@@ -35,6 +35,7 @@ export function SuperAdminDemoCreator({ className }: { className?: string }) {
   const [company, setCompany] = useState("");
   const [industry, setIndustry] = useState("general");
   const [credits, setCredits] = useState(String(DEMO_DEFAULT_STARTING_CREDITS));
+  const numericCredits = Number(credits) || 0;
   const [selectedPreset, setSelectedPreset] = useState<DemoPresetId>("enterprise_full");
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>(
     DEMO_PRESETS[0].featureIds
@@ -78,6 +79,9 @@ export function SuperAdminDemoCreator({ className }: { className?: string }) {
     setBusy(true);
     setRes(null);
 
+    const parsedCredits = credits === "" ? DEMO_DEFAULT_STARTING_CREDITS : Number(credits);
+    const finalCredits = !isNaN(parsedCredits) && parsedCredits >= 0 ? Math.round(parsedCredits) : DEMO_DEFAULT_STARTING_CREDITS;
+
     try {
       const resp = await fetch("/api/superadmin", {
         method: "POST",
@@ -90,7 +94,7 @@ export function SuperAdminDemoCreator({ className }: { className?: string }) {
           industry,
           preset: selectedPreset,
           features: selectedFeatures,
-          credits: Number(credits) || DEMO_DEFAULT_STARTING_CREDITS,
+          credits: finalCredits,
           durationDays: DEMO_TRIAL_DURATION_DAYS,
           preSeedData,
         }),
@@ -184,17 +188,37 @@ export function SuperAdminDemoCreator({ className }: { className?: string }) {
               </select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Starting AI Credits</label>
-              <select
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-muted-foreground">Starting AI Credits</label>
+                <span className="text-[11px] font-mono text-primary font-medium">
+                  {numericCredits > 0 ? `${numericCredits.toLocaleString("en-IN")} cr` : "0 cr"}
+                </span>
+              </div>
+              <input
+                type="number"
+                min="0"
+                step="500"
                 value={credits}
                 onChange={(e) => setCredits(e.target.value)}
+                placeholder="Custom credits (e.g. 2500)"
                 className={`${INPUT} w-full font-mono`}
-              >
-                <option value="1000">1,000 Credits (Essential)</option>
-                <option value="2500">2,500 Credits (Standard Demo)</option>
-                <option value="5000">5,000 Credits (High Evaluation)</option>
-                <option value="10000">10,000 Credits (Enterprise Pilot)</option>
-              </select>
+              />
+              <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                {[1000, 2500, 5000, 10000, 25000, 50000].map((presetVal) => (
+                  <button
+                    key={presetVal}
+                    type="button"
+                    onClick={() => setCredits(String(presetVal))}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
+                      numericCredits === presetVal
+                        ? "bg-primary text-primary-foreground font-semibold"
+                        : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground border"
+                    }`}
+                  >
+                    {presetVal >= 1000 ? `${presetVal / 1000}k` : presetVal}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <label className="text-xs text-muted-foreground block mb-1">Evaluation Period</label>
@@ -206,6 +230,25 @@ export function SuperAdminDemoCreator({ className }: { className?: string }) {
               </div>
             </div>
           </div>
+
+          {/* Real-time Demo Credit Capacity Breakdown */}
+          {numericCredits > 0 && (
+            <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
+              <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
+                <Coins className="h-3.5 w-3.5 text-primary" />
+                Est. Action Capacity ({numericCredits.toLocaleString("en-IN")} credits):
+              </span>
+              <div className="flex flex-wrap items-center gap-2.5 text-[11px] font-mono">
+                <span className="text-foreground">~{Math.floor(numericCredits / 19)} questions</span>
+                <span className="text-muted-foreground">&bull;</span>
+                <span className="text-foreground">~{Math.floor(numericCredits / 45)} bank/GST scans</span>
+                <span className="text-muted-foreground">&bull;</span>
+                <span className="text-foreground">~{Math.floor(numericCredits / 24)} deep analyses</span>
+                <span className="text-muted-foreground">&bull;</span>
+                <span className="text-foreground">~{Math.floor(numericCredits / 14)} daily pulses</span>
+              </div>
+            </div>
+          )}
 
           {/* Quick Demo Presets */}
           <div className="space-y-2 pt-1">
