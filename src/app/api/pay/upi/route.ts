@@ -5,6 +5,7 @@ import {
   generateUpiQrSvg,
   buildUpiAppLinks,
 } from "@/lib/pay/upi";
+import { clientIp, enforce } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,19 @@ export const dynamic = "force-dynamic";
  * Returns dynamic payment metadata, deep links, or standalone SVG image.
  */
 export async function GET(req: NextRequest) {
+  // Throttled per client IP to prevent CPU exhaustion on public SVG QR renders
+  const ip = clientIp(req);
+  const over = await enforce([
+    { key: `upi:ip:${ip}`, limit: 120, windowSecs: 3600 },
+    { key: `upi:burst:${ip}`, limit: 30, windowSecs: 60 },
+  ]);
+  if (over) {
+    return NextResponse.json(
+      { ok: false, error: "Too many QR generation requests. Please try again in a few moments." },
+      { status: 429 }
+    );
+  }
+
   const { searchParams } = new URL(req.url);
 
   const rawVpa = searchParams.get("pa") || searchParams.get("vpa");
