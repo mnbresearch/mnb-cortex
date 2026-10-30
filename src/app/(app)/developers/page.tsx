@@ -162,6 +162,29 @@ export default async function Developers() {
               <pre className="text-xs bg-background/60 border rounded-lg p-3 overflow-x-auto mt-2">{`curl "${BASE}/api/v1/invoices?type=receivable&status=pending&limit=100" -H "Authorization: Bearer YOUR_KEY"`}</pre>
               <p className="text-xs text-muted-foreground mt-2">Newest first, up to 200 a page. Pass <code>page.next_cursor</code> back as <code>cursor</code> for the next page. Errors are <code>{"{ ok:false, error, code, request_id }"}</code>; quote the request_id if you contact us.</p>
             </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-2"><Terminal className="h-4 w-4 text-primary" /><b>POST /api/v1/ask</b> — ask Cortex <code className="text-xs bg-secondary px-1 rounded">ai:ask</code></div>
+              <pre className="text-xs bg-background/60 border rounded-lg p-3 overflow-x-auto">{`curl -X POST ${BASE}/api/v1/ask \\
+  -H "Authorization: Bearer YOUR_KEY" -H "Content-Type: application/json" \\
+  -d '{"question":"Which customers are most overdue, and what should I do this week?"}'`}</pre>
+              <p className="text-xs text-muted-foreground mt-2">Charged in credits at the in-app chat price, refunded if the AI engine does not answer. Read-only: an answer cannot send messages or change data.</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-2"><Terminal className="h-4 w-4 text-primary" /><b>MCP</b> — use Cortex from Claude, Cursor or any MCP-capable AI app (and by voice with Wispr Flow)</div>
+              <pre className="text-xs bg-background/60 border rounded-lg p-3 overflow-x-auto">{`URL:     ${BASE}/api/mcp
+Header:  Authorization: Bearer YOUR_KEY   (preset: "AI assistant")`}</pre>
+              <p className="text-xs text-muted-foreground mt-2">
+                Add it as a custom connector / MCP server in your AI app. Tools: get_metrics, list_invoices, list_customers,
+                list_sales_orders and ask_cortex — each only if the key has that permission. Wispr Flow dictates into whichever
+                app is in front, so once Cortex is connected to your assistant you can ask it by voice; it also types straight into
+                Cortex&apos;s own chat box.
+              </p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-2"><Terminal className="h-4 w-4 text-primary" /><b>Tally bridge</b> — sync Tally every 30 minutes <code className="text-xs bg-secondary px-1 rounded">connector:write</code></div>
+              <pre className="text-xs bg-background/60 border rounded-lg p-3 overflow-x-auto">{`node scripts/tally-bridge.mjs --key=YOUR_TALLY_BRIDGE_KEY --watch`}</pre>
+              <p className="text-xs text-muted-foreground mt-2">Runs on the PC next to Tally Prime (HTTP access on port 9000). Sends sales, purchases and paid/overdue status from bill-wise outstanding; only changed rows are sent. Every plan includes this key.</p>
+            </Card>
           </div>
         </Section>
 

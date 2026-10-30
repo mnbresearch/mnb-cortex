@@ -16,6 +16,7 @@
 export const ERROR_CODES = [
   "missing_key", "invalid_key", "revoked_key", "expired_key", "insufficient_scope",
   "rate_limited", "bad_request", "payload_too_large", "not_configured", "internal",
+  "payment_required", "unavailable",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 

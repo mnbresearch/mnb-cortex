@@ -34,7 +34,7 @@ function systemPrompt(context: string): string {
   return `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
 }
 
-type Msg = { role: "user" | "assistant"; content: string };
+export type Msg = { role: "user" | "assistant"; content: string };
 
 /**
  * Set once if a Gemini model rejects thinkingConfig, so the whole process stops

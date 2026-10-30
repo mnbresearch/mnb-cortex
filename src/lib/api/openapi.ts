@@ -63,12 +63,12 @@ export function buildOpenApi(server = "https://cortex.mnbresearch.com") {
         integrator re-sending inventory got duplicates, and one re-sending
         leads expected updates that never happen.
       */
-      description: "Requires scope `ingest:write`. At most 10,000 rows and 5 MB per call. Behaviour per table: "
+      description: "Requires scope `ingest:write` — or `connector:write` (every plan; the Tally bridge), which may write sales_orders, invoices, customers and inventory_items but never leads, with rows per call by plan (Try 2,000, Watch 5,000, higher plans 10,000). At most 10,000 rows and 5 MB per call. Behaviour per table: "
         + "`sales_orders` upserts on order_no, `invoices` on invoice_no, `customers` on name (existing rows are updated). "
         + "`leads` is insert-if-absent: a row whose email (or last 10 phone digits) already exists in the workspace is skipped, and existing leads are never updated. "
         + "`inventory_items` is a plain insert with no de-duplication — every row sent is added, so re-sending the same SKUs creates duplicate items. "
         + "Rows without their key (order_no, invoice_no, name; email or phone for leads) are counted in skipped_no_key and never invented.",
-      security: [{ bearer: ["ingest:write"] }, { apiKeyHeader: ["ingest:write"] }],
+      security: [{ bearer: ["ingest:write"] }, { apiKeyHeader: ["ingest:write"] }, { bearer: ["connector:write"] }, { apiKeyHeader: ["connector:write"] }],
       requestBody: {
         required: true,
         content: { "application/json": { schema: {
@@ -80,6 +80,16 @@ export function buildOpenApi(server = "https://cortex.mnbresearch.com") {
         } } },
       },
       responses: { "200": { description: "{ ok, written, skipped_no_key, note, request_id }" }, ...errorResponses({ "413": "Too many rows or body over 5 MB — nothing written", "500": "Server-side failure (not a problem with your rows) — nothing written; safe to retry" }) },
+    },
+  };
+
+  paths["/api/v1/ask"] = {
+    post: {
+      summary: "Ask Cortex a question about the business, in plain language.",
+      description: "Requires scope `ai:ask` (Watch Pro and above). Charged in credits at the in-app chat price; refunded if the AI engine does not answer (503). Read-only — the answer cannot send messages or change data. The same capability is available to MCP clients at POST /api/mcp.",
+      security: [{ bearer: ["ai:ask"] }, { apiKeyHeader: ["ai:ask"] }],
+      requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["question"], properties: { question: { type: "string", maxLength: 4000 } } } } } },
+      responses: { "200": { description: "{ ok, answer, credits_charged, balance, request_id }" }, ...errorResponses({ "402": "Not enough credits — nothing was charged", "503": "The AI engine did not answer — nothing was charged; retry", "413": "Question over 4,000 characters" }) },
     },
   };
 

@@ -69,7 +69,7 @@ const SCOPE_LIST = Object.entries(API_SCOPES) as [ApiScope, string][];
 type AppPreset = { id: string; label: string; hint: string; scopes: readonly ApiScope[]; needs: "connect" | "read" };
 const APP_PRESETS: AppPreset[] = [
   { id: "tally", label: "Tally bridge", hint: "Runs next to Tally and syncs your books every 30 minutes", scopes: SCOPE_PRESETS.tally, needs: "connect" },
-  { id: "assistant", label: "AI assistant (Claude, ChatGPT, Cursor — and Wispr Flow dictation)", hint: "Ask Cortex from another AI app through the MCP endpoint", scopes: SCOPE_PRESETS.assistant, needs: "read" },
+  { id: "assistant", label: "AI assistant (Claude, Cursor or any MCP app — and Wispr Flow dictation)", hint: "Ask Cortex from another AI app through the MCP endpoint", scopes: SCOPE_PRESETS.assistant, needs: "read" },
   { id: "automation", label: "Zapier / Make / n8n", hint: "Read invoices, customers and KPIs into your automations", scopes: SCOPE_PRESETS.automation, needs: "read" },
 ];
 

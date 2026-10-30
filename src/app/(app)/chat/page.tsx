@@ -72,7 +72,7 @@ export default function Chat() {
 
   function toggleMic() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { alert("Voice input isn't supported in this browser. Try Chrome."); return; }
+    if (!SR) { alert("Voice input isn't supported in this browser. Try Chrome — or a dictation app such as Wispr Flow, which types straight into this box."); return; }
     if (listening) { recogRef.current?.stop(); return; }
     const rec = new SR();
     rec.lang = "en-IN"; rec.interimResults = true; rec.continuous = false;
@@ -205,15 +205,26 @@ export default function Chat() {
           </div>
         </div>
         <div className="border-t glass px-4 lg:px-8 py-4">
-          <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="max-w-3xl mx-auto flex items-center gap-2">
+          <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="max-w-3xl mx-auto flex items-end gap-2">
             <select value={lang} onChange={(e) => setLang(e.target.value)} title="Reply language"
               className="h-12 rounded-xl border bg-card px-2 text-sm outline-none focus:ring-2 focus:ring-ring shrink-0">
               <option value="English">EN</option>
               <option value="Hindi">हिं</option>
               <option value="Hinglish">Hinglish</option>
             </select>
-            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={listening ? "Listening…" : "Who owes me the most right now?"}
-              className="flex-1 rounded-xl border bg-card px-4 h-12 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            {/*
+              A TEXTAREA, FOR DICTATION. Wispr Flow, macOS/Windows dictation and
+              pasted notes arrive as long, multi-line text; a single-line input
+              silently dropped every line break and showed only the tail of a
+              long question. Enter still sends; Shift+Enter is a new line; the box
+              grows to six lines. Dictation tools insert text rather than press
+              Enter, so nothing is sent half-way through a sentence.
+            */}
+            <textarea value={input} rows={1} aria-label="Ask Cortex"
+              onChange={(e) => { setInput(e.target.value); const t = e.currentTarget; t.style.height = "auto"; t.style.height = `${Math.min(t.scrollHeight, 144)}px`; }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(input); } }}
+              placeholder={listening ? "Listening…" : "Who owes me the most right now?  (Shift+Enter for a new line)"}
+              className="flex-1 rounded-xl border bg-card px-4 py-3 min-h-12 max-h-36 resize-none text-sm leading-6 outline-none focus:ring-2 focus:ring-ring" />
             <Button type="button" variant={listening ? "default" : "outline"} size="icon" className={`h-12 w-12 rounded-xl ${listening ? "animate-pulse" : ""}`} onClick={toggleMic} title="Voice input"><Mic className="h-4 w-4" /></Button>
             <Button size="icon" className="h-12 w-12 rounded-xl" disabled={loading}><Send className="h-4 w-4" /></Button>
           </form>
