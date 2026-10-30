@@ -105,7 +105,7 @@ export const FEATURES: Feature[] = [
   { id: "proposals", job: "create", title: "Proposals", outcome: "A client-ready proposal from a few lines of brief.", route: "/proposals", gate: all, modes: ["proposal"], keywords: "proposal pitch document" },
   // ---- Connect
   { id: "import", job: "connect", title: "Import from Tally, Vyapar, Busy, Excel", outcome: "Drop an export; Cortex maps the columns and starts watching the same day.", route: "/import", gate: all, modes: [], keywords: "import tally vyapar busy excel csv" },
-  { id: "integrations", job: "connect", title: "Integrations", outcome: "Shopify, Razorpay, Stripe, Google Sheets and more, synced in.", route: "/integrations", gate: all, modes: [], keywords: "shopify razorpay stripe sheets sync" },
+  { id: "integrations", job: "connect", title: "Integrations", outcome: "Zoho Books, Odoo, Shopify, Razorpay, Stripe, Google Sheets and the Tally bridge, synced in.", route: "/integrations", gate: all, modes: [], keywords: "shopify razorpay stripe sheets sync" },
   { id: "developers", job: "connect", title: "API & webhooks", outcome: "Scoped, expiring API keys and signed webhooks for your own systems.", route: "/developers", gate: { kind: "cap", cap: "api" }, modes: [], keywords: "api key webhook developer" },
   { id: "practice", job: "connect", title: "Practice console", outcome: "For CA firms: every client workspace on one screen, ranked by who needs you.", route: "/practice", gate: { kind: "practice" }, modes: [], keywords: "ca firm practice clients accountant" },
 ];

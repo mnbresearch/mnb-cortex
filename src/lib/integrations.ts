@@ -108,7 +108,7 @@ const KEY = (label = "API key", ph = "sk_live_…"): Field => ({ key: "api_key",
  * CONNECTORS stay identical, so there is one source of truth even though the
  * constant is written twice.
  */
-export const SYNCED_INTEGRATION_IDS = ["shopify", "razorpay", "stripe", "google_sheets"] as const;
+export const SYNCED_INTEGRATION_IDS = ["shopify", "razorpay", "stripe", "google_sheets", "zoho_books", "odoo"] as const;
 
 /** Everything else: credentials we store and hand back, but do not sync. */
 export function vaultOnlyCount(): number {
@@ -151,10 +151,23 @@ export const INTEGRATIONS: Integration[] = [
     ] },
 
   // ---- Accounting & Finance ----
-  { id: "zoho_books", name: "Zoho Books", category: "Accounting & Finance", desc: "Verifies and stores your Zoho Books token. Not synced yet — Zoho tokens expire in about an hour", minPlan: "growth", testable: true,
-    docs: "https://www.zoho.com/books/api/v3/",
-    fields: [KEY("OAuth token", "1000.xxxx"), { key: "organization_id", label: "Organization ID", type: "text", placeholder: "60xxxxxxx", required: true },
-      { key: "data_center", label: "Data centre (in, com, eu, com.au, jp, ca, sa)", type: "text", placeholder: "in" }] },
+  /*
+    SYNCED (2026-10). It said "not synced yet" because a pasted access token
+    dies in about an hour. A Zoho Self Client gives a long-lived refresh token;
+    lib/sync/books.ts trades it for a fresh access token on every pull and
+    imports invoices, bills, sales orders and customers. The old "OAuth token"
+    field stays readable (api_key) so existing connections keep working until
+    that token expires, and are told what to save instead.
+  */
+  { id: "zoho_books", name: "Zoho Books", category: "Accounting & Finance", desc: "Invoices, bills, sales orders and customers, synced nightly and on demand. Use a Zoho Self Client (api-console.zoho.in) — scope ZohoBooks.fullaccess.READ", minPlan: "try", testable: true,
+    docs: "https://www.zoho.com/books/api/v3/oauth/",
+    fields: [
+      { key: "client_id", label: "Client ID", type: "text", placeholder: "1000.XXXXXXXX", required: true, help: "Zoho API console → Self Client → Client Secret tab." },
+      { key: "client_secret", label: "Client secret", type: "password", required: true },
+      { key: "refresh_token", label: "Refresh token", type: "password", placeholder: "1000.xxxx.xxxx", required: true, help: "Generate a code in the Self Client with scope ZohoBooks.fullaccess.READ, then exchange it once for a refresh token (see Setup guides → Zoho Books)." },
+      { key: "organization_id", label: "Organization ID", type: "text", placeholder: "60xxxxxxx", required: true },
+      { key: "data_center", label: "Data centre (in, com, eu, com.au, jp, ca, sa)", type: "text", placeholder: "in" },
+    ] },
   /* The endpoint below is stored and NEVER READ: Cortex runs on the public
      internet and cannot reach Tally on your LAN. Data arrives only through the
      Tally bridge (scripts/tally-bridge.mjs), which runs next to Tally and
@@ -238,7 +251,7 @@ export const INTEGRATIONS: Integration[] = [
     fields: [{ key: "connection_string", label: "Connection string", type: "password", placeholder: "postgres://user:pass@host/db", required: true }] },
 
   // ---- Accounting & Finance (India) ----
-  { id: "odoo", name: "Odoo", category: "Accounting & Finance", desc: "ERP: sales, invoicing, CRM, inventory", minPlan: "growth",
+  { id: "odoo", name: "Odoo", category: "Accounting & Finance", desc: "Invoices, vendor bills, confirmed sales orders and customers, synced read-only through Odoo's external API. Use an API key (Preferences → Account Security)", minPlan: "growth", testable: true,
     docs: "https://www.odoo.com/documentation/master/developer/reference/external_api.html",
     fields: [{ key: "url", label: "Odoo URL", type: "text", placeholder: "https://mycompany.odoo.com", required: true }, { key: "db", label: "Database name", type: "text", required: true }, { key: "username", label: "Username / email", type: "text", required: true }, KEY("API key / password", "…")] },
   { id: "vyapar", name: "Vyapar", category: "Accounting & Finance", desc: "Billing & accounting for small business", minPlan: "growth", fields: [KEY("API key")] },

@@ -4,6 +4,7 @@ import { credentialsFor } from "@/lib/credentials";
 import { recomputeQuietly } from "@/lib/metrics";
 import type { Budget } from "@/lib/cron-budget";
 import { safeFetch } from "@/lib/net-guard";
+import { pullZohoBooks, pullOdoo, type FetchLike } from "@/lib/sync/books";
 
 /**
  * Shopify Admin API version — ONE constant, because it was two.
@@ -331,7 +332,28 @@ const googleSheets: Connector = {
   },
 };
 
-export const CONNECTORS: Connector[] = [shopify, razorpay, stripe, googleSheets];
+/* ------------------------------------------------------------ books (Zoho, Odoo) */
+/* Zoho's hosts are fixed (zohoapis.<dc>, accounts.zoho.<dc>), so plain fetch with a deadline. */
+const timedFetch: FetchLike = (url, init = {}) => {
+  const { timeoutMs = 20_000, ...rest } = init;
+  return fetch(url, { ...rest, signal: AbortSignal.timeout(timeoutMs) });
+};
+/* An Odoo URL is typed by the customer: safeFetch refuses private and metadata addresses before the API key is sent. */
+const guardedFetch: FetchLike = (url, init = {}) => safeFetch(url, init as any);
+
+const zohoBooks: Connector = {
+  id: "zoho_books",
+  label: "Zoho Books",
+  pull: (c, since) => pullZohoBooks(c, since, timedFetch),
+};
+
+const odoo: Connector = {
+  id: "odoo",
+  label: "Odoo",
+  pull: (c, since) => pullOdoo(c, since, guardedFetch),
+};
+
+export const CONNECTORS: Connector[] = [shopify, razorpay, stripe, googleSheets, zohoBooks, odoo];
 export const SYNCABLE: string[] = CONNECTORS.map((c) => c.id);
 export function isSyncable(provider: string): boolean {
   return SYNCABLE.includes(String(provider || "").toLowerCase());

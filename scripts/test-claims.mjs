@@ -192,7 +192,7 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
   const m = sync.match(/export const CONNECTORS[^=]*=\s*\[([^\]]*)\]/);
   check(!!m, "CONNECTORS is found in lib/sync");
   const live = m ? m[1].split(",").map((s) => s.trim()).filter(Boolean) : [];
-  check(live.length === 4, "there are still exactly four live syncs", `found ${live.length}: ${live.join(", ")}`);
+  check(live.length === 6, "there are exactly six live syncs (Zoho Books and Odoo added 2026-10)", `found ${live.length}: ${live.join(", ")}`);
 
   /* The manager duplicates the list as a string array so a client component can
      read it. A copy that drifts would badge a non-syncing provider "Syncs". */

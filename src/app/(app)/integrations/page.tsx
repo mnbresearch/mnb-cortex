@@ -84,7 +84,7 @@ export default async function Integrations() {
               );
             })}
           </div>
-          <p className="text-xs text-muted-foreground mt-3">Connecting a tool stores its credential securely. Today Cortex pulls data in from Shopify, Razorpay, Stripe and Google Sheets every night, sends through WhatsApp Business and your own AI provider, and can email from your Resend domain; the rest are stored for the connectors that follow. Need something not listed? <Link href="/pricing" className="text-primary">Talk to us</Link> — custom connectors are available on Enterprise.</p>
+          <p className="text-xs text-muted-foreground mt-3">Connecting a tool stores its credential securely. Today Cortex pulls data in from Zoho Books, Odoo, Shopify, Razorpay, Stripe and Google Sheets every night (Tally through the Tally bridge), sends through WhatsApp Business and your own AI provider, and can email from your Resend domain; the rest are stored for the connectors that follow. Need something not listed? <Link href="/pricing" className="text-primary">Talk to us</Link> — custom connectors are available on Enterprise.</p>
         </Section>
       </PageShell>
     </>

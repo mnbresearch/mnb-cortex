@@ -16,14 +16,25 @@
  * updates rows instead of duplicating them (this needs the 2026_zzzt
  * migration on the Cortex side — before it, the second run failed).
  *
- * What it does NOT know: whether a sales invoice has been paid. Tally records
- * that in Receipt vouchers against the bill, which this bridge does not read.
- * Invoices arrive as pending with a due date of voucher date + --credit-days;
- * mark them paid in Cortex (or re-import an outstanding-bills report).
+ * PAID STATUS: each run also reads Tally's Bills Receivable and Bills Payable
+ * (bill-wise outstanding). A bill in the register that is no longer
+ * outstanding is sent as paid; one past its due date as overdue. If the
+ * company does not keep bill-wise details those reports are empty, and the
+ * bridge leaves statuses alone rather than marking everything paid
+ * (--no-paid-status turns this off entirely).
  *
- * Get the API key from Cortex → Developers · API → Generate key.
+ * ONLY CHANGES ARE PUSHED. A small cache next to this script
+ * (.tally-bridge-cache.json) remembers what was sent, so a 30-minute run with
+ * nothing new costs no API calls at all — which matters on plans with a small
+ * hourly allowance.
+ *
+ * Get the key from Cortex → Developers → Connect an app → "Tally bridge"
+ * (scope connector:write — included on every plan).
  * See SETUP.md → Tally for the full walkthrough.
  */
+
+import { readFileSync, writeFileSync } from "node:fs";
+import { parseVouchers, parseOutstanding, applyOutstanding, fingerprint } from "./lib/tally-parse.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -43,9 +54,14 @@ const fyStart = (() => { const d = new Date(); const y = d.getMonth() >= 3 ? d.g
 const FROM = String(args.from || fyStart);
 const TO = String(args.to || new Date().toISOString().slice(0, 10));
 const tallyDate = (iso) => iso.replace(/-/g, "");
+const PAID_STATUS = !args["no-paid-status"];
+const CACHE_FILE = new URL("./.tally-bridge-cache.json", import.meta.url);
+let cache = {};
+try { cache = JSON.parse(readFileSync(CACHE_FILE, "utf8")); } catch { cache = {}; }
+const saveCache = () => { try { writeFileSync(CACHE_FILE, JSON.stringify(cache)); } catch { /* read-only folder: every run pushes everything, still correct */ } };
 
 if (!API_KEY) {
-  console.error("Missing --key. Generate one in Cortex → Developers · API, then:\n  node scripts/tally-bridge.mjs --key=ck_xxx");
+  console.error("Missing --key. In Cortex: Developers → Connect an app → Tally bridge. Then:\n  node scripts/tally-bridge.mjs --key=mnbc_xxxxxxxxxx_… --watch");
   process.exit(1);
 }
 
@@ -60,65 +76,39 @@ async function tallyRequest(reportName) {
   return r.text();
 }
 
-/** Minimal XML field reader — enough for Tally's flat collection output. */
-const pick = (block, tag) => {
-  const m = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
-  return m ? m[1].replace(/<[^>]+>/g, "").trim() : "";
-};
-const money = (v) => Math.abs(parseFloat(String(v).replace(/[^0-9.-]/g, "")) || 0);
-const addDays = (iso, n) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-
-function parseVouchers(xml) {
-  const blocks = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
-  const sales = [];
-  const invoices = [];
-  for (const b of blocks) {
-    const type = pick(b, "VOUCHERTYPENAME").toLowerCase();
-    const party = pick(b, "PARTYLEDGERNAME") || pick(b, "PARTYNAME");
-    const amount = money(pick(b, "AMOUNT"));
-    const date = pick(b, "DATE");
-    const iso = /^\d{8}$/.test(date) ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}` : "";
-    const no = pick(b, "VOUCHERNUMBER");
-    if (!amount) continue;
-
-    /*
-      KEYS MUST BE STABLE ACROSS RUNS — Cortex upserts on them. A voucher with
-      no number gets a key from its own content (date, party, amount), never
-      from its position in this run's list, which shifts as vouchers are added
-      and would re-key every row on the next run.
-      Tally numbers each voucher TYPE separately, so sales #12 and purchase #12
-      both exist: purchase keys are prefixed so they cannot overwrite a sale.
-    */
-    const fallback = `${iso || "nodate"}-${party || "noparty"}-${amount}`.replace(/\s+/g, "_").slice(0, 80);
-    const due = iso ? addDays(iso, CREDIT_DAYS) : undefined;
-    if (type.includes("sales")) {
-      const key = no || `TALLY-${fallback}`;
-      sales.push({ order_no: key, customer_name: party, amount, status: "won", order_date: iso || undefined });
-      invoices.push({ invoice_no: key, party, amount, type: "receivable", status: "pending", issue_date: iso || undefined, due_date: due });
-    } else if (type.includes("purchase")) {
-      invoices.push({ invoice_no: `PUR-${no || fallback}`, party, amount, type: "payable", status: "pending", issue_date: iso || undefined, due_date: due });
-    }
-  }
-  return { sales, invoices };
-}
-
-async function pushToCortex(table, rows) {
-  if (!rows.length) return { ok: true, inserted: 0 };
-  const out = { ok: true, inserted: 0 };
-  // Chunked so a big ledger doesn't build one enormous request.
-  for (let i = 0; i < rows.length; i += 200) {
-    const chunk = rows.slice(i, i + 200);
+/*
+  Batches of 2,000 — the smallest plan's per-call allowance for a connector
+  key — so a year's ledger is a handful of calls, not dozens. A 413 (a plan
+  with a smaller cap, or a future change) halves the batch and retries.
+*/
+async function pushToCortex(table, all, keyOf) {
+  const rows = all.filter((r) => cache[`${table}:${keyOf(r)}`] !== fingerprint(r));
+  if (!rows.length) return { ok: true, inserted: 0, unchanged: all.length };
+  const out = { ok: true, inserted: 0, unchanged: all.length - rows.length };
+  let size = 2000;
+  for (let i = 0; i < rows.length;) {
+    const chunk = rows.slice(i, i + size);
     const r = await fetch(`${CORTEX}/api/v1/ingest`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
       body: JSON.stringify({ table, rows: chunk }),
     });
     const j = await r.json().catch(() => ({}));
+    if (r.status === 413 && size > 100) { size = Math.floor(size / 2); continue; }
+    if (r.status === 429) { out.ok = false; out.error = `${j.error || "Rate limit reached"} — the rest go on the next run.`; break; }
     if (!r.ok || j.ok === false) { out.ok = false; out.error = j.error || `HTTP ${r.status}`; break; }
     out.inserted += Number(j.written ?? chunk.length);
     if (j.skipped_no_key) out.skipped = (out.skipped || 0) + Number(j.skipped_no_key);
+    for (const row of chunk) cache[`${table}:${keyOf(row)}`] = fingerprint(row);
+    saveCache();
+    i += chunk.length;
   }
   return out;
+}
+
+/** Bills Receivable / Payable are reports too; an error here never stops the voucher sync. */
+async function outstanding(report) {
+  try { return parseOutstanding(await tallyRequest(report)); } catch { return new Map(); }
 }
 
 async function syncOnce() {
@@ -126,14 +116,22 @@ async function syncOnce() {
   try {
     process.stdout.write(`[${stamp}] Reading Tally at ${TALLY} (${FROM} → ${TO}) … `);
     const xml = await tallyRequest("Voucher Register");
-    const { sales, invoices } = parseVouchers(xml);
+    const { sales, invoices } = parseVouchers(xml, CREDIT_DAYS);
     console.log(`${sales.length} sales, ${invoices.length} invoices`);
 
-    const a = await pushToCortex("sales_orders", sales);
-    const b = await pushToCortex("invoices", invoices);
+    if (PAID_STATUS) {
+      const rec = await outstanding("Bills Receivable");
+      const pay = await outstanding("Bills Payable");
+      const res = applyOutstanding(invoices, rec, pay);
+      if (!res.applied.receivable) console.log(`[${stamp}] Bills Receivable came back empty — keep bill-wise details on in Tally to get paid/overdue status. Statuses left as pending.`);
+      else console.log(`[${stamp}] ${res.paid} bill(s) settled in Tally will show as paid.`);
+    }
+
+    const a = await pushToCortex("sales_orders", sales, (r) => r.order_no);
+    const b = await pushToCortex("invoices", invoices, (r) => r.invoice_no);
 
     if (a.ok && b.ok) {
-      console.log(`[${stamp}] Synced ${a.inserted} sales orders and ${b.inserted} invoices (new or updated). Your Cortex dashboard will refresh automatically.`);
+      console.log(`[${stamp}] Synced ${a.inserted} sales orders and ${b.inserted} invoices (new or changed; ${a.unchanged + b.unchanged} unchanged, not resent). Your Cortex dashboard will refresh automatically.`);
     } else {
       console.error(`[${stamp}] Push failed: ${a.error || b.error}`);
     }

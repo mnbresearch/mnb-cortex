@@ -42,7 +42,7 @@ export const metadata = {
 const COLS = ["Cortex", "ERP", "CRM", "General chatbot", "Consultant"];
 const ROWS: { f: string; v: string[] }[] = [
   /* Partial for Cortex too: it reads your exports (CSV/Tally/Vyapar/Busy) plus
-     four live syncs — Shopify, Razorpay, Stripe, Google Sheets (lib/sync). */
+     six live syncs — Zoho Books, Odoo, Shopify, Razorpay, Stripe, Google Sheets (lib/sync). */
   { f: "Reads all your business data", v: ["p", "p", "p", "n", "p"] },
   { f: "Diagnoses problems for you", v: ["y", "n", "n", "p", "y"] },
   { f: "Predicts what's coming", v: ["y", "n", "n", "n", "p"] },
@@ -80,7 +80,7 @@ export default function Compare() {
           <SectionLabel n="00">Compare</SectionLabel>
           <Kinetic as="h1" text={"Store, chat, or act?"} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            ERPs and CRMs store your data. Chatbots make conversation, then forget. MNB Cortex reads your Tally, Busy, Vyapar or Excel exports — plus Shopify, Razorpay, Stripe and Google Sheets — and tells you what changed.
+            ERPs and CRMs store your data. Chatbots make conversation, then forget. MNB Cortex reads your Tally, Busy, Vyapar or Excel exports — plus Zoho Books, Odoo, Shopify, Razorpay, Stripe and Google Sheets — and tells you what changed.
           </p>
         </div>
       </section>
@@ -110,7 +110,7 @@ export default function Compare() {
             <span><span className="text-warning">◐</span> Partial</span>
             <span><span className="text-muted-foreground/40">○</span> No</span>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Cortex reads your Tally, Vyapar, Busy and spreadsheet exports, plus four live syncs: Shopify, Razorpay, Stripe and Google Sheets.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Cortex reads your Tally, Vyapar, Busy and spreadsheet exports, plus six live syncs: Zoho Books, Odoo, Shopify, Razorpay, Stripe and Google Sheets.</p>
           {/*
             Says out loud what the table is and is not.
 

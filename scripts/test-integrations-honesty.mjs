@@ -37,7 +37,7 @@ for (const e of entries) {
   check(!FALSE_PROMISES.test(e.desc), `${e.name}: description does not promise behaviour no code performs`, e.desc);
 }
 check(/key: "from_email"/.test(cat.slice(cat.indexOf('id: "resend"'), cat.indexOf('id: "resend"') + 700)), "Resend has the from_email field collections reads (own-domain reminders could never be configured)");
-check(/key: "data_center"/.test(cat.slice(cat.indexOf('id: "zoho_books"'), cat.indexOf('id: "zoho_books"') + 700)), "Zoho Books asks for its data centre");
+check(/key: "data_center"/.test(cat.slice(cat.indexOf('id: "zoho_books"'), cat.indexOf('id: "zoho_books"') + 2000)), "Zoho Books asks for its data centre");
 
 /* 2. Credential checks */
 const route = read("src/app/api/integrations/route.ts");
@@ -88,7 +88,10 @@ check(/signal: AbortSignal\.timeout\(20_000\)/.test(wa), "WhatsApp sends are tim
 
 /* 5. Tally bridge: stable keys, real dates (executed) */
 const tb = read("scripts/tally-bridge.mjs");
-const parse = new Function("CREDIT_DAYS", tb.slice(tb.indexOf("const pick ="), tb.indexOf("async function pushToCortex")) + "; return parseVouchers;")(30);
+/* The parser now lives in scripts/lib/tally-parse.mjs (shared with its own test); the bridge must still use it. */
+check(/from "\.\/lib\/tally-parse\.mjs"/.test(tb) && /parseVouchers\(xml, CREDIT_DAYS\)/.test(tb), "the bridge parses with the shared, tested parser");
+const { parseVouchers: pv } = await import("./lib/tally-parse.mjs");
+const parse = (x) => pv(x, 30);
 const xml = (n) => `<VOUCHER><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><PARTYLEDGERNAME>Acme</PARTYLEDGERNAME><AMOUNT>-1180</AMOUNT><DATE>20260415</DATE>${n}</VOUCHER>`;
 const a = parse(xml("<VOUCHERNUMBER>12</VOUCHERNUMBER>") + "<VOUCHER><VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME><PARTYLEDGERNAME>S</PARTYLEDGERNAME><AMOUNT>500</AMOUNT><DATE>20260416</DATE><VOUCHERNUMBER>12</VOUCHERNUMBER></VOUCHER>");
 check(a.invoices.map((i) => i.invoice_no).join() === "12,PUR-12", "sales #12 and purchase #12 get distinct keys", a.invoices.map((i) => i.invoice_no).join());

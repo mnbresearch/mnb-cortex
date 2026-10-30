@@ -54,7 +54,7 @@ export default function Help() {
           find, rather than importing blanks.
         </li>
         <li>
-          Shopify, Razorpay, Stripe and Google Sheets can sync directly — connect them under Integrations. Step-by-step
+          Zoho Books, Odoo, Shopify, Razorpay, Stripe and Google Sheets can sync directly — connect them under Integrations. Step-by-step
           instructions for each are in the Setup guides (in the app, after you sign in).
         </li>
         <li>

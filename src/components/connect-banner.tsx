@@ -56,7 +56,7 @@ export async function ConnectBanner() {
     : "Use your own AI key, and pay no AI credits";
 
   const body = ownKey
-    ? "Cortex is running on your provider account. Connect Shopify, Razorpay, Stripe or a Google Sheet to pull your numbers in automatically, or upload a Tally, Vyapar or Busy export."
+    ? "Cortex is running on your provider account. Connect Zoho Books, Odoo, Shopify, Razorpay, Stripe or a Google Sheet to pull your numbers in automatically, or upload a Tally, Vyapar or Busy export."
     : "Bring a Gemini, OpenAI, Anthropic or Groq key and Cortex runs on your account — your data-processing terms, your spend controls, and no AI credits charged, because the model cost is already yours.";
 
   return (

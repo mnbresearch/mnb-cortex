@@ -5,6 +5,7 @@ import { integrationById, planAllows, limitForPlan } from "@/lib/integrations";
 import { safeFetch, BlockedUrlError } from "@/lib/net-guard";
 import { statusFor, statusForAttempt, lastTestOk, shouldPersistResult } from "@/lib/integration-status";
 import { SHOPIFY_API_VERSION, normaliseShopDomain } from "@/lib/sync";
+import { zohoDc, zohoAccessToken, odooBase } from "@/lib/sync/books";
 import { stripeKeyVerdict, shopifyScopesVerdict } from "@/lib/least-privilege";
 
 export const runtime = "nodejs";
@@ -143,8 +144,26 @@ async function testCredentials(id: string, c: Record<string, string>): Promise<{
       }
       /* Zoho runs separate data centres; a .com or .eu account is not a bad key just because India was asked. */
       case "zoho_books": {
-        const dc = ["in", "com", "eu", "com.au", "jp", "ca", "sa"].includes(String(c.data_center || "in")) ? String(c.data_center || "in") : "in";
-        return j(await fetch(`https://www.zohoapis.${dc}/books/v3/organizations`, { headers: { Authorization: `Zoho-oauthtoken ${c.api_key}` } }), `Connected to Zoho Books (zohoapis.${dc})`);
+        /* Tests the same path the sync uses: refresh token → access token → organizations. */
+        const dc = zohoDc(c.data_center);
+        let token: string;
+        try {
+          token = await zohoAccessToken(c, (url, init = {}) => { const { timeoutMs = 20_000, ...rest } = init as any; return fetch(url, { ...rest, signal: AbortSignal.timeout(timeoutMs) }); });
+        } catch (e: any) { return { ok: false, verified: true, message: e?.message || "Zoho refused the credentials." }; }
+        return j(await fetch(`https://www.zohoapis.${dc}/books/v3/organizations`, { headers: { Authorization: `Zoho-oauthtoken ${token}` } }), `Connected to Zoho Books (zohoapis.${dc})`);
+      }
+      /* Odoo: authenticate only (common.authenticate) — no data is read by the Test button. safeFetch: the URL is the customer's. */
+      case "odoo": {
+        try {
+          const base = odooBase(c.url);
+          const r = await safeFetch(`${base}/jsonrpc`, { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { service: "common", method: "authenticate", args: [c.db, c.username, c.api_key, {}] }, id: 1 }) });
+          const body: any = await r.json().catch(() => ({}));
+          if (!r.ok || body?.error) return { ok: false, verified: true, message: `Odoo refused the request${body?.error?.data?.message ? `: ${body.error.data.message}` : ` (${r.status})`}` };
+          return body?.result ? { ok: true, verified: true, message: `Connected to Odoo as user #${body.result}` } : { ok: false, verified: true, message: "Odoo refused the username, database or API key." };
+        } catch (e: any) {
+          return { ok: false, verified: true, message: e?.message || "Could not reach Odoo." };
+        }
       }
       case "sendgrid": return j(await fetch("https://api.sendgrid.com/v3/user/profile", { headers: { Authorization: `Bearer ${c.api_key}` } }), "Connected to SendGrid");
       case "brevo": return j(await fetch("https://api.brevo.com/v3/account", { headers: { "api-key": c.api_key } }), "Connected to Brevo");

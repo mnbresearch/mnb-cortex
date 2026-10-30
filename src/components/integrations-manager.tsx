@@ -20,7 +20,7 @@ async function call(op: string, id: string, credentials?: Record<string, string>
 }
 
 /** Providers whose data Cortex can actually pull in — see src/lib/sync. */
-const SYNCABLE = ["shopify", "razorpay", "stripe", "google_sheets"];
+const SYNCABLE = ["shopify", "razorpay", "stripe", "google_sheets", "zoho_books", "odoo"];
 
 export function IntegrationsManager({ plan, connections, canManage }: { plan: string; connections: Conn[]; canManage: boolean }) {
   const [syncing, setSyncing] = useState("");
@@ -204,7 +204,7 @@ export function IntegrationsManager({ plan, connections, canManage }: { plan: st
                 do not have. That is not a marketing problem, it is a custody
                 problem: we are holding a key we cannot justify having asked for.
 
-                Four providers sync (lib/sync CONNECTORS). The rest are a
+                Six providers sync (lib/sync CONNECTORS). The rest are a
                 credential vault, which is a legitimate thing to be — it is what
                 the API and the Tally bridge authenticate against — but the card
                 has to say so while the customer can still decline.

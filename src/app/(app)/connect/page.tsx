@@ -142,7 +142,7 @@ export default async function Connect() {
                     <p className="text-muted-foreground">
                       {others.length
                         ? others.map((c) => c.provider).join(" · ")
-                        : "Shopify, Razorpay, Stripe and Google Sheets sync automatically. Tally, Vyapar and Busy work by uploading their export files."}
+                        : "Zoho Books, Odoo, Shopify, Razorpay, Stripe and Google Sheets sync automatically. Tally syncs through the Tally bridge; Vyapar and Busy work by uploading their export files."}
                     </p>
                   </div>
                   <Link href="/integrations"

@@ -74,7 +74,7 @@ const DOMAINS: { n: string; name: string; blurb: string; tools: string[] }[] = [
     SendGrid" / "62 tools", in a list headed "Plugs into the tools you already
     run", with the four that genuinely sync buried in the middle of it.
 
-    Four providers sync — Shopify, Razorpay, Stripe and Google Sheets
+    Six providers sync — Zoho Books, Odoo, Shopify, Razorpay, Stripe and Google Sheets
     (lib/sync/index.ts CONNECTORS). Zoho, Odoo, HubSpot, Salesforce, Slack,
     SendGrid and QuickBooks pull and push nothing. Listing them beside Razorpay
     made the whole list read as uniform, which is exactly how a reader is
@@ -85,7 +85,7 @@ const DOMAINS: { n: string; name: string; blurb: string; tools: string[] }[] = [
     working Tally bridge over the API, and a credential vault for the rest.
   */
   { n: "10", name: "Integrations", blurb: "Four live syncs, plus the files your accountant already sends you.",
-    tools: ["Syncs: Shopify, Razorpay, Stripe, Google Sheets", "File import: Tally, Vyapar, Busy, any CSV", "Tally bridge via the public API", "Your own WhatsApp Business account", `Credential vault for the other ${vaultOnlyCount()} tools`] },
+    tools: ["Syncs: Zoho Books, Odoo, Shopify, Razorpay, Stripe, Google Sheets", "File import: Tally, Vyapar, Busy, any CSV", "Tally bridge via the public API", "Your own WhatsApp Business account", `Credential vault for the other ${vaultOnlyCount()} tools`] },
 ];
 
 // The whole platform, grouped by the job it does for you. Moved from page.tsx.
@@ -148,7 +148,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
       { icon: Receipt, name: "GST & Compliance", d: "Filing calendar, ITC set-off and GST invoicing." },
       { icon: Banknote, name: "Payroll & CTC", d: "Take-home, EPF/ESI, gratuity and appraisals." },
       { icon: ScrollText, name: "Contract Review", d: "AI reads a contract and flags the real risks." },
-      { icon: Plug, name: "Public API + 4 live syncs", d: "Shopify, Razorpay, Stripe, Sheets — plus Tally & Vyapar file imports." },
+      { icon: Plug, name: "Public API + 6 live syncs", d: "Zoho Books, Odoo, Shopify, Razorpay, Stripe, Sheets — plus the Tally bridge and file imports." },
       { icon: ShieldCheck, name: "Security & RLS", d: "Row-level isolation, encryption, JSON export of every workspace table anytime." },
     ],
   },
@@ -382,7 +382,7 @@ export default function Features() {
               </tbody>
             </table>
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">Cortex reads your Tally, Vyapar, Busy and spreadsheet exports, plus four live syncs: Shopify, Razorpay, Stripe and Google Sheets.</p>
+          <p className="mt-4 text-xs text-muted-foreground">Cortex reads your Tally, Vyapar, Busy and spreadsheet exports, plus six live syncs: Zoho Books, Odoo, Shopify, Razorpay, Stripe and Google Sheets.</p>
         </div>
       </section>
 
