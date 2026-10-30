@@ -429,19 +429,27 @@ export function seatLimit(plan: string | null | undefined): number {
   The deeper nightly watch (15 reminders a night instead of 5) follows the
   same tiers via WATCH_REMINDERS below.
 */
-export type Capability = "api" | "webhooks" | "whitelabel" | "workflows" | "alert_rules" | "memory" | "api_write" | "autonomy";
+/*
+  connectors (2026-10): sync your own books in through a connector key (the
+  Tally bridge — scope connector:write). On EVERY plan, Try included: the entry
+  plan is sold on "Reads your Tally, Vyapar & Busy exports", and a workspace
+  that can't get its books in has nothing for Cortex to read. It is narrower
+  than api_write (no leads, smaller batches on smaller plans — lib/api-keys.ts),
+  which stays the Practice+ two-way API.
+*/
+export type Capability = "api" | "webhooks" | "whitelabel" | "workflows" | "alert_rules" | "memory" | "api_write" | "autonomy" | "connectors";
 
 /* Exported so scripts/test-capabilities.mjs can check it against PLAN_SEATS —
    two maps keyed by plan id that drift apart is how `premium` lost everything. */
 export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
   // Same as Watch: no API, no webhooks, no white-label. The entry tier is a
   // smaller version of the product, not a differently-shaped one.
-  try: [],
-  watch: [],
-  watchpro: ["api", "webhooks", "workflows", "alert_rules", "memory"],
-  practice: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write"],
-  command: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy"],
-  enterprise: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy"],
+  try: ["connectors"],
+  watch: ["connectors"],
+  watchpro: ["api", "webhooks", "workflows", "alert_rules", "memory", "connectors"],
+  practice: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "connectors"],
+  command: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy", "connectors"],
+  enterprise: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy", "connectors"],
 
   /*
     Retired tiers. These workspaces PAID for these capabilities under the old
@@ -449,11 +457,11 @@ export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
     the one failure this module is most concerned with. Mapped to the nearest
     current equivalent, generously where it is ambiguous.
   */
-  starter: [],
+  starter: ["connectors"],
   /* api_write: every key these tiers issued could already push data, so they keep it. */
-  growth: ["api", "webhooks", "workflows", "alert_rules", "api_write"],
-  business: ["api", "webhooks", "workflows", "alert_rules", "memory", "api_write"],
-  aicoo: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy"],
+  growth: ["api", "webhooks", "workflows", "alert_rules", "api_write", "connectors"],
+  business: ["api", "webhooks", "workflows", "alert_rules", "memory", "api_write", "connectors"],
+  aicoo: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy", "connectors"],
 
   /*
     `solo` and `premium` are NOT in PLANS or LEGACY_PLANS, but they are real:
@@ -467,8 +475,8 @@ export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
     paid is worse than letting someone through who did not. Mirrored from
     PLAN_SEATS, where premium sits at 20 seats alongside `business`.
   */
-  solo: [],
-  premium: ["api", "webhooks", "workflows", "alert_rules", "memory", "api_write"],
+  solo: ["connectors"],
+  premium: ["api", "webhooks", "workflows", "alert_rules", "memory", "api_write", "connectors"],
 };
 
 /** Payment reminders the nightly watch may propose per workspace per night. */

@@ -161,7 +161,7 @@ export const INTEGRATIONS: Integration[] = [
      pushes through the public API with an API key. The field stays (removing
      it would orphan existing connections) but is optional and labelled for
      what it is: a note for your own reference. */
-  { id: "tally", name: "Tally", category: "Accounting & Finance", desc: "Via the Tally bridge, which runs on your PC and pushes with an API key (Developers → API keys). Nothing saved here is read by Cortex", minPlan: "growth",
+  { id: "tally", name: "Tally", category: "Accounting & Finance", desc: "Via the Tally bridge, which runs on your PC and syncs every 30 minutes with a \"Tally bridge\" key (Developers → Connect an app — every plan). Nothing saved here is read by Cortex", minPlan: "try",
     fields: [{ key: "endpoint", label: "Where Tally runs (your reference only)", type: "text", placeholder: "http://localhost:9000", required: false, help: "Not used by Cortex — it cannot reach your PC. Run the Tally bridge next to Tally Prime with an API key instead." }] },
   { id: "quickbooks", name: "QuickBooks", category: "Accounting & Finance", desc: "Store your QuickBooks access token", minPlan: "premium",
     fields: [KEY("Access token"), { key: "realm_id", label: "Realm ID", type: "text", required: true }] },

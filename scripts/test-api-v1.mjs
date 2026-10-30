@@ -340,7 +340,7 @@ const call = async (mod, method, path, key, init = {}) => {
   const acts = read("src/lib/actions.ts");
   const fn = (name) => { const i = acts.indexOf(`export async function ${name}`); const j = acts.indexOf("\nexport ", i + 10); return acts.slice(i, j); };
   const gen = fn("generateApiKey"), rot = fn("rotateApiKey"), rev = fn("revokeApiKey");
-  check(/requireRole\("admin"\)/.test(gen) && /apiKeyGate\(orgId, "issue an API key"\)/.test(gen) && /requireCapability\(orgId, "api"/.test(gen), "create: admin + second factor + plan (live)");
+  check(/requireRole\("admin"\)/.test(gen) && /apiKeyGate\(orgId, "issue an API key"\)/.test(gen) && /K\.capabilitiesForScopes\(scopes\)[\s\S]{0,240}requireCapability\(orgId, cap/.test(gen), "create: admin + second factor + plan (live, every capability the scopes need)");
   check(/svc\.from\("api_keys"\)\.insert/.test(gen) && !/sb\.from\("api_keys"\)\.insert/.test(gen), "create: written by the service role (browser writes are revoked)");
   check(/key_hash: k\.hash/.test(gen) && !/key: k\.key,/.test(gen.split("return { key: k.key")[0]), "create: only the hash is stored; plaintext only in the return value");
   check(/normaliseScopes/.test(gen) && /SCOPE_PRESETS\.read/.test(gen) && /expiryFrom/.test(gen), "create: scopes filtered to the catalogue, read-only default, expiry chosen");

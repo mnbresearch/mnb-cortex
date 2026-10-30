@@ -1660,15 +1660,25 @@ export async function generateApiKey(fd: FormData): Promise<KeyIssue> {
   */
   const { data: org } = await sb.from("organizations").select("plan").eq("id", orgId).single();
   const plan = String((org as any)?.plan || "");
-  try { await requireCapability(orgId, "api", "The public API"); }
-  catch (e: any) { return { key: null, error: e?.message || `The public API is part of ${lowestPlanWith("api")} and above.` }; }
 
   const K = await import("@/lib/api-keys");
   const scopes = K.normaliseScopes(fd.getAll("scopes").length ? fd.getAll("scopes") : K.SCOPE_PRESETS[str(fd.get("preset")) || "read"] || K.SCOPE_PRESETS.read);
   if (!scopes.length) return { key: null, error: "Choose at least one permission for the key." };
   /* Pushing data IN is a high-growth capability (Practice, Command). Reading stays on Watch Pro. */
   if (scopes.includes("ingest:write") && !planIncludes(plan, "api_write")) {
-    return { key: null, error: `Pushing data in through the API (ingest:write) is part of ${lowestPlanWith("api_write")} and above. Untick it to create a read-only key, or upgrade under Billing.` };
+    return { key: null, error: `Pushing data in through the API (ingest:write) is part of ${lowestPlanWith("api_write")} and above. Untick it to create a read-only key — or, to sync Tally, use the "Tally bridge" key (connector:write), which every plan includes.` };
+  }
+  /*
+    EVERY CAPABILITY THE CHOSEN SCOPES NEED (lib/api-keys.ts SCOPE_CAPABILITIES),
+    on a live plan. A Tally-bridge key (connector:write) needs only
+    "connectors", which every plan has; anything that reads needs "api"
+    (Watch Pro+). This used to demand "api" for every key, so a Try or Watch
+    customer could never create the key the Tally bridge asks for.
+  */
+  for (const cap of K.capabilitiesForScopes(scopes)) {
+    const what = cap === "api_write" ? "Pushing data in through the API" : cap === "connectors" ? "Connecting an app" : "The public API";
+    try { await requireCapability(orgId, cap as any, what); }
+    catch (e: any) { return { key: null, error: e?.message || `${what} is part of ${lowestPlanWith(cap as any)} and above.` }; }
   }
   const expires_at = K.expiryFrom(fd.get("expiry"), Date.now());
 

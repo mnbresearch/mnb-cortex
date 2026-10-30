@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     ingest:write, not revoked, not expired, per-key write limit for the plan
     (lib/api/auth.ts). This replaces the bespoke key-hash bucket that lived here.
   */
-  const auth = await apiAuth(req, "ingest:write", "write", "/api/v1/ingest");
+  const auth = await apiAuth(req, ["ingest:write", "connector:write"], "write", "/api/v1/ingest");
   if (!auth.ok) return auth.res;
   const { ctx, svc } = auth;
   const key = (await import("@/lib/api-keys")).keyFromHeaders(req.headers);
@@ -30,6 +30,21 @@ export async function POST(req: Request) {
   const table = body?.table; const rows = Array.isArray(body?.rows) ? body.rows : (body?.row ? [body.row] : []);
   if (!table || !rows.length) return apiError(ctx.rid, 400, "bad_request", "Provide { table, rows: [...] }.");
   if (!(TABLES as readonly string[]).includes(table)) return apiError(ctx.rid, 400, "bad_request", `table must be one of: ${TABLES.join(", ")}.`);
+  /*
+    A CONNECTOR KEY (connector:write — e.g. the Tally bridge) syncs books, not
+    a sales feed: no leads, and batches sized by plan. It reaches this route on
+    every plan, so these are the lines that keep it what it says it is.
+  */
+  const K = await import("@/lib/api-keys");
+  if (ctx.scope === "connector:write") {
+    if (!(K.CONNECTOR_TABLES as readonly string[]).includes(table)) {
+      return apiError(ctx.rid, 403, "insufficient_scope", `A connector key can write ${K.CONNECTOR_TABLES.join(", ")}. Pushing ${table} needs a key with ingest:write. Nothing was written.`);
+    }
+    const cap = K.connectorRowsPerCall(ctx.plan);
+    if (rows.length > cap) {
+      return apiError(ctx.rid, 413, "payload_too_large", `Too many rows for one connector call on your plan (${rows.length}; at most ${cap}). Split the batch — the Tally bridge does this for you. Nothing was written.`);
+    }
+  }
 
   /*
     A BOUND ON THE PAYLOAD, AND A BOUND ON THE RATE. This endpoint had neither.

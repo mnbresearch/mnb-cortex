@@ -84,7 +84,7 @@ const plan = (id) => C.PLANS.find((p) => p.id === id);
   check(n({ ...base, maxReminders: 999 }) <= 50, "watch: a nonsense cap is clamped");
   check(/maxReminders: watchRemindersFor\(orgPlan\)/.test(read("src/lib/watch.ts")), "watch: the runner passes the workspace's plan allowance");
   const dev = read("src/app/(app)/developers/page.tsx");
-  check(/canWrite = planIncludes\(billing\.plan, "api_write"\)/.test(dev) && /disabled=\{s === "ingest:write" && !canWrite\}/.test(read("src/components/api-key-creator.tsx")), "UI: the write scope is shown as a higher-tier option, and the server still decides");
+  check(/canWrite = planIncludes\(billing\.plan, "api_write"\)/.test(dev) && /s === "ingest:write" \? \(canWrite \? null : writePlan\)/.test(read("src/components/api-key-creator.tsx")) && /disabled=\{Boolean\(lockedFor\(s\)\)\}/.test(read("src/components/api-key-creator.tsx")), "UI: the write scope is shown as a higher-tier option, and the server still decides");
 }
 
 /* 4. no stale price in what customers read */

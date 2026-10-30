@@ -181,9 +181,9 @@ check(acl.filter((x) => x.rolname === "service_role").length === 2, "service_rol
   const ing = readFileSync("src/app/api/v1/ingest/route.ts", "utf8");
   const met = readFileSync("src/app/api/v1/metrics/route.ts", "utf8");
   const auth = readFileSync("src/lib/api/auth.ts", "utf8");
-  check(/apiAuth\(req, "ingest:write", "write"/.test(ing) && /svc\.rpc\("api_ingest"/.test(ing) && !/createClient\(\)/.test(ing), "ingest: scope ingest:write, then the RPC with the service client");
+  check(/apiAuth\(req, \["ingest:write", "connector:write"\], "write"/.test(ing) && /ctx\.scope === "connector:write"/.test(ing) && /svc\.rpc\("api_ingest"/.test(ing) && !/createClient\(\)/.test(ing), "ingest: scope ingest:write (or a connector key, fenced to the books tables), then the RPC with the service client");
   check(/apiAuth\(req, "metrics:read", "read"/.test(met) && /\.eq\("org_id", ctx\.orgId\)/.test(met) && !/createClient\(\)/.test(met), "metrics: scope metrics:read, read by the key's own org with the service client");
-  check(/serviceClient\(\)/.test(auth) && /enforce\(\[\{ key: `api:\$\{kind\}:\$\{k\.id\}`/.test(auth), "auth: rate-limits per key (row id, never the secret) before any route work");
+  check(/serviceClient\(\)/.test(auth) && /enforce\(\[\{ key: `api:\$\{via\}:\$\{k\.id\}`/.test(auth), "auth: rate-limits per key (row id, never the secret) before any route work");
   check(auth.indexOf("enforce([") < auth.indexOf("return { ok: true, svc"), "auth: the limit is applied before the route gets a context");
 }
 

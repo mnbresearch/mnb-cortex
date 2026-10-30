@@ -59,11 +59,31 @@ export function KeyReveal({ value, note }: { value: string; note?: string }) {
 
 const SCOPE_LIST = Object.entries(API_SCOPES) as [ApiScope, string][];
 
-export function ApiKeyCreator({ canWrite = true, writePlan = "Practice" }: { canWrite?: boolean; writePlan?: string }) {
+/*
+  CONNECT AN APP — one key per app, with only what that app needs.
+
+  The server decides (generateApiKey checks every capability the scopes need);
+  these buttons only pre-fill a sensible label and permission set, and say
+  which plan an option needs instead of letting someone click into a refusal.
+*/
+type AppPreset = { id: string; label: string; hint: string; scopes: readonly ApiScope[]; needs: "connect" | "read" };
+const APP_PRESETS: AppPreset[] = [
+  { id: "tally", label: "Tally bridge", hint: "Runs next to Tally and syncs your books every 30 minutes", scopes: SCOPE_PRESETS.tally, needs: "connect" },
+  { id: "assistant", label: "AI assistant (Claude, ChatGPT, Cursor — and Wispr Flow dictation)", hint: "Ask Cortex from another AI app through the MCP endpoint", scopes: SCOPE_PRESETS.assistant, needs: "read" },
+  { id: "automation", label: "Zapier / Make / n8n", hint: "Read invoices, customers and KPIs into your automations", scopes: SCOPE_PRESETS.automation, needs: "read" },
+];
+
+export function ApiKeyCreator({ canWrite = true, writePlan = "Practice", canRead = true, readPlan = "Watch Pro", canConnect = true }:
+  { canWrite?: boolean; writePlan?: string; canRead?: boolean; readPlan?: string; canConnect?: boolean }) {
   const router = useRouter();
   const [label, setLabel] = useState("");
-  /* Read-only by default: least privilege. Writing is a deliberate tick. */
-  const [scopes, setScopes] = useState<ApiScope[]>([...SCOPE_PRESETS.read]);
+  /* Read-only by default: least privilege. Writing is a deliberate tick. On a plan without the read API, the Tally-bridge key is the sensible default. */
+  const [scopes, setScopes] = useState<ApiScope[]>(canRead ? [...SCOPE_PRESETS.read] : canConnect ? [...SCOPE_PRESETS.tally] : []);
+  /* Which scopes this plan cannot issue, and the plan that can. Mirrors lib/api-keys.ts SCOPE_CAPABILITIES. */
+  const lockedFor = (s: ApiScope): string | null =>
+    s === "ingest:write" ? (canWrite ? null : writePlan)
+    : s === "connector:write" ? (canConnect ? null : "any plan")
+    : canRead ? null : readPlan;
   const [expiry, setExpiry] = useState("365");
   const [key, setKey] = useState<string | null>(null);
   const [err, setErr] = useState("");
@@ -128,17 +148,33 @@ export function ApiKeyCreator({ canWrite = true, writePlan = "Practice" }: { can
           </button>
         </div>
         <fieldset className="rounded-lg border p-3">
+          <legend className="px-1 text-xs text-muted-foreground">Connect an app — one key per app</legend>
+          <div className="grid sm:grid-cols-3 gap-2">
+            {APP_PRESETS.map((a) => {
+              const ok = a.needs === "connect" ? canConnect : canRead;
+              return (
+                <button key={a.id} type="button" disabled={!ok}
+                  onClick={() => { setScopes([...a.scopes]); setLabel(a.label.split(" (")[0]); }}
+                  className="text-left rounded-lg border p-2.5 min-h-11 hover:bg-accent disabled:opacity-60 disabled:hover:bg-transparent">
+                  <span className="block text-xs font-medium">{a.label}</span>
+                  <span className="block text-[11px] text-muted-foreground mt-0.5">{ok ? a.hint : `${readPlan} and above`}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+        <fieldset className="rounded-lg border p-3">
           <legend className="px-1 text-xs text-muted-foreground">Permissions — a key can do only what is ticked</legend>
           <div className="flex flex-wrap gap-2 mb-2 text-xs">
-            <button type="button" onClick={() => setScopes([...SCOPE_PRESETS.read])} className="rounded-md border px-2 min-h-8 hover:bg-accent">Read only</button>
+            {canRead && <button type="button" onClick={() => setScopes([...SCOPE_PRESETS.read])} className="rounded-md border px-2 min-h-8 hover:bg-accent">Read only</button>}
             {canWrite && <button type="button" onClick={() => setScopes([...SCOPE_PRESETS.ingest])} className="rounded-md border px-2 min-h-8 hover:bg-accent">Push data only</button>}
-            <button type="button" onClick={() => setScopes(canWrite ? [...SCOPE_PRESETS.full] : [...SCOPE_PRESETS.read])} className="rounded-md border px-2 min-h-8 hover:bg-accent">Everything{canWrite ? "" : " you can"}</button>
+            <button type="button" onClick={() => setScopes(SCOPE_PRESETS.full.filter((s) => !lockedFor(s)))} className="rounded-md border px-2 min-h-8 hover:bg-accent">Everything{canWrite && canRead ? "" : " you can"}</button>
           </div>
           <div className="grid sm:grid-cols-2 gap-1.5">
             {SCOPE_LIST.map(([s, desc]) => (
-              <label key={s} className={`flex items-start gap-2 text-xs min-h-8 ${s === "ingest:write" && !canWrite ? "opacity-60" : ""}`}>
-                <input type="checkbox" checked={scopes.includes(s)} onChange={() => toggle(s)} className="mt-0.5" disabled={s === "ingest:write" && !canWrite} />
-                <span><code className="bg-secondary px-1 rounded">{s}</code> <span className="text-muted-foreground">{desc}{s === "ingest:write" && !canWrite ? ` — ${writePlan} and above` : ""}</span></span>
+              <label key={s} className={`flex items-start gap-2 text-xs min-h-8 ${lockedFor(s) ? "opacity-60" : ""}`}>
+                <input type="checkbox" checked={scopes.includes(s)} onChange={() => toggle(s)} className="mt-0.5" disabled={Boolean(lockedFor(s))} />
+                <span><code className="bg-secondary px-1 rounded">{s}</code> <span className="text-muted-foreground">{desc}{lockedFor(s) ? ` — ${lockedFor(s)} and above` : ""}</span></span>
               </label>
             ))}
           </div>

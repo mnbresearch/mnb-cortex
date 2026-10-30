@@ -162,7 +162,8 @@ for (const [fn, what, why] of [
   that "existing keys keep working": that sentence became untrue.
 */
 const keyBody = body("generateApiKey");
-check(/requireCapability\(orgId, "api"/.test(keyBody),
+/* Since 2026-10 every scope names its own capabilities (lib/api-keys.ts SCOPE_CAPABILITIES) and each is required, live. */
+check(/for \(const cap of K\.capabilitiesForScopes\(scopes\)\)[\s\S]{0,240}requireCapability\(orgId, cap/.test(keyBody),
   "generateApiKey checks the plan (and that it is live)",
   "this was the revenue leak: any plan could issue keys");
 /* The two plan-refusal sentences that became untrue. (KEY_MIGRATION_MSG's "Existing keys keep working." is about a missing migration, and is still true.) */

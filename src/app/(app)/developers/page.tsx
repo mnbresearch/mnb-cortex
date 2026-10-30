@@ -58,6 +58,8 @@ export default async function Developers() {
   const { planIncludes, lowestPlanWith } = await import("@/lib/config");
   const billing = await getBillingStatus();
   const canWrite = planIncludes(billing.plan, "api_write");
+  const canRead = planIncludes(billing.plan, "api");
+  const canConnect = planIncludes(billing.plan, "connectors");
   const activity = live ? await getApiActivity() : { usage: [] as any[], events: [] as any[] };
   const now = Date.now();
   const usageBy = new Map<string, { calls: number; denied: number }>();
@@ -73,7 +75,7 @@ export default async function Developers() {
         {!live && <Card className="p-5 bg-warning/10 border-warning/20 text-sm"><a href="/login" className="text-primary underline">Sign in</a> (admin/owner) to generate API keys.</Card>}
         {live && (
           <Section title="API keys" desc="Send as Authorization: Bearer <key>. Shown once when created — Cortex keeps only a hash. Each key can do only what its permissions allow.">
-            <ApiKeyCreator canWrite={canWrite} writePlan={lowestPlanWith("api_write")} />
+            <ApiKeyCreator canWrite={canWrite} writePlan={lowestPlanWith("api_write")} canRead={canRead} readPlan={lowestPlanWith("api")} canConnect={canConnect} />
             {/*
               THIS LIST USED TO PRINT THE WHOLE KEY, every visit.
 

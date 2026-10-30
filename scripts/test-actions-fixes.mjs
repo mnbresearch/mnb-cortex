@@ -82,7 +82,7 @@ const { capabilityVerdict, capabilityMessage } = await import("../src/lib/engine
   check(/capabilityVerdict\(/.test(rc) && /select\("\*"\)/.test(rc),
     "requireCapability reads the whole org row and decides through plan-gate",
     "it read only `plan`, so status was never considered");
-  check(/requireCapability\(orgId, "api"/.test(fnBody(ACTIONS, "generateApiKey")),
+  check(/K\.capabilitiesForScopes\(scopes\)[\s\S]{0,240}requireCapability\(orgId, cap/.test(fnBody(ACTIONS, "generateApiKey")),
     "generateApiKey goes through requireCapability (so a lapsed plan cannot issue keys)");
 }
 
@@ -204,8 +204,8 @@ const { nextDocNumber, sameParty } = await import("../src/lib/engine/doc-number.
 /* ===================================================================== */
 {
   const a = strip(read("src/lib/api/auth.ts"));
-  check(/capabilityVerdict\(orgRow, cap, firm\)/.test(a) && /^import \{ capabilityVerdict, capabilityMessage \} from "@\/lib\/engine\/plan-gate";/m.test(a) && /kind === "write" \? \(\["api", "api_write"\]/.test(a),
-    "apiAuth: every call checks the plan includes api (and api_write for writes) and is live");
+  check(/capabilityVerdict\(orgRow, cap as any, firm\)/.test(a) && /^import \{ capabilityVerdict, capabilityMessage \} from "@\/lib\/engine\/plan-gate";/m.test(a) && /admittingScope\(verdict\.scopes, need, allowed\)/.test(a),
+    "apiAuth: every call checks the capabilities of the scope that admits it (api; api_write for ingest; connectors for a connector key) and that the plan is live");
   check(/if \(gateRefusal\)[\s\S]{0,200}403/.test(a), "apiAuth: a refusal is a 403 with the reason");
 }
 

@@ -36,6 +36,16 @@ export const API_SCOPES = {
   "sales:read": "Read sales orders (GET /api/v1/sales-orders)",
   "leads:read": "Read leads (GET /api/v1/leads)",
   "ingest:write": "Push records in (POST /api/v1/ingest)",
+  /*
+    CONNECT AN APP (2026-10). The Tally bridge — and any accounting connector
+    that runs next to the books — pushes through /api/v1/ingest too, but it is
+    not a general-purpose integration: it writes sales, invoices, customers and
+    stock, never leads, with smaller batches on smaller plans. Giving it its
+    own scope lets every live plan connect its books (capability
+    "connectors") while the open-ended ingest:write stays a Practice+ feature.
+  */
+  "connector:write": "Sync your books in from a connector such as the Tally bridge (POST /api/v1/ingest — sales, invoices, customers, stock)",
+  "ai:ask": "Ask Cortex a question in plain language — charged in credits like chat (POST /api/v1/ask, and the MCP endpoint)",
 } as const;
 
 export type ApiScope = keyof typeof API_SCOPES;
@@ -49,7 +59,89 @@ export const SCOPE_PRESETS: Record<string, ApiScope[]> = {
   read: ["metrics:read", "invoices:read", "customers:read", "sales:read", "leads:read"],
   ingest: ["ingest:write"],
   full: [...ALL_SCOPES],
+  /* "Connect an app" presets on /developers — one key per app. */
+  tally: ["connector:write"],
+  assistant: ["ai:ask", "metrics:read", "invoices:read", "customers:read", "sales:read"],
+  automation: ["metrics:read", "invoices:read", "customers:read", "sales:read", "leads:read"],
 };
+
+/**
+ * THE PLAN CAPABILITIES EACH SCOPE NEEDS. Named as plain strings (they match
+ * config.ts `Capability`) so this module stays import-free and testable.
+ *
+ * A key is issued only if every scope it asks for is allowed, and a call is
+ * allowed if the scope that matched the endpoint is allowed — both checks read
+ * this one table, so the issue-time and use-time rules cannot drift apart.
+ */
+export const SCOPE_CAPABILITIES: Record<ApiScope, readonly string[]> = {
+  "metrics:read": ["api"],
+  "invoices:read": ["api"],
+  "customers:read": ["api"],
+  "sales:read": ["api"],
+  "leads:read": ["api"],
+  "ingest:write": ["api", "api_write"],
+  "connector:write": ["connectors"],
+  "ai:ask": ["api"],
+};
+
+/** Which rate-limit bucket a call spends, by the scope that admitted it. */
+export type LimitKind = "read" | "write" | "connector" | "ask";
+export function limitKindFor(scope: ApiScope, kind: "read" | "write"): LimitKind {
+  if (scope === "connector:write") return "connector";
+  if (scope === "ai:ask") return "ask";
+  return kind;
+}
+
+/**
+ * Of the scopes an endpoint accepts and the key holds, the first one the plan
+ * allows — or null with the first refused capability, for the error message.
+ * `allowed(cap)` is the caller's live-plan check (engine/plan-gate.ts).
+ */
+export function admittingScope(
+  keyScopes: ApiScope[],
+  need: ApiScope | ApiScope[],
+  allowed: (cap: string) => boolean,
+): { scope: ApiScope } | { scope: null; refused: string } {
+  const needs = Array.isArray(need) ? need : [need];
+  let refused = "api";
+  /*
+    Broadest scope first: a key with ingest:write on Practice is admitted as a
+    full integration (leads allowed, 10,000 rows), not as a connector. If the
+    plan no longer allows it — a downgrade to Watch — the same key falls back
+    to connector:write when it holds that too, and the books keep syncing.
+  */
+  const order = [...needs].sort((a, b) => (SCOPE_CAPABILITIES[b]?.length ?? 0) - (SCOPE_CAPABILITIES[a]?.length ?? 0));
+  for (const s of order) {
+    if (!keyScopes.includes(s)) continue;
+    const caps = SCOPE_CAPABILITIES[s] || ["api"];
+    const miss = caps.find((c) => !allowed(c));
+    if (!miss) return { scope: s };
+    refused = miss;
+  }
+  return { scope: null, refused };
+}
+
+/** Capabilities a NEW key with these scopes needs — every one, deduplicated. */
+export function capabilitiesForScopes(scopes: ApiScope[]): string[] {
+  return Array.from(new Set(scopes.flatMap((s) => SCOPE_CAPABILITIES[s] || ["api"])));
+}
+
+/**
+ * Tables a connector-only key may write. Leads are a sales-team feed, not
+ * books, and stay behind ingest:write.
+ */
+export const CONNECTOR_TABLES = ["sales_orders", "invoices", "customers", "inventory_items"] as const;
+
+/** Rows per ingest call for a connector key, by plan. ingest:write keeps 10,000 everywhere. */
+export const CONNECTOR_ROWS_PER_CALL: Record<string, number> = {
+  try: 2000, starter: 2000, solo: 2000,
+  watch: 5000, growth: 5000,
+  watchpro: 10000, practice: 10000, command: 10000, enterprise: 10000,
+  business: 10000, aicoo: 10000, premium: 10000,
+};
+export function connectorRowsPerCall(plan: string | null | undefined): number {
+  return CONNECTOR_ROWS_PER_CALL[String(plan || "").toLowerCase()] ?? 2000;
+}
 
 export const KEY_PREFIX = "mnbc_";
 
@@ -156,12 +248,20 @@ export function judgeKey(row: KeyRow | null, need: ApiScope | ApiScope[], now: n
  * from the key's row id (never its secret), so each key has its own
  * allowance and a raw secret never becomes a cache key.
  */
-export const API_LIMITS: Record<"read" | "write", Record<string, number>> = {
+export const API_LIMITS: Record<LimitKind, Record<string, number>> = {
   read: { watchpro: 1200, practice: 3000, command: 6000, enterprise: 20000 },
   write: { watchpro: 120, practice: 300, command: 600, enterprise: 2000 },
+  /*
+    Connector pushes. The Tally bridge sends 3–4 calls a run; every 30 minutes
+    that is ~8 an hour. Try is sized for a few runs a day, Watch for the
+    30-minute default, and the top plans for multi-company CA setups.
+  */
+  connector: { try: 12, starter: 12, solo: 12, watch: 60, growth: 60, watchpro: 120, practice: 300, command: 600, enterprise: 2000 },
+  /* Each ask is an AI call and is charged in credits; this is a runaway-loop guard, not the meter. */
+  ask: { watchpro: 60, practice: 120, command: 240, enterprise: 600 },
 };
-const DEFAULT_LIMIT = { read: 600, write: 60 };
-export function hourlyLimit(plan: string | null | undefined, kind: "read" | "write"): number {
+const DEFAULT_LIMIT: Record<LimitKind, number> = { read: 600, write: 60, connector: 12, ask: 30 };
+export function hourlyLimit(plan: string | null | undefined, kind: LimitKind): number {
   return API_LIMITS[kind][String(plan || "").toLowerCase()] ?? DEFAULT_LIMIT[kind];
 }
 

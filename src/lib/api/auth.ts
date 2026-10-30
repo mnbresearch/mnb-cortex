@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { createHash, randomUUID } from "node:crypto";
 import { hasSupabase, serviceClient } from "@/lib/supabase/server";
-import { keyFromHeaders, plausibleKey, judgeKey, hourlyLimit, shouldTouch, type ApiScope, type KeyRow } from "@/lib/api-keys";
+import { keyFromHeaders, plausibleKey, judgeKey, hourlyLimit, shouldTouch, admittingScope, limitKindFor, type ApiScope, type KeyRow, type LimitKind } from "@/lib/api-keys";
 import { requestId, type ErrorCode } from "@/lib/api/http";
 import { capabilityVerdict, capabilityMessage } from "@/lib/engine/plan-gate";
 
@@ -30,7 +30,12 @@ import { capabilityVerdict, capabilityMessage } from "@/lib/engine/plan-gate";
   power it did not have.
 */
 
-export type ApiCtx = { orgId: string; keyId: string; prefix: string | null; scopes: ApiScope[]; plan: string; rid: string };
+/*
+  `scope` is the one scope that admitted THIS call (see admittingScope), and
+  `via` the rate-limit bucket it spent. Routes use them where the scope changes
+  behaviour — /api/v1/ingest keeps a connector-only key to the books tables.
+*/
+export type ApiCtx = { orgId: string; keyId: string; prefix: string | null; scopes: ApiScope[]; plan: string; rid: string; scope: ApiScope; via: LimitKind };
 
 export function apiError(rid: string, status: number, code: ErrorCode, error: string, headers: Record<string, string> = {}) {
   return NextResponse.json({ ok: false, error, code, request_id: rid }, { status, headers: { "X-Request-Id": rid, ...headers } });
@@ -108,12 +113,30 @@ export async function apiAuth(
       try { firm = (await svc.from("organizations").select("*").eq("id", firmId).maybeSingle()).data; } catch { /* own state decides */ }
     }
   } catch { /* default limits; fail open on an unreadable plan */ }
+  /*
+    WHICH SCOPE ADMITS THIS CALL. Each scope needs its own capabilities
+    (lib/api-keys.ts SCOPE_CAPABILITIES): read scopes need "api", ingest:write
+    needs "api_write" too, connector:write needs only "connectors" — which every
+    live plan has, so a Try or Watch workspace can sync Tally while open-ended
+    ingest stays on Practice and above. On an unread plan we fail open with the
+    first scope the key holds, exactly as before.
+  */
+  const needList = Array.isArray(need) ? need : [need];
+  let scope: ApiScope = needList.find((n) => verdict.scopes.includes(n)) as ApiScope;
   if (orgRead) {
     plan = String(orgRow?.plan || "");
-    const caps = kind === "write" ? (["api", "api_write"] as const) : (["api"] as const);
-    for (const cap of caps) {
-      const v = capabilityVerdict(orgRow, cap, firm);
-      if (!v.ok) { gateRefusal = capabilityMessage(v, cap, cap === "api_write" ? "Pushing data in through the API" : "The public API"); break; }
+    const verdicts = new Map<string, ReturnType<typeof capabilityVerdict>>();
+    const allowed = (cap: string) => {
+      if (!verdicts.has(cap)) verdicts.set(cap, capabilityVerdict(orgRow, cap as any, firm));
+      return verdicts.get(cap)!.ok;
+    };
+    const pick = admittingScope(verdict.scopes, need, allowed);
+    if (pick.scope) {
+      scope = pick.scope;
+    } else {
+      const cap = pick.refused;
+      const what = cap === "api_write" ? "Pushing data in through the API" : cap === "connectors" ? "Connecting an app" : "The public API";
+      gateRefusal = capabilityMessage((verdicts.get(cap) ?? { ok: false, reason: "plan" }) as any, cap as any, what);
     }
   }
   if (gateRefusal) {
@@ -121,13 +144,14 @@ export async function apiAuth(
     return { ok: false, res: apiError(rid, 403, "insufficient_scope", `${gateRefusal} Nothing was done.`) };
   }
 
-  const limit = hourlyLimit(plan, kind);
+  const via = limitKindFor(scope, kind);
+  const limit = hourlyLimit(plan, via);
   {
     const { enforce } = await import("@/lib/ratelimit");
-    const over = await enforce([{ key: `api:${kind}:${k.id}`, limit, windowSecs: 3600 }]);
+    const over = await enforce([{ key: `api:${via}:${k.id}`, limit, windowSecs: 3600 }]);
     if (over) {
       await bump(svc, k.org_id, k.id, endpoint, false);
-      return { ok: false, res: apiError(rid, 429, "rate_limited", `Rate limit reached for this key (${limit} ${kind} calls an hour on your plan). Nothing was done; retry later.`, { "Retry-After": "300", "X-RateLimit-Limit": String(limit) }) };
+      return { ok: false, res: apiError(rid, 429, "rate_limited", `Rate limit reached for this key (${limit} ${via} calls an hour on your plan). Nothing was done; retry later.`, { "Retry-After": "300", "X-RateLimit-Limit": String(limit) }) };
     }
   }
 
@@ -139,7 +163,7 @@ export async function apiAuth(
     bump(svc, k.org_id, k.id, endpoint, true),
   ]);
 
-  return { ok: true, svc, ctx: { orgId: k.org_id, keyId: k.id, prefix: (row as any)?.key_prefix ?? null, scopes: verdict.scopes, plan, rid } };
+  return { ok: true, svc, ctx: { orgId: k.org_id, keyId: k.id, prefix: (row as any)?.key_prefix ?? null, scopes: verdict.scopes, plan, rid, scope, via } };
 }
 
 /* Per key, per endpoint, per day — powers "API usage" on /developers and the operator console. Missing function = migration not run yet = skip. */
