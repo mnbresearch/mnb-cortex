@@ -48,6 +48,8 @@ export type BillingStatus = {
   pooledByName: string | null;
   /** True when workspace is a 7-day custom demo workspace subject to compulsory upgrade upon expiry. */
   isDemo?: boolean;
+  /** Feature ids a demo workspace was provisioned with; null = not a demo, or every feature. */
+  demoFeatures?: string[] | null;
 };
 
 /**
@@ -272,13 +274,25 @@ export async function getBillingStatus(): Promise<BillingStatus> {
 
     Anyone locked here genuinely has no plan and no credits.
   */
+  /*
+    DEMO WORKSPACES. Read with the service role so a tenant cannot hide the row
+    from this check (and since 2026_zzzz_i, cannot delete it either). The
+    feature list is returned so the app shell can keep a demo to the features
+    the super-admin chose — before this it was stored and never read, so every
+    demo received the whole Enterprise product.
+  */
   let isDemoWorkspace = false;
+  let demoFeatures: string[] | null = null;
   try {
     const { serviceClient } = await import("@/lib/supabase/server");
     const svc = serviceClient();
     if (svc) {
-      const { data: demo } = await svc.from("demo_workspaces").select("org_id").eq("org_id", orgId).maybeSingle();
-      if (demo) isDemoWorkspace = true;
+      const { data: demo } = await svc.from("demo_workspaces").select("org_id, features").eq("org_id", orgId).maybeSingle();
+      if (demo) {
+        isDemoWorkspace = true;
+        const f = (demo as any).features;
+        demoFeatures = Array.isArray(f) && f.length ? f.map(String) : null;
+      }
     }
   } catch { /* best effort */ }
 
@@ -292,5 +306,6 @@ export async function getBillingStatus(): Promise<BillingStatus> {
     autorenewActive: ["ACTIVE", "INITIALIZED"].includes(String(autorenewStatus || "").toUpperCase()),
     plan, locked, credits, pooledBy, pooledByName,
     isDemo: isDemoWorkspace,
+    demoFeatures,
   };
 }

@@ -10,6 +10,7 @@ import {
   calculateDemoExpiry,
   isDemoCompulsoryUpgradeRequired,
   generateDemoWelcomeEmail,
+  demoRouteAllowed,
 } from "../src/lib/demo-workspace.ts";
 import { isLocked } from "../src/lib/paywall.ts";
 
@@ -148,6 +149,33 @@ console.log("=== Testing Custom 7-Day Demo Account & Feature Customization Engin
   });
   check(emailWithMagicLink.includes("Direct 1-Click Access (No password required):"), "Direct magic link header rendered");
   check(emailWithMagicLink.includes("token=xyz123"), "Direct magic link URL included in body");
+}
+
+// Route gate: the provisioned feature list is enforced, not just stored
+{
+  const f = ["receivables"];
+  check(demoRouteAllowed(f, "/receivables") === true, "granted feature route opens");
+  check(demoRouteAllowed(f, "/receivables/abc?x=1") === true, "granted route covers sub-paths");
+  check(demoRouteAllowed(f, "/gst") === false, "feature not granted is closed");
+  check(demoRouteAllowed(f, "/dashboard") === true, "dashboard always open even though a feature lists it");
+  check(demoRouteAllowed(f, "/billing") === true, "billing always open so the demo can pay");
+  check(demoRouteAllowed(f, "/gst-calc") === true, "segment match: /gst does not swallow /gst-calc");
+  check(demoRouteAllowed(null, "/gst") === true, "no feature list = no restriction");
+  check(demoRouteAllowed([], "/gst") === true, "empty feature list = no restriction");
+  check(demoRouteAllowed(["msme_43bh"], "/msme") === true, "shared route opens when any owner is granted");
+}
+
+// The migration must never again grant writes to every workspace owner
+{
+  const { readFileSync } = await import("node:fs");
+  for (const f of ["supabase/migrations/2026_demo_workspaces.sql", "supabase/migrations/2026_zzzz_i_demo_workspaces_rls.sql"]) {
+    const sql = readFileSync(new URL("../" + f, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/gm, "");
+    check(!/create\s+policy[^;]*for\s+all/i.test(sql), `${f}: no FOR ALL policy`);
+    check(!/m\.role\s*=\s*'owner'/i.test(sql), `${f}: no "any owner" predicate`);
+  }
+  const order = readFileSync(new URL("../supabase/migrations/ORDER.txt", import.meta.url), "utf8");
+  check(/^2026_demo_workspaces\.sql$/m.test(order), "2026_demo_workspaces.sql is listed in ORDER.txt");
+  check(/^2026_zzzz_i_demo_workspaces_rls\.sql$/m.test(order), "fix migration is listed in ORDER.txt");
 }
 
 if (failures.length > 0) {

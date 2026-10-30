@@ -63,6 +63,7 @@
 2026_default_weekly_brief.sql
 2026_definer_grant_sweep.sql
 2026_demo_isolation.sql
+2026_demo_workspaces.sql
 2026_erasure_retention.sql
 2026_hardening.sql
 2026_integrations_lockdown.sql
@@ -137,3 +138,4 @@
 2026_zzzz_e_invite_expiry.sql
 2026_zzzz_h_api_ingest_order_date.sql
 2026_zzzz_h_statutory_profile_composition.sql
+2026_zzzz_i_demo_workspaces_rls.sql

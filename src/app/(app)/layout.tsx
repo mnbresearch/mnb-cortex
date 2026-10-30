@@ -19,6 +19,7 @@ import { getBillingStatus } from "@/lib/billing";
 import { planIncludes } from "@/lib/config";
 import { getFirstRun } from "@/lib/first-run";
 import { TrialGuard } from "@/components/trial-guard";
+import { DemoFeatureGuard } from "@/components/demo-feature-guard";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const [profile, superAdmin, orgs, { orgId }, billing, firstRun] = await Promise.all([
@@ -88,6 +89,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* Super-admins operate the platform and are never gated. */}
       {/* billing.known is false for a logged-out visitor — they have no trial to count down. */}
       {!superAdmin && billing.known && <TrialGuard status={billing.status} daysLeft={billing.daysLeft} locked={billing.locked} lapsedSubscription={billing.lapsedSubscription} subscriptionEndsAt={billing.subscriptionEndsAt} autorenewActive={billing.autorenewActive} />}
+      {!superAdmin && billing.isDemo && <DemoFeatureGuard features={billing.demoFeatures} />}
       {!superAdmin && <CreditBanner />}
       {!superAdmin && <DailyNudge status={billing.status} daysLeft={billing.daysLeft} />}
     </div>

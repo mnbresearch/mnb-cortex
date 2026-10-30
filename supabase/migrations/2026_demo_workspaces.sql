@@ -24,18 +24,22 @@ create index if not exists idx_demo_workspaces_expires_at on demo_workspaces(exp
 
 alter table demo_workspaces enable row level security;
 
--- Platform Super Admins can manage demo workspaces
-create policy "superadmin manage demo workspaces"
-  on demo_workspaces for all
-  using (
-    exists (
-      select 1 from memberships m
-      join organizations o on o.id = m.org_id
-      where m.user_id = auth.uid() and m.role = 'owner'
-    )
-  );
+/*
+  WRITES ARE SERVICE-ROLE ONLY.
 
--- Workspace members can read their own demo details
+  The first version of this file had a policy named "superadmin manage demo
+  workspaces" granting FOR ALL to anyone who was `owner` of ANY workspace —
+  i.e. every customer. That exposed every prospect's email and company, and
+  let a demo user delete their own row to escape the compulsory-upgrade lock.
+  Super-admins provision through provisionDemoCustomer(), which uses the
+  service role and bypasses RLS, so no write policy is needed at all.
+  2026_zzzz_i_demo_workspaces_rls.sql removes the old policy where it was
+  already applied.
+*/
+drop policy if exists "superadmin manage demo workspaces" on demo_workspaces;
+
+-- Workspace members can read their own demo details (nothing else).
+drop policy if exists "members read own demo details" on demo_workspaces;
 create policy "members read own demo details"
   on demo_workspaces for select
   using (
@@ -44,3 +48,5 @@ create policy "members read own demo details"
       where m.org_id = demo_workspaces.org_id and m.user_id = auth.uid()
     )
   );
+
+revoke insert, update, delete on demo_workspaces from anon, authenticated;

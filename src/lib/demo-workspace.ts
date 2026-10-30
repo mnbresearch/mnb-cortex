@@ -351,3 +351,35 @@ Best regards,
 Team MNB Cortex · MNB Research
 https://cortex.mnbresearch.com`;
 }
+
+/* ------------------------------------------------------------------ route gate */
+
+/**
+ * May a demo workspace with `features` open `path`?
+ *
+ * The provisioning screen let a super-admin pick features, and the choice was
+ * stored and then read by nothing — every demo got the whole product. This is
+ * the rule the app shell now applies:
+ *
+ *   - `null` / empty features = no restriction (not a demo, or a full demo).
+ *   - DEMO_ALWAYS_OPEN (dashboard, chat, settings, billing…) and any route
+ *     that NO catalogue feature owns are always open: the demo must be usable
+ *     and payable.
+ *   - A route owned by one or more features is open if ANY of those features
+ *     was granted (several features share /receivables, /msme and so on).
+ *
+ * Matching is by path segment, so "/gst" covers "/gst/123" but not "/gst-calc".
+ */
+/** Always reachable in a demo, whatever was chosen: the home screen and the way to pay. */
+export const DEMO_ALWAYS_OPEN = ["/dashboard", "/chat", "/settings", "/billing", "/pricing", "/onboarding", "/usage", "/help"] as const;
+
+export function demoRouteAllowed(features: string[] | null | undefined, path: string | null | undefined): boolean {
+  if (!features || !features.length) return true;
+  const p = String(path || "").split(/[?#]/)[0] || "/";
+  if (DEMO_ALWAYS_OPEN.some((r) => p === r || p.startsWith(r + "/"))) return true;
+  const covers = (route: string) => p === route || p.startsWith(route + "/");
+  const owners = DEMO_FEATURE_CATALOGUE.filter((f) => f.routes.some(covers));
+  if (!owners.length) return true;
+  const granted = new Set(features);
+  return owners.some((f) => granted.has(f.id));
+}

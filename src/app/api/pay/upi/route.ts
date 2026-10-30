@@ -6,6 +6,7 @@ import {
   buildUpiAppLinks,
 } from "@/lib/pay/upi";
 import { clientIp, enforce } from "@/lib/ratelimit";
+import { createClient, hasSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,28 @@ export const dynamic = "force-dynamic";
  * Returns dynamic payment metadata, deep links, or standalone SVG image.
  */
 export async function GET(req: NextRequest) {
+  /*
+    SIGNED-IN USERS ONLY.
+
+    As first shipped this was an open endpoint that drew a payment QR for ANY
+    UPI ID under ANY payee name, served from our own domain — a ready-made
+    phishing kit ("Pay MNB Research" → an attacker's VPA, on
+    cortex.mnbresearch.com). Nothing in the app calls it: the invoice and the
+    UPI card draw their QR in the browser from lib/pay/upi. So it now answers
+    only a signed-in Cortex user, and keeps the IP limits below as well.
+  */
+  if (hasSupabase()) {
+    let signedIn = false;
+    try {
+      const sb = await createClient();
+      const { data: { user } } = await sb.auth.getUser();
+      signedIn = Boolean(user);
+    } catch { /* treated as signed out */ }
+    if (!signedIn) {
+      return NextResponse.json({ ok: false, error: "Sign in to generate a UPI QR." }, { status: 401 });
+    }
+  }
+
   // Throttled per client IP to prevent CPU exhaustion on public SVG QR renders
   const ip = clientIp(req);
   const over = await enforce([
@@ -76,7 +99,7 @@ export async function GET(req: NextRequest) {
         status: 200,
         headers: {
           "Content-Type": "image/svg+xml",
-          "Cache-Control": "public, max-age=3600, s-maxage=3600",
+          "Cache-Control": "private, max-age=3600",
         },
       });
     }
