@@ -397,6 +397,23 @@ export async function chargeOrgForMode(
     if (isHardStopped(status) || isHardStopped(payerStatus)) {
       return { ok: false, enforced: true, cost, balance: balanceNow, reason: "lapsed" };
     }
+    /*
+      A DEMO STOPS AT ITS END DATE, WHATEVER IS LEFT IN THE BALANCE.
+
+      Demo workspaces are provisioned with starting credits (2,500 by default),
+      and the rule below lets a lapsed workspace keep spending credits it holds —
+      right for a customer who bought a pack, wrong for a 7-day demo, which would
+      otherwise keep running AI until those credits ran out. The app shell already
+      locks an expired demo (billing.ts compulsoryUpgrade); this is the same rule
+      on the server, so the API, MCP and any direct call stop at the same moment.
+      Only looked up once the workspace is lapsed, so live workspaces pay nothing.
+    */
+    if (isLapsed(status)) {
+      try {
+        const { data: demo } = await svc.from("demo_workspaces").select("org_id").eq("org_id", orgId).maybeSingle();
+        if (demo) return { ok: false, enforced: true, cost, balance: balanceNow, reason: "lapsed" };
+      } catch { /* table absent → not a demo */ }
+    }
     /* The clock and the balance belong to the payer. */
     if (isLapsed(payerStatus) && !(pooledFor ? payerHasOverride : hasOverride) && balanceNow < cost) {
       return { ok: false, enforced: true, cost, balance: balanceNow, reason: "lapsed" };

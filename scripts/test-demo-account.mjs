@@ -178,6 +178,22 @@ console.log("=== Testing Custom 7-Day Demo Account & Feature Customization Engin
   check(/^2026_zzzz_i_demo_workspaces_rls\.sql$/m.test(order), "fix migration is listed in ORDER.txt");
 }
 
+// An expired demo stops on the server too, and old demos are backfilled
+{
+  const { readFileSync } = await import("node:fs");
+  const credits = readFileSync(new URL("../src/lib/credits.ts", import.meta.url), "utf8");
+  const i = credits.indexOf('from("demo_workspaces")');
+  check(i > 0 && /if \(isLapsed\(status\)\)/.test(credits.slice(i - 400, i)) && credits.indexOf('from("demo_workspaces")') < credits.indexOf("The clock and the balance belong to the payer"),
+    "credits: an expired demo is refused before leftover credits can keep it running");
+  const bf = readFileSync(new URL("../supabase/migrations/2026_zzzz_k_demo_workspaces_backfill.sql", import.meta.url), "utf8");
+  check(/lower\(coalesce\(o\.subscription_status, 'trialing'\)\) = 'trialing'/.test(bf), "backfill: a demo that became a paying customer is never touched");
+  check(/not exists \(select 1 from demo_workspaces d where d\.org_id = c\.org_id\)/.test(bf), "backfill: re-runnable, existing rows skipped");
+  check(/provisioned_at \+ make_interval\(days => c\.days\)/.test(bf) && /set trial_ends_at = ins\.expires_at/.test(bf), "backfill: stops at provisioning + demo length, and the trial clock agrees");
+  check(!/create\s+policy[^;]*for\s+all/i.test(bf.replace(/\/\*[\s\S]*?\*\//g, "")), "backfill: no FOR ALL policy");
+  const order = readFileSync(new URL("../supabase/migrations/ORDER.txt", import.meta.url), "utf8");
+  check(/^2026_zzzz_k_demo_workspaces_backfill\.sql$/m.test(order), "backfill listed in ORDER.txt");
+}
+
 if (failures.length > 0) {
   console.error(`\ndemo-account: ${pass} passed, ${failures.length} failed\n`);
   for (const f of failures) console.error("  ✕ " + f);

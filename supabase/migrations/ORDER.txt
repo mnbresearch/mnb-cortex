@@ -140,3 +140,4 @@
 2026_zzzz_h_statutory_profile_composition.sql
 2026_zzzz_i_demo_workspaces_rls.sql
 2026_zzzz_j_api_connector_scope.sql
+2026_zzzz_k_demo_workspaces_backfill.sql
