@@ -12,12 +12,11 @@
   WHAT THIS DOES — nothing is stopped today:
     1. Creates demo_workspaces if it is missing (same table and safe policy as
        the fixed 2026_demo_workspaces.sql). Idempotent.
-    2. Finds every demo the creator provisioned — the org_billing_log entry
-       manageOrg() writes for it (plan enterprise + trialing + extendTrialDays),
-       or a workspace named "… (Demo)" on enterprise — that is STILL on its
+    2. Finds every demo the creator provisioned — an `enterprise` workspace
+       with the demo's gold accent or a "… (Demo)" name — that is STILL on its
        trial (not paid, not cancelled) and has no row yet.
     3. Records it with expires_at = the moment it was provisioned + its demo
-       length (7 days unless a different length was chosen), and sets the
+       length (read from its trial clock; 7 days by default), and sets the
        workspace's trial_ends_at to that same moment, so it runs normally until
        then and locks automatically at it.
   A demo that already became a paying customer (status active) is not touched.
@@ -52,33 +51,29 @@ create policy "members read own demo details"
 revoke insert, update, delete on demo_workspaces from anon, authenticated;
 
 -- 2 + 3 ── backfill the demos created before the table existed
-with from_log as (
-  select distinct on (l.org_id)
-         l.org_id,
-         l.created_at as provisioned_at,
-         greatest(1, least(90, coalesce(nullif(l.detail->'requested'->>'extendTrialDays', '')::numeric::int, 7))) as days
-    from org_billing_log l
-   where l.detail->'requested'->>'plan' = 'enterprise'
-     and l.detail->'requested'->>'subscription_status' = 'trialing'
-     and (l.detail->'requested') ? 'extendTrialDays'
-   order by l.org_id, l.created_at asc
-),
-from_name as (
-  select o.id as org_id, o.created_at as provisioned_at, 7 as days
+--
+-- How a demo is recognised. provisionDemoCustomer() is the only code that
+-- creates an `enterprise` workspace, and it gives it accent 'gold' (the column
+-- default is 'indigo') and, when no company name is typed, a "… (Demo)" name.
+-- It then sets trial_ends_at = provisioning time + the demo length. (An earlier
+-- version of this file read org_billing_log, which is not present on every
+-- database.)
+with candidates as (
+  select o.id as org_id,
+         o.name,
+         coalesce(o.created_at, now()) as provisioned_at,
+         greatest(1, least(90, coalesce(
+           round(extract(epoch from (o.trial_ends_at - o.created_at)) / 86400.0)::int,
+           7))) as days
     from organizations o
-   where o.name ilike '%(Demo)'
-     and lower(coalesce(o.plan, '')) = 'enterprise'
-     and not exists (select 1 from from_log f where f.org_id = o.id)
-),
-candidates as (
-  select * from from_log
-  union all
-  select * from from_name
+   where lower(coalesce(o.plan, '')) = 'enterprise'
+     and (lower(coalesce(o.accent, '')) = 'gold' or o.name ilike '%(Demo)')
+     and lower(coalesce(o.subscription_status, 'trialing')) = 'trialing'
+     and not exists (select 1 from demo_workspaces d where d.org_id = o.id)
 ),
 picked as (
-  select c.org_id, c.days,
+  select c.org_id, c.days, c.name,
          c.provisioned_at + make_interval(days => c.days) as expires_at,
-         o.name,
          coalesce(
            (select i.email from invites i where i.org_id = c.org_id and i.role::text = 'owner' order by i.created_at asc limit 1),
            (select u.email from memberships m join auth.users u on u.id = m.user_id
@@ -86,9 +81,6 @@ picked as (
            'unknown'
          ) as email
     from candidates c
-    join organizations o on o.id = c.org_id
-   where lower(coalesce(o.subscription_status, 'trialing')) = 'trialing'
-     and not exists (select 1 from demo_workspaces d where d.org_id = c.org_id)
 ),
 ins as (
   insert into demo_workspaces (org_id, email, name, company, preset, features, duration_days, expires_at, compulsory_upgrade, created_at)

@@ -186,8 +186,8 @@ console.log("=== Testing Custom 7-Day Demo Account & Feature Customization Engin
   check(i > 0 && /if \(isLapsed\(status\)\)/.test(credits.slice(i - 400, i)) && credits.indexOf('from("demo_workspaces")') < credits.indexOf("The clock and the balance belong to the payer"),
     "credits: an expired demo is refused before leftover credits can keep it running");
   const bf = readFileSync(new URL("../supabase/migrations/2026_zzzz_k_demo_workspaces_backfill.sql", import.meta.url), "utf8");
-  check(/lower\(coalesce\(o\.subscription_status, 'trialing'\)\) = 'trialing'/.test(bf), "backfill: a demo that became a paying customer is never touched");
-  check(/not exists \(select 1 from demo_workspaces d where d\.org_id = c\.org_id\)/.test(bf), "backfill: re-runnable, existing rows skipped");
+  check(/lower\(coalesce\(o\.subscription_status, 'trialing'\)\) = 'trialing'/.test(bf) && !/from org_billing_log/.test(bf), "backfill: a demo that became a paying customer is never touched");
+  check(/not exists \(select 1 from demo_workspaces d where d\.org_id = o\.id\)/.test(bf), "backfill: re-runnable, existing rows skipped");
   check(/provisioned_at \+ make_interval\(days => c\.days\)/.test(bf) && /set trial_ends_at = ins\.expires_at/.test(bf), "backfill: stops at provisioning + demo length, and the trial clock agrees");
   check(!/create\s+policy[^;]*for\s+all/i.test(bf.replace(/\/\*[\s\S]*?\*\//g, "")), "backfill: no FOR ALL policy");
   const order = readFileSync(new URL("../supabase/migrations/ORDER.txt", import.meta.url), "utf8");
