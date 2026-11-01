@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getClientBrief } from "@/lib/practice-brief-data";
 import { getUserAndOrg } from "@/lib/data";
-import { planRank } from "@/lib/integrations";
+import { practiceClientLimit } from "@/lib/config";
 import { serviceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -33,12 +33,18 @@ export async function GET(req: Request) {
   const target = new URL(req.url).searchParams.get("org") || "";
   if (!target) return NextResponse.json({ ok: false, error: "Which client?" }, { status: 400 });
 
-  /* Practice is a plan feature. Same rank check the console itself uses. */
+  /*
+    Practice is a plan feature — the SAME test the console uses
+    (lib/practice.ts: practiceClientLimit(plan) !== 0, i.e. Practice or
+    Enterprise). This used a rank comparison against "practice", and Watch Pro
+    shares Practice's rank (3) while Command outranks it (4), so both could pull
+    client briefs the console itself refused them.
+  */
   try {
     const svc = serviceClient();
     const { data } = await svc!.from("organizations").select("plan").eq("id", myOrg).maybeSingle();
     const plan = String((data as any)?.plan || "").toLowerCase();
-    if (planRank(plan) < planRank("practice")) {
+    if (practiceClientLimit(plan) === 0) {
       return NextResponse.json({
         ok: false,
         error: "Client briefs are part of the Practice plan — the one built for firms managing several businesses.",

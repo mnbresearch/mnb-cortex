@@ -176,6 +176,16 @@ check("the client's name heads it", full.text.startsWith(base.clientName), full.
 check("it is short enough to read", full.text.split("\n").length <= 30, `${full.text.split("\n").length} lines`);
 
 /* ------------------------------------------------------------------ report */
+/* The brief route gates on the same rule as the console: Practice or Enterprise only. */
+{
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../src/app/api/practice/brief/route.ts", import.meta.url), "utf8");
+  const C = await import("../src/lib/config.ts");
+  check("brief route gates with practiceClientLimit (same rule as the console)", /practiceClientLimit\(plan\) === 0/.test(route) && !/planRank\(plan\)/.test(route));
+  check("Watch Pro and Command are not Practice", C.practiceClientLimit("watchpro") === 0 && C.practiceClientLimit("command") === 0);
+  check("Practice and Enterprise are", C.practiceClientLimit("practice") > 0 && C.practiceClientLimit("enterprise") !== 0);
+}
+
 console.log(`\npractice client brief: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   console.log("\n" + failures.map((f) => "  ✗ " + f).join("\n"));
