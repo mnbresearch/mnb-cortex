@@ -55,7 +55,9 @@ async function guard() {
   if (!mem) throw new Error("No workspace found");
   if ((RANK[(mem as any).role] || 0) < RANK.admin) throw new Error("Only workspace admins can manage integrations");
   const { data: org } = await sb.from("organizations").select("plan").eq("id", orgId).single();
-  return { sb, orgId, plan: (org as any)?.plan || "watch" };
+  /* A company in a live Enterprise group connects on the group's plan. */
+  const { capabilityPlanOf } = await import("@/lib/engine/plan-gate-server");
+  return { sb, orgId, plan: (await capabilityPlanOf(orgId, (org as any)?.plan || "watch")) || "watch" };
 }
 
 /**

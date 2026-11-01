@@ -1,7 +1,7 @@
 import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import type { Capability } from "@/lib/config";
-import { capabilityVerdict, type CapabilityVerdict, type GateOrg } from "./plan-gate";
+import { capabilityVerdict, capabilityPlan, type CapabilityVerdict, type GateOrg } from "./plan-gate";
 
 /*
   Read a workspace (and, if it is claimed by a Practice firm, the firm) with the
@@ -54,5 +54,27 @@ export async function orgsWithCapability(orgIds: string[], cap: Capability): Pro
     return { allowed, readError: false };
   } catch {
     return { allowed, readError: true };
+  }
+}
+
+
+/**
+ * The plan a workspace's capabilities, seats and limits come from — its
+ * Enterprise group's while it is linked to a live one (see plan-gate.ts,
+ * GROUP WORKSPACES), otherwise its own. An unreadable row returns `fallback`
+ * (the caller's own reading of the plan), never a more generous answer.
+ */
+export async function capabilityPlanOf(orgId: string, fallback = ""): Promise<string> {
+  const svc = serviceClient();
+  if (!svc || !orgId) return fallback;
+  try {
+    const { data, error } = await svc.from("organizations").select("*").eq("id", orgId).maybeSingle();
+    if (error || !data) return fallback;
+    const firmId = String((data as any).practice_org_id || "");
+    let firm: GateOrg = null;
+    if (firmId && firmId !== orgId) firm = ((await svc.from("organizations").select("*").eq("id", firmId).maybeSingle()).data as GateOrg) || null;
+    return capabilityPlan(data as GateOrg, firm) || fallback;
+  } catch {
+    return fallback;
   }
 }

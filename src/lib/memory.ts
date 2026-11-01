@@ -53,7 +53,10 @@ async function memoryWriteAllowed(orgId: string): Promise<boolean> {
     const svc = serviceClient();
     if (!svc) return true;   // unreadable plan must never block a write
     const { data } = await svc.from("organizations").select("plan").eq("id", orgId).maybeSingle();
-    return planIncludes(String((data as any)?.plan || ""), "memory");
+    if (planIncludes(String((data as any)?.plan || ""), "memory")) return true;
+    /* A company in a live Enterprise group inherits the group's memory. */
+    const { orgCapability } = await import("@/lib/engine/plan-gate-server");
+    return (await orgCapability(orgId, "memory")).verdict.ok;
   } catch { return true; }   // fail OPEN: never lose a customer's note to a gate bug
 }
 

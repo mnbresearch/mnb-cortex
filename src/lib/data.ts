@@ -84,7 +84,8 @@ export async function getIntegrationState() {
     const canManage = (RANK[(mem as any)?.role] || 0) >= RANK.admin;
     return {
       connections: ((rows as any[]) || []).map((r) => ({ provider: r.provider, status: r.status, config: r.config || {}, lastSync: r.last_sync ?? null, lastError: r.last_error ?? null })),
-      plan: ((org as any)?.plan || "starter").toLowerCase(),
+      /* A company in a live Enterprise group is shown — and gated on — the group's plan. */
+      plan: ((await (await import("@/lib/engine/plan-gate-server")).capabilityPlanOf(orgId, (org as any)?.plan || "starter")) || "starter").toLowerCase(),
       canManage, live: true, encryption,
     };
   } catch {

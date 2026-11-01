@@ -121,6 +121,8 @@ async function autonomyGate(orgId: string): Promise<string | null> {
   const sb = await createClient();
   const { data } = await sb.from("organizations").select("plan").eq("id", orgId).maybeSingle();
   if (planIncludes(String((data as any)?.plan || ""), "autonomy")) return null;
+  /* A company in a live Enterprise group inherits the group's Autopilot (plan-gate.ts GROUP WORKSPACES). */
+  try { const { orgCapability } = await import("./plan-gate-server"); if ((await orgCapability(orgId, "autonomy")).verdict.ok) return null; } catch { /* own plan decides */ }
   return `Letting Cortex act on its own for customer messages and money is part of ${lowestPlanWith("autonomy")}. On your plan it drafts and waits for your tap — upgrade under Billing to turn on Autopilot.`;
 }
 

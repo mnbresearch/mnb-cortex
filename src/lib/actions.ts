@@ -1309,7 +1309,8 @@ export async function inviteMember(fd: FormData): Promise<ActionResult | void> {
   // Seat limit. Every plan advertises a user cap and none was enforced, so a
   // ₹799 Solo workspace could add unlimited teammates. Pending invites count,
   // otherwise the cap is trivially bypassed by inviting everyone at once.
-  const cap = seatLimit((org.data as any)?.plan);
+  /* Seats follow the group's plan for a company in a live Enterprise group — unlimited, not the signup default. */
+  const cap = seatLimit(await (await import("@/lib/engine/plan-gate-server")).capabilityPlanOf(orgId, String((org.data as any)?.plan || "")));
   if (cap > 0) {
     const [{ count: members }, { count: pending }] = await Promise.all([
       sb.from("memberships").select("id", { count: "exact", head: true }).eq("org_id", orgId),
@@ -1659,7 +1660,8 @@ export async function generateApiKey(fd: FormData): Promise<KeyIssue> {
     is gone: it is no longer true.
   */
   const { data: org } = await sb.from("organizations").select("plan").eq("id", orgId).single();
-  const plan = String((org as any)?.plan || "");
+  /* The group's plan for a company in a live Enterprise group (plan-gate.ts GROUP WORKSPACES). */
+  const plan = await (await import("@/lib/engine/plan-gate-server")).capabilityPlanOf(orgId, String((org as any)?.plan || ""));
 
   const K = await import("@/lib/api-keys");
   const scopes = K.normaliseScopes(fd.getAll("scopes").length ? fd.getAll("scopes") : K.SCOPE_PRESETS[str(fd.get("preset")) || "read"] || K.SCOPE_PRESETS.read);
@@ -3165,6 +3167,74 @@ const POOL_MESSAGES: Record<string, string> = {
   "client-limit-reached": "You are at your plan's limit of client workspaces.",
   "not-pooled": "That client is not using your credits.",
 };
+
+/*
+  CREATE A COMPANY WORKSPACE INSIDE A GROUP (Enterprise) OR A FIRM (Practice).
+
+  "Unlimited workspaces" was on the Enterprise card and only a super-admin
+  could make one: an owner had no way to set up the companies in their own
+  group. This creates the workspace, makes the caller its owner, and links it
+  to the current workspace through cortex_practice_claim() — the same audited
+  path the pooling toggle uses, so the plan's client cap (Practice 25,
+  Enterprise unlimited) and the rank checks live in one place, in Postgres.
+
+  Once linked it shares the group's credits; an Enterprise group's companies
+  also inherit its features, seats and integration limits (plan-gate.ts GROUP
+  WORKSPACES). If the link is refused, the new workspace is removed again
+  rather than left behind as an empty, unfunded, locked shell.
+*/
+export async function createGroupWorkspace(fd: FormData): Promise<{ ok: boolean; orgId?: string; error?: string }> {
+  try {
+    const { orgId: groupId } = await requireRole("admin");
+    const { user } = await getUserAndOrg();
+    if (!user?.id) return { ok: false, error: "Sign in first." };
+    const name = str(fd.get("name")).replace(/\s+/g, " ").trim().slice(0, 80);
+    const industry = str(fd.get("industry")).trim().slice(0, 40) || null;
+    if (name.length < 2) return { ok: false, error: "Give the company a name." };
+
+    const svc = serviceClient();
+    if (!svc) return { ok: false, error: "Workspaces cannot be created on this deployment (service role missing)." };
+
+    const { data: group, error: gErr } = await svc.from("organizations").select("*").eq("id", groupId).maybeSingle();
+    if (gErr || !group) return { ok: false, error: "Could not read your workspace's plan. Nothing was created — try again." };
+    const { practiceClientLimit } = await import("@/lib/config");
+    const { statusOf, isLapsed, isHardStopped } = await import("@/lib/entitlement");
+    const gplan = String((group as any).plan || "").toLowerCase();
+    const limit = practiceClientLimit(gplan);
+    if (limit === 0) return { ok: false, error: "Company workspaces are part of the Enterprise and Practice plans." };
+    const gstatus = statusOf(group);
+    if (isLapsed(gstatus) || isHardStopped(gstatus)) return { ok: false, error: "Your plan is not active, so it cannot fund a new workspace. Renew under Billing first." };
+
+    /* Same insert shape as ensureWorkspace(): a fresh workspace on the default plan, its own trial clock at now. */
+    const { data: org, error: oErr } = await svc.from("organizations")
+      .insert({ name, industry, currency: String((group as any).currency || "INR"), plan: "watch", accent: "gold", trial_ends_at: new Date().toISOString() })
+      .select("id").single();
+    if (oErr || !org) return { ok: false, error: "Could not create the workspace. Nothing was saved — try again." };
+    const newId = String((org as any).id);
+    const undo = async () => {
+      try { await svc.from("memberships").delete().eq("org_id", newId); } catch { /* best effort */ }
+      try { await svc.from("organizations").delete().eq("id", newId); } catch { /* best effort */ }
+    };
+
+    const { data: mem, error: mErr } = await svc.from("memberships").insert({ org_id: newId, user_id: user.id, role: "owner" }).select("org_id");
+    if (mErr || !((mem as any[]) || []).length) { await undo(); return { ok: false, error: "Could not make you the owner of the new workspace. Nothing was kept — try again." }; }
+
+    /* The link is made AS THE USER, so cortex_practice_claim's own rank and membership checks apply. */
+    const sb = await createClient();
+    const { data: code, error: cErr } = await sb.rpc("cortex_practice_claim", { p_firm: groupId, p_client: newId, p_limit: limit });
+    if (cErr || String(code || "") !== "ok") {
+      await undo();
+      return { ok: false, error: cErr ? "Shared credits are not set up on this database yet — run 2026_zzzd_practice_pool.sql." : (POOL_MESSAGES[String(code)] || "Could not link the new workspace. Nothing was kept.") };
+    }
+
+    await logActivity(groupId, "practice", `Created company workspace "${name}"`);
+    await logActivity(newId, "practice", `Workspace created inside ${String((group as any).name || "the group")}`);
+    revalidatePath("/practice");
+    return { ok: true, orgId: newId };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Could not create the workspace." };
+  }
+}
 
 export async function setClientPooling(fd: FormData): Promise<{ ok: boolean; error?: string }> {
   try {

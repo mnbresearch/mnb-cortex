@@ -41,8 +41,51 @@ export type CapabilityVerdict =
   | { ok: true }
   | { ok: false; reason: "plan" | "lapsed" | "suspended" };
 
+/*
+  GROUP WORKSPACES (2026-11). An Enterprise customer is a group — a holding
+  company, a PE fund, a family office — and each company in it has its own
+  workspace. Those workspaces are linked to the group through the same
+  practice_org_id link Practice firms use (written only by
+  cortex_practice_claim, which proves the caller administers the group AND
+  belongs to the company), and they already share the group's credit pool.
+
+  What they lacked was the group's FEATURES: a company workspace kept its own
+  plan (usually the signup default), so the API, Autopilot, workflows and the
+  rest were refused inside the very companies the group was paying for.
+
+  A workspace inherits the GROUP's plan for capabilities, seats and integration
+  limits when — and only while — it is linked to a live Enterprise group.
+  Practice firms keep credit pooling only: a CA firm's clients are separate
+  businesses, not one group. A group that lapses or is suspended stops lending
+  its plan at once (resolvePayer re-checks it every time); the company then
+  falls back to its own plan.
+*/
+export const GROUP_PLANS = ["enterprise"] as const;
+
+/** The group's plan this workspace inherits right now, or null. Pure. */
+export function inheritedPlan(org: GateOrg, firm?: GateOrg): string | null {
+  if (!org || !firm || !firm.id || !org.id) return null;
+  if (String(org.practice_org_id || "") !== String(firm.id) || String(firm.id) === String(org.id)) return null;
+  const fplan = String(firm.plan || "").toLowerCase();
+  if (!(GROUP_PLANS as readonly string[]).includes(fplan)) return null;
+  const d = resolvePayer(
+    { id: String(org.id), plan: String(org.plan || ""), status: statusOf(org) },
+    { id: String(firm.id), plan: fplan, status: statusOf(firm) },
+  );
+  return d.pooled ? fplan : null;
+}
+
+/** The plan to read capabilities, seats and limits from: the group's when inherited, else the workspace's own. */
+export function capabilityPlan(org: GateOrg, firm?: GateOrg): string {
+  return inheritedPlan(org, firm) ?? String(org?.plan || "");
+}
+
 export function capabilityVerdict(org: GateOrg, cap: Capability, firm?: GateOrg): CapabilityVerdict {
   if (!org) return { ok: false, reason: "plan" };
+  /* A suspension of THIS workspace is a decision about it; a group cannot lend past it. */
+  if (isHardStopped(statusOf(org))) return { ok: false, reason: "suspended" };
+  const lent = inheritedPlan(org, firm);
+  if (lent) return planIncludes(lent, cap) ? { ok: true } : { ok: false, reason: "plan" };
   if (!planIncludes(String(org.plan || ""), cap)) return { ok: false, reason: "plan" };
 
   const status = statusOf(org);

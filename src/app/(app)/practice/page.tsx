@@ -5,6 +5,7 @@ import { getPractice } from "@/lib/practice";
 import { ClientSwitchLink } from "@/components/client-switch-link";
 import { ClientPoolingToggle } from "@/components/client-pooling-toggle";
 import { ClientBrief } from "@/components/client-brief";
+import { GroupWorkspaceCreator } from "@/components/group-workspace-creator";
 import { AlertTriangle, Info, Building2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +88,7 @@ export default async function Practice() {
               alerts nobody has read. Add yourself to a client&rsquo;s workspace and they appear here automatically.
             </p>
           </Card>
+          {p.live && <GroupWorkspaceCreator group={p.plan === "enterprise"} />}
         </PageShell>
       </>
     );
@@ -123,6 +125,8 @@ export default async function Practice() {
             <div className="text-xs text-muted-foreground mt-0.5">receivables past due</div>
           </Card>
         </div>
+
+        <GroupWorkspaceCreator group={p.plan === "enterprise"} />
 
         <div className="space-y-2">
           {p.clients.map((c) => (
