@@ -5,6 +5,7 @@ import { Section } from "@/components/section";
 import { SafeForm } from "@/components/safe-form";
 import { SubmitButton } from "@/components/form-buttons";
 import { MfaPanel } from "@/components/mfa-panel";
+import { AuditExportButton } from "@/components/audit-export-button";
 import { getUserAndOrg } from "@/lib/data";
 import { hasRole } from "@/lib/roles";
 import { securitySettings, assurance } from "@/lib/strong-auth";
@@ -30,7 +31,7 @@ export default async function SecurityPage() {
 
   return (
     <>
-      <Topbar title="Security" subtitle="Two-step sign-in and AI privacy" />
+      <Topbar title="Security" subtitle="Two-step sign-in, AI privacy and the audit log" />
       <PageShell>
         <Link href="/settings" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Settings</Link>
 
@@ -69,6 +70,10 @@ export default async function SecurityPage() {
             </div>
             {isAdmin && <SubmitButton className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground h-10 px-4 text-sm font-medium disabled:opacity-60"><ShieldCheck className="h-4 w-4" aria-hidden="true" /> Save</SubmitButton>}
           </SafeForm>
+        </Section>
+
+        <Section title="Audit log" desc={isAdmin ? "One spreadsheet of who did what: activity, every action Cortex proposed and who approved it, API key events, billing changes and credit movements. Each download is itself recorded." : "Owners and admins can download the workspace audit log."}>
+          {isAdmin ? <AuditExportButton /> : <p className="text-sm text-muted-foreground">Ask an owner or admin of this workspace.</p>}
         </Section>
       </PageShell>
     </>
