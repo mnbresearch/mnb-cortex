@@ -260,7 +260,9 @@ export async function updateOrgProfile(fd: FormData): Promise<ActionResult | voi
   const [billing, superAdmin] = await Promise.all([getBillingStatus(), isSuperAdmin()]);
   // `superAdmin ||` matches the app layout, which renders branded chrome for
   // super-admins. Without it they could see the branding and not save it.
-  const brandable = superAdmin || planIncludes(billing.plan, "whitelabel");
+  /* An Enterprise group's companies brand themselves too (capabilityPlanOf). */
+  const brandPlan = await (await import("@/lib/engine/plan-gate-server")).capabilityPlanOf(orgId, billing.plan);
+  const brandable = superAdmin || planIncludes(brandPlan, "whitelabel");
 
   /*
     SAY SO RATHER THAN SILENTLY DROPPING IT.

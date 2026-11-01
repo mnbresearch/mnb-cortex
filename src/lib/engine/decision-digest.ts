@@ -2,6 +2,7 @@ import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import { brandFrom, renderBrandedEmail } from "@/lib/branded-email";
+import { orgEmailBrand } from "@/lib/org-brand";
 import { ownerContact } from "@/lib/alert-delivery";
 import { CATALOGUE_BY_KEY } from "@/lib/engine/catalogue";
 import { isHighImpact } from "@/lib/engine/policy";
@@ -114,9 +115,10 @@ export async function sendDecisionDigests(origin: string, budget?: Budget): Prom
       `\n\nEach link opens one proposal and asks you to confirm — opening it changes nothing.`;
 
     try {
-      const html = renderBrandedEmail(body, { origin, preheader: lines[0]?.split("\n")[0] });
+      const brand = await orgEmailBrand(svc, orgId);
+      const html = renderBrandedEmail(body, { origin, preheader: lines[0]?.split("\n")[0], brand });
       const subject = items.length === 1 ? `Cortex needs your decision: ${lines[0].split("\n")[0]}`.slice(0, 120) : `Cortex: ${items.length} actions need your decision`;
-      const res = await sendEmail(to.email, subject, html, { from: brandFrom(), kind: "decision_digest", orgId });
+      const res = await sendEmail(to.email, subject, html, { from: brandFrom(brand), kind: "decision_digest", orgId });
       if (res.sent) { out.sent++; out.proposals += items.length; }
       else { await release(); out.skipped.push(`${orgId}: send failed`); }
     } catch { /* may have delivered — keep the claim rather than risk a daily repeat */ }

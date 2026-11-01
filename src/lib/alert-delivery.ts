@@ -2,6 +2,7 @@ import "server-only";
 import { serviceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import { brandFrom, renderBrandedEmail } from "@/lib/branded-email";
+import { orgEmailBrand } from "@/lib/org-brand";
 import type { Budget } from "@/lib/cron-budget";
 
 /**
@@ -194,11 +195,12 @@ export async function deliverAlerts(origin?: string, budget?: Budget): Promise<D
       `\n\nOpen Cortex to see the numbers behind these and mark them handled.`;
 
     try {
-      const html = renderBrandedEmail(body, { origin, preheader: ordered[0]?.title });
+      const brand = await orgEmailBrand(svc, orgId);
+      const html = renderBrandedEmail(body, { origin, preheader: ordered[0]?.title, brand });
       const subject = ordered.length === 1
         ? `Cortex alert: ${ordered[0].title}`.slice(0, 120)
         : `Cortex: ${ordered.length} alerts need your attention`;
-      const res = await sendEmail(to, subject, html, { from: brandFrom() });
+      const res = await sendEmail(to, subject, html, { from: brandFrom(brand) });
       if (res.sent) { sent++; alerts += ordered.length; }
       else {
         /*

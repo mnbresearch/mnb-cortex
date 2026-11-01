@@ -667,7 +667,7 @@ export const PLANS: Plan[] = [
       "Whose receivables moved this week",
       "Two-way API — push data in from your own systems",
       "Nightly watch drafts up to 15 reminders per workspace",
-      "Your accent colour across the workspace (outbound email is Cortex-branded)",
+      "Your firm's name, logo and colour on the workspace — and on the alert and decision emails your clients receive",
       "Everything in Watch Pro for your firm",
       "Named onboarding for your team",
     ] },
@@ -686,14 +686,15 @@ export const PLANS: Plan[] = [
       /*
         SCOPED TO THE WORKSPACE, deliberately.
 
-        The chrome is branded — layout.tsx reads logo_url and the accent, and
-        the sidebar renders them. But renderBrandedEmail() takes no org
-        parameter, so every email the customer's own clients receive is
-        MNB-branded, and email is the surface a white-label buyer actually
-        judges. Until that is threaded through all ten call sites, the bullet
-        says where the branding stops.
+        The chrome is branded — layout.tsx reads logo_url and the accent — and
+        so are the two emails a workspace's own people receive from Cortex:
+        the alert digest and the decision digest (lib/email-brand.ts).
+        Collections reminders already go out in the customer's own name
+        (collections/envelope.ts). Product mail from MNB itself — billing,
+        lifecycle, the weekly brief — stays MNB-branded, so the bullet names
+        exactly what is branded.
       */
-      "Custom accent colour & logo in your workspace",
+      "Your logo & colour in the workspace and on its alert and decision emails",
       "Image & video generation — 2,000 images and 60 videos a week",
       "Guided onboarding · priority support",
     ] },
@@ -704,8 +705,11 @@ export const PLANS: Plan[] = [
       "Unlimited workspaces & users",
       "1,50,000 AI credits / month — fair use",
       "Everything in Command",
-      // Neither has code behind it today — both are arranged per contract.
-      "Audit export & SSO — on request",
+      "Group workspaces — create your companies; each inherits Enterprise",
+      "Priority daily run — sync, watch and reminders first, every business day",
+      "Audit log export (CSV) for your auditors",
+      // No code behind these — arranged per contract.
+      "SSO — on request",
       "Dedicated environment — on request",
       "Named success manager",
     ] },

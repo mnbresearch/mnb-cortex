@@ -1,5 +1,7 @@
 import "server-only";
 import { signDestination } from "@/lib/track-link";
+import type { OrgBrand } from "@/lib/email-brand";
+export type { OrgBrand } from "@/lib/email-brand";
 
 /* ============================================================
    BRANDING — edit this block only. Everything else is generic.
@@ -57,7 +59,10 @@ export const BRAND = {
 };
 
 /** The RFC-5322 From value: "MNB Cortex by MNB Research <hello@updates.mnbresearch.com>". */
-export function brandFrom(): string {
+export function brandFrom(brand?: OrgBrand | null): string {
+  /* White-label: the workspace's (or firm's) name, honestly marked as relayed,
+     from the same verified address. */
+  if (brand?.sender) return `${brand.sender} <${BRAND.FROM_ADDRESS}>`;
   return `${BRAND.SENDER_DISPLAY} <${BRAND.FROM_ADDRESS}>`;
 }
 
@@ -139,7 +144,7 @@ export function mergeTokens(text: string, v: MergeVars): string {
  * Escapes the body, linkifies bare URLs (optionally click-tracked), converts
  * newlines to <br>, and appends an open-tracking pixel when tracking is provided.
  */
-export function renderBrandedEmail(bodyText: string, opts?: { origin?: string; token?: string; preheader?: string; linkHosts?: string[] }): string {
+export function renderBrandedEmail(bodyText: string, opts?: { origin?: string; token?: string; preheader?: string; linkHosts?: string[]; brand?: OrgBrand | null }): string {
   const origin = opts?.origin || "";
   const token = opts?.token;
   /*
@@ -157,6 +162,12 @@ export function renderBrandedEmail(bodyText: string, opts?: { origin?: string; t
     } catch { return false; }
   };
 
+  /* White-label (lib/email-brand.ts): the workspace's name, logo and colour;
+     no MNB header, tagline, badges, phone or marketing footer — one quiet line
+     of provenance stays, because a recipient is entitled to know the relay. */
+  const brand = opts?.brand || null;
+  const linkColor = brand ? brand.color : BRAND.COLOR_TO;
+
   // Body: escape → linkify (tracked if token) → line breaks.
   const linked = esc(bodyText).split(/(https?:\/\/[^\s<]+)/g).map((p) => {
     if (/^https?:\/\//.test(p) && linkable(p)) {
@@ -165,7 +176,7 @@ export function renderBrandedEmail(bodyText: string, opts?: { origin?: string; t
       const href = token && origin
         ? `${origin}/api/t/c/${encodeURIComponent(token)}?u=${encodeURIComponent(p)}&s=${signDestination(p)}`
         : p;
-      return `<a href="${href}" style="color:${BRAND.COLOR_TO};text-decoration:underline">${p}</a>`;
+      return `<a href="${href}" style="color:${linkColor};text-decoration:underline">${p}</a>`;
     }
     return p;
   }).join("").replace(/\n/g, "<br/>");
@@ -173,6 +184,31 @@ export function renderBrandedEmail(bodyText: string, opts?: { origin?: string; t
   const pixel = token && origin ? `<img src="${origin}/api/t/o/${encodeURIComponent(token)}.gif" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px" />` : "";
   const badges = BRAND.BADGES.map((b) => `<span style="display:inline-block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#5b6b64;background:#eef4f1;border-radius:999px;padding:3px 9px;margin:2px 3px">${esc(b)}</span>`).join("");
   const pre = opts?.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(opts.preheader)}</div>` : "";
+
+  if (brand) {
+    const logo = brand.logoUrl && brand.logoUrl.startsWith("https://")
+      ? `<img src="${esc(brand.logoUrl)}" alt="" height="32" style="display:inline-block;height:32px;max-width:160px;border:0;vertical-align:middle;margin-right:10px" />`
+      : "";
+    return `<!doctype html><html><body style="margin:0;padding:0;background:#f4f5f6">
+${pre}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f6;padding:24px 12px">
+  <tr><td align="center">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+      <tr><td style="border-top:4px solid ${brand.color};padding:22px 28px 6px">
+        ${logo}<span style="font-size:18px;font-weight:700;color:#111827;vertical-align:middle">${esc(brand.name)}</span>
+      </td></tr>
+      <tr><td style="padding:18px 28px 18px;color:#1a2420;font-size:15px;line-height:1.6">
+        ${linked}
+      </td></tr>
+      <tr><td style="padding:14px 28px 22px;border-top:1px solid #eef0f2">
+        <div style="font-size:11px;color:#9aa1a9;line-height:1.5">Sent by ${esc(brand.name)} using Cortex.</div>
+      </td></tr>
+    </table>
+    ${pixel}
+  </td></tr>
+</table>
+</body></html>`;
+  }
 
   return `<!doctype html><html><body style="margin:0;padding:0;background:#f4f6f5">
 ${pre}

@@ -1,3 +1,4 @@
+import { capabilityPlanOf } from "@/lib/engine/plan-gate-server";
 import { NavProgress } from "@/components/nav-progress";
 import { Sidebar } from "@/components/sidebar";
 import { MobileNav } from "@/components/mobile-nav";
@@ -43,7 +44,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     So the more expensive plan's differentiator was free, and its headline
     feature did not exist. This is the one place that decides both.
   */
-  const brandable = superAdmin || planIncludes(billing.plan, "whitelabel");
+  const brandPlan = orgId ? await capabilityPlanOf(orgId, billing.plan) : billing.plan;
+  const brandable = superAdmin || planIncludes(brandPlan, "whitelabel");
   const logoUrl = brandable && typeof profile?.logo_url === "string" && profile.logo_url.startsWith("https://")
     ? profile.logo_url
     : null;

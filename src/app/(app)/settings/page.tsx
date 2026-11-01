@@ -12,6 +12,7 @@ import { getOrgProfile, getUserAndOrg } from "@/lib/data";
 import { updateOrgProfile, seedDemoData, clearDemoData, hasDemoData, signOut } from "@/lib/actions";
 import { APP_VERSION, planIncludes, lowestPlanWith } from "@/lib/config";
 import { getBillingStatus } from "@/lib/billing";
+import { capabilityPlanOf } from "@/lib/engine/plan-gate-server";
 import { isSuperAdmin } from "@/lib/superadmin";
 import { ACCENT_NAMES } from "@/lib/utils";
 import { INDUSTRIES as AGENT_INDUSTRIES, SECTORS } from "@/lib/agents/catalog";
@@ -43,7 +44,9 @@ export default async function Settings() {
   // `isOwner`-style super-admin allowance, matching the app layout and the
   // server action. All three must agree or the operator sees branding they
   // cannot save.
-  const brandable = (await isSuperAdmin()) || planIncludes(billing.plan, "whitelabel");
+  const { orgId: brandOrg } = await getUserAndOrg();
+  const brandPlan = brandOrg ? await capabilityPlanOf(brandOrg, billing.plan) : billing.plan;
+  const brandable = (await isSuperAdmin()) || planIncludes(brandPlan, "whitelabel");
   const inp = "rounded-lg border bg-background px-3 h-9 text-sm w-full outline-none focus:ring-2 focus:ring-ring";
   const btn = "inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90";
 
