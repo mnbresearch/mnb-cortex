@@ -8,8 +8,10 @@ import { CollapsibleForm, Field, SelectField, DeleteButton } from "@/components/
 import { getWorkflowsList, getWorkflowRuns } from "@/lib/data";
 import { addWorkflow, runWorkflow, toggleWorkflow } from "@/lib/actions";
 import { AutomateThis } from "@/components/automate-this";
+import { ExecutiveRoutines } from "@/components/executive-routines";
 import { Workflow, Zap, Play, Pause, PlayCircle } from "lucide-react";
 import { ACTIONS } from "@/lib/workflows";
+import { listExecutiveRoutines } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 // Example workflows written in the real step language, so what a visitor sees
@@ -22,13 +24,18 @@ const demo = [
 ];
 
 export default async function Workflows() {
-  const wf = await getWorkflowsList();
-  const runs = await getWorkflowRuns();
+  const [wf, runs, routines] = await Promise.all([
+    getWorkflowsList(),
+    getWorkflowRuns(),
+    listExecutiveRoutines(),
+  ]);
   const list = wf.live ? wf.rows : demo;
   return (
     <>
-      <Topbar title="Workflow Automation" subtitle="The COO doesn't just advise — it executes" />
+      <Topbar title="Workflow Automation & Executive Routines" subtitle="Autopilot routines and multi-step operational procedures" />
       <PageShell>
+        <ExecutiveRoutines initial={routines} />
+
         <p className="text-sm text-muted-foreground">{wf.live ? `${list.length} workflows` : "Demo workflows"} · {runs.live ? runs.rows.length : 0} runs logged</p>
 
         <Card className="p-4">

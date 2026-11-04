@@ -2944,7 +2944,10 @@ export async function convertQuoteToInvoice(fd: FormData): Promise<ActionResult 
 */
 export type ActionTask = {
   id: string; title: string; col: 0 | 1 | 2;
-  priority?: "P1" | "P2" | "P3" | null; source: string;
+  priority?: "P0" | "P1" | "P2" | "P3" | null; source: string;
+  waiting_on?: string | null;
+  due_date?: string | null;
+  context_source?: string | null;
 };
 
 export async function listTasks(): Promise<ActionTask[]> {
@@ -2953,7 +2956,7 @@ export async function listTasks(): Promise<ActionTask[]> {
   const sb = await createClient();
   try {
     const { data } = await sb.from("action_tasks")
-      .select("id,title,col,priority,source")
+      .select("id,title,col,priority,source,waiting_on,due_date,context_source")
       .eq("org_id", orgId).order("created_at", { ascending: true }).limit(300);
     return (data as any[] || []).map((t) => ({ ...t, col: Number(t.col) as 0 | 1 | 2 }));
   } catch { return []; }   // table not migrated yet — board still renders
@@ -2964,15 +2967,22 @@ export async function addTask(fd: FormData) {
   const title = str(fd.get("title")).slice(0, 200);
   if (!title) return;
   const priority = str(fd.get("priority"));
+  const waiting_on = str(fd.get("waiting_on")) || null;
+  const due_date = str(fd.get("due_date")) || null;
+  const context_source = str(fd.get("context_source")) || null;
   const { error } = await sb.from("action_tasks").insert({
     org_id: orgId,
     title,
     col: 0,
-    priority: ["P1", "P2", "P3"].includes(priority) ? priority : null,
+    priority: ["P0", "P1", "P2", "P3"].includes(priority) ? priority : null,
     source: str(fd.get("source")) === "ai" ? "ai" : "user",
+    waiting_on,
+    due_date,
+    context_source,
   });
   if (error) throw new Error(error.message);
   revalidatePath("/action-center");
+  revalidatePath("/tasks");
 }
 
 export async function moveTask(fd: FormData) {
@@ -2986,21 +2996,143 @@ export async function moveTask(fd: FormData) {
     .eq("id", id).eq("org_id", orgId);
   if (error) throw new Error(error.message);
   revalidatePath("/action-center");
+  revalidatePath("/tasks");
 }
 
 export async function deleteTask(fd: FormData) {
-  /*
-    MANAGER, matching RLS (2026_write_rank_gates.sql: action_tasks delete needs
-    rank 3). At analyst the delete matched zero rows, returned no error, and the
-    board showed the task gone until the next reload. The count is read back;
-    the board catches the throw, restores the task and says why.
-  */
   const { orgId } = await requireRole("manager"); const sb = await createClient();
   const { data, error } = await sb.from("action_tasks")
     .delete().eq("id", str(fd.get("id"))).eq("org_id", orgId).select("id");
   if (error) throw new Error(error.message);
   if (!data || data.length === 0) throw new Error("the task was not deleted — it may already be gone, or your role cannot delete tasks");
   revalidatePath("/action-center");
+  revalidatePath("/tasks");
+}
+
+// ---- Commitments Tracking (Chief of Staff) ----
+export type Commitment = {
+  id: string;
+  title: string;
+  party: string;
+  direction: "we_promised" | "they_promised";
+  due_date: string | null;
+  status: "pending" | "fulfilled" | "slipped";
+  context?: string | null;
+  source: string;
+  created_at?: string;
+  fulfilled_at?: string | null;
+};
+
+export async function listCommitments(): Promise<Commitment[]> {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return [];
+  const sb = await createClient();
+  try {
+    const { data } = await sb.from("commitments")
+      .select("id,title,party,direction,due_date,status,context,source,created_at,fulfilled_at")
+      .eq("org_id", orgId).order("due_date", { ascending: true, nullsFirst: false }).limit(200);
+    return (data as any[] || []);
+  } catch { return []; }
+}
+
+export async function addCommitment(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = await createClient();
+  const title = str(fd.get("title")).slice(0, 250);
+  const party = str(fd.get("party")).slice(0, 150);
+  if (!title || !party) return;
+  const direction = str(fd.get("direction")) === "they_promised" ? "they_promised" : "we_promised";
+  const due_date = str(fd.get("due_date")) || null;
+  const context = str(fd.get("context")) || null;
+  const source = str(fd.get("source")) === "ai" ? "ai" : "user";
+  const { error } = await sb.from("commitments").insert({
+    org_id: orgId,
+    title,
+    party,
+    direction,
+    due_date,
+    status: "pending",
+    context,
+    source,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath("/tasks");
+  revalidatePath("/action-center");
+}
+
+export async function updateCommitmentStatus(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = await createClient();
+  const id = str(fd.get("id"));
+  const rawStatus = str(fd.get("status"));
+  const status = ["pending", "fulfilled", "slipped"].includes(rawStatus) ? rawStatus : "pending";
+  const { error } = await sb.from("commitments")
+    .update({ status, fulfilled_at: status === "fulfilled" ? new Date().toISOString() : null })
+    .eq("id", id).eq("org_id", orgId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/tasks");
+  revalidatePath("/action-center");
+}
+
+export async function deleteCommitment(fd: FormData) {
+  const { orgId } = await requireRole("manager"); const sb = await createClient();
+  const { data, error } = await sb.from("commitments")
+    .delete().eq("id", str(fd.get("id"))).eq("org_id", orgId).select("id");
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error("the commitment was not deleted — it may already be gone, or your role cannot delete it");
+  revalidatePath("/tasks");
+  revalidatePath("/action-center");
+}
+
+// ---- Executive Routines (Chief of Staff) ----
+export type ExecutiveRoutine = {
+  id: string;
+  title: string;
+  frequency: "daily" | "weekly" | "monthly";
+  action_type: "brief" | "triage" | "commitments" | "digest";
+  is_active: boolean;
+  last_run: string | null;
+  created_at: string;
+};
+
+export async function listExecutiveRoutines(): Promise<ExecutiveRoutine[]> {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) return [];
+  const sb = await createClient();
+  try {
+    const { data } = await sb.from("executive_routines")
+      .select("id,title,frequency,action_type,is_active,last_run,created_at")
+      .eq("org_id", orgId).order("created_at", { ascending: true }).limit(50);
+    return (data as any[] || []);
+  } catch { return []; }
+}
+
+export async function addExecutiveRoutine(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = await createClient();
+  const title = str(fd.get("title")).slice(0, 200);
+  const frequency = str(fd.get("frequency"));
+  const action_type = str(fd.get("action_type"));
+  if (!title) return;
+  const { error } = await sb.from("executive_routines").insert({
+    org_id: orgId,
+    title,
+    frequency: ["daily", "weekly", "monthly"].includes(frequency) ? frequency : "daily",
+    action_type: ["brief", "triage", "commitments", "digest"].includes(action_type) ? action_type : "brief",
+    is_active: true,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath("/workflows");
+  revalidatePath("/tasks");
+}
+
+export async function toggleExecutiveRoutine(fd: FormData) {
+  const orgId = await requireWriteOrg(); const sb = await createClient();
+  const id = str(fd.get("id"));
+  const is_active = str(fd.get("is_active")) === "true";
+  const { error } = await sb.from("executive_routines")
+    .update({ is_active })
+    .eq("id", id).eq("org_id", orgId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/workflows");
+  revalidatePath("/tasks");
 }
 
 // ---- KPI alert rules ----

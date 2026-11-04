@@ -137,6 +137,8 @@ export const CREDIT_COSTS: Record<string, number> = {
   transform_plan: 14,
   /* "Automate this": one short JSON call turning a sentence into workflow steps. */
   automation_plan: 14,
+  /* Executive Bond Chief of Staff triage & routine generation */
+  triage: 14, routine: 14, commitments: 14,
 
   // STANDARD — the default working answer.
   chat: 19, ask: 19, document: 19, meeting: 19,
@@ -649,9 +651,12 @@ export const PLANS: Plan[] = [
       "Up to 20 users",
       "17,500 AI credits / month",
       "Everything in Watch",
+      "Executive Action Board with P0–P3 triage & counterparty follow-up tracking",
+      "Automated commitment tracker (we promised vs they promised)",
+      "Daily decision-grade morning brief",
       "Ask Cortex anything about your own rows",
       "Alert rules you set, delivered by email",
-      "Workflow automation on a schedule",
+      "Workflow automation & executive routines on a schedule",
       "Read API with scoped, expiring keys + signed outbound webhooks",
       "Cortex Memory — permanent business context",
       "Image & video generation — 500 images and 20 videos a week",

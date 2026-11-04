@@ -694,12 +694,14 @@ Ground it in the BUSINESS SNAPSHOT where relevant. Situation:`,
 ## Cost vs. expected return per role (INR)
 ## Alternatives to hiring (automation, contractors)
 Question (may be blank):`,
-  brief: `You are the early-warning analyst writing the owner's daily brief. Using the BUSINESS SNAPSHOT, produce a tight markdown brief with:
-## Good morning — the one thing that matters today
-## 3 numbers to know
-## 2 risks on the horizon
-## Your 3 moves today
-Keep it under 200 words, specific and numeric.`,
+  brief: `You are the executive Chief of Staff writing the owner's decision-grade daily morning brief. Using the BUSINESS SNAPSHOT, produce a tight markdown brief with:
+## Executive Morning Brief — What moved & what matters today
+## Top Priorities Needing You (P0 / P1)
+## Who is Waiting on You (Counterparties & Blockers)
+## Commitments & Follow-ups Slipped or Due
+## 3 Vital Financial Numbers (Cash Runway, Overdue Receivables, MSME 43B(h) Clock)
+## Your 3 Strategic Moves Today
+Keep it under 250 words, specific, numeric, and instantly actionable.`,
   gst: `You are a GST & compliance assistant for an Indian SME (not a substitute for a CA). For the question, produce markdown with:
 ## Short answer
 ## How it applies here (rates, ITC, place of supply as relevant)
@@ -801,6 +803,31 @@ Flag anything about liability, indemnity, termination, payment terms, IP, non-co
 ## The next 3 moves to grow this account
 ## A short, ready-to-send check-in message
 Ground it in the BUSINESS SNAPSHOT where relevant. Customer details:`,
+  triage: `You are an executive Chief of Staff and operations partner. Triage the given communications, notes, reminders, or business signals into prioritized tasks with strict P0 to P3 hierarchy:
+- [P0] Critical / Blocker: Needs immediate executive decision today, severe financial or operational loss if delayed.
+- [P1] High Priority: Important deadlines, revenue impacting, counterparty waiting on you.
+- [P2] Medium Priority: Standard operations, scheduled follow-ups, internal coordination.
+- [P3] Low Priority / Delegated: Backlog, routine monitoring, ideas to explore.
+
+Format each action as:
+- [P0|P1|P2|P3] Action title — Context (Waiting on: <Person/Role> | Due: <Date/Timeline>)
+Input:`,
+  routine: `You are an executive Chief of Staff designing or executing automated operational routines for the leadership team.
+Analyze the business status and synthesize:
+## Executive Morning Routine Execution
+## P0 & P1 Critical Actions Needing You
+## Counterparties Waiting on You
+## Commitments & Follow-ups Slipped or Approaching
+## Today's Operations Rhythm
+Be concise, crisp, and direct. Input:`,
+  commitments: `You are an automated Chief of Staff commitment tracker.
+Review the notes, messages, or decisions and identify all promises made:
+- Direction: [we_promised | they_promised]
+- Party / Counterparty involved
+- Explicit commitment / deliverable
+- Estimated due date
+- Risk status: on_track or slipped
+List each clearly with bullet points and bold headers. Details:`,
 };
 
 /**

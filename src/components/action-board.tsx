@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Plus, Trash2, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Sparkles, Plus, Trash2, ChevronLeft, ChevronRight, Loader2, ArrowUpDown, Filter, Clock, UserCheck } from "lucide-react";
 import { addTask, moveTask, deleteTask, type ActionTask } from "@/lib/actions";
 
 type Task = ActionTask;
@@ -15,39 +15,24 @@ const COLS = ["To do", "In progress", "Done"] as const;
 */
 const SEED: Task[] = [];
 
-const pt: Record<string, string> = { P1: "bg-danger/10 text-danger border-danger/20", P2: "bg-warning/10 text-warning border-warning/20", P3: "bg-primary/10 text-primary border-primary/20" };
+const pt: Record<string, string> = {
+  P0: "bg-danger text-white border-danger font-semibold animate-pulse",
+  P1: "bg-danger/10 text-danger border-danger/20 font-medium",
+  P2: "bg-warning/10 text-warning border-warning/20",
+  P3: "bg-primary/10 text-primary border-primary/20",
+};
 
 /*
-  `initial` is fetched on the server by the page and passed in, so the board is
-  populated in the first paint rather than flashing empty.
-
-  WHAT CHANGED. This component kept the entire board in localStorage. The owner
-  opened Cortex on his phone and saw nothing — not stale, empty — and nobody on
-  his team could see what he had committed to. It also meant the server had no
-  idea what Cortex had suggested, so the product could never ask "you said you'd
-  chase this three weeks ago, did you?", which is the loop it is sold on.
-
-  Each mutation writes through a server action and then updates local state, so
-  the board still feels instant while being real.
+  ActionBoard with Bond-grade P0–P3 self-managing prioritization,
+  automated triage, and counterparty tracking ("Waiting on").
 */
 export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
   const [tasks, setTasks] = useState<Task[]>(initial);
   const [draft, setDraft] = useState("");
+  const [priorityDraft, setPriorityDraft] = useState<"P0" | "P1" | "P2" | "P3">("P1");
+  const [waitingOnDraft, setWaitingOnDraft] = useState("");
   const [loading, setLoading] = useState(false);
-  /*
-    THE BOARD NEVER SAID ANYTHING WHEN IT FAILED.
-
-    Two silences, both of which look identical to a bug in the user's eyes:
-
-      - persist() caught every write error and restored the previous state. A
-        task the user typed simply vanished a moment after appearing, with no
-        message. The rollback was right; doing it wordlessly was not.
-      - generate() had `catch {}` — a literally empty handler — around the
-        whole AI call. Out of credits, no API key, a network failure: the
-        spinner stopped and nothing else happened. "Generate from my business"
-        appeared to be a button that does nothing, which is exactly how a
-        customer describes a product they are about to stop paying for.
-  */
+  const [filter, setFilter] = useState<"all" | "p0_p1" | "waiting_on">("all");
   const [err, setErr] = useState("");
 
   useEffect(() => { setTasks(initial); }, [initial]);
@@ -63,12 +48,18 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
   async function add() {
     const title = draft.trim();
     if (!title) return;
+    const waiting_on = waitingOnDraft.trim() || undefined;
+    const priority = priorityDraft;
     setDraft("");
+    setWaitingOnDraft("");
     const before = tasks;
     // Optimistic. The temporary id is replaced by the server's on next load.
-    const tmp: Task = { id: "tmp" + Date.now(), title, col: 0, source: "user" };
+    const tmp: Task = { id: "tmp" + Date.now(), title, col: 0, priority, waiting_on, source: "user" };
     setTasks((t) => [...t, tmp]);
-    const fd = new FormData(); fd.set("title", title);
+    const fd = new FormData();
+    fd.set("title", title);
+    fd.set("priority", priority);
+    if (waiting_on) fd.set("waiting_on", waiting_on);
     await persist(() => addTask(fd), before, "save that task");
   }
 
@@ -91,120 +82,228 @@ export function ActionBoard({ initial = SEED }: { initial?: Task[] }) {
     await persist(() => deleteTask(fd), before, "delete that task");
   }
 
-  async function generate() {
+  async function generate(mode: "actions" | "triage" = "actions") {
     setLoading(true);
     setErr("");
     try {
-      const r = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "actions", input: "" }) });
+      const r = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode, input: "" }),
+      });
       const j = await r.json().catch(() => ({} as any));
 
-      /*
-        The credit denial arrives as a 402 whose body carries the real
-        explanation ("You're out of credits — top up to keep going"). That
-        message was being fed straight into the bullet regex below, which of
-        course matches nothing, so the most actionable error in the product
-        was silently discarded and the board just stayed empty.
-      */
       if (!r.ok || j?.ok === false || j?.error) {
-        setErr(String(j?.error || j?.text || "Cortex couldn't generate actions right now. Try again in a moment."));
+        setErr(String(j?.error || j?.text || "Cortex couldn't triage actions right now. Try again in a moment."));
         return;
       }
 
       const lines: string[] = String(j.text || "").split("\n").filter((l) => /^\s*(\d+\.|[-*]|\*\*\[)/.test(l));
       const parsed: Task[] = lines.slice(0, 8).map((l, i) => {
-        const pr = (l.match(/\[(P[123])\]/) || [])[1] as any;
-        const title = l.replace(/^\s*(\d+\.|[-*])\s*/, "").replace(/\*\*/g, "").replace(/\[P[123]\]\s*/, "").split("—")[0].trim().slice(0, 90);
-        return { id: "tmp" + Date.now() + i, title, col: 0 as const, priority: pr, source: "ai" };
+        const prMatch = l.match(/\[(P[0123])\]/);
+        const pr = (prMatch ? prMatch[1] : (mode === "triage" ? "P1" : "P2")) as any;
+        const waitingMatch = l.match(/waiting on:?\s*([^)|—\n]+)/i);
+        const waiting_on = waitingMatch ? waitingMatch[1].trim() : undefined;
+        const title = l
+          .replace(/^\s*(\d+\.|[-*])\s*/, "")
+          .replace(/\*\*/g, "")
+          .replace(/\[P[0123]\]\s*/, "")
+          .split("—")[0]
+          .trim()
+          .slice(0, 90);
+        return {
+          id: "tmp" + Date.now() + i,
+          title,
+          col: 0 as const,
+          priority: pr,
+          waiting_on,
+          source: "ai",
+        };
       }).filter((t) => t.title);
+
       if (!parsed.length) {
-        // The model answered, but not in a shape with any actions in it.
         setErr("Cortex didn't find any clear actions from your current numbers. Add or import more data and try again.");
         return;
       }
-      {
-        setTasks((t) => [...parsed, ...t]);
-        /*
-          Persist each one, tagged source:"ai" so the follow-up loop can later
-          tell what Cortex suggested from what the owner wrote himself.
 
-          THE FAILURES ARE COUNTED NOW. This loop was
-          `try { await addTask(fd); } catch { /* keep the rest *\/ }` — so up to
-          eight AI-generated tasks appeared on the board, some or all of them
-          unsaved, and vanished on the next reload with nothing ever said. The
-          header comment on this file promises the opposite: "Each mutation
-          writes through a server action and then updates local state, so the
-          board still feels instant while being real." Only the generate path
-          skipped persist() and its rollback.
-
-          Continuing through failures rather than aborting is right — one bad
-          title should not discard seven good ones — so this keeps the loop and
-          reports the shortfall instead. Rolling the whole set back would throw
-          away a paid-for model call, so the ones that did save stay, and only
-          the ones that did not are removed from the board.
-        */
-        const failed: string[] = [];
-        for (const t of parsed) {
-          const fd = new FormData();
-          fd.set("title", t.title);
-          if (t.priority) fd.set("priority", t.priority);
-          fd.set("source", "ai");
-          try { await addTask(fd); } catch { failed.push(t.id); }
-        }
-        if (failed.length) {
-          setTasks((t) => t.filter((x) => !failed.includes(x.id)));
-          setErr(
-            failed.length === parsed.length
-              ? "Cortex generated actions but none could be saved — check your connection and try again."
-              : `${failed.length} of ${parsed.length} actions couldn't be saved and have been removed from the board. The rest are saved.`,
-          );
-        }
+      setTasks((t) => [...parsed, ...t]);
+      const failed: string[] = [];
+      for (const t of parsed) {
+        const fd = new FormData();
+        fd.set("title", t.title);
+        if (t.priority) fd.set("priority", t.priority);
+        if (t.waiting_on) fd.set("waiting_on", t.waiting_on);
+        fd.set("source", "ai");
+        try { await addTask(fd); } catch { failed.push(t.id); }
+      }
+      if (failed.length) {
+        setTasks((t) => t.filter((x) => !failed.includes(x.id)));
+        setErr(
+          failed.length === parsed.length
+            ? "Cortex generated actions but none could be saved — check your connection and try again."
+            : `${failed.length} of ${parsed.length} actions couldn't be saved and have been removed from the board. The rest are saved.`,
+        );
       }
     } catch (e: any) {
       setErr(e?.message ? `Couldn't reach Cortex: ${e.message}` : "Couldn't reach Cortex — check your connection and try again.");
     } finally { setLoading(false); }
   }
 
+  const displayedTasks = tasks.filter((t) => {
+    if (filter === "p0_p1") return t.priority === "P0" || t.priority === "P1";
+    if (filter === "waiting_on") return Boolean(t.waiting_on);
+    return true;
+  });
+
   return (
     <Card className="p-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="font-semibold">Action board</div>
-        <Button variant="outline" size="sm" onClick={generate} disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Generate from my business</Button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="font-semibold text-base flex items-center gap-2">
+            <span>Executive Action Board</span>
+            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-normal">P0–P3 Prioritized</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">Self-managing operational to-do list with counterparty follow-up tracking</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center rounded-lg border bg-secondary/30 p-0.5 text-xs">
+            <button
+              onClick={() => setFilter("all")}
+              className={`px-2.5 py-1 rounded-md transition-colors ${filter === "all" ? "bg-background shadow font-medium" : "text-muted-foreground"}`}
+            >
+              All ({tasks.length})
+            </button>
+            <button
+              onClick={() => setFilter("p0_p1")}
+              className={`px-2.5 py-1 rounded-md transition-colors ${filter === "p0_p1" ? "bg-background shadow font-medium text-danger" : "text-muted-foreground"}`}
+            >
+              P0 & P1 Urgent
+            </button>
+            <button
+              onClick={() => setFilter("waiting_on")}
+              className={`px-2.5 py-1 rounded-md transition-colors ${filter === "waiting_on" ? "bg-background shadow font-medium text-primary" : "text-muted-foreground"}`}
+            >
+              Waiting On
+            </button>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => generate("triage")} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-primary" />}
+            Auto-Triage P0–P3
+          </Button>
+        </div>
       </div>
-      <div className="flex gap-2">
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="Add a task…" aria-label="Add a task"
-          className="flex-1 rounded-lg border bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring" />
-        <Button onClick={add}><Plus className="h-4 w-4" /> Add</Button>
+
+      <div className="grid sm:grid-cols-12 gap-2 bg-secondary/15 p-2 rounded-lg border">
+        <div className="sm:col-span-6">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+            placeholder="Add an executive action or task…"
+            aria-label="Add a task"
+            className="w-full rounded-md border bg-background px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <div className="sm:col-span-3">
+          <input
+            value={waitingOnDraft}
+            onChange={(e) => setWaitingOnDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+            placeholder="Waiting on (e.g. Ramesh, Vendor)…"
+            aria-label="Waiting on"
+            className="w-full rounded-md border bg-background px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <select
+            value={priorityDraft}
+            onChange={(e) => setPriorityDraft(e.target.value as any)}
+            className="w-full rounded-md border bg-background px-2.5 h-9 text-sm outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="P0">P0 (Critical / Blocker)</option>
+            <option value="P1">P1 (High Priority)</option>
+            <option value="P2">P2 (Medium)</option>
+            <option value="P3">P3 (Low / Delegated)</option>
+          </select>
+        </div>
+        <div className="sm:col-span-1">
+          <Button onClick={add} size="sm" className="w-full h-9">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
-      {/* role="alert" so a screen reader is told immediately — a failure the
-          user cannot see is worse than one they can. */}
+
       {err && (
         <p role="alert" className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">
           {err}
         </p>
       )}
+
       <div className="grid sm:grid-cols-3 gap-3">
-        {COLS.map((name, ci) => (
-          <div key={name} className="rounded-lg border bg-background/40 p-3">
-            <div className="text-sm font-medium mb-2 flex items-center justify-between">{name}<span className="text-xs text-muted-foreground">{tasks.filter((t) => t.col === ci).length}</span></div>
-            <div className="space-y-2 min-h-[60px]">
-              {tasks.filter((t) => t.col === ci).map((t) => (
-                <div key={t.id} className="rounded-lg border bg-card p-2.5 text-sm">
-                  <div className="flex items-start gap-1.5">
-                    {t.priority && <span className={`text-[10px] rounded border px-1 py-0.5 ${pt[t.priority]}`}>{t.priority}</span>}
-                    <span className={`flex-1 ${t.col === 2 ? "line-through text-muted-foreground" : ""}`}>{t.title}</span>
+        {COLS.map((name, ci) => {
+          const colTasks = displayedTasks.filter((t) => t.col === ci);
+          return (
+            <div key={name} className="rounded-lg border bg-background/40 p-3 flex flex-col">
+              <div className="text-sm font-medium mb-2.5 flex items-center justify-between">
+                <span>{name}</span>
+                <span className="text-xs bg-muted px-2 py-0.5 rounded-full font-normal text-muted-foreground">
+                  {colTasks.length}
+                </span>
+              </div>
+              <div className="space-y-2 min-h-[80px] flex-1">
+                {colTasks.map((t) => (
+                  <div key={t.id} className="rounded-lg border bg-card p-3 text-sm shadow-sm space-y-1.5 hover:border-primary/40 transition-colors">
+                    <div className="flex items-start gap-1.5">
+                      {t.priority && (
+                        <span className={`text-[10px] rounded border px-1.5 py-0.5 shrink-0 ${pt[t.priority] || pt.P2}`}>
+                          {t.priority}
+                        </span>
+                      )}
+                      <span className={`flex-1 font-medium ${t.col === 2 ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                        {t.title}
+                      </span>
+                    </div>
+                    {t.waiting_on && (
+                      <div className="text-xs text-muted-foreground flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded w-fit">
+                        <UserCheck className="h-3 w-3 text-primary" />
+                        <span>Waiting on: <strong className="text-foreground">{t.waiting_on}</strong></span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1 pt-1 border-t border-border/40">
+                      <button
+                        onClick={() => move(t.id, -1)}
+                        disabled={t.col === 0}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-30 min-h-11 min-w-11 p-2 rounded hover:bg-secondary flex items-center justify-center"
+                        aria-label="Previous"
+                      >
+                        <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => move(t.id, 1)}
+                        disabled={t.col === 2}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-30 min-h-11 min-w-11 p-2 rounded hover:bg-secondary flex items-center justify-center"
+                        aria-label="Next"
+                      >
+                        <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => del(t.id)}
+                        className="ml-auto text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2 rounded hover:bg-danger/10 flex items-center justify-center"
+                        aria-label="Remove"
+                      >
+                        <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 mt-2">
-                    <button onClick={() => move(t.id, -1)} disabled={t.col === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 min-h-11 min-w-11 p-2" aria-label="Previous"><ChevronLeft aria-hidden="true" className="h-4 w-4" /></button>
-                    <button onClick={() => move(t.id, 1)} disabled={t.col === 2} className="text-muted-foreground hover:text-foreground disabled:opacity-30 min-h-11 min-w-11 p-2" aria-label="Next"><ChevronRight aria-hidden="true" className="h-4 w-4" /></button>
-                    <button onClick={() => del(t.id)} className="ml-auto text-muted-foreground hover:text-danger min-h-11 min-w-11 p-2" aria-label="Remove"><Trash2 aria-hidden="true" className="h-3.5 w-3.5" /></button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      <p className="text-xs text-muted-foreground">Saved to your workspace — visible on every device and to your team. Use the arrows to move a task across the board.</p>
+      <p className="text-xs text-muted-foreground">
+        Ranked P0 to P3. Syncs seamlessly across all devices and workspace members.
+      </p>
     </Card>
   );
 }

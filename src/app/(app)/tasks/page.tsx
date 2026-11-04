@@ -1,21 +1,23 @@
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { ActionBoard } from "@/components/action-board";
-import { listTasks } from "@/lib/actions";
+import { CommitmentsPanel } from "@/components/commitments-panel";
+import { listTasks, listCommitments } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function Tasks() {
-  // Fetched on the server so the board is populated in the first paint rather
-  // than flashing empty — and, more to the point, so it is the same board on
-  // every device. It used to live in localStorage.
-  const initial = await listTasks();
+  const [initialTasks, initialCommitments] = await Promise.all([
+    listTasks(),
+    listCommitments(),
+  ]);
 
   return (
     <>
-      <Topbar title="Action Board" subtitle="Turn advice into things that actually get done" />
+      <Topbar title="Executive Action & Commitments" subtitle="Prioritized P0–P3 triage and automated counterparty follow-up tracking" />
       <PageShell>
-        <ActionBoard initial={initial} />
+        <ActionBoard initial={initialTasks} />
+        <CommitmentsPanel initial={initialCommitments} />
       </PageShell>
     </>
   );

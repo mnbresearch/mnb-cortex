@@ -25,22 +25,22 @@ export function BriefPanel() {
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
   const desc = generatedAt
-    ? `Generated at ${generatedAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}, from your figures as they stood then`
-    : "Nothing generated yet today — press the button to build it from your current figures";
+    ? `Generated at ${generatedAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}, from your live operational and financial figures`
+    : "Nothing generated yet today — decision-grade morning brief: what moved, who is waiting on you, top P0/P1 priorities, and cash runway";
 
   return (
-    <Section title="Today's brief" desc={desc}>
+    <Section title="Executive Morning Brief" desc={desc}>
       <AIPanel
         inputOptional
         mode="brief"
         placeholder=""
-        cta={generatedAt ? "Regenerate today's brief" : "Generate today's brief"}
+        cta={generatedAt ? "Regenerate Executive Brief" : "Generate Executive Morning Brief"}
         saveMode="strategy"
         onResult={(_text, at) => setGeneratedAt(at)}
       />
       {generatedAt && (
         <p className="text-xs text-muted-foreground mt-2">
-          A brief reflects the moment it was built. Regenerate it after importing data or recording a payment.
+          Decision-grade briefing reflects the moment it was produced. Regenerate after updating commitments or recording payments.
         </p>
       )}
     </Section>
