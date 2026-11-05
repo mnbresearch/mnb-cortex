@@ -150,6 +150,24 @@ export const PLAYBOOKS: Playbook[] = [
     industries: ["D2C", "Retail", "Services", "Wholesale"],
     engine: "rules",
   },
+  {
+    id: "month-end-close",
+    name: "Autonomous Month-End Close",
+    watches: "Unreconciled bank lines, GSTR-2B mismatches, pending TDS deductions and MSME 43B(h) deadlines.",
+    does: "Runs an automated checklist verification across books, audits variances, and alerts you before close.",
+    module: "/close",
+    industries: [],
+    engine: "rules+model",
+  },
+  {
+    id: "action-triage",
+    name: "P0–P3 Chief of Staff Action Triage",
+    watches: "Operational bottlenecks, stalled vendor follow-ups, and commitments made across threads.",
+    does: "Auto-triages tasks into P0 to P3 priority boards, tracks commitments, and enforces daily executive routines.",
+    module: "/tasks",
+    industries: [],
+    engine: "rules+model",
+  },
 ];
 
 /**
