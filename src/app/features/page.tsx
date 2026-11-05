@@ -8,7 +8,7 @@ import {
   MessageSquare, Telescope, LineChart, Brain, FileBarChart, Calculator,
   Megaphone, Sparkles, Bot, Workflow, Radio, Cpu,
   Radar, KanbanSquare, UserMinus, BadgeIndianRupee, Target, Gem,
-  BrainCircuit, Receipt, Banknote, Plug,
+  BrainCircuit, Receipt, Banknote, Plug, CheckCircle2,
 } from "lucide-react";
 import { SmoothScroll, Cursor, Kinetic, SectionLabel } from "@/components/loco";
 import { Reveal } from "@/components/landing-extras";
