@@ -61,6 +61,8 @@ const MODE_PROFILE: Record<string, GenProfile> = {
   triage: FAST,
   routine: FAST,
   commitments: FAST,
+  close_audit: FAST,
+  variance: FAST,
   scenario: DEEP,
   forecast: DEEP,
   strategy: DEEP,

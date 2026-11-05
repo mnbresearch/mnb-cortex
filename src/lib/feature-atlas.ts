@@ -72,6 +72,7 @@ export const FEATURES: Feature[] = [
   { id: "bank", job: "cash", title: "Bank statement reader", outcome: "Upload a statement; get categorised spend, leaks and recurring charges.", route: "/bank", gate: all, modes: ["bankstatement"], keywords: "bank pdf statement spend categorise" },
   { id: "payables", job: "cash", title: "Payables & DPO", outcome: "What you owe, to whom and when — so you pay in the right order.", route: "/payables", gate: all, modes: [], keywords: "creditors suppliers bills dpo" },
   { id: "funding", job: "cash", title: "Funding & loans", outcome: "Which loan fits, what it costs, and whether your numbers support it.", route: "/funding", gate: all, modes: ["loan"], keywords: "loan credit msme scheme dscr" },
+  { id: "close", job: "cash", title: "Month-End Close", outcome: "Autonomous continuous close, ledger balance verification and variance detection.", route: "/close", gate: all, modes: ["close_audit"], keywords: "close reconciliation month-end variance audit" },
   // ---- Sell more
   { id: "pipeline", job: "sell", title: "Deals pipeline", outcome: "Weighted forecast by stage, and the deals going cold.", route: "/pipeline", gate: all, modes: [], keywords: "deals crm stage forecast" },
   { id: "leads", job: "sell", title: "Leads", outcome: "Every enquiry scored by a clear rule, hottest first, one click to customer.", route: "/leads", gate: all, modes: [], keywords: "enquiry lead score inbox" },

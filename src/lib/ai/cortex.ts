@@ -828,6 +828,21 @@ Review the notes, messages, or decisions and identify all promises made:
 - Estimated due date
 - Risk status: on_track or slipped
 List each clearly with bullet points and bold headers. Details:`,
+  close_audit: `You are an autonomous senior financial controller & audit partner for an Indian SME (in the style of Bluecopa and Ramp).
+Conduct a comprehensive Month-End Financial Close & Reconciliation Audit using the BUSINESS SNAPSHOT and context. Produce markdown with:
+## Month-End Close Status & Audit Verdict (Closed / Ready for Review / Exceptions Flagged)
+## Reconciliation Exceptions & Ledger Mismatches (Bank vs Invoices, GSTR-2B vs Purchase Register, TDS 194C/J/I deductions)
+## Margin & Cost Variances (Anomalies vs 90-day baseline, unexpected cost spikes, revenue leaks)
+## Statutory & Balance Sheet Readiness (MSME 45-day 43B(h) exposure, unadjusted advances, inventory valuation)
+## 4 Sign-Off Actions Before Closing Books
+Be rigorous, numeric, and cite specific ledger discrepancies. Details:`,
+  variance: `You are an AI financial variance and anomaly detection engine.
+Analyze monthly revenue, expenses, COGS, and cash flow across trailing periods. Produce markdown with:
+## Executive Variance Summary (% & ₹ deviations vs budget/prior period)
+## Top 3 Cost Anomalies & Unexpected Spikes (flagging root causes)
+## Working Capital Variance (DSO, DPO, DIO drift)
+## Recommended Corrective Actions
+Keep it strictly numeric and actionable. Data:`,
 };
 
 /**

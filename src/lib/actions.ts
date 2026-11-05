@@ -3406,3 +3406,155 @@ export async function setClientPooling(fd: FormData): Promise<{ ok: boolean; err
     return { ok: true };
   } catch (e: any) { return { ok: false, error: e?.message || "Could not change that." }; }
 }
+
+/* =========================================================================
+   Month-End Close & Financial Reconciliation Engine
+   (Vertical/Horizontal Parity with Bluecopa & Ramp)
+   ========================================================================= */
+
+export type CloseChecklistItem = {
+  id: string;
+  category: "bank" | "tax" | "receivables" | "payables" | "inventory" | "accruals";
+  title: string;
+  status: "pending" | "reconciled" | "exception";
+  note?: string;
+  amount_inr?: number;
+};
+
+export async function getMonthEndCloseStatus(period?: string): Promise<{
+  ok: boolean;
+  period: string;
+  status: "in_progress" | "ready_for_review" | "closed" | "reopened";
+  items: CloseChecklistItem[];
+  variance_summary: Record<string, any>;
+  closed_at?: string | null;
+}> {
+  try {
+    const { orgId } = await getUserAndOrg();
+    if (!orgId) return { ok: false, period: period || "current", status: "in_progress", items: [], variance_summary: {} };
+    const sb = await createClient();
+    const currPeriod = period || istTodayISO().slice(0, 7); // e.g. "2026-11"
+
+    const { data } = await sb
+      .from("close_checklists")
+      .select("*")
+      .eq("org_id", orgId)
+      .eq("period", currPeriod)
+      .maybeSingle();
+
+    if (data) {
+      return {
+        ok: true,
+        period: (data as any).period,
+        status: (data as any).status,
+        items: Array.isArray((data as any).items) ? (data as any).items : [],
+        variance_summary: (data as any).variance_summary || {},
+        closed_at: (data as any).closed_at,
+      };
+    }
+
+    // Default checklist template for Indian SME Month-End Close
+    const defaultItems: CloseChecklistItem[] = [
+      { id: "bank_feed", category: "bank", title: "Bank Inflow/Outflow vs Bank Statement reconciliation", status: "pending" },
+      { id: "gstr2b_match", category: "tax", title: "GSTR-2B vs Purchase Register ITC match (Rule 88D check)", status: "pending" },
+      { id: "gstr1_match", category: "tax", title: "GSTR-1 Outward Supplies vs Sales Register (Rule 88C check)", status: "pending" },
+      { id: "tds_check", category: "tax", title: "TDS 194C / 194J / 194I monthly deduction verification", status: "pending" },
+      { id: "msme_clock", category: "payables", title: "Section 43B(h) 45-day MSME supplier aging sweep", status: "pending" },
+      { id: "ar_aging", category: "receivables", title: "Overdue Receivables & Top Risk Accounts review", status: "pending" },
+      { id: "unadjusted_adv", category: "accruals", title: "Unadjusted customer advances & prepayments check", status: "pending" },
+    ];
+
+    return {
+      ok: true,
+      period: currPeriod,
+      status: "in_progress",
+      items: defaultItems,
+      variance_summary: {},
+    };
+  } catch {
+    return { ok: false, period: "current", status: "in_progress", items: [], variance_summary: {} };
+  }
+}
+
+export async function updateMonthEndChecklistItem(fd: FormData): Promise<ActionResult> {
+  try {
+    const { orgId } = await requireRole("analyst");
+    const itemId = str(fd.get("itemId"));
+    const status = str(fd.get("status")) as "pending" | "reconciled" | "exception";
+    const note = str(fd.get("note"));
+    const period = str(fd.get("period")) || istTodayISO().slice(0, 7);
+
+    if (!itemId) return fail("Missing item id.");
+    const sb = await createClient();
+
+    const { data: existing } = await sb
+      .from("close_checklists")
+      .select("id, items")
+      .eq("org_id", orgId)
+      .eq("period", period)
+      .maybeSingle();
+
+    let items: CloseChecklistItem[] = [];
+    if (existing && Array.isArray((existing as any).items)) {
+      items = (existing as any).items;
+    } else {
+      const defaultState = await getMonthEndCloseStatus(period);
+      items = defaultState.items;
+    }
+
+    items = items.map((it) => (it.id === itemId ? { ...it, status, note: note || it.note } : it));
+
+    if (existing?.id) {
+      await sb.from("close_checklists").update({ items, updated_at: new Date().toISOString() }).eq("id", existing.id);
+    } else {
+      await sb.from("close_checklists").insert({ org_id: orgId, period, items, status: "in_progress" });
+    }
+
+    await logActivity(orgId, "finance", `Updated month-end close item ${itemId} to ${status}`);
+    revalidatePath("/close");
+    return { ok: true, message: "Checklist updated." };
+  } catch (e: any) {
+    return fail(e?.message || "Could not update checklist item.");
+  }
+}
+
+export async function setMonthEndCloseStatus(fd: FormData): Promise<ActionResult> {
+  try {
+    const { orgId } = await requireRole("manager"); // Manager rank required to close books
+    const period = str(fd.get("period")) || istTodayISO().slice(0, 7);
+    const newStatus = str(fd.get("status")) as "in_progress" | "ready_for_review" | "closed" | "reopened";
+
+    const sb = await createClient();
+    const { data: existing } = await sb
+      .from("close_checklists")
+      .select("id, items")
+      .eq("org_id", orgId)
+      .eq("period", period)
+      .maybeSingle();
+
+    const closedAt = newStatus === "closed" ? new Date().toISOString() : null;
+
+    if (existing?.id) {
+      await sb.from("close_checklists").update({
+        status: newStatus,
+        closed_at: closedAt,
+        updated_at: new Date().toISOString(),
+      }).eq("id", existing.id);
+    } else {
+      const defaultState = await getMonthEndCloseStatus(period);
+      await sb.from("close_checklists").insert({
+        org_id: orgId,
+        period,
+        status: newStatus,
+        items: defaultState.items,
+        closed_at: closedAt,
+      });
+    }
+
+    await logActivity(orgId, "finance", `Month-end close for ${period} marked ${newStatus}`);
+    revalidatePath("/close");
+    return { ok: true, message: `Month-end books for ${period} marked ${newStatus}.` };
+  } catch (e: any) {
+    return fail(e?.message || "Could not update month-end status.");
+  }
+}

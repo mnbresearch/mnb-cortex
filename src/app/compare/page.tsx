@@ -51,6 +51,8 @@ const ROWS: { f: string; v: string[] }[] = [
   { f: "Plain-language answers", v: ["y", "n", "n", "y", "y"] },
   { f: "Remembers your business", v: ["y", "p", "p", "n", "p"] },
   { f: "Re-reads your numbers without being asked", v: ["y", "n", "n", "n", "n"] },
+  { f: "Autonomous month-end close & variance audit", v: ["y", "p", "n", "n", "p"] },
+  { f: "P0–P3 Chief of Staff action triage & routines", v: ["y", "n", "n", "n", "p"] },
   { f: "Built for Indian SMEs", v: ["y", "p", "p", "n", "p"] },
 ];
 

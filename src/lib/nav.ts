@@ -137,6 +137,7 @@ export const NAV = [
   { href: "/rate-card", label: "Billable Rate", icon: Timer, group: "Money", sub: "Profit & pricing", calc: true },
   { href: "/ccc", label: "Cash Conversion Cycle", icon: RotateCw, group: "Money", sub: "Cash & working capital", calc: true },
   { href: "/networth", label: "Net Worth & Balance", icon: Vault, group: "Money", sub: "Cash & working capital", calc: true },
+  { href: "/close", label: "Month-End Close", icon: CheckCircle2, group: "Money", sub: "Cash & working capital" },
   { href: "/capacity", label: "Team Capacity", icon: GaugeCircle, group: "Intelligence", sub: "Stock & capacity" },
   { href: "/nps", label: "NPS & Sentiment", icon: Smile, group: "Intelligence", sub: "Customers & growth" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Foresight" },

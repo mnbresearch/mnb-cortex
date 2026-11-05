@@ -139,6 +139,8 @@ export const CREDIT_COSTS: Record<string, number> = {
   automation_plan: 14,
   /* Executive Bond Chief of Staff triage & routine generation */
   triage: 14, routine: 14, commitments: 14,
+  /* Autonomous Month-End Close & Variance Engine */
+  close_audit: 14, variance: 14,
 
   // STANDARD — the default working answer.
   chat: 19, ask: 19, document: 19, meeting: 19,

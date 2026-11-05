@@ -95,6 +95,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
     items: [
       { icon: LayoutDashboard, name: "Business Health Dashboard", d: "Every KPI on one page, with a live Cortex Score." },
       { icon: Landmark, name: "Bank Statement Intelligence", d: "Upload a statement → real cashflow, trends, recurring spend, runway." },
+      { icon: CheckCircle2, name: "Month-End Close & Variance Cockpit", d: "Continuous close, ledger balance verification and variance detection." },
       { icon: ReceiptText, name: "GST Return Reader", d: "Turnover, tax split, ITC utilisation & net payable in seconds." },
       { icon: CalendarClock, name: "13-week Cash Flow", d: "Rolling runway you can model, seeded from your ledger." },
       { icon: Database, name: "Import & Data Explorer", d: "CSV or a shared Google Sheet — then query it all." },
