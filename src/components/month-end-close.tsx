@@ -1,5 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function MonthEndCloseCockpit({ initialPeriod, initialStatus, initialItems, closedAt }: Props) {
+  const router = useRouter();
   const [items, setItems] = useState<CloseChecklistItem[]>(initialItems);
   const [status, setStatus] = useState(initialStatus);
   const [isPending, startTransition] = useTransition();
@@ -32,6 +34,7 @@ export function MonthEndCloseCockpit({ initialPeriod, initialStatus, initialItem
     fd.append("period", initialPeriod);
     startTransition(async () => {
       await updateMonthEndChecklistItem(fd);
+      router.refresh();
     });
   }
 
@@ -42,6 +45,7 @@ export function MonthEndCloseCockpit({ initialPeriod, initialStatus, initialItem
     fd.append("status", newStatus);
     startTransition(async () => {
       await setMonthEndCloseStatus(fd);
+      router.refresh();
     });
   }
 
