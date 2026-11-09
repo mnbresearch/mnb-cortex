@@ -141,6 +141,8 @@ export const CREDIT_COSTS: Record<string, number> = {
   triage: 14, routine: 14, commitments: 14,
   /* Autonomous Month-End Close & Variance Engine */
   close_audit: 14, variance: 14,
+  /* Autonomous Driver-Based FP&A and Variance Commentary */
+  fpa_model: 14, fpa_narrative: 14,
 
   // STANDARD — the default working answer.
   chat: 19, ask: 19, document: 19, meeting: 19,

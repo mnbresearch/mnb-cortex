@@ -3558,3 +3558,155 @@ export async function setMonthEndCloseStatus(fd: FormData): Promise<ActionResult
     return fail(e?.message || "Could not update month-end status.");
   }
 }
+
+export type FpaDriver = {
+  id: string;
+  name: string;
+  category: "revenue" | "cost" | "headcount" | "working_capital";
+  baseline: number;
+  current: number;
+  unit: string;
+  elasticity: number; // % impact on EBITDA per 10% change in driver
+};
+
+export type FpaBudgetLine = {
+  category: string;
+  budgetMonthly: number;
+  actualMonthly: number;
+  variancePct: number;
+  flag: "favorable" | "unfavorable" | "neutral";
+};
+
+export type FpaModelData = {
+  id?: string;
+  fiscalYear: string;
+  name: string;
+  drivers: FpaDriver[];
+  budgetLines: FpaBudgetLine[];
+  varianceCommentary: string | null;
+  executiveSummary: string | null;
+  lastAuditedAt: string | null;
+};
+
+export async function getFpaModel(fiscalYear: string = "2026-27"): Promise<FpaModelData> {
+  const { orgId } = await getUserAndOrg();
+  if (!orgId) {
+    return {
+      fiscalYear,
+      name: "Base Operating Model",
+      drivers: [
+        { id: "d1", name: "Average Order Value (AOV)", category: "revenue", baseline: 45000, current: 48500, unit: "₹", elasticity: 1.4 },
+        { id: "d2", name: "Blended Gross Margin", category: "revenue", baseline: 28, current: 26.5, unit: "%", elasticity: 2.1 },
+        { id: "d3", name: "Headcount (Core Team)", category: "headcount", baseline: 18, current: 21, unit: "FTE", elasticity: -0.9 },
+        { id: "d4", name: "DSO (Days Sales Outstanding)", category: "working_capital", baseline: 42, current: 49, unit: "days", elasticity: -1.2 },
+        { id: "d5", name: "Cloud & Technology OpEx", category: "cost", baseline: 120000, current: 145000, unit: "₹/mo", elasticity: -0.4 },
+      ],
+      budgetLines: [
+        { category: "Topline Revenue", budgetMonthly: 4000000, actualMonthly: 4250000, variancePct: 6.25, flag: "favorable" },
+        { category: "Direct COGS & Raw Materials", budgetMonthly: 2800000, actualMonthly: 3120000, variancePct: 11.43, flag: "unfavorable" },
+        { category: "Payroll & Benefits", budgetMonthly: 650000, actualMonthly: 680000, variancePct: 4.62, flag: "neutral" },
+        { category: "Sales & Marketing (CAC)", budgetMonthly: 250000, actualMonthly: 230000, variancePct: -8.0, flag: "favorable" },
+        { category: "General & Administrative", budgetMonthly: 180000, actualMonthly: 195000, variancePct: 8.33, flag: "unfavorable" },
+      ],
+      varianceCommentary: null,
+      executiveSummary: null,
+      lastAuditedAt: null,
+    };
+  }
+
+  const sb = await createClient();
+  const { data } = await sb
+    .from("fpa_models")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("fiscal_year", fiscalYear)
+    .maybeSingle();
+
+  if (!data) {
+    return {
+      fiscalYear,
+      name: "Base Operating Model",
+      drivers: [
+        { id: "d1", name: "Average Order Value (AOV)", category: "revenue", baseline: 45000, current: 48500, unit: "₹", elasticity: 1.4 },
+        { id: "d2", name: "Blended Gross Margin", category: "revenue", baseline: 28, current: 26.5, unit: "%", elasticity: 2.1 },
+        { id: "d3", name: "Headcount (Core Team)", category: "headcount", baseline: 18, current: 21, unit: "FTE", elasticity: -0.9 },
+        { id: "d4", name: "DSO (Days Sales Outstanding)", category: "working_capital", baseline: 42, current: 49, unit: "days", elasticity: -1.2 },
+        { id: "d5", name: "Cloud & Technology OpEx", category: "cost", baseline: 120000, current: 145000, unit: "₹/mo", elasticity: -0.4 },
+      ],
+      budgetLines: [
+        { category: "Topline Revenue", budgetMonthly: 4000000, actualMonthly: 4250000, variancePct: 6.25, flag: "favorable" },
+        { category: "Direct COGS & Raw Materials", budgetMonthly: 2800000, actualMonthly: 3120000, variancePct: 11.43, flag: "unfavorable" },
+        { category: "Payroll & Benefits", budgetMonthly: 650000, actualMonthly: 680000, variancePct: 4.62, flag: "neutral" },
+        { category: "Sales & Marketing (CAC)", budgetMonthly: 250000, actualMonthly: 230000, variancePct: -8.0, flag: "favorable" },
+        { category: "General & Administrative", budgetMonthly: 180000, actualMonthly: 195000, variancePct: 8.33, flag: "unfavorable" },
+      ],
+      varianceCommentary: null,
+      executiveSummary: null,
+      lastAuditedAt: null,
+    };
+  }
+
+  return {
+    id: data.id,
+    fiscalYear: data.fiscal_year,
+    name: data.name,
+    drivers: Array.isArray(data.drivers) ? (data.drivers as FpaDriver[]) : [],
+    budgetLines: Array.isArray(data.budget_lines) ? (data.budget_lines as FpaBudgetLine[]) : [],
+    varianceCommentary: data.variance_commentary || null,
+    executiveSummary: data.executive_summary || null,
+    lastAuditedAt: data.last_audited_at || null,
+  };
+}
+
+export async function saveFpaModel(fd: FormData): Promise<ActionResult> {
+  try {
+    const { orgId } = await requireRole("analyst");
+    const fiscalYear = str(fd.get("fiscalYear")) || "2026-27";
+    const name = str(fd.get("name")) || "Base Operating Model";
+    const driversJson = str(fd.get("drivers"));
+    const budgetLinesJson = str(fd.get("budgetLines"));
+    const varianceCommentary = str(fd.get("varianceCommentary")) || null;
+    const executiveSummary = str(fd.get("executiveSummary")) || null;
+
+    const drivers = driversJson ? JSON.parse(driversJson) : [];
+    const budgetLines = budgetLinesJson ? JSON.parse(budgetLinesJson) : [];
+
+    const sb = await createClient();
+    const { data: existing } = await sb
+      .from("fpa_models")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("fiscal_year", fiscalYear)
+      .maybeSingle();
+
+    if (existing?.id) {
+      await sb.from("fpa_models").update({
+        name,
+        drivers,
+        budget_lines: budgetLines,
+        variance_commentary: varianceCommentary,
+        executive_summary: executiveSummary,
+        last_audited_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", existing.id);
+    } else {
+      await sb.from("fpa_models").insert({
+        org_id: orgId,
+        fiscal_year: fiscalYear,
+        name,
+        drivers,
+        budget_lines: budgetLines,
+        variance_commentary: varianceCommentary,
+        executive_summary: executiveSummary,
+        last_audited_at: new Date().toISOString(),
+      });
+    }
+
+    await logActivity(orgId, "finance", `Updated driver-based FP&A model for FY ${fiscalYear}`);
+    revalidatePath("/forecast");
+    revalidatePath("/boardroom");
+    return { ok: true, message: "FP&A model saved." };
+  } catch (e: any) {
+    return fail(e?.message || "Could not save FP&A model.");
+  }
+}

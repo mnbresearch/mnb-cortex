@@ -107,7 +107,7 @@ const FEATURES: { label: string; items: { icon: any; name: string; d: string }[]
     items: [
       { icon: MessageSquare, name: "Ask Cortex", d: "Ask about your own rows — it looks them up, in English or Hinglish." },
       { icon: Telescope, name: "Cortex Deep Dive", d: "Diagnose → decide → draft the first action, in three passes." },
-      { icon: LineChart, name: "Forecasting & Scenarios", d: "90-day forecast with interactive what-ifs." },
+      { icon: LineChart, name: "Forecasting & Autonomous FP&A", d: "Driver-based 90-day forecast, operational elasticity levers, and budget vs actuals." },
       { icon: Brain, name: "Strategy Consultant", d: "SWOT, growth levers and a prioritised plan." },
       { icon: FileBarChart, name: "Executive Reports", d: "Board-ready reviews you can print or save as PDF." },
       { icon: Calculator, name: "28 Business Calculators", d: "Margins, GST, payroll, valuation, ratios & more." },

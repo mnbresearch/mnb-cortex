@@ -94,6 +94,8 @@ export const MODE_PROFILE_NAME: Record<string, keyof typeof PROFILE_OUTPUT_TOKEN
   commitments: "FAST",
   close_audit: "FAST",
   variance: "FAST",
+  fpa_model: "FAST",
+  fpa_narrative: "FAST",
   scenario: "DEEP", forecast: "DEEP", strategy: "DEEP", investor: "DEEP",
   board: "DEEP", valuation: "DEEP", deepdive: "DEEP", report: "DEEP",
   gst: "EXTRACT", bankstatement: "EXTRACT",

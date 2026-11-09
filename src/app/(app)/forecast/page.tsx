@@ -1,12 +1,15 @@
 import { getUserAndOrg } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { lastCompleteMonthRevenue } from "@/lib/money-rules";
+import { getFpaModel } from "@/lib/actions";
+import { hasRole } from "@/lib/roles";
 import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { AIPanel } from "@/components/ai-panel";
 import { ScenarioPlanner, type ScenarioBaseline } from "@/components/scenario-planner";
+import { AutonomousFpaCockpit } from "@/components/autonomous-fpa-cockpit";
 import { StressTestSimulator } from "@/components/stress-test-simulator";
 import { TredsArbitrageCard } from "@/components/treds-arbitrage-card";
 import { TrendingUp, Wallet, AlertTriangle } from "lucide-react";
@@ -96,11 +99,16 @@ export default async function Forecast() {
   const { orgId } = await getUserAndOrg();
   const signedIn = Boolean(orgId);
   const baseline = await scenarioBaseline();
+  const fpaModel = await getFpaModel("2026-27");
+  const canEdit = await hasRole("analyst");
 
   return (
     <>
-      <Topbar title="Forecasting & Scenarios" subtitle="See the next 90 days before they happen" />
+      <Topbar title="Autonomous FP&A & Forecasting" subtitle="Driver-based financial planning, budget-to-actual variance audits, and scenario simulation" />
       <PageShell>
+        <Section title="Autonomous FP&A cockpit" desc="Driver correlations, budget vs actuals, and AI board pack commentary (Abacum & Drivetrain parity)">
+          <AutonomousFpaCockpit initialModel={fpaModel} canEdit={canEdit} />
+        </Section>
         {/*
           THE GATE WAS INVERTED, AND THIS IS THE SIXTH PAGE WITH IT.
 

@@ -63,6 +63,8 @@ const MODE_PROFILE: Record<string, GenProfile> = {
   commitments: FAST,
   close_audit: FAST,
   variance: FAST,
+  fpa_model: FAST,
+  fpa_narrative: FAST,
   scenario: DEEP,
   forecast: DEEP,
   strategy: DEEP,

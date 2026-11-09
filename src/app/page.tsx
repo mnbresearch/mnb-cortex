@@ -162,6 +162,7 @@ const OLD_NEW = [
   { old: "A GST or TDS date passes and you find out from a notice.", now: "Every statutory deadline that applies to you, warned before — not after." },
   { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Zoho Books, Vyapar and Busy files as they come." },
   { old: "Month-end close takes weeks of manual bank and GST reconciliation.", now: "Automated month-end close: bank vs invoices, GSTR-2B vs purchase register, TDS deductions, and variance audits in one cockpit." },
+  { old: "Forecasting and FP&A are stuck in static, disconnected spreadsheets.", now: "Autonomous FP&A: driver-based sensitivity models, budget vs actuals, and instant board pack commentary." },
   { old: "Tasks and commitments get lost across WhatsApp, emails, and meetings.", now: "P0–P3 Chief of Staff board auto-triages tasks, tracks promises made to counterparties, and runs daily executive routines." },
   { old: "You're too busy running the business to sit and analyse it.", now: "One email on Monday: the three things worth your attention this week." },
   /*

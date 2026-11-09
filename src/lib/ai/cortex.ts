@@ -843,6 +843,20 @@ Analyze monthly revenue, expenses, COGS, and cash flow across trailing periods. 
 ## Working Capital Variance (DSO, DPO, DIO drift)
 ## Recommended Corrective Actions
 Keep it strictly numeric and actionable. Data:`,
+  fpa_model: `You are an autonomous FP&A Architect (in the style of Abacum and Drivetrain).
+Analyze the business actuals and operational drivers (headcount, pricing, pipeline conversion, customer churn) to build a driver-based financial outlook. Produce markdown with:
+## Driver Correlation & Sensitivity Summary
+## 12-Month Rolling P&L & Cash Flow Forecast (Base, Bear, Bull)
+## Operational Driver Sensitivity Table (Impact of +10% / -10% shift in key levers)
+## Strategic Capital Allocation Recommendations
+Be quantitative, rigorous, and explicitly link drivers to bottom-line impact. Input:`,
+  fpa_narrative: `You are an AI Chief Financial Analyst drafting Board & Executive Commentary.
+Synthesize the budget-to-actual variance into presentation-ready commentary (Price-Volume-Mix decomposition). Produce markdown with:
+## Executive Financial Performance Overview
+## Material Variances & Root-Cause Decomposition (Revenue, Gross Margin, OpEx)
+## Cash Runway & Working Capital Trajectory
+## Board-Level Decisions & Forward Guidance
+Ensure zero hallucinated numbers, professional tone, and audit-grade explanations. Input:`,
 };
 
 /**
