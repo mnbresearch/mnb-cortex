@@ -138,6 +138,18 @@ export const BACKUP_TABLES = [
   // the table itself; until 2026_zzzz_c is run, backups report it as a read
   // error — run the SQL, don't delete the line.
   "finance_ledger_net_profit_backup_c",
+  // 2026_demo_workspaces: custom provisioned demo workspaces, feature flags,
+  // duration, expiry and compulsory upgrade locks. Keyed on organizations.
+  "demo_workspaces",
+  // 2026_zzzz_m_bond_cortex_features: executive commitment tracking and
+  // recurring operational routines. Keyed on organizations.
+  "commitments", "executive_routines",
+  // 2026_zzzz_n_close_checklists: month-end close checklists, audit signs,
+  // and reconciliation variance summaries. Keyed on organizations.
+  "close_checklists",
+  // 2026_zzzz_o_fpa_forecasts: rolling FP&A operating models, driver assumptions,
+  // budget lines, and variance commentary. Keyed on organizations.
+  "fpa_models",
 ];
 
 /**
