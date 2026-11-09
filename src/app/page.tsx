@@ -307,7 +307,8 @@ export default function Home() {
           <p className="mt-7 text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto leading-8">
             Send it one export from Tally, Zoho Books, Vyapar or your spreadsheet. It watches your numbers every day and
             tells you <span className="text-foreground font-medium">who hasn&rsquo;t paid</span>,{" "}
-            <span className="text-foreground font-medium">what&rsquo;s due</span> and{" "}
+            <span className="text-foreground font-medium">what&rsquo;s due</span>,{" "}
+            <span className="text-foreground font-medium">how to close your books</span>, and{" "}
             <span className="text-foreground font-medium">what&rsquo;s about to run out</span>.
           </p>
 
@@ -337,7 +338,7 @@ export default function Home() {
             <Link href="/login" className="text-foreground font-medium underline underline-offset-4 hover:text-primary transition-colors">Sign in</Link>
           </p>
 
-          <p className="mt-5 text-sm text-muted-foreground">No card. Keep your accounting software.</p>
+          <p className="mt-5 text-sm text-muted-foreground">No card required. Keep your accounting software. SOC-2 grade data isolation.</p>
         </div>
       </section>
 

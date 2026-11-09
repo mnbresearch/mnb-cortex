@@ -168,6 +168,15 @@ export const PLAYBOOKS: Playbook[] = [
     industries: [],
     engine: "rules+model",
   },
+  {
+    id: "fpa-forecasting",
+    name: "Autonomous Driver-Based FP&A",
+    watches: "Budget vs actuals deviations, unit economics shifts, headcount costs, and customer churn drivers.",
+    does: "Runs multi-variable sensitivity models across P&L drivers and generates executive board pack commentary.",
+    module: "/forecast",
+    industries: [],
+    engine: "rules+model",
+  },
 ];
 
 /**
