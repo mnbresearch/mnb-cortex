@@ -310,7 +310,13 @@ ${model.budgetLines.map((l) => `- ${l.category}: Budget ${inr(l.budgetMonthly)},
                 Audit-grade Price-Volume-Mix decomposition and strategic commentary derived from live numbers.
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 no-print">
+              {aiReport && (
+                <Button size="sm" variant="secondary" onClick={() => window.print()} className="text-xs gap-1.5 border">
+                  <Presentation className="h-3.5 w-3.5" />
+                  Print / Export Board Pack (PDF)
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={runAiFpaAudit} disabled={isAuditing} className="text-xs">
                 Re-run Analysis
               </Button>
