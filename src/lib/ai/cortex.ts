@@ -564,7 +564,11 @@ export async function streamCortex(messages: Msg[], context: string, hooks: { on
   const openaiLike =
     (provider === "groq" && aiKey("GROQ_API_KEY")) ? { url: "https://api.groq.com/openai/v1/chat/completions", key: aiKey("GROQ_API_KEY")!, model: groqModel() } :
     ((provider === "xai" || provider === "grok") && grokKey) ? { url: "https://api.x.ai/v1/chat/completions", key: grokKey, model: envKey("XAI_MODEL") || "grok-2-latest" } :
-    (provider === "openai" && aiKey("OPENAI_API_KEY")) ? { url: "https://api.openai.com/v1/chat/completions", key: aiKey("OPENAI_API_KEY")!, model: openaiModel() } : null;
+    /* Same OPENAI_BASE_URL the blocking path in runOnce() honours. This was hardcoded to
+       api.openai.com, so an OpenAI-compatible endpoint configured through OPENAI_BASE_URL
+       (a proxy, or the MNB Intelligence gateway) served every blocking call and was silently
+       bypassed by the one path users watch token by token. */
+    (provider === "openai" && aiKey("OPENAI_API_KEY")) ? { url: `${(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "")}/chat/completions`, key: aiKey("OPENAI_API_KEY")!, model: openaiModel() } : null;
 
   if (openaiLike) {
     try {

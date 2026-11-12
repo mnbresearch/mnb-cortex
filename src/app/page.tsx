@@ -338,7 +338,7 @@ export default function Home() {
             <Link href="/login" className="text-foreground font-medium underline underline-offset-4 hover:text-primary transition-colors">Sign in</Link>
           </p>
 
-          <p className="mt-5 text-sm text-muted-foreground">No card required. Keep your accounting software. SOC-2 grade data isolation.</p>
+          <p className="mt-5 text-sm text-muted-foreground">No card required. Keep your accounting software. Each workspace's data is isolated at the database level.</p>
         </div>
       </section>
 
