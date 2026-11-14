@@ -150,6 +150,9 @@ export const BACKUP_TABLES = [
   // 2026_zzzz_o_fpa_forecasts: rolling FP&A operating models, driver assumptions,
   // budget lines, and variance commentary. Keyed on organizations.
   "fpa_models",
+  // 2026_zzzz_q_enterprise_hud: forensic audit pre-flight snapshots and
+  // live balance sheet digital twin shock simulations. Keyed on organizations.
+  "enterprise_audit_snapshots", "digital_twin_scenarios",
 ];
 
 /**

@@ -146,3 +146,4 @@
 2026_zzzz_n_close_checklists.sql
 2026_zzzz_o_fpa_forecasts.sql
 2026_zzzz_p_rank_gates_hardening.sql
+2026_zzzz_q_enterprise_hud.sql

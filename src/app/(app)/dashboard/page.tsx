@@ -27,7 +27,8 @@ import { getFirstRun } from "@/lib/first-run";
 import { SetupPath } from "@/components/setup-path";
 import { NeedsYouStrip } from "@/components/needs-you";
 import { getNeedsYou } from "@/lib/needs-you";
-import { dismissAlert } from "@/lib/actions";
+import { dismissAlert, getEnterpriseHudData } from "@/lib/actions";
+import { EnterpriseCommandHud } from "@/components/enterprise-hud";
 import { SafeForm } from "@/components/safe-form";
 import { usedModes, suggestions } from "@/lib/feature-usage";
 
@@ -35,8 +36,8 @@ export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
   const { orgId } = await getUserAndOrg();
-  const [metrics, insights, alerts, fin, profile, firstRun] = await Promise.all([
-    getMetrics(), getInsights(), getAlerts(), getFinanceSeries(), getOrgProfile(), getFirstRun(),
+  const [metrics, insights, alerts, fin, profile, firstRun, hudData] = await Promise.all([
+    getMetrics(), getInsights(), getAlerts(), getFinanceSeries(), getOrgProfile(), getFirstRun(), getEnterpriseHudData(),
   ]);
   const isReal = Boolean(orgId);                 // signed-in workspace vs public demo preview
   const needsYou = orgId ? await getNeedsYou(orgId) : null;
@@ -103,6 +104,9 @@ export default async function Dashboard() {
           <ExportButton rows={metrics} filename="business-health.csv" columns={["label","value","unit","delta_pct","status"]} />
           <PrintButton />
         </div>
+
+        {/* Enterprise Command HUD: 4-Pillar Executive Cockpit, Big-4 Pre-Flight Audit Sentinel & Digital Twin Shock Simulator */}
+        <EnterpriseCommandHud initialData={hudData} />
         {/* What waits on a human, before anything else. */}
         {needsYou && <NeedsYouStrip n={needsYou} />}
         {tryNext.length > 0 && (
