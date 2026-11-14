@@ -2,12 +2,19 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { cn, statusBg } from "@/lib/utils";
+// Alert toasts are not time-critical, and every poll wakes edge middleware plus a
+// serverless function on a force-dynamic route. Three minutes is ample for a toast.
+const POLL_MS = 180_000;
+
 export function Toaster() {
   const [toasts, setToasts] = useState<any[]>([]);
   useEffect(() => {
     let seen: string[] = []; try { seen = JSON.parse(localStorage.getItem("mnb-seen-alerts") || "[]"); } catch {}
     let first = true;
     async function poll() {
+      // A hidden tab has nobody to show a toast to. Without this guard a single
+      // forgotten background tab polls this endpoint forever.
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
         const r = await fetch("/api/alerts"); const d = await r.json(); const alerts = d.alerts || [];
         if (first) { seen = alerts.map((a: any) => a.id); localStorage.setItem("mnb-seen-alerts", JSON.stringify(seen)); first = false; return; }
@@ -15,7 +22,12 @@ export function Toaster() {
         if (fresh.length) { setToasts((t) => [...fresh.slice(0, 3), ...t].slice(0, 4)); seen = alerts.map((a: any) => a.id); localStorage.setItem("mnb-seen-alerts", JSON.stringify(seen)); }
       } catch {}
     }
-    poll(); const id = setInterval(poll, 60000); return () => clearInterval(id);
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    // Catch up immediately when the user comes back, so gating costs no freshness.
+    const onVisible = () => { if (document.visibilityState === "visible") void poll(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
   }, []);
   if (!toasts.length) return null;
   return (
