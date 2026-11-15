@@ -71,6 +71,8 @@ export function PWA() {
     // ---- service worker ---------------------------------------------------
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").then((reg) => {
+        // Force an immediate check for updated worker on page load instead of waiting 24h
+        reg.update().catch(() => {});
         if (reg.waiting && navigator.serviceWorker.controller) {
           setWaitingSW(reg.waiting); setUpdateReady(true);
         }
