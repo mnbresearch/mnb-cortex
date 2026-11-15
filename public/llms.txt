@@ -1,0 +1,18 @@
+# MNB Cortex
+
+> MNB Cortex is an early-warning system for Indian businesses, built by MNB Research (Abrobot Technologies Private Limited, Faridabad, Haryana, India). A business sends one export from Tally, Zoho Books, Vyapar or a spreadsheet; Cortex watches the numbers every day and flags who has not paid, what is due, how to close the books and what is about to run out. Businesses keep their existing accounting software. Each workspace's data is isolated at the database level. There is a free 2-minute health check and no card is needed to start.
+
+## Key pages
+- [Home](https://cortex.mnbresearch.com/): what Cortex does
+- [Features](https://cortex.mnbresearch.com/features)
+- [Industries](https://cortex.mnbresearch.com/industries)
+- [Pricing](https://cortex.mnbresearch.com/pricing)
+- [Free health check](https://cortex.mnbresearch.com/health-check)
+- [Compare](https://cortex.mnbresearch.com/compare)
+- [Contact](https://cortex.mnbresearch.com/contact)
+
+## Free calculators
+- [All calculators](https://cortex.mnbresearch.com/calculators): GST, GST late fee, ITC, TDS, advance tax, depreciation, gratuity, EPF, break-even, cash runway, cash conversion cycle, DSCR, loan amortisation and more
+
+## Company
+Built by MNB Research: https://www.mnbresearch.com (Cortex page: https://www.mnbresearch.com/mnb-cortex). Company facts: https://www.mnbresearch.com/company
