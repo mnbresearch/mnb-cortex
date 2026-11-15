@@ -97,7 +97,7 @@ export function MonthEndCloseCockpit({ initialPeriod, initialStatus, initialItem
             <Button
               onClick={runAiAudit}
               disabled={isAuditing}
-              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 min-h-11"
+              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 min-h-11 no-print"
             >
               <Sparkles className="h-4 w-4" />
               {isAuditing ? "Auditing Books..." : "Run AI Close Audit"}
@@ -107,21 +107,31 @@ export function MonthEndCloseCockpit({ initialPeriod, initialStatus, initialItem
                 variant="outline"
                 onClick={() => handleSetCloseStatus("closed")}
                 disabled={isPending}
-                className="gap-2 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 min-h-11"
+                className="gap-2 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 min-h-11 no-print"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 Sign-off & Close Books
               </Button>
             ) : (
-              <Button
-                variant="outline"
-                onClick={() => handleSetCloseStatus("reopened")}
-                disabled={isPending}
-                className="gap-2 text-muted-foreground min-h-11"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Reopen Period
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => window.print()}
+                  className="gap-2 border-primary/30 text-primary hover:bg-primary/10 min-h-11 no-print"
+                >
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Export Audit Sign-Off (PDF)
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSetCloseStatus("reopened")}
+                  disabled={isPending}
+                  className="gap-2 text-muted-foreground min-h-11 no-print"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Reopen Period
+                </Button>
+              </>
             )}
           </div>
         </div>

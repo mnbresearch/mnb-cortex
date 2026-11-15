@@ -16,6 +16,7 @@ import { PLAYBOOKS } from "@/lib/playbooks";
 import { INDUSTRIES } from "@/lib/industries";
 import { STATUTORY_CATALOGUE } from "@/lib/statutory";
 import { HealthCheckClient } from "@/components/health-check-client";
+import { UnrivaledMoat } from "@/components/unrivaled-moat";
 
 /*
   ORDERED BY WHAT STOPS THE SALE, not by what is interesting to explain.
@@ -37,6 +38,8 @@ const FAQS = [
   { q: "Will it contact my customers on its own?", a: "Not unless you let it. Chasing ships switched off. When you turn it on, Cortex writes each message in your business's name and holds it for your approval — and stops the moment the invoice is marked paid. There is a setting to let it send unattended, off by default, and it's yours to decide." },
   { q: "Do I need to be technical?", a: "No. You ask questions in plain language — English or Hinglish — the way you'd ask your accountant, and Cortex looks up your actual invoices and orders to answer. Nothing to install, nothing to code." },
   { q: "How is this different from an ERP or CRM?", a: "Those record what already happened and wait for you to open them. Cortex reads across all of it every day, names the specific thing about to cost you money, and drafts the action. It doesn't replace them — it does the part they were never built to do." },
+  { q: "What is the Financial Digital Twin & Shock Chamber?", a: "It is Cortex's proprietary balance sheet simulator. Instead of relying on static spreadsheets, you can test debtor payment delays, MSME 45-day vendor payment compression, and raw material inflation to immediately see your simulated post-shock cash runway, working capital gap, and 1-click autonomous mitigation playbooks." },
+  { q: "How does the Big-4 Forensic Audit Sentinel work?", a: "Cortex evaluates your books against 5 statutory audit vectors: MSME Section 43B(h) tax disallowances, GSTR-2B Rule 88D Input Tax Credit mismatches, TDS 194Q thresholds, bank clearing variances, and forensic anomaly detection (duplicate invoices and round-number disbursements). It gives you a continuous 0–100% pre-flight audit readiness score and one-click printable workpapers." },
   { q: "Is my data safe?", a: "Yes. Every workspace is isolated with Postgres row-level security, traffic is encrypted with TLS, sensitive keys use AES-256-GCM, and you can export every table in your workspace as JSON, or delete it, anytime." },
   { q: "How does billing work?", a: `Cortex runs on credits. Buy a ${SMALLEST_PACK_LABEL} pack and use it with no subscription, or pick a plan from ${ENTRY_PRICE_LABEL}/mo for a monthly allowance — billed securely via Cashfree. Your free Business Health Check needs no card at all. Prices are in INR; international customers are onboarded by our team.` },
 ];
@@ -163,6 +166,8 @@ const OLD_NEW = [
   { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Zoho Books, Vyapar and Busy files as they come." },
   { old: "Month-end close takes weeks of manual bank and GST reconciliation.", now: "Automated month-end close: bank vs invoices, GSTR-2B vs purchase register, TDS deductions, and variance audits in one cockpit." },
   { old: "Forecasting and FP&A are stuck in static, disconnected spreadsheets.", now: "Autonomous FP&A: driver-based sensitivity models, budget vs actuals, and instant board pack commentary." },
+  { old: "A big customer delays payment or inflation hits, and your runway collapses without warning.", now: "Balance Sheet Digital Twin & Live Shock Chamber lets you stress-test debtor delays, COGS inflation, and MSME terms in real time with 1-click autonomous mitigation playbooks." },
+  { old: "Auditors arrive and find duplicate invoices, missing GSTR-2B ITC matches, and MSME 43B(h) penalties.", now: "Continuous Big-4 Forensic Audit Sentinel scores pre-flight compliance (0–100%) and catches duplicate billings before auditors ever see them." },
   { old: "Tasks and commitments get lost across WhatsApp, emails, and meetings.", now: "P0–P3 Chief of Staff board auto-triages tasks, tracks promises made to counterparties, and runs daily executive routines." },
   { old: "You're too busy running the business to sit and analyse it.", now: "One email on Monday: the three things worth your attention this week." },
   /*
@@ -376,7 +381,7 @@ export default function Home() {
           and lib/reorder.
         */}
         <div className="max-w-6xl mx-auto mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-muted-foreground text-center">
-          <span>It watches for <RotatingWord words={["deductions at risk under 43B(h).", "invoices past their due date.", "the next statutory deadline.", "stock about to run out."]} /></span>
+          <span>It watches for <RotatingWord words={["deductions at risk under Section 43B(h).", "invoices past their due date.", "the next statutory deadline.", "balance sheet shock runway contractions.", "stock about to run out."]} /></span>
         </div>
         <div className="max-w-6xl mx-auto mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs text-muted-foreground">
           <span>★ From the makers of AbroBot (featured on Shark Tank India)</span>
@@ -477,10 +482,25 @@ export default function Home() {
         <Marquee items={["Tally exports", "Zoho Books", "Vyapar exports", "Busy exports", "Marg ERP", "Shopify", "0% Fee UPI QR", "Razorpay", "Stripe", "Google Sheets", "WhatsApp Business", "CSV"]} />
       </section>
 
+      {/* ---------- THE MOAT: UNRIVALED CAPABILITIES ---------- */}
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      <section id="moat" className="px-5 lg:px-10 py-24 lg:py-32">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="02">Proprietary Moat</SectionLabel>
+          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-4xl">
+            Features that exist <span className="text-primary">nowhere else</span> in the market.
+          </h2>
+          <p className="mt-4 text-muted-foreground max-w-3xl leading-relaxed text-base lg:text-lg">
+            Traditional accounting software and ERPs record what already happened. Cortex gives you live financial stress-testing, continuous Big-4 pre-flight audit defense, 0% fee UPI payment acceleration, and autonomous boardroom intelligence that you cannot buy anywhere else.
+          </p>
+          <UnrivaledMoat />
+        </div>
+      </section>
+
       {/* ---------- THE PROBLEM ---------- */}
       <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="02">The problem</SectionLabel>
+          <SectionLabel n="03">The problem</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Running an SME shouldn&rsquo;t mean flying blind.</h2>
           <p className="mt-4 text-muted-foreground max-w-2xl">You&rsquo;re the CEO, CFO, head of sales and firefighter — all at once. Cortex takes the analysis and the busywork off your plate.</p>
           <div className="mt-12 grid md:grid-cols-2 gap-px bg-border border rounded-2xl overflow-hidden hairline">
@@ -529,7 +549,7 @@ export default function Home() {
       <section id="health-check" className="px-5 lg:px-10 py-24 lg:py-28 bg-secondary/20">
         <div className="max-w-7xl mx-auto grid lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-16 items-start">
           <div>
-            <SectionLabel n="03">Free · about 2 minutes</SectionLabel>
+            <SectionLabel n="04">Free · about 2 minutes</SectionLabel>
             <h2 className="font-display display-3 tracking-tightest mt-6 leading-[1.1]">
               How healthy is <span className="text-primary">your</span> business, really?
             </h2>
@@ -573,7 +593,7 @@ export default function Home() {
           scarce; two of these and neither is special. */}
       <section className="relative px-5 lg:px-10 pb-24 lg:pb-32 pt-24 lg:pt-32 sheen">
         <div className="relative z-10 max-w-7xl mx-auto">
-          <SectionLabel n="04">What it is</SectionLabel>
+          <SectionLabel n="05">What it is</SectionLabel>
           <Reveal>
             {/*
               THE POSITION, IN ONE PARAGRAPH. See docs/positioning.md §1.
@@ -614,7 +634,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section id="playbooks" className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="05">Playbooks</SectionLabel>
+          <SectionLabel n="06">Playbooks</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             You don&rsquo;t configure it.<br />The playbooks are <span className="text-primary">already running.</span>
           </h2>
@@ -708,7 +728,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="06">The bit you&rsquo;re worried about</SectionLabel>
+          <SectionLabel n="07">The bit you&rsquo;re worried about</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             You&rsquo;ve been sold software before.<br /><span className="text-primary">This one asks almost nothing of you.</span>
           </h2>
@@ -806,7 +826,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section className="px-5 lg:px-10 py-24">
         <div className="max-w-3xl mx-auto">
-          <SectionLabel n="07">Questions</SectionLabel>
+          <SectionLabel n="08">Questions</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">Good to know.</h2>
           <Faq items={FAQS} />
         </div>

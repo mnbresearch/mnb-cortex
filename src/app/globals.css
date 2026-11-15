@@ -304,16 +304,16 @@ button:active:not(:disabled), [role="button"]:active { transform: scale(.985); }
    room to run. Centred in a narrower column it breaks into four ragged lines
    and the composition collapses. This caps lower so the headline sets in two
    or three balanced lines at every width. */
-.display-hero { font-size: clamp(2.4rem, 5.6vw, 4.25rem); }
+.display-hero { font-size: clamp(2.4rem, 5.6vw, 4.25rem); line-height: 1.04; }
 .display-2 { font-size: clamp(2.2rem, 6.2vw, 5.25rem); }
 .display-3 { font-size: clamp(1.7rem, 4vw, 3.1rem); }
 .tracking-tightest { letter-spacing: -0.04em; }
 .eyebrow { font-size: .72rem; letter-spacing: .2em; text-transform: uppercase; color: hsl(var(--muted-foreground)); font-weight: 600; }
 
 /* Kinetic word reveal — text visible by default (SSR/no-JS safe); only masks once armed */
-.kin { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .04em; }
+.kin { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.25em; margin-bottom: -0.25em; }
 .kin > span { display: inline-block; transform: translateY(0); }
-.kin-armed .kin > span { transform: translateY(110%); transition: transform 1s cubic-bezier(.19,1,.22,1); }
+.kin-armed .kin > span { transform: translateY(130%); transition: transform 1s cubic-bezier(.19,1,.22,1); }
 .kin-armed .kin.in > span { transform: translateY(0); }
 
 /* Big hover-reveal capability rows (Locomotive "featured work" feel) */

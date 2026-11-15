@@ -3710,3 +3710,247 @@ export async function saveFpaModel(fd: FormData): Promise<ActionResult> {
     return fail(e?.message || "Could not save FP&A model.");
   }
 }
+
+// ---- Enterprise Command HUD, Forensic Sentinel & Digital Twin ----
+
+export interface EnterpriseHudData {
+  ok: boolean;
+  isReal: boolean;
+  orgName: string;
+  pillar1_capital: {
+    cashInBank: number;
+    monthlyBurnRate: number;
+    monthlyRevenue: number;
+    runwayMonths: number;
+    totalReceivables: number;
+    totalPayables: number;
+    dsoDays: number;
+  };
+  pillar2_forensic: import("@/lib/forensic-audit").EnterpriseAuditReport;
+  pillar3_operations: {
+    closeStatus: "in_progress" | "ready_for_review" | "closed" | "reopened";
+    closeCompletedPct: number;
+    closeExceptionsCount: number;
+    p0TasksCount: number;
+    p1TasksCount: number;
+    pendingCommitmentsCount: number;
+  };
+  pillar4_digitalTwin: import("@/lib/digital-twin").DigitalTwinResult;
+}
+
+export async function getEnterpriseHudData(): Promise<EnterpriseHudData> {
+  const { generateEnterpriseAuditReport } = await import("@/lib/forensic-audit");
+  const { simulateFinancialShocks, DEFAULT_BASELINE_FINANCIALS, DEFAULT_SHOCK_PARAMETERS } = await import("@/lib/digital-twin");
+  const { getMsmeExposure } = await import("@/lib/msme");
+
+  try {
+    const { orgId } = await getUserAndOrg();
+    if (!orgId) {
+      // Demo / preview enterprise dataset
+      const demoAudit = generateEnterpriseAuditReport({
+        msmeExposure: { atRisk: 180000, atRiskCount: 3, unclassified: 75000 },
+        invoices: [
+          { id: "demo-1", party: "Bharat Steel Industries", amount: 450000, created_at: "2026-11-01" },
+          { id: "demo-2", party: "Bharat Steel Industries", amount: 450000, created_at: "2026-11-03" }, // duplicate flag
+          { id: "demo-3", party: "Vanguard Tech Logistics", amount: 1200000, created_at: "2026-11-05" },
+        ],
+      });
+      const demoTwin = simulateFinancialShocks(DEFAULT_BASELINE_FINANCIALS, DEFAULT_SHOCK_PARAMETERS);
+      return {
+        ok: true,
+        isReal: false,
+        orgName: "Acme Enterprises (Demo Preview)",
+        pillar1_capital: {
+          cashInBank: DEFAULT_BASELINE_FINANCIALS.cashInBank,
+          monthlyBurnRate: DEFAULT_BASELINE_FINANCIALS.monthlyBurnRate,
+          monthlyRevenue: DEFAULT_BASELINE_FINANCIALS.monthlyRevenue,
+          runwayMonths: DEFAULT_BASELINE_FINANCIALS.currentRunwayMonths,
+          totalReceivables: DEFAULT_BASELINE_FINANCIALS.totalReceivables,
+          totalPayables: DEFAULT_BASELINE_FINANCIALS.totalPayables,
+          dsoDays: 41,
+        },
+        pillar2_forensic: demoAudit,
+        pillar3_operations: {
+          closeStatus: "in_progress",
+          closeCompletedPct: 75,
+          closeExceptionsCount: 1,
+          p0TasksCount: 2,
+          p1TasksCount: 4,
+          pendingCommitmentsCount: 3,
+        },
+        pillar4_digitalTwin: demoTwin,
+      };
+    }
+
+    const sb = await createClient();
+
+    // 1. Fetch organization profile & invoices
+    const [orgRes, invoicesRes, msmeExp, closeData, tasksList, commitmentsList] = await Promise.all([
+      sb.from("organizations").select("name").eq("id", orgId).maybeSingle(),
+      sb.from("invoices").select("id, invoice_number, party, amount, type, status, created_at").eq("org_id", orgId).limit(500),
+      getMsmeExposure(),
+      getMonthEndCloseStatus(),
+      listTasks(),
+      listCommitments(),
+    ]);
+
+    const rawInvoices = (invoicesRes.data as any[]) || [];
+    const receivables = rawInvoices.filter((i) => String(i.type || "").toLowerCase() !== "payable");
+    const payables = rawInvoices.filter((i) => String(i.type || "").toLowerCase() === "payable");
+
+    const totalAr = receivables.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+    const totalAp = payables.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+
+    // Approximate cash & burn from ledger if available or standard derivation
+    const { data: ledgerRows } = await sb.from("finance_ledger").select("revenue, expenses, net_cash_flow").eq("org_id", orgId).order("period", { ascending: false }).limit(3);
+    const recentBurn = ledgerRows && ledgerRows.length > 0 && Number(ledgerRows[0].expenses) > 0
+      ? Number(ledgerRows[0].expenses)
+      : Math.max(500000, Math.round(totalAp * 0.4));
+    const recentRev = ledgerRows && ledgerRows.length > 0 && Number(ledgerRows[0].revenue) > 0
+      ? Number(ledgerRows[0].revenue)
+      : Math.max(1000000, Math.round(totalAr * 0.7));
+
+    const estCash = Math.max(1500000, Math.round(recentRev * 1.5));
+    const runway = Number((estCash / Math.max(1, recentBurn)).toFixed(1));
+
+    // Pillar 2: Forensic audit report
+    const forensicAudit = generateEnterpriseAuditReport({
+      msmeExposure: msmeExp,
+      closeStatus: closeData,
+      invoices: rawInvoices,
+    });
+
+    // Pillar 3: Operations
+    const closeItems = closeData.items || [];
+    const closeCompleted = closeItems.filter((i) => i.status === "reconciled").length;
+    const closeExceptions = closeItems.filter((i) => i.status === "exception").length;
+    const closePct = closeItems.length > 0 ? Math.round((closeCompleted / closeItems.length) * 100) : 0;
+
+    const p0Tasks = tasksList.filter((t) => t.priority === "P0" && t.col !== 2).length;
+    const p1Tasks = tasksList.filter((t) => t.priority === "P1" && t.col !== 2).length;
+    const pendingComm = commitmentsList.filter((c) => c.status === "pending").length;
+
+    // Pillar 4: Digital twin baseline
+    const baseline: import("@/lib/digital-twin").BaselineFinancials = {
+      cashInBank: estCash,
+      monthlyBurnRate: recentBurn,
+      monthlyRevenue: recentRev,
+      totalReceivables: totalAr || DEFAULT_BASELINE_FINANCIALS.totalReceivables,
+      totalPayables: totalAp || DEFAULT_BASELINE_FINANCIALS.totalPayables,
+      topDebtorConcentrationPct: 38,
+      currentRunwayMonths: runway,
+    };
+    const digitalTwin = simulateFinancialShocks(baseline, DEFAULT_SHOCK_PARAMETERS);
+
+    return {
+      ok: true,
+      isReal: true,
+      orgName: (orgRes.data as any)?.name || "Enterprise Workspace",
+      pillar1_capital: {
+        cashInBank: estCash,
+        monthlyBurnRate: recentBurn,
+        monthlyRevenue: recentRev,
+        runwayMonths: runway,
+        totalReceivables: totalAr,
+        totalPayables: totalAp,
+        dsoDays: totalAr > 0 && recentRev > 0 ? Math.round((totalAr / recentRev) * 30) : 38,
+      },
+      pillar2_forensic: forensicAudit,
+      pillar3_operations: {
+        closeStatus: closeData.status,
+        closeCompletedPct: closePct,
+        closeExceptionsCount: closeExceptions,
+        p0TasksCount: p0Tasks,
+        p1TasksCount: p1Tasks,
+        pendingCommitmentsCount: pendingComm,
+      },
+      pillar4_digitalTwin: digitalTwin,
+    };
+  } catch (e: any) {
+    const { generateEnterpriseAuditReport } = await import("@/lib/forensic-audit");
+    const { simulateFinancialShocks, DEFAULT_BASELINE_FINANCIALS, DEFAULT_SHOCK_PARAMETERS } = await import("@/lib/digital-twin");
+    return {
+      ok: false,
+      isReal: false,
+      orgName: "Enterprise Workspace",
+      pillar1_capital: {
+        cashInBank: DEFAULT_BASELINE_FINANCIALS.cashInBank,
+        monthlyBurnRate: DEFAULT_BASELINE_FINANCIALS.monthlyBurnRate,
+        monthlyRevenue: DEFAULT_BASELINE_FINANCIALS.monthlyRevenue,
+        runwayMonths: DEFAULT_BASELINE_FINANCIALS.currentRunwayMonths,
+        totalReceivables: DEFAULT_BASELINE_FINANCIALS.totalReceivables,
+        totalPayables: DEFAULT_BASELINE_FINANCIALS.totalPayables,
+        dsoDays: 40,
+      },
+      pillar2_forensic: generateEnterpriseAuditReport({}),
+      pillar3_operations: {
+        closeStatus: "in_progress",
+        closeCompletedPct: 0,
+        closeExceptionsCount: 0,
+        p0TasksCount: 0,
+        p1TasksCount: 0,
+        pendingCommitmentsCount: 0,
+      },
+      pillar4_digitalTwin: simulateFinancialShocks(DEFAULT_BASELINE_FINANCIALS, DEFAULT_SHOCK_PARAMETERS),
+    };
+  }
+}
+
+export async function runForensicAuditSnapshot(fd: FormData): Promise<ActionResult> {
+  try {
+    const { orgId } = await requireRole("analyst");
+    const score = num(fd.get("score"));
+    const grade = str(fd.get("grade")) || "A";
+    const status = str(fd.get("status")) || "audit_ready";
+    let checks = [];
+    let anomalies = [];
+    try { checks = JSON.parse(str(fd.get("checks")) || "[]"); } catch {}
+    try { anomalies = JSON.parse(str(fd.get("anomalies")) || "[]"); } catch {}
+
+    const sb = await createClient();
+    await sb.from("enterprise_audit_snapshots").insert({
+      org_id: orgId,
+      score: Math.min(100, Math.max(0, score)),
+      grade,
+      status,
+      checks,
+      anomalies,
+    });
+
+    await logActivity(orgId, "compliance", `Generated Big-4 Pre-Flight Audit Snapshot (Score: ${score}/100 Grade: ${grade})`);
+    revalidatePath("/dashboard");
+    revalidatePath("/compliance");
+    return { ok: true, message: "Audit snapshot recorded." };
+  } catch (e: any) {
+    return fail(e?.message || "Could not record audit snapshot.");
+  }
+}
+
+export async function saveDigitalTwinScenario(fd: FormData): Promise<ActionResult> {
+  try {
+    const { orgId } = await requireRole("analyst");
+    const name = str(fd.get("name")) || "Macroeconomic Shock Simulation";
+    let shocks = {};
+    let impact = {};
+    let mitigations = [];
+    try { shocks = JSON.parse(str(fd.get("shocks")) || "{}"); } catch {}
+    try { impact = JSON.parse(str(fd.get("impact")) || "{}"); } catch {}
+    try { mitigations = JSON.parse(str(fd.get("mitigations")) || "[]"); } catch {}
+
+    const sb = await createClient();
+    await sb.from("digital_twin_scenarios").insert({
+      org_id: orgId,
+      name,
+      shocks,
+      impact,
+      mitigations,
+    });
+
+    await logActivity(orgId, "finance", `Saved Balance Sheet Digital Twin scenario: ${name}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/forecast");
+    return { ok: true, message: "Digital Twin simulation saved." };
+  } catch (e: any) {
+    return fail(e?.message || "Could not save simulation.");
+  }
+}
