@@ -62,7 +62,7 @@
   encrypted store, a visible "last synced" stamp, and a clear on sign-out. Not
   a cache-everything handler.
 */
-const CACHE = "mnb-cortex-v4";
+const CACHE = "mnb-cortex-v5";
 const OFFLINE_URL = "/offline";
 
 /** Static, non-personal, safe to keep on the device. */
