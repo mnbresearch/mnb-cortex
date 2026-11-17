@@ -39,7 +39,7 @@ const FAQS = [
   { q: "Do I need to be technical?", a: "No. You ask questions in plain language — English or Hinglish — the way you'd ask your accountant, and Cortex looks up your actual invoices and orders to answer. Nothing to install, nothing to code." },
   { q: "How is this different from an ERP or CRM?", a: "Those record what already happened and wait for you to open them. Cortex reads across all of it every day, names the specific thing about to cost you money, and drafts the action. It doesn't replace them — it does the part they were never built to do." },
   { q: "What is the Financial Digital Twin & Shock Chamber?", a: "It is Cortex's proprietary balance sheet simulator. Instead of relying on static spreadsheets, you can test debtor payment delays, MSME 45-day vendor payment compression, and raw material inflation to immediately see your simulated post-shock cash runway, working capital gap, and 1-click autonomous mitigation playbooks." },
-  { q: "How does the Big-4 Forensic Audit Sentinel work?", a: "Cortex evaluates your books against 5 statutory audit vectors: MSME Section 43B(h) tax disallowances, GSTR-2B Rule 88D Input Tax Credit mismatches, TDS 194Q thresholds, bank clearing variances, and forensic anomaly detection (duplicate invoices and round-number disbursements). It gives you a continuous 0–100% pre-flight audit readiness score and one-click printable workpapers." },
+  { q: "How does the Big-4 Forensic Audit Sentinel work?", a: "Cortex evaluates your books against 5 statutory audit vectors: MSME Section 43B(h) tax disallowances, GSTR-2B Rule 88D Input Tax Credit mismatches, TDS 194Q thresholds, bank clearing variances, and forensic anomaly detection (duplicate invoices and round-number disbursements). It gives you a daily-refreshed 0–100% pre-flight audit readiness score and one-click printable workpapers." },
   { q: "Is my data safe?", a: "Yes. Every workspace is isolated with Postgres row-level security, traffic is encrypted with TLS, sensitive keys use AES-256-GCM, and you can export every table in your workspace as JSON, or delete it, anytime." },
   { q: "How does billing work?", a: `Cortex runs on credits. Buy a ${SMALLEST_PACK_LABEL} pack and use it with no subscription, or pick a plan from ${ENTRY_PRICE_LABEL}/mo for a monthly allowance — billed securely via Cashfree. Your free Business Health Check needs no card at all. Prices are in INR; international customers are onboarded by our team.` },
 ];
@@ -166,8 +166,8 @@ const OLD_NEW = [
   { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Zoho Books, Vyapar and Busy files as they come." },
   { old: "Month-end close takes weeks of manual bank and GST reconciliation.", now: "Automated month-end close: bank vs invoices, GSTR-2B vs purchase register, TDS deductions, and variance audits in one cockpit." },
   { old: "Forecasting and FP&A are stuck in static, disconnected spreadsheets.", now: "Autonomous FP&A: driver-based sensitivity models, budget vs actuals, and instant board pack commentary." },
-  { old: "A big customer delays payment or inflation hits, and your runway collapses without warning.", now: "Balance Sheet Digital Twin & Live Shock Chamber lets you stress-test debtor delays, COGS inflation, and MSME terms in real time with 1-click autonomous mitigation playbooks." },
-  { old: "Auditors arrive and find duplicate invoices, missing GSTR-2B ITC matches, and MSME 43B(h) penalties.", now: "Continuous Big-4 Forensic Audit Sentinel scores pre-flight compliance (0–100%) and catches duplicate billings before auditors ever see them." },
+  { old: "A big customer delays payment or inflation hits, and your runway collapses without warning.", now: "Balance Sheet Digital Twin & Live Shock Chamber lets you stress-test debtor delays, COGS inflation and MSME terms instantly, with a one-click mitigation plan." },
+  { old: "Auditors arrive and find duplicate invoices, missing GSTR-2B ITC matches, and MSME 43B(h) penalties.", now: "A daily Big-4-style audit check scores pre-flight compliance (0–100%) and catches duplicate billings before auditors ever see them." },
   { old: "Tasks and commitments get lost across WhatsApp, emails, and meetings.", now: "P0–P3 Chief of Staff board auto-triages tasks, tracks promises made to counterparties, and runs daily executive routines." },
   { old: "You're too busy running the business to sit and analyse it.", now: "One email on Monday: the three things worth your attention this week." },
   /*
@@ -488,10 +488,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="02">Proprietary Moat</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-4xl">
-            Features that exist <span className="text-primary">nowhere else</span> in the market.
+            What your ERP was <span className="text-primary">never built to do</span>.
           </h2>
           <p className="mt-4 text-muted-foreground max-w-3xl leading-relaxed text-base lg:text-lg">
-            Traditional accounting software and ERPs record what already happened. Cortex gives you live financial stress-testing, continuous Big-4 pre-flight audit defense, 0% fee UPI payment acceleration, and autonomous boardroom intelligence that you cannot buy anywhere else.
+            Traditional accounting software and ERPs record what already happened. Cortex adds what they were never built to do: balance-sheet stress tests, a daily pre-flight audit check, 0% fee UPI collections and board-ready reporting — in one place, built for Indian SMEs.
           </p>
           <UnrivaledMoat />
         </div>

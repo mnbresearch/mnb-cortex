@@ -483,3 +483,21 @@ button:active:not(:disabled), [role="button"]:active { transform: scale(.985); }
   .agent-walk, .agent-idle, .agent-bubble, .agent-path,
   .agent-walk .agent-leg-l, .agent-walk .agent-leg-r { animation: none !important; }
 }
+
+/* Glass — only on the control-centre surfaces (attention strip, KPI tiles,
+   quick tools). Never on tables or forms, where it hurts reading. The
+   .app-canvas gradients behind the content are what it frosts. */
+.glass {
+  background-color: hsl(var(--card) / 0.62);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid hsl(var(--border) / 0.8);
+  box-shadow: 0 10px 30px -14px rgb(15 23 42 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+.dark .glass { box-shadow: 0 10px 30px -14px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.06); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass { background-color: hsl(var(--card)); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass { background-color: hsl(var(--card)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

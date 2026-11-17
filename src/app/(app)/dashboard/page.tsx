@@ -31,6 +31,8 @@ import { dismissAlert, getEnterpriseHudData } from "@/lib/actions";
 import { EnterpriseCommandHud } from "@/components/enterprise-hud";
 import { SafeForm } from "@/components/safe-form";
 import { usedModes, suggestions } from "@/lib/feature-usage";
+import { CollapsibleSection } from "@/components/collapsible-section";
+import { MessageSquare, Wallet, Sunrise } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -105,28 +107,18 @@ export default async function Dashboard() {
           <PrintButton />
         </div>
 
-        {/* Enterprise Command HUD: 4-Pillar Executive Cockpit, Big-4 Pre-Flight Audit Sentinel & Digital Twin Shock Simulator */}
-        <EnterpriseCommandHud initialData={hudData} />
-        {/* What waits on a human, before anything else. */}
+        {/* 1. What waits on a human, before anything else. */}
         {needsYou && <NeedsYouStrip n={needsYou} />}
-        {tryNext.length > 0 && (
-          <Card className="p-4 no-print">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-sm font-medium">Cortex can also do this for you</div>
-              <Link href="/discover" className="text-xs text-primary underline-offset-2 hover:underline">See everything it does</Link>
-            </div>
-            <div className="mt-2 grid gap-2 sm:grid-cols-3">
-              {tryNext.map((f) => (
-                <Link key={f.id} href={f.route} className="rounded-lg border px-3 py-2 hover:border-primary/40 transition-colors">
-                  <div className="text-sm font-medium">{f.title}</div>
-                  <div className="text-xs text-muted-foreground leading-5 line-clamp-2">{f.outcome}</div>
-                </Link>
-              ))}
-            </div>
-          </Card>
-        )}
+        {/* 2. Until the workspace has data, the setup path is the dashboard. */}
+        {/*
+          The single ordered path from signup to the first real warning. Hides
+          itself the moment all four steps are done, so an established workspace
+          never sees it.
+        */}
+        <SetupPath run={firstRun} />
+
         {/* AI summary banner */}
-        <Card className="p-5 bg-gradient-to-br from-primary/10 to-purple-500/5 border-primary/20">
+        <Card className="glass p-5">
           <div className="flex items-start gap-3">
             <div className="rounded-lg bg-primary/15 p-2"><Sparkles className="h-5 w-5 text-primary" /></div>
             <div className="flex-1">
@@ -161,33 +153,23 @@ export default async function Dashboard() {
           </div>
         </Card>
 
-        {/*
-          The single ordered path from signup to the first real warning. Hides
-          itself the moment all four steps are done, so an established workspace
-          never sees it.
-        */}
-        <SetupPath run={firstRun} />
-
-        {/* Guided command layer: turns 128 modules into the few that matter now. */}
-        <NextBestActions />
-
-        {/*
-          The one entry point for "connect Cortex to my own stuff".
-
-          It lives on the dashboard because the two questions it answers are the
-          two people arrive with — can I use my own AI key, and what is already
-          connected — and both were previously reachable only by finding
-          /integrations in the nav and scrolling a 62-entry grid.
-
-          Rendered by a server component so it can show real state (connected,
-          nothing yet) rather than a button that always says the same thing.
-        */}
-        <ConnectBanner />
-
-        {isReal && (resolveIndustry((profile as any)?.industry)
-          ? <IndustryPlaybook industry={(profile as any)?.industry} />
-          : <IndustryPrompt />)}
-
+        {/* Quick tools — the four things an owner does most, one tap each. */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 no-print">
+          {[
+            { href: "/import", label: "Upload a file", sub: "Tally, Zoho, Vyapar, CSV", Icon: UploadIcon },
+            { href: "/collections", label: "Collect now", sub: "0% fee UPI reminders", Icon: Wallet },
+            { href: "/chat", label: "Ask Cortex", sub: "Answers from your numbers", Icon: MessageSquare },
+            { href: "/brief", label: "Daily brief", sub: "What changed overnight", Icon: Sunrise },
+          ].map(({ href, label, sub, Icon }) => (
+            <Link key={href} href={href} className="glass rounded-xl px-4 py-3.5 flex items-center gap-3 transition-transform hover:-translate-y-0.5">
+              <span className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0"><Icon className="h-4 w-4" /></span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold leading-tight">{label}</span>
+                <span className="block text-xs text-muted-foreground truncate">{sub}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
         {hasMetrics && <Card className="p-5"><CortexScore metrics={metrics} /></Card>}
 
         {/* KPI grid */}
@@ -244,51 +226,92 @@ export default async function Dashboard() {
           )
         ) : null}
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <Section title="Revenue, profit & cash" desc="Trailing 12 months (₹ Cr)">
-              {chartData.length && chartKeys.length ? (
-                <TrendChart data={chartData} keys={chartKeys} />
-              ) : (
-                <Card className="p-8 text-center text-sm text-muted-foreground">
-                  No finance data yet. <Link href="/bank" className="text-primary">Upload a bank statement</Link> or <Link href="/import" className="text-primary">import your ledger</Link> to see your revenue, profit and cash trend.
-                </Card>
-              )}
-            </Section>
-          </div>
+        {/* 3. Everything else folds away and remembers how you left it. */}
+        <CollapsibleSection id="hud" title="Command view — cash, audit, operations, scenarios" defaultOpen summary="Four pillars">
+          <EnterpriseCommandHud initialData={hudData} />
+        </CollapsibleSection>
+        <CollapsibleSection id="trend" title="Trend & alerts" defaultOpen summary={alerts.length ? `${alerts.length} alert${alerts.length === 1 ? "" : "s"}` : "No active alerts"}>
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <Section title="Revenue, profit & cash" desc="Trailing 12 months (₹ Cr)">
+                {chartData.length && chartKeys.length ? (
+                  <TrendChart data={chartData} keys={chartKeys} />
+                ) : (
+                  <Card className="p-8 text-center text-sm text-muted-foreground">
+                    No finance data yet. <Link href="/bank" className="text-primary">Upload a bank statement</Link> or <Link href="/import" className="text-primary">import your ledger</Link> to see your revenue, profit and cash trend.
+                  </Card>
+                )}
+              </Section>
+            </div>
 
-          {/* Alerts */}
-          <Card>
-            <div className="p-5 pb-2 font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-warning" /> Alerts</div>
-            <div className="p-3 pt-1 space-y-2">
-              {alerts.length ? alerts.map((a) => (
-                <div key={a.id} className={cn("rounded-lg border p-3 flex items-start gap-2", statusBg[a.severity])}>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">{a.title}</p>
-                    <p className="text-xs opacity-80 mt-0.5">{a.body}</p>
+            {/* Alerts */}
+            <Card>
+              <div className="p-5 pb-2 font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-warning" /> Alerts</div>
+              <div className="p-3 pt-1 space-y-2">
+                {alerts.length ? alerts.map((a) => (
+                  <div key={a.id} className={cn("rounded-lg border p-3 flex items-start gap-2", statusBg[a.severity])}>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{a.title}</p>
+                      <p className="text-xs opacity-80 mt-0.5">{a.body}</p>
+                    </div>
+                    {isReal && (
+                      <SafeForm action={dismissAlert}>
+                        <input type="hidden" name="id" value={a.id} />
+                        <button type="submit" className="text-xs opacity-70 hover:opacity-100 whitespace-nowrap" aria-label={`Dismiss alert: ${a.title}`}>Dismiss</button>
+                      </SafeForm>
+                    )}
                   </div>
-                  {isReal && (
-                    <SafeForm action={dismissAlert}>
-                      <input type="hidden" name="id" value={a.id} />
-                      <button type="submit" className="text-xs opacity-70 hover:opacity-100 whitespace-nowrap" aria-label={`Dismiss alert: ${a.title}`}>Dismiss</button>
-                    </SafeForm>
-                  )}
-                </div>
-              )) : <p className="text-sm text-muted-foreground px-2 py-3">No active alerts. Cortex raises them here once it's watching your data.</p>}
-            </div>
-          </Card>
-        </div>
-
-        {/* AI Insights & recommended actions */}
-        {(insights.length > 0 || !isReal) && (
-          <div>
-            <h2 className="font-semibold mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI Insights & recommended actions</h2>
-            <div className="grid md:grid-cols-2 gap-3">
-              {insights.map((ins) => <InsightCard key={ins.id} ins={ins} />)}
-            </div>
+                )) : <p className="text-sm text-muted-foreground px-2 py-3">No active alerts. Cortex raises them here once it's watching your data.</p>}
+              </div>
+            </Card>
           </div>
-        )}
+        </CollapsibleSection>
+        <CollapsibleSection id="insights" title="AI insights & next steps" summary={insights.length ? `${insights.length} insights` : "Recommended actions"}>
+          {/* Guided command layer: turns 128 modules into the few that matter now. */}
+          <NextBestActions />
+          {tryNext.length > 0 && (
+            <Card className="p-4 no-print">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">Cortex can also do this for you</div>
+                <Link href="/discover" className="text-xs text-primary underline-offset-2 hover:underline">See everything it does</Link>
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {tryNext.map((f) => (
+                  <Link key={f.id} href={f.route} className="rounded-lg border px-3 py-2 hover:border-primary/40 transition-colors">
+                    <div className="text-sm font-medium">{f.title}</div>
+                    <div className="text-xs text-muted-foreground leading-5 line-clamp-2">{f.outcome}</div>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          )}
+          {/* AI Insights & recommended actions */}
+          {(insights.length > 0 || !isReal) && (
+            <div>
+              <h2 className="font-semibold mb-3 flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI Insights & recommended actions</h2>
+              <div className="grid md:grid-cols-2 gap-3">
+                {insights.map((ins) => <InsightCard key={ins.id} ins={ins} />)}
+              </div>
+            </div>
+          )}
+        </CollapsibleSection>
+        <CollapsibleSection id="connect" title="Connections & your industry" summary="Integrations, AI keys, industry playbook">
+          {/*
+            The one entry point for "connect Cortex to my own stuff".
 
+            It lives on the dashboard because the two questions it answers are the
+            two people arrive with — can I use my own AI key, and what is already
+            connected — and both were previously reachable only by finding
+            /integrations in the nav and scrolling a 62-entry grid.
+
+            Rendered by a server component so it can show real state (connected,
+            nothing yet) rather than a button that always says the same thing.
+          */}
+          <ConnectBanner />
+          {isReal && (resolveIndustry((profile as any)?.industry)
+            ? <IndustryPlaybook industry={(profile as any)?.industry} />
+            : <IndustryPrompt />)}
+        </CollapsibleSection>
         <InstallCTA />
       </PageShell>
     </>

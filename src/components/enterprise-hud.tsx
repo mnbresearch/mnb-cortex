@@ -112,7 +112,7 @@ export function EnterpriseCommandHud({ initialData }: Props) {
             <div className="flex items-center gap-2.5">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">
-                Enterprise Command HUD · Autonomous Financial Sentinel
+                Command view · cash, audit, operations, scenarios
               </span>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground mt-1 flex items-center gap-2">
@@ -124,7 +124,7 @@ export function EnterpriseCommandHud({ initialData }: Props) {
               )}
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Unified 4-Pillar Executive Cockpit: Capital Velocity, Forensic Audit Shield, Auto-Operations & Digital Twin.
+              Four pillars: cash and collections, audit readiness, month-end operations, and what-if scenarios.
             </p>
           </div>
 

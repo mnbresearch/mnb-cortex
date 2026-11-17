@@ -34,15 +34,15 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null, log
   const groups = Array.from(new Set(NAV.map((n) => n.group)));
   const activeGroup = NAV.find((n) => n.href === path)?.group;
   const { theme, setTheme } = useTheme();
-  const [open, setOpen] = useState<Record<string, boolean>>({ Overview: true });
+  const [open, setOpen] = useState<Record<string, boolean>>({ Home: true });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     let saved: Record<string, boolean> = {};
     try { saved = JSON.parse(localStorage.getItem(OPEN_KEY) || "{}"); } catch {}
-    // Overview always open; the section you're in is force-opened; everything else remembers your choice.
-    setOpen({ Overview: true, ...saved, ...(activeGroup ? { [activeGroup]: true } : {}) });
+    // Home always open; the section you're in is force-opened; everything else remembers your choice.
+    setOpen({ Home: true, ...saved, ...(activeGroup ? { [activeGroup]: true } : {}) });
   }, [activeGroup]);
 
   function toggle(g: string) {
