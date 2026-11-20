@@ -208,9 +208,12 @@ const home = readFileSync("src/app/page.tsx", "utf8");
   what the agents are FOR — named teams — and the page must carry the
   solution lines, read from lib/solutions.ts so they cannot drift.
 */
-check(/Agents that work from your books/.test(home) && /finance team/.test(home),
+/* Nov 2026: the homepage speaks to finance and operations teams ("the agent
+   workspace"); the owner-facing "work from your books" hero lives on /business. */
+const smb = readFileSync("src/app/business/page.tsx", "utf8");
+check(/agent workspace/.test(home) && /finance and operations teams/.test(home) && /work from your books/i.test(smb) && /finance team/.test(smb),
   "the hero states the agent position and names the teams");
-check(/SOLUTIONS\.map/.test(home) && /\/solutions\/finance/.test(home),
+check(/SOLUTIONS\.(map|filter|find)/.test(home) && /\/solutions\/finance/.test(home),
   "the homepage carries the solution lines, with Cortex for Finance as the flagship");
 check(/Tally/.test(home) && /accounting software/i.test(home),
   "the hero says Cortex sits ON TOP of existing books rather than replacing them",
@@ -218,7 +221,7 @@ check(/Tally/.test(home) && /accounting software/i.test(home),
 
 const layout = readFileSync("src/app/layout.tsx", "utf8");
 check(!/operating brain/i.test(layout), "page metadata no longer says 'operating brain'");
-check(/AI agents that work from your books/.test(layout) && !/early-warning system for Indian businesses/i.test(layout),
+check(/agent workspace for finance and operations/.test(layout) && !/early-warning system for Indian businesses/i.test(layout),
   "page metadata carries the agent position, not the retired early-warning headline");
 
 /*

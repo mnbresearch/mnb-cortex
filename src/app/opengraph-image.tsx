@@ -1,25 +1,33 @@
 import { ImageResponse } from "next/og";
 export const runtime = "edge";
-export const alt = "MNB Cortex — The early-warning system for your business";
+export const alt = "MNB Cortex — Agents that run the work. You make the calls.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+
+/* The share card, in the MNB Cortex brand: near-black, one gold accent, heavy
+   sans with the last word set as the gold emphasis (the brand kit's signature;
+   the edge renderer has no italic serif, so weight and colour carry it). */
 export default function OG() {
   return new ImageResponse(
     (
-      <div style={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", justifyContent: "center", padding: 80, background: "linear-gradient(135deg,#04201d,#0a3a34)", color: "white", fontFamily: "sans-serif" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <div style={{ width: 64, height: 64, borderRadius: 16, background: "linear-gradient(135deg,#12b5a0,#1ec98a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, fontWeight: 800, color: "#04201d" }}>C</div>
-          <div style={{ fontSize: 40, fontWeight: 700 }}>MNB Cortex</div>
+      <div style={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 80, background: "radial-gradient(ellipse at 50% 0%, #2a2211 0%, #0b0b0c 62%)", color: "#ededef", fontFamily: "sans-serif" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          <div style={{ width: 60, height: 60, borderRadius: 16, background: "linear-gradient(135deg,#e2c27a,#b8862f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, fontWeight: 800, color: "#0b0b0c" }}>C</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+            <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: 4, color: "#9a9aa4" }}>MNB</div>
+            <div style={{ fontSize: 40, fontWeight: 800 }}>Cortex</div>
+          </div>
         </div>
-        {/* The landing page's own headline. The old card ("a brain of its own…
-            reads everything, remembers everything, and acts") was a retired
-            overclaim still shown on every shared link. */}
-        <div style={{ display: "flex", flexDirection: "column", fontSize: 64, fontWeight: 800, marginTop: 44, lineHeight: 1.08, letterSpacing: -2 }}>
-          <div>Your books tell you what happened.</div>
-          <div>Cortex tells you what&apos;s about to.</div>
+        <div style={{ display: "flex", flexDirection: "column", fontSize: 76, fontWeight: 800, lineHeight: 1.02, letterSpacing: -3 }}>
+          <div>Agents that run the work.</div>
+          <div style={{ display: "flex" }}>You make the&nbsp;<span style={{ color: "#c9a24a" }}>calls.</span></div>
         </div>
-        <div style={{ fontSize: 30, color: "#8fd8cc", marginTop: 26 }}>The early-warning system for Indian businesses.</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 26, color: "#9a9aa4" }}>
+          <div>The agent workspace for finance and operations teams</div>
+          <div style={{ color: "#c9a24a" }}>mnbcortex.app</div>
+        </div>
       </div>
-    ), { ...size }
+    ),
+    { ...size },
   );
 }

@@ -55,7 +55,7 @@ export const BRAND = {
   BADGES: ["Shark Tank India Featured", "DPIIT-Recognised Startup"],
   COLOR_FROM: "#1f4a3b",
   COLOR_TO: "#2f6b54",
-  DISCLAIMER: `MNB Cortex is the early-warning system for your business. © ${new Date().getFullYear()} Abrobot Technologies Private Limited. All rights reserved.`,
+  DISCLAIMER: `MNB Cortex — agents that run the work. You make the calls. © ${new Date().getFullYear()} Abrobot Technologies Private Limited. All rights reserved.`,
 };
 
 /** The RFC-5322 From value: "MNB Cortex by MNB Research <hello@updates.mnbresearch.com>". */

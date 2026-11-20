@@ -66,6 +66,7 @@ check(CALCULATOR_ROUTES.length === TRUE.calculators,
 /* ---- where each number is published ------------------------------------ */
 const SURFACES = [
   "src/app/page.tsx",
+  "src/app/business/page.tsx",
   "src/app/features/page.tsx",
   "src/app/investors/page.tsx",
   "src/app/pricing/page.tsx",
@@ -175,7 +176,8 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
 */
 {
   const actions = read("src/lib/actions.ts");
-  const page = read("src/app/page.tsx");
+  /* The SME landing content moved to /business in the Nov 2026 redesign; the claim it backs is still made there. */
+  const page = read("src/app/business/page.tsx");
   if (/first import to your first warning/.test(page)) {
     check(/recomputeAndReport/.test(actions),
       "the '3 min from import to warning' stat still has its mechanism",
@@ -367,7 +369,8 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
 
   /* The landing page and the investor page must both render the real list
      rather than a hand-typed copy of it. */
-  const landing = read("src/app/page.tsx");
+  /* The SME landing content moved to /business in the Nov 2026 redesign; the claim it backs is still made there. */
+  const landing = read("src/app/business/page.tsx");
   const investors = read("src/app/investors/page.tsx");
   check(/PLAYBOOKS\.map/.test(landing), "the landing page renders the real playbook list");
   check(/PLAYBOOKS\.(map|length)/.test(investors), "the investor page does too");
@@ -389,7 +392,7 @@ for (const file of [...SURFACES, "src/app/refund/page.tsx", "src/app/help/page.t
   true, so the sentence dies with the mechanism instead of outliving it.
 */
 {
-  const landing = read("src/app/page.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+  const landing = read("src/app/business/page.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
 
   /* "no mapping screen" / "reads your column names itself" */
   if (/no mapping screen|reads your column names|matches your column/i.test(landing)) {

@@ -28,8 +28,8 @@ import { Check, MessageCircle, Send } from "lucide-react";
 
 const WA = "https://wa.me/919711488480";
 
-export function ContactForm() {
-  const [f, setF] = useState({ name: "", email: "", company: "", phone: "", message: "" });
+export function ContactForm({ defaultMessage = "", submitLabel }: { defaultMessage?: string; submitLabel?: string } = {}) {
+  const [f, setF] = useState({ name: "", email: "", company: "", phone: "", message: defaultMessage });
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [err, setErr] = useState("");
   /*
@@ -124,7 +124,7 @@ export function ContactForm() {
       {status === "error" && <p role="alert" className="text-xs text-danger">{err}</p>}
       <div className="flex flex-wrap gap-2">
         <button disabled={status === "sending"} className="inline-flex items-center gap-2 rounded-full btn-ink h-11 px-5 text-sm font-medium">
-          <Send className="h-4 w-4" aria-hidden="true" /> {status === "sending" ? "Sending…" : "Send message"}
+          <Send className="h-4 w-4" aria-hidden="true" /> {status === "sending" ? "Sending…" : (submitLabel || "Send message")}
         </button>
         <a href={WA} target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-full bg-[#25D366] text-white h-11 px-5 text-sm font-medium">

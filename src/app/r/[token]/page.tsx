@@ -36,7 +36,7 @@ export default async function PublicReport({ params }: { params: { token: string
               {data.as_of
                 ? <>Figures as at <b className="text-foreground">{String(data.as_of).slice(0, 10)}</b>. </>
                 : null}
-              Powered by MNB Cortex — the early-warning system for Indian businesses.
+              Powered by MNB Cortex — agents that run the work. You make the calls.
             </p>
             {(data.metrics || []).length === 0 && (
               <p className="mt-6 rounded-lg border bg-card p-4 text-sm text-muted-foreground">

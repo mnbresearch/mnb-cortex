@@ -6,7 +6,7 @@ import { BrainCircuit, Landmark, MessageSquare, Megaphone, Radar, Rocket, ArrowR
 const KEY = "cortex_tour_v1";
 
 const STEPS = [
-  { icon: BrainCircuit, title: "Meet your early-warning system", body: "MNB Cortex reads your business, remembers every decision, and acts. Not a chatbot — an AI that runs the loop across your whole company.", href: "", cta: "" },
+  { icon: BrainCircuit, title: "Meet your agent workspace", body: "MNB Cortex reads your business, remembers every decision, and acts. Not a chatbot — an AI that runs the loop across your whole company.", href: "", cta: "" },
   { icon: Landmark, title: "Give it your real numbers", body: "Upload a bank statement or GST return, or import a CSV. In seconds Cortex turns it into your real cash truth — and grounds every answer in it.", href: "/bank", cta: "Upload a statement" },
   { icon: MessageSquare, title: "Ask it anything", body: "Ask “How is my business?” in plain language. For the deep stuff, run a Cortex Deep Dive — it diagnoses, decides, and drafts the first action.", href: "/deepdive", cta: "Try a Deep Dive" },
   { icon: Megaphone, title: "Let it act for you", body: "AI Outreach drafts payment reminders, follow-ups and supplier notes. You review and approve — it sends by email or WhatsApp.", href: "/act", cta: "Open AI Outreach" },

@@ -74,9 +74,9 @@ export function Sidebar({ superAdmin = false, orgs = [], activeOrgId = null, log
           <Logo size={34} />
         )}
         <div className="min-w-0">
-          <div className="font-semibold leading-none tracking-tight truncate">{brandName || "Cortex"}</div>
+          <div className="font-semibold leading-none tracking-tight truncate">{brandName || <><span className="text-[10px] font-bold tracking-[0.18em] text-muted-foreground mr-1">MNB</span>Cortex</>}</div>
           <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
-            {brandName ? "on Cortex" : "Agents that work from your books"}
+            {brandName ? "on Cortex" : "The agent workspace"}
           </div>
         </div>
       </div>

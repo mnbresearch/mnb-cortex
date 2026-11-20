@@ -97,7 +97,7 @@ Reply to this email to reach them directly.`;
        links only to our own site (a public form must not be a phishing relay). */
     const userBody = `Hi ${plainCallerText(name.split(" ")[0], 40) || "there"},
 
-Thanks for your interest in MNB Cortex — the early-warning system for your business.
+Thanks for your interest in MNB Cortex — the agent workspace for finance and operations teams.
 
 Our team has received your request and will reach out shortly with access. In the meantime, you can tell us more about your business here: ${CONTACT_URL}
 
