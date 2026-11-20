@@ -177,6 +177,25 @@ export default function Privacy() {
         </li>
       </UL>
 
+      <H2>6b. Company Knowledge — mail, chats, documents and connected systems</H2>
+      <P>
+        If a workspace admin connects Company Knowledge, Cortex reads the following so your agents can search it and cite it.
+        Nothing is read until an admin connects a source, and each source is removed — with everything read from it — when an
+        admin removes it.
+      </P>
+      <UL>
+        <li><strong>Microsoft 365</strong> — the signed-in account&rsquo;s Outlook mail, Teams chats and recent OneDrive/SharePoint files, using the read-only permissions Mail.Read, Chat.Read and Files.Read.All. Cortex cannot send, delete or change anything.</li>
+        <li><strong>Google Workspace</strong> — the signed-in account&rsquo;s Gmail and Google Drive, using the read-only scopes gmail.readonly and drive.readonly.</li>
+        <li><strong>Uploaded documents</strong> — the text of files an admin or manager uploads.</li>
+        <li><strong>MCP servers</strong> — answers from tools that the server marks read-only and an admin allows, fetched when an agent asks.</li>
+      </UL>
+      <P>
+        Sign-in tokens are stored encrypted (AES-256-GCM). The text read is stored in your workspace, isolated from every other
+        workspace at the database level, and is searchable by every member of that workspace. When an agent uses it, the relevant
+        excerpts are sent to the AI provider serving the request, after the masking described in section 4. New items are read
+        about every six hours while a source is connected.
+      </P>
+
       <H2>7. Your Rights &amp; Control</H2>
       <P>You remain in control of your data at all times. You can:</P>
       <UL>

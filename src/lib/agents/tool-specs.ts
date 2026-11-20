@@ -72,6 +72,44 @@ export const AGENT_TOOL_DECLARATIONS = [
       required: ["content"],
     },
   },
+  {
+    name: "search_company_knowledge",
+    description:
+      "Search the company's own knowledge: emails (Outlook, Gmail), Teams chats, documents and files (OneDrive, SharePoint, Google Drive, uploads) and reports the company has connected. "
+      + "Every result carries a `citation` naming where it came from. Use it for any question about what someone said or sent, a policy, a contract, a report, a decision, a customer conversation or anything not in the books. "
+      + "When you use a result, quote its citation in your answer.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "What to look for: names, subjects, invoice numbers, topics." },
+        kind: { type: "string", description: "Optional: email | chat | document | file | report." },
+        limit: { type: "integer", description: "How many results (1-12, default 6)." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "list_company_sources",
+    description:
+      "What the company has connected: mailboxes, chats, drives, uploaded documents and MCP-connected systems, with how much each holds and which system tools are available. "
+      + "Use when asked what Cortex can see, or before query_connected_system to find the right source and tool.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "query_connected_system",
+    description:
+      "Ask one of the company's connected systems (an MCP server such as a CRM, ERP, ticketing tool or data warehouse) using one of its read-only tools. "
+      + "Only tools the system marks read-only and the owner allowed can be called; nothing can be changed this way. Use list_company_sources first to find the source id and tool name.",
+    parameters: {
+      type: "object",
+      properties: {
+        source_id: { type: "string", description: "The source id from list_company_sources." },
+        tool: { type: "string", description: "The tool name." },
+        arguments: { type: "object", description: "The tool's arguments." },
+      },
+      required: ["source_id", "tool"],
+    },
+  },
 ] as const;
 
 export type AgentToolName = (typeof AGENT_TOOL_DECLARATIONS)[number]["name"];

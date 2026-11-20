@@ -14,6 +14,7 @@ const TOOL_LABEL: Record<string, string> = {
   low_stock: "Low stock", find_party: "Customer & supplier lookup", collections_status: "Collections", revenue_by_month: "Revenue by month",
   propose_action: "Proposes actions", business_snapshot: "KPI snapshot", msme_exposure: "43B(h) exposure",
   statutory_deadlines: "Statutory calendar", customer_segments: "Customer segments", recall_memory: "Memory", remember_fact: "Writes memory",
+  search_company_knowledge: "Company mail, chats & documents", list_company_sources: "Connected sources", query_connected_system: "Connected systems (MCP)",
 };
 
 export function AgentTeamGrid({ team }: { team: TeamId }) {
@@ -40,10 +41,10 @@ export function AgentTeamGrid({ team }: { team: TeamId }) {
 }
 
 const STEPS = [
-  { icon: Database, t: "Connect your books", d: "Live sync from Zoho Books, Odoo, Shopify, Razorpay, Stripe and Google Sheets; a bridge for Tally; file import for Vyapar, Busy and CSV. You keep your accounting software." },
+  { icon: Database, t: "Connect your books and your company", d: "Live sync from Zoho Books, Odoo, Shopify, Razorpay, Stripe and Google Sheets; a bridge for Tally; file import for Vyapar, Busy and CSV. Add mail, Teams, drives and documents through Company Knowledge, and any system through MCP. You keep your accounting software." },
   { icon: Bot, t: "Delegate in plain words", d: "Ask for the outcome. Cortex routes it to the right agent, or a team lead plans it across specialists. Tasks keep running after you close the tab, and can run on a schedule." },
   { icon: Inbox, t: "Approve what matters", d: "Agents only propose. A reminder, a status change or an export waits on your Approvals page until you say yes, unless you've set an Autopilot rule with limits." },
-  { icon: ShieldCheck, t: "Every figure checked", d: "Veritas v1 traces every rupee figure in an answer back to the rows the agents read, and flags any it can't. Names and identifiers are masked before anything reaches an AI model." },
+  { icon: ShieldCheck, t: "Every answer sourced", d: "Agents name the email, chat or document behind what they say, and Veritas v1 traces every rupee figure back to what they read. Names and identifiers are masked before anything reaches an AI model." },
 ];
 
 export function HowAgentsWork() {

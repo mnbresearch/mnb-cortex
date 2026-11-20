@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sparkles, X } from "lucide-react";
 import { APP_VERSION } from "@/lib/config";
-const HIGHLIGHTS = ["Agent Workspace — delegate work to Finance, Operations and Sales & Growth agents", "Team tasks planned by a lead agent, with every step shown", "Background and scheduled agents", "Veritas v1 checks every rupee figure in an answer"];
+const HIGHLIGHTS = ["Company Knowledge — Outlook, Teams, Gmail, Drive, documents and MCP systems", "Agents cite the email, chat or document behind every answer", "Agent Workspace — Finance, Operations and Sales & Growth agents", "Veritas v1 checks every rupee figure"];
 export function WhatsNew() {
   const [show, setShow] = useState(false);
   useEffect(() => { if (localStorage.getItem("mnb-seen-version") !== APP_VERSION) setShow(true); }, []);

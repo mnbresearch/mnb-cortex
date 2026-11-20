@@ -12,7 +12,7 @@ const SITE = (process.env.NEXT_PUBLIC_APP_URL || "https://cortex.mnbresearch.com
 
 export const metadata: Metadata = {
   title: "Cortex — AI agents that work from your books",
-  description: "Cortex gives Indian businesses a team of AI agents for finance, operations and growth. They read your own Tally, Zoho Books or spreadsheet data, do the work, and bring you only the decisions. Every action waits for your approval; every figure is checked.",
+  description: "Cortex gives Indian businesses a team of AI agents for finance, operations and growth. They read your books and your company's mail, chats and documents, do the work, and bring you only the decisions. Every action waits for your approval; every answer names its source.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Cortex", statusBarStyle: "black-translucent" },
   icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/icon-192.png", sizes: "192x192", type: "image/png" }], apple: "/apple-touch-icon.png" },

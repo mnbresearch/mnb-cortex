@@ -14,7 +14,7 @@ Built with **Next.js 14 (App Router) · TypeScript · Tailwind · Supabase (Post
 
 ## What's inside
 
-133 module pages, 438 agent definitions and 28 calculators, plus the Agent
+134 module pages, 438 agent definitions and 28 calculators, plus the Agent
 Workspace. Rather than list them here — where the list goes stale the moment
 someone adds a page — the sources of truth are:
 
@@ -64,6 +64,24 @@ Supabase SQL editor. Until then the Workspace shows a setup message and
 `/api/health` reports the tables as not applied.
 
 Tests: `npm run test:agent-workspace` (shape and rules) and `npm run test:agent-runner` (the real runner, end to end against an in-memory database).
+
+---
+
+## Company Knowledge (`/knowledge`)
+
+The company's own mail, chats, documents and systems, searchable by every
+agent, with a citation on every hit (`src/lib/knowledge/`):
+
+| Source | Reads | Plan | File |
+|---|---|---|---|
+| Microsoft 365 | Outlook mail, Teams chats, OneDrive/SharePoint files — read-only scopes | Command, Enterprise | `workspace-sync.ts`, `oauth.ts` |
+| Google Workspace | Gmail, Google Drive — read-only scopes | Command, Enterprise | `workspace-sync.ts`, `oauth.ts` |
+| MCP servers | Read-only tools the owner allows, called live by agents | Pro and above | `mcp-client.ts` |
+| Documents | PDF, Word, Excel, CSV, text | Pro and above | `files.ts` |
+
+Agents get `search_company_knowledge`, and leads also `list_company_sources`
+and `query_connected_system`; every brief requires quoting the citation.
+Setup: `SETUP.md` → Company Knowledge. Tests: `npm run test:company-knowledge`.
 
 ---
 
@@ -158,7 +176,7 @@ After a user signs up, run in the Supabase SQL editor (or wire a button):
     |  |  |- login/                   # magic-link + Google
     |  |  |- auth/callback/route.ts   # OAuth/OTP exchange
     |  |  |- api/chat/route.ts        # Ask Cortex endpoint
-    |  |  |- (app)/                   # authenticated shell + 133 module pages
+    |  |  |- (app)/                   # authenticated shell + 134 module pages
     |  |- components/   # sidebar, topbar, KPI cards, charts, UI primitives
     |  |- lib/          # supabase clients, data layer, AI layer, demo data
     |  |- types/

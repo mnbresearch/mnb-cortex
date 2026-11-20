@@ -73,6 +73,13 @@ export const SOLUTIONS: Solution[] = [
           { title: "Valuation", body: "What the business could be worth on several methods, from your own numbers.", module: "/valuation" },
         ],
       },
+      {
+        name: "Company knowledge",
+        items: [
+          { title: "Answers from your mail and documents", body: "What the bank, the auditor or a customer said by email or in Teams, and what the contract or policy says — with the source named.", module: "/knowledge" },
+          { title: "Your systems, through MCP", body: "Connect a CRM, ERP or data warehouse with an MCP server; agents use only the read-only tools you allow.", module: "/knowledge" },
+        ],
+      },
     ],
     delegations: [
       "Who owes us the most, and draft reminders for anything over 60 days",
