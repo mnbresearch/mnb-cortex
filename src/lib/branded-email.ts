@@ -17,7 +17,7 @@ export type { OrgBrand } from "@/lib/email-brand";
   page nobody visits.
 */
 export const BRAND = {
-  PRODUCT_NAME: "MNB Cortex",
+  PRODUCT_NAME: "Cortex",
   SENDER_DISPLAY: "MNB Cortex by MNB Research",
   FROM_ADDRESS: process.env.EMAIL_FROM_ADDRESS || "hello@updates.mnbresearch.com",
   COMPANY_NAME: "MNB Research",
@@ -38,7 +38,7 @@ export const BRAND = {
     data module, so the old tagline kept shipping in the header of every single
     email the product sends.
   */
-  TAGLINE: "Early warning for your business",
+  TAGLINE: "AI agents that work from your books",
   /*
     "10,000+ Businesses Served" IS BANNED, AND WAS IN EVERY EMAIL.
 

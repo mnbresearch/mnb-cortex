@@ -6,6 +6,7 @@ import { GET as invoices } from "@/app/api/v1/invoices/route";
 import { GET as customers } from "@/app/api/v1/customers/route";
 import { GET as salesOrders } from "@/app/api/v1/sales-orders/route";
 import { POST as ask } from "@/app/api/v1/ask/route";
+import { GET as agentTasksGet, POST as agentTasksPost } from "@/app/api/v1/agents/tasks/route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +30,8 @@ const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "GET /api/v1/customers": customers,
   "GET /api/v1/sales-orders": salesOrders,
   "POST /api/v1/ask": ask,
+  "GET /api/v1/agents/tasks": agentTasksGet,
+  "POST /api/v1/agents/tasks": agentTasksPost,
 };
 
 function forward(req: Request): Call {

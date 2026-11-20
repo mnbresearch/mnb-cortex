@@ -5,7 +5,15 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "6.45.0", date: "Latest", items: [
+  { v: "7.0.0", date: "Latest", items: [
+    "Cortex is now a team of AI agents — the Agent Workspace lets you delegate work in plain words to Finance, Operations and Sales & Growth agents that look things up in your own books before they answer",
+    "Team tasks — a lead agent (CFO, COO or CRO) plans the work across its specialists and writes one answer, with every step, every lookup and every credit shown on a timeline",
+    "Agents keep working after you close the tab, on plans with background running, and can run on a schedule — daily, weekly or monthly, at an hour you choose",
+    "Every agent answer is checked by Veritas v1: each rupee figure is traced to the rows the agents read, and any it cannot trace is flagged as unconfirmed",
+    "Agents only propose — reminders, status changes and exports wait on Approvals unless you have set an Autopilot rule; each task pauses and asks before spending past its credit ceiling",
+    "New plans — Essentials, Team, Pro, Practice, Command and Enterprise — with agent limits on every plan",
+  ] },
+  { v: "6.45.0", date: "Earlier", items: [
     "A real developer API — scoped keys that expire, rotate without downtime and can be revoked, read endpoints for invoices, customers, sales orders and leads, consistent errors, paging, and a published OpenAPI contract",
     "Every API key now shows what it may do, when it expires, when it was last used and how many calls it made — and key changes are kept in a history",
     "One reminder, once, if a checkout is confirmed unpaid — sent only once switched on, never to anyone who unsubscribed, already paid or is subscribed",

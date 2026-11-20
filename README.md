@@ -1,35 +1,87 @@
-# MNB Cortex — early warning for Indian SMEs
+# Cortex — AI agents that work from your books
 
-Cortex watches an Indian SME's receivables, payables, cash and statutory clocks, and tells the owner what is about to cost them money — before it does. It sits on top of Tally, Vyapar or Busy rather than replacing them: you upload the export, Cortex reads it.
+**Cortex** (by MNB Research) gives an Indian business a team of AI agents —
+Finance, Operations, and Sales & Growth — that read the company's own books
+(Tally, Zoho Books, Vyapar, Busy, Odoo, Shopify, spreadsheets), do the work,
+propose actions for approval, and check every rupee figure they quote.
 
-> The positioning is **early warning**, not "AI COO". See `src/lib/config.ts` for the plans and `scripts/test-positioning.mjs`, which fails the build if marketing copy drifts back.
+It is sold as solution lines (`src/lib/solutions.ts`, `/solutions`), with
+**Cortex for Finance** as the flagship. See `docs/positioning.md`.
 
-
-Built with **Next.js 16 (App Router) · TypeScript · Tailwind · Supabase (Postgres + Auth + RLS) · Google Gemini**. Deploys to **Vercel + Supabase**.
+Built with **Next.js 14 (App Router) · TypeScript · Tailwind · Supabase (Postgres + Auth + RLS) · Gemini / Groq / OpenAI / Anthropic**. Deploys to **Vercel + Supabase**.
 
 ---
 
 ## What's inside
 
-131 module pages, 438 agent definitions and 28 calculators. Rather than list them
-here — where the list goes stale the moment someone adds a page — the sources of
-truth are:
+133 module pages, 438 agent definitions and 28 calculators, plus the Agent
+Workspace. Rather than list them here — where the list goes stale the moment
+someone adds a page — the sources of truth are:
 
 | Question | Where the answer actually lives |
 |---|---|
-| What modules exist? | `src/lib/nav.ts` (127 nav entries; `NAV.filter(n => n.calc)` are the calculators) |
-| What agents exist? | `src/lib/agents/catalog.ts` — `agentCount()` |
-| What do the plans include? | `src/lib/config.ts` — `PLANS[].features`, pinned by `scripts/test-positioning.mjs` and `scripts/test-legal.mjs` |
-| Which integrations really sync? | `src/lib/sync/index.ts` — `CONNECTORS`. Four: Shopify, Razorpay, Stripe, Google Sheets. The 62-entry catalogue in `src/lib/integrations.ts` is a credential vault, not 62 syncs. |
+| What modules exist? | `src/lib/nav.ts` (`NAV.filter(n => n.calc)` are the calculators) |
+| What template agents exist? | `src/lib/agents/catalog.ts` — `agentCount()` |
+| Which agents work from the books (tools, teams, leads)? | `src/lib/agents/teams.ts` |
+| What can an agent look up or do? | `src/lib/ai/tools.ts` (chat tools) + `src/lib/agents/tool-specs.ts` / `toolkit.ts` (agent tools) |
+| What do the plans include, and the agent limits? | `src/lib/config.ts` — `PLANS[].features`, `PLAN_AGENT_LIMITS` |
+| Which integrations really sync? | `src/lib/sync/index.ts` — `CONNECTORS`. Six: Shopify, Razorpay, Stripe, Google Sheets, Zoho Books, Odoo. The rest of the catalogue in `src/lib/integrations.ts` is a credential vault. |
 | What is genuinely wired vs aspirational? | `SETUP.md`, which is the honest document |
 
-**The load-bearing parts**, the ones worth understanding first: the MSME 43B(h)
-exposure engine (`src/lib/msme.ts` + `cortex_msme_exposure`), the collections
-engine (`src/lib/collections/`), the metrics aggregation layer
-(`src/lib/metrics.ts`), credit metering (`src/lib/credits.ts`) and the tenancy
-model (`supabase/migrations/2026_tenancy.sql`).
+**The load-bearing parts**: the MSME 43B(h) exposure engine (`src/lib/msme.ts`
++ `cortex_msme_exposure`), the collections engine (`src/lib/collections/`), the
+action engine and approvals (`src/lib/engine/`), the metrics layer
+(`src/lib/metrics.ts`), credit metering (`src/lib/credits.ts`), the tenancy
+model (`supabase/migrations/2026_tenancy.sql`) and the Agent Workspace below.
 
-Dark + light mode, fully responsive (desktop sidebar + mobile bottom nav), animated.
+---
+
+## The Agent Workspace (`/workspace`)
+
+One agent runtime on top of the parts that already existed — no second model
+loop, no second approval path.
+
+| Piece | File | What it does |
+|---|---|---|
+| Agent teams | `src/lib/agents/teams.ts` | 15 tool-using agents in 3 teams, each with a lead |
+| Routing & planning | `src/lib/agents/orchestration.ts` | Deterministic routing; validates a lead's plan against the roster; a fallback plan when the model's plan is unusable |
+| Agent scope | `src/lib/ai/agent-scope.ts` | Lets an agent step run through `runCortex` with its own tools and workspace, with or without a cookie session |
+| Toolkit | `src/lib/agents/toolkit.ts` | Chat tools + agent tools (KPI snapshot, 43B(h), statutory calendar, RFM, memory) — all org-scoped |
+| Task runner | `src/lib/agents/tasks.ts` | Tasks and checkpointed steps, leases, per-step credit charging and refunds, credit ceilings, pause/resume/cancel, schedules, the sweeper |
+| Veritas v1 | `src/lib/veritas.ts` | Checks every rupee figure in an answer against what the agents read; reports unsupported figures and injected instructions |
+| API | `src/app/api/agents/tasks/**`, `src/app/api/agents/schedules`, `src/app/api/cron/agents` | Create, read, tick, control, schedule, sweep |
+| UI | `src/components/agent-workspace.tsx`, `src/app/(app)/workspace/**` | Delegate, watch the timeline, approve, schedule |
+
+**Background running.** A task advances while the Workspace is open (the page
+ticks it) and, on plans with background running, after the tab is closed: the
+sweeper `/api/cron/agents` runs every 5 minutes from
+`.github/workflows/agents.yml` (needs the `CRON_SECRET` Actions secret, the same
+one `autopilot.yml` uses) and daily from `vercel.json`. Every step is
+checkpointed, so a timeout or deploy never loses finished work.
+
+**Database.** Run `supabase/RUN-2026-11-20-agent-workspace.sql` once in the
+Supabase SQL editor. Until then the Workspace shows a setup message and
+`/api/health` reports the tables as not applied.
+
+Tests: `npm run test:agent-workspace` (shape and rules) and `npm run test:agent-runner` (the real runner, end to end against an in-memory database).
+
+---
+
+## Domains
+
+`mnbcortex.app` is the brand domain; `cortex.mnbresearch.com` is the current
+primary. To make `mnbcortex.app` primary:
+
+1. Supabase → Authentication → URL Configuration: add
+   `https://mnbcortex.app/auth/callback` to the redirect allow-list (keep the
+   old one) and set the Site URL to `https://mnbcortex.app`.
+2. Google OAuth client: add `https://mnbcortex.app` as an authorised origin.
+3. Vercel → Domains: remove the redirect on `mnbcortex.app`, and set
+   `cortex.mnbresearch.com` to redirect (308) to `mnbcortex.app`.
+4. Set `NEXT_PUBLIC_APP_URL=https://mnbcortex.app` and redeploy.
+5. Cashfree webhook URL and the GitHub Actions `CORTEX_URL` variable: update
+   to the new host (the old one keeps working through the redirect for GETs,
+   but webhooks should not depend on a redirect).
 
 ---
 
@@ -84,7 +136,7 @@ That's it — you're live.
 - **Sign up** -> a Postgres trigger (`handle_new_user`) auto-creates a profile, a demo organization, and an owner membership.
 - **Every table is org-scoped** via RLS using `user_org_ids()`, so tenants never see each other's data.
 - **Server components** (`src/lib/data.ts`) fetch the signed-in user's org data; if Supabase isn't configured or the org has no rows, they fall back to the bundled demo dataset so the UI is never empty.
-- **AI CEO chat** (`/api/chat`) builds a live business snapshot from your metrics + insights and sends it to Claude/OpenAI with a McKinsey-grade COO system prompt (`src/lib/ai/cortex.ts`). With no key set it returns smart canned answers so the feature still demos.
+- **Ask Cortex** (`/api/chat`) builds a live business snapshot from your metrics + insights and answers with tool calls over the workspace's own rows (`src/lib/ai/cortex.ts`, `src/lib/ai/tools.ts`). With no key set it returns canned answers so the feature still demos.
 
 ### Seeding a real org with demo numbers
 After a user signs up, run in the Supabase SQL editor (or wire a button):
@@ -105,8 +157,8 @@ After a user signs up, run in the Supabase SQL editor (or wire a button):
     |  |  |- page.tsx                 # landing
     |  |  |- login/                   # magic-link + Google
     |  |  |- auth/callback/route.ts   # OAuth/OTP exchange
-    |  |  |- api/chat/route.ts        # AI COO endpoint
-    |  |  |- (app)/                   # authenticated shell + 131 module pages
+    |  |  |- api/chat/route.ts        # Ask Cortex endpoint
+    |  |  |- (app)/                   # authenticated shell + 133 module pages
     |  |- components/   # sidebar, topbar, KPI cards, charts, UI primitives
     |  |- lib/          # supabase clients, data layer, AI layer, demo data
     |  |- types/

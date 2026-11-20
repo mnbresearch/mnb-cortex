@@ -17,6 +17,8 @@ import { INDUSTRIES } from "@/lib/industries";
 import { STATUTORY_CATALOGUE } from "@/lib/statutory";
 import { HealthCheckClient } from "@/components/health-check-client";
 import { UnrivaledMoat } from "@/components/unrivaled-moat";
+import { HowAgentsWork } from "@/components/solution-blocks";
+import { SOLUTIONS } from "@/lib/solutions";
 
 /*
   ORDERED BY WHAT STOPS THE SALE, not by what is interesting to explain.
@@ -160,7 +162,7 @@ const OLD_NEW = [
     past due" — but it is rendered in the app, which is where the honest
     version of this sentence now points.
   */
-  { old: "You find out a customer hasn't paid when you need the cash.", now: "Your overdue list is ranked worst-first and names who to chase — Cortex emails you when overdue money crosses ₹5 lakh (or your own line on Watch Pro), with 0% fee Dynamic UPI QR links to collect directly to your bank account." },
+  { old: "You find out a customer hasn't paid when you need the cash.", now: "Your overdue list is ranked worst-first and names who to chase — Cortex emails you when overdue money crosses ₹5 lakh (or your own line on Pro), with 0% fee Dynamic UPI QR links to collect directly to your bank account." },
   { old: "You pay a small supplier late and lose the deduction at year end.", now: "Its nightly run checks the MSME 45-day clock (43B(h)) and lists the micro and small suppliers past it, oldest first." },
   { old: "A GST or TDS date passes and you find out from a notice.", now: "Every statutory deadline that applies to you, warned before — not after." },
   { old: "Your numbers live in Tally, spreadsheets and WhatsApp.", now: "Upload the export. Cortex reads Tally, Zoho Books, Vyapar and Busy files as they come." },
@@ -300,21 +302,21 @@ export default function Home() {
         <div className="relative z-10 max-w-5xl mx-auto text-center">
           <div className="inline-flex items-center gap-2.5 rounded-full glass px-4 py-1.5 text-xs font-medium text-muted-foreground">
             <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-            The early-warning system for Indian businesses
+            Agents that work from your books
           </div>
 
           <Kinetic
             as="h1"
-            text={"Your books tell you what happened.\nCortex tells you what's about to."}
+            text={"Agents that run the work.\nYou make the calls."}
             className="font-display display-hero tracking-tightest mt-7 text-balance"
           />
 
           <p className="mt-7 text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto leading-8">
-            Send it one export from Tally, Zoho Books, Vyapar or your spreadsheet. It watches your numbers every day and
-            tells you <span className="text-foreground font-medium">who hasn&rsquo;t paid</span>,{" "}
-            <span className="text-foreground font-medium">what&rsquo;s due</span>,{" "}
-            <span className="text-foreground font-medium">how to close your books</span>, and{" "}
-            <span className="text-foreground font-medium">what&rsquo;s about to run out</span>.
+            Cortex gives your business a <span className="text-foreground font-medium">finance team</span>, an{" "}
+            <span className="text-foreground font-medium">operations team</span> and a{" "}
+            <span className="text-foreground font-medium">growth team</span> of AI agents. They read your own Tally, Zoho Books or
+            spreadsheet data, chase what you&rsquo;re owed, track every filing date, close the month and find the customers slipping
+            away. Every action waits for your approval. Every figure is checked against your books.
           </p>
 
           {/* Full-bleed on a phone, side by side from sm up. A centred pill
@@ -328,7 +330,7 @@ export default function Home() {
                   hero's main action was asked for a password they had never
                   set. */}
               <Link href="/login?mode=signup" className="flex sm:inline-flex items-center justify-center gap-2 rounded-full btn-ink px-7 h-12 text-sm font-medium" data-cursor>
-                Start with one file <ArrowUpRight className="h-4 w-4" />
+                Start your agent team <ArrowUpRight className="h-4 w-4" />
               </Link>
             </Magnetic>
             <Link href="/health-check" className="flex sm:inline-flex items-center justify-center gap-2 rounded-full border px-7 h-12 text-sm font-medium hover:bg-accent transition-colors">
@@ -343,7 +345,10 @@ export default function Home() {
             <Link href="/login" className="text-foreground font-medium underline underline-offset-4 hover:text-primary transition-colors">Sign in</Link>
           </p>
 
-          <p className="mt-5 text-sm text-muted-foreground">No card required. Keep your accounting software. Each workspace's data is isolated at the database level.</p>
+          <p className="mt-5 text-sm text-muted-foreground">
+            Flagship: <Link href="/solutions/finance" className="text-foreground font-medium underline underline-offset-4 hover:text-primary">Cortex for Finance</Link>.
+            Keep your accounting software. Each workspace&rsquo;s data is isolated at the database level.
+          </p>
         </div>
       </section>
 
@@ -407,10 +412,41 @@ export default function Home() {
 
         See the note on HOW above for what each claim rests on.
       */}
+      {/* ---------- SOLUTIONS ----------
+        The product is one agent workspace with four ways in. Finance is the
+        flagship and gets the full width; the others sit beneath it. Every card
+        is read from lib/solutions.ts, and every agent named on a solution page
+        is read from lib/agents/teams.ts — the page cannot describe an agent
+        the product does not have.
+      */}
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      <section id="solutions" className="px-5 lg:px-10 py-20 lg:py-24">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="01">Solutions</SectionLabel>
+          <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
+            Four teams.<br /><span className="text-primary">One workspace that knows your business.</span>
+          </h2>
+          <div className="mt-12 grid md:grid-cols-3 gap-4">
+            {SOLUTIONS.map((sol) => (
+              <Link key={sol.slug} href={`/solutions/${sol.slug}`} className={`group rounded-2xl border p-7 transition-colors hover:bg-accent ${sol.flagship ? "md:col-span-3 bg-primary/5 border-primary/30" : "bg-card"}`}>
+                {sol.flagship && <span className="text-xs font-medium text-primary">Flagship</span>}
+                <div className={`font-display tracking-tightest mt-1 ${sol.flagship ? "text-3xl lg:text-4xl" : "text-2xl"}`}>{sol.name}</div>
+                <p className="mt-3 text-sm text-muted-foreground leading-6 max-w-2xl">{sol.short}</p>
+                <span className="mt-5 inline-flex items-center gap-1 text-sm font-medium">Explore <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span>
+              </Link>
+            ))}
+          </div>
+          <div className="mt-14">
+            <h3 className="font-display text-2xl lg:text-3xl tracking-tightest max-w-3xl">How the agents work</h3>
+            <div className="mt-6"><HowAgentsWork /></div>
+          </div>
+        </div>
+      </section>
+
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section id="how" className="px-5 lg:px-10 py-20 lg:py-24">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="01">How it works</SectionLabel>
+          <SectionLabel n="02">How it works</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             Three steps.<br /><span className="text-primary">Then you stop doing anything.</span>
           </h2>
@@ -486,7 +522,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section id="moat" className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="02">Proprietary Moat</SectionLabel>
+          <SectionLabel n="03">Proprietary Moat</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-4xl">
             What your ERP was <span className="text-primary">never built to do</span>.
           </h2>
@@ -500,7 +536,7 @@ export default function Home() {
       {/* ---------- THE PROBLEM ---------- */}
       <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="03">The problem</SectionLabel>
+          <SectionLabel n="04">The problem</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Running an SME shouldn&rsquo;t mean flying blind.</h2>
           <p className="mt-4 text-muted-foreground max-w-2xl">You&rsquo;re the CEO, CFO, head of sales and firefighter — all at once. Cortex takes the analysis and the busywork off your plate.</p>
           <div className="mt-12 grid md:grid-cols-2 gap-px bg-border border rounded-2xl overflow-hidden hairline">
@@ -549,7 +585,7 @@ export default function Home() {
       <section id="health-check" className="px-5 lg:px-10 py-24 lg:py-28 bg-secondary/20">
         <div className="max-w-7xl mx-auto grid lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-16 items-start">
           <div>
-            <SectionLabel n="04">Free · about 2 minutes</SectionLabel>
+            <SectionLabel n="05">Free · about 2 minutes</SectionLabel>
             <h2 className="font-display display-3 tracking-tightest mt-6 leading-[1.1]">
               How healthy is <span className="text-primary">your</span> business, really?
             </h2>
@@ -593,7 +629,7 @@ export default function Home() {
           scarce; two of these and neither is special. */}
       <section className="relative px-5 lg:px-10 pb-24 lg:pb-32 pt-24 lg:pt-32 sheen">
         <div className="relative z-10 max-w-7xl mx-auto">
-          <SectionLabel n="05">What it is</SectionLabel>
+          <SectionLabel n="06">What it is</SectionLabel>
           <Reveal>
             {/*
               THE POSITION, IN ONE PARAGRAPH. See docs/positioning.md §1.
@@ -606,12 +642,12 @@ export default function Home() {
               asset rather than a limitation.
             */}
             <p className="font-display display-3 tracking-tightest mt-8 max-w-5xl leading-[1.15]">
-              Your accounting software records what happened. A dashboard waits for you to open it.{" "}
-              <span className="text-primary">Cortex reads your own numbers every day, names the thing that is about to cost you money — the customer, the amount, the date — and then does something about it.</span>
+              Your accounting software records what happened. A dashboard waits for you to open it. A chatbot doesn&rsquo;t know your rows.{" "}
+              <span className="text-primary">Cortex is a team of agents that reads your own numbers every day, does the work — the customer, the amount, the date — and brings you only the decisions.</span>
             </p>
             <p className="mt-6 text-muted-foreground max-w-3xl leading-7">
-              It is the layer between your books and your business. You keep Tally, Zoho Books, Vyapar or your spreadsheets;
-              Cortex is the part they were never built to do.
+              It sits between your books and your business. You keep Tally, Zoho Books, Vyapar or your spreadsheets;
+              Cortex is the part your accounting software was never built to do.
             </p>
           </Reveal>
         </div>
@@ -634,7 +670,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section id="playbooks" className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="06">Playbooks</SectionLabel>
+          <SectionLabel n="07">Playbooks</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             You don&rsquo;t configure it.<br />The playbooks are <span className="text-primary">already running.</span>
           </h2>
@@ -728,7 +764,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="07">The bit you&rsquo;re worried about</SectionLabel>
+          <SectionLabel n="08">The bit you&rsquo;re worried about</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             You&rsquo;ve been sold software before.<br /><span className="text-primary">This one asks almost nothing of you.</span>
           </h2>
@@ -826,7 +862,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section className="px-5 lg:px-10 py-24">
         <div className="max-w-3xl mx-auto">
-          <SectionLabel n="08">Questions</SectionLabel>
+          <SectionLabel n="09">Questions</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">Good to know.</h2>
           <Faq items={FAQS} />
         </div>

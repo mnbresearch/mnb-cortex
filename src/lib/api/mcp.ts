@@ -51,9 +51,17 @@ export const MCP_TOOLS: ToolDef[] = [
     inputSchema: { type: "object", properties: { status: { enum: ["won", "open", "lost"] }, from: { ...str, description: "ordered on or after, YYYY-MM-DD" }, to: { ...str, description: "ordered on or before, YYYY-MM-DD" }, limit: lim, cursor: str }, additionalProperties: false },
     route: (a) => ({ method: "GET", path: "/api/v1/sales-orders", query: q(a, ["status", "from", "to", "limit", "cursor"]) }) },
   { name: "ask_cortex", scope: "ai:ask",
-    description: "Ask Cortex, the AI COO, a question about this business in plain language. Charged in credits like chat in the app; refunded if the engine does not answer.",
+    description: "Ask Cortex a question about this business in plain language. Charged in credits like chat in the app; refunded if the engine does not answer.",
     inputSchema: { type: "object", properties: { question: { ...str, description: "The question, in plain language" } }, required: ["question"], additionalProperties: false },
     route: (a) => ({ method: "POST", path: "/api/v1/ask", body: { question: String(a.question ?? "") } }) },
+  { name: "delegate_to_agents", scope: "agents:run",
+    description: "Hand a piece of work to Cortex's agents (Finance, Operations, Sales & Growth). They look up this workspace's own data and return an answer with every rupee figure checked by Veritas v1. Short tasks come back finished; longer ones keep running — check them with get_agent_task. Charged in credits per step. Agents started here can look things up but cannot propose actions.",
+    inputSchema: { type: "object", properties: { request: { ...str, description: "What the agents should do, in plain language" }, team: { enum: ["finance", "operations", "growth"] }, mode: { enum: ["single", "team"] } }, required: ["request"], additionalProperties: false },
+    route: (a) => ({ method: "POST", path: "/api/v1/agents/tasks", body: { request: String(a.request ?? ""), team: a.team, mode: a.mode } }) },
+  { name: "get_agent_task", scope: "agents:run",
+    description: "Read one agent task: its status, its answer, its Veritas v1 verification and what each agent looked up.",
+    inputSchema: { type: "object", properties: { id: { ...str, description: "The task id from delegate_to_agents" } }, required: ["id"], additionalProperties: false },
+    route: (a) => ({ method: "GET", path: "/api/v1/agents/tasks", query: q(a, ["id"]) }) },
 ];
 
 export type Rpc = { jsonrpc: "2.0"; id?: string | number | null; method: string; params?: any };
@@ -76,8 +84,8 @@ export async function handleRpc(msg: Rpc, scopes: string[], call: Call) {
       return ok(msg.id, {
         protocolVersion: version,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "mnb-cortex", title: "MNB Cortex — AI COO", version: "1.0.0" },
-        instructions: "Tools read this workspace's live business data (KPIs, invoices, customers, sales). ask_cortex answers questions in plain language and costs credits. Nothing here can send messages or change data.",
+        serverInfo: { name: "mnb-cortex", title: "Cortex — AI agents that work from your books", version: "1.1.0" },
+        instructions: "Tools read this workspace's live business data (KPIs, invoices, customers, sales). ask_cortex answers questions in plain language and delegate_to_agents hands work to Cortex's agent teams; both cost credits. Nothing here can send messages or change data.",
       });
     }
     case "notifications/initialized":

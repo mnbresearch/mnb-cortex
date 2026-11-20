@@ -20,6 +20,7 @@ import { Magnetic } from "@/components/loco";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV = [
+  { href: "/solutions", label: "Solutions" },
   { href: "/features", label: "Features" },
   { href: "/industries", label: "Industries" },
   { href: "/pricing", label: "Pricing" },
@@ -41,7 +42,7 @@ export function PublicHeader() {
     <>
       <header className={`fixed top-0 inset-x-0 z-40 transition-colors duration-300 ${scrolled ? "glass border-b" : ""}`}>
         <div className="flex items-center justify-between px-5 lg:px-10 h-16">
-          <Link href="/" className="flex items-center gap-2.5" aria-label="MNB Cortex home">
+          <Link href="/" className="flex items-center gap-2.5" aria-label="Cortex by MNB Research — home">
             <Logo size={32} />
             {/*
               TM, not (R). Section 107 of the Trade Marks Act 1999 makes it an offence
@@ -51,7 +52,10 @@ export function PublicHeader() {
               we are entitled to say. Change this back only against a registration
               certificate number.
             */}
-            <span className="font-semibold tracking-tight">MNB Cortex<sup className="text-[9px] align-super ml-0.5 opacity-60">&trade;</sup></span>
+            <span className="flex flex-col leading-none">
+              <span className="font-semibold tracking-tight">Cortex<sup className="text-[9px] align-super ml-0.5 opacity-60">&trade;</sup></span>
+              <span className="hidden sm:block text-[10px] text-muted-foreground tracking-wide mt-0.5 whitespace-nowrap">by MNB Research</span>
+            </span>
           </Link>
           <nav className="hidden md:flex items-center gap-8 text-sm">
             {NAV.map((n) => (
@@ -137,7 +141,7 @@ export function PublicHeader() {
       >
         <div className="absolute inset-0 bg-foreground text-background flex flex-col">
           <div className="flex items-center justify-between px-5 h-16">
-            <span className="font-semibold">MNB Cortex</span>
+            <span className="font-semibold">Cortex <span className="text-xs font-normal text-muted-foreground">by MNB Research</span></span>
             <div className="flex items-center gap-2">
               <ThemeToggle />
               <button onClick={() => setOpen(false)} className="h-10 w-10 grid place-items-center rounded-full border border-background/30" aria-label="Close menu"><X className="h-5 w-5" /></button>
@@ -177,7 +181,7 @@ export function PublicFooter() {
     than orphans that happen to exist.
   */
   const cols = [
-    { h: "Product", links: [["Features", "/features"], ["Industries", "/industries"], ["Compare", "/compare"], ["Pricing", "/pricing"], ["AI Visibility check", "/ai-visibility"], ["Free health check", "/health-check"]] },
+    { h: "Product", links: [["Solutions", "/solutions"], ["Cortex for Finance", "/solutions/finance"], ["Features", "/features"], ["Industries", "/industries"], ["Compare", "/compare"], ["Pricing", "/pricing"], ["AI Visibility check", "/ai-visibility"], ["Free health check", "/health-check"]] },
     { h: "Free tools", links: [["Free calculators", "/calculators"], ["Compliance calendar", "/deadlines"], ["Ledger check", "/health-check#ledger"]] },
     { h: "Company", links: [["Investors", "/investors"], ["Resources", "/resources"], ["Contact", "/contact"], ["Changelog", "/changelog"], ["Status", "/status"], ["MNB Research", "https://www.mnbresearch.com"]] },
     { h: "Legal", links: [["Terms", "/terms"], ["Privacy", "/privacy"], ["Refund Policy", "/refund"]] },
@@ -188,8 +192,8 @@ export function PublicFooter() {
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-10 items-end">
             <div>
-              <p className="eyebrow text-background/50">Give your business a brain</p>
-              <h2 className="font-display display-2 tracking-tightest mt-4">Put your <span className="text-primary">early-warning system</span> to work.</h2>
+              <p className="eyebrow text-background/50">Agents that work from your books</p>
+              <h2 className="font-display display-2 tracking-tightest mt-4">Put your <span className="text-primary">agent team</span> to work.</h2>
             </div>
             <div className="lg:justify-self-end">
               {/* The footer CTA is aimed at someone who has read the page and
@@ -207,8 +211,8 @@ export function PublicFooter() {
               group onto a second row on its own. */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-10">
             <div>
-              <div className="flex items-center gap-2.5"><Logo size={30} /><span className="font-semibold">MNB Cortex</span></div>
-              <p className="mt-4 text-sm text-background/60 max-w-xs">The early-warning system for your business. A brand of Abrobot Technologies Pvt Ltd, Delhi.</p>
+              <div className="flex items-center gap-2.5"><Logo size={30} /><span className="font-semibold">Cortex <span className="text-xs font-normal opacity-70">by MNB Research</span></span></div>
+              <p className="mt-4 text-sm text-background/60 max-w-xs">AI agents for Indian businesses, working from your own books. Cortex is built by MNB Research, a brand of Abrobot Technologies Pvt Ltd, Delhi.</p>
               <a href="https://wa.me/919711488480" className="mt-4 inline-block text-sm link-sweep text-background/80">wa.me / +91 97114 88480</a>
             </div>
             {cols.map((c) => (

@@ -19,7 +19,7 @@ for (const p of ["try", "watch", "watchpro", "practice", "command", "enterprise"
   check(C.planIncludes(p, "connectors"), `connectors: ${p} has it`);
 }
 check(!C.planIncludes("try", "api") && !C.planIncludes("watch", "api_write"), "connectors did not widen api / api_write");
-check(C.lowestPlanWith("connectors") === "Try Cortex", "connectors: cheapest plan named correctly", C.lowestPlanWith("connectors"));
+check(C.lowestPlanWith("connectors") === "Essentials", "connectors: cheapest plan named correctly", C.lowestPlanWith("connectors"));
 
 /* 2. scopes and the capabilities they need */
 check(K.ALL_SCOPES.includes("connector:write") && K.ALL_SCOPES.includes("ai:ask"), "scopes: connector:write and ai:ask exist");

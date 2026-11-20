@@ -202,15 +202,24 @@ check(offenders.length === 0, "no customer-facing copy says 'AI COO' or 'AI CEO'
   `still present in: ${offenders.join(", ")}`);
 
 const home = readFileSync("src/app/page.tsx", "utf8");
-check(/what happened/.test(home) && /about to/.test(home),
-  "the hero states the early-warning position");
+/*
+  THE 2026-11 POSITION: agents that work from your books, sold as solution
+  lines with Finance as the flagship (docs/positioning.md). The hero must say
+  what the agents are FOR — named teams — and the page must carry the
+  solution lines, read from lib/solutions.ts so they cannot drift.
+*/
+check(/Agents that work from your books/.test(home) && /finance team/.test(home),
+  "the hero states the agent position and names the teams");
+check(/SOLUTIONS\.map/.test(home) && /\/solutions\/finance/.test(home),
+  "the homepage carries the solution lines, with Cortex for Finance as the flagship");
 check(/Tally/.test(home) && /accounting software/i.test(home),
   "the hero says Cortex sits ON TOP of existing books rather than replacing them",
   "the 'keep your accounting software' promise is what makes adoption cheap");
 
 const layout = readFileSync("src/app/layout.tsx", "utf8");
 check(!/operating brain/i.test(layout), "page metadata no longer says 'operating brain'");
-check(/early-warning/i.test(layout), "page metadata carries the new position");
+check(/AI agents that work from your books/.test(layout) && !/early-warning system for Indian businesses/i.test(layout),
+  "page metadata carries the agent position, not the retired early-warning headline");
 
 /*
   ------------------------------------------------------------------

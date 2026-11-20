@@ -8,7 +8,7 @@ import { getUserAndOrg } from "@/lib/data";
 import { TRIAL_DAYS } from "@/lib/config";
 import { ENTRY_PRICE_LABEL } from "@/lib/config";
 
-export const metadata = { title: "Pricing — MNB Cortex" };
+export const metadata = { title: "Pricing — Cortex" };
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +24,11 @@ export default async function Pricing() {
       <section className="px-5 lg:px-10 pt-32 lg:pt-40 pb-12">
         <div className="max-w-7xl mx-auto">
           <SectionLabel n="00">Pricing</SectionLabel>
-          <Kinetic as="h1" text={"Find out first,\nnot last."} className="font-display display-1 tracking-tightest mt-6" />
+          <Kinetic as="h1" text={"Agents for every\nstage of the business."} className="font-display display-1 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
-            Cortex re-reads your receivables, your MSME supplier deadlines and your stock in a nightly run — your
-            workspace shows when it last read them — and emails you when one of them needs you. From{" "}
+            Every plan includes the Finance, Operations and Sales &amp; Growth agents, the nightly watch over your receivables,
+            MSME supplier deadlines and stock, and Veritas v1 checking every figure. Higher plans add team tasks, background
+            running, schedules, memory and Autopilot. From{" "}
             <span className="text-foreground font-medium">{ENTRY_PRICE_LABEL}/month</span>.
             Keep Tally, Vyapar, Busy or any spreadsheet — this is the part they were never built to do.
           </p>

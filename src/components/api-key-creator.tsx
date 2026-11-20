@@ -73,7 +73,7 @@ const APP_PRESETS: AppPreset[] = [
   { id: "automation", label: "Zapier / Make / n8n", hint: "Read invoices, customers and KPIs into your automations", scopes: SCOPE_PRESETS.automation, needs: "read" },
 ];
 
-export function ApiKeyCreator({ canWrite = true, writePlan = "Practice", canRead = true, readPlan = "Watch Pro", canConnect = true }:
+export function ApiKeyCreator({ canWrite = true, writePlan = "Practice", canRead = true, readPlan = "Pro", canConnect = true }:
   { canWrite?: boolean; writePlan?: string; canRead?: boolean; readPlan?: string; canConnect?: boolean }) {
   const router = useRouter();
   const [label, setLabel] = useState("");

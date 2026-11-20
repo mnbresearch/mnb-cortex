@@ -280,7 +280,7 @@ console.log(`\nEVERY PLAN must clear ${MIN_PLAN_MARGIN}% if the customer spends 
   if (entCredits > 0) {
     const implied = entCredits * PRICED_AGAINST;
     check(`the enterprise floor matches its allowance (${entCredits} credits => ₹${implied.toLocaleString("en-IN")}/mo)`,
-      /150_000 \* 0\.90/.test(PM));
+      /250_000 \* 0\.90/.test(PM));
   }
 
   // Enterprise must also be metered, or the allowance is decorative.

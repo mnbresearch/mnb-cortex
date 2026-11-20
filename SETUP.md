@@ -32,6 +32,28 @@ money**), `WEEKLY_UPDATE_ENABLED=1`, `WEEKLY_PLAN_ENABLED=1`.
 
 ---
 
+## Agent Workspace — one SQL file and one secret
+
+The Agent Workspace (`/workspace`) is built. It needs:
+
+1. **Its tables.** Paste `supabase/RUN-2026-11-20-agent-workspace.sql` into the
+   Supabase SQL editor and run it (idempotent, additive only). `/setup` and
+   `/api/health` report it as missing until you do, and the Workspace shows a
+   setup message instead of an error.
+2. **The background runner.** `.github/workflows/agents.yml` calls
+   `/api/cron/agents` every 5 minutes with the `CRON_SECRET` repository secret
+   (the same one `autopilot.yml` uses — see the note at the top of that file).
+   Without it, tasks still run while the Workspace is open, and Vercel's daily
+   cron (`vercel.json`) advances background tasks and starts due schedules once
+   a day. Optional: set the Actions *variable* `CORTEX_URL` if the app moves to
+   another host (default `https://cortex.mnbresearch.com`).
+
+No new AI key: agent steps use the same providers as Ask Cortex (and a
+workspace's own key when it has set one). Each step is charged at the
+`agent_plan` / `agent_step` / `agent_synthesis` rates in `src/lib/config.ts`.
+
+---
+
 ## WhatsApp — needs a Meta account
 
 Cortex has the full Meta Cloud API send path. It cannot work until you own a
@@ -243,11 +265,11 @@ verify the mandate and refunds it.
 
 | Plan | Monthly | UPI Autopay? |
 |---|---|---|
-| Try Cortex | ₹799 | yes |
-| Watch | ₹4,999 | yes |
-| Watch Pro | ₹14,999 | yes |
-| Practice | ₹29,999 | no — card or eNACH |
-| Command | ₹39,999 | no — card or eNACH |
+| Essentials | ₹2,999 | yes |
+| Team | ₹14,999 | yes |
+| Pro | ₹34,999 | no — card or eNACH |
+| Practice | ₹69,999 | no — card or eNACH |
+| Command | ₹99,999 | no — card or eNACH |
 | Enterprise | negotiated | invoice / eNACH |
 
 The UI says this before the customer starts, rather than letting them discover

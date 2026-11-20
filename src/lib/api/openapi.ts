@@ -86,10 +86,27 @@ export function buildOpenApi(server = "https://cortex.mnbresearch.com") {
   paths["/api/v1/ask"] = {
     post: {
       summary: "Ask Cortex a question about the business, in plain language.",
-      description: "Requires scope `ai:ask` (Watch Pro and above). Charged in credits at the in-app chat price; refunded if the AI engine does not answer (503). Read-only — the answer cannot send messages or change data. The same capability is available to MCP clients at POST /api/mcp.",
+      description: "Requires scope `ai:ask` (Pro and above). Charged in credits at the in-app chat price; refunded if the AI engine does not answer (503). Read-only — the answer cannot send messages or change data. The same capability is available to MCP clients at POST /api/mcp.",
       security: [{ bearer: ["ai:ask"] }, { apiKeyHeader: ["ai:ask"] }],
       requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["question"], properties: { question: { type: "string", maxLength: 4000 } } } } } },
       responses: { "200": { description: "{ ok, answer, credits_charged, balance, request_id }" }, ...errorResponses({ "402": "Not enough credits — nothing was charged", "503": "The AI engine did not answer — nothing was charged; retry", "413": "Question over 4,000 characters" }) },
+    },
+  };
+
+  paths["/api/v1/agents/tasks"] = {
+    get: {
+      summary: "The workspace's agent tasks, or one task with its steps (?id=).",
+      description: "Requires scope `agents:run` (Pro and above). Free to read.",
+      security: [{ bearer: ["agents:run"] }, { apiKeyHeader: ["agents:run"] }],
+      parameters: [{ name: "id", in: "query", description: "A task id, to read one task and its steps", schema: { type: "string" } }],
+      responses: { "200": { description: "{ ok, data } or { ok, task, steps }" }, ...errorResponses({ "503": "The Agent Workspace is not set up in this deployment" }) },
+    },
+    post: {
+      summary: "Delegate work to Cortex agents.",
+      description: "Requires scope `agents:run` (Pro and above). Cortex routes the request to the right agent or a team of agents, works on it for up to ~40 seconds, and returns the task — finished, or still running in the background (poll GET ?id=). Each step is charged in credits as in the app and refunded if the AI engine does not answer. Agents started by an API key can look things up but cannot propose actions. Every answer carries a Veritas v1 verification of its rupee figures.",
+      security: [{ bearer: ["agents:run"] }, { apiKeyHeader: ["agents:run"] }],
+      requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["request"], properties: { request: { type: "string", maxLength: 4000 }, team: { type: "string", enum: ["finance", "operations", "growth"] }, mode: { type: "string", enum: ["single", "team"] } } } } } },
+      responses: { "200": { description: "{ ok, task, steps }" }, ...errorResponses({ "429": "The plan's limit on tasks running at once is reached", "413": "Request over 4,000 characters", "503": "The Agent Workspace is not set up in this deployment" }) },
     },
   };
 

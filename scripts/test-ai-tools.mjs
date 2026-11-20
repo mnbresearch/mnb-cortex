@@ -220,7 +220,14 @@ async function main() {
   const oc = CORTEX.slice(CORTEX.indexOf("async function openaiCompatible"), CORTEX.indexOf("/** Record an upstream non-OK response"));
   check(oc.length > 200, "an OpenAI-compatible tool loop exists");
   check(/const useTools = Boolean\(toolOrg\)/.test(oc), "openai-compatible: tools only with a session org");
-  check(/TOOL_NAMES\.has\(fname\)\s*\?\s*await runTool\(fname, (?:vault\.restoreDeep\(args\)|args), toolOrg!/.test(oc), "openai-compatible: undeclared names refused, lookups scoped by toolOrg");
+  /*
+    Both loops now call dispatchTool(), which refuses undeclared names itself:
+    the chat set outside an agent step, the agent's own declared set inside one.
+  */
+  const dt = CORTEX.slice(CORTEX.indexOf("async function dispatchTool"), CORTEX.indexOf("async function dispatchTool") + 900);
+  check(/await dispatchTool\(fname, (?:vault\.restoreDeep\(args\)|args), toolOrg!/.test(oc), "openai-compatible: lookups go through dispatchTool, scoped by toolOrg");
+  check(/TOOL_NAMES\.has\(fname\)\s*\?\s*runTool\(fname, args, toolOrg/.test(dt), "dispatchTool: outside an agent step, undeclared names are refused and lookups scoped by toolOrg");
+  check(/scope\.declarations\.some\(\(d\) => d\.name === fname\)/.test(dt), "dispatchTool: inside an agent step, only the agent's declared tools run");
   check(/round < 4/.test(oc) && /calls\.slice\(0, 4\)/.test(oc), "openai-compatible: bounded rounds and calls per round");
   check(/r\.status === 400 && offerTools/.test(oc) && /body: JSON\.stringify\(\{ model, messages: cleaned, temperature: 0\.4 \}\)/.test(oc), "openai-compatible: a 400 on tools retries once WITHOUT tools instead of failing the chat");
   check(/if \(!text && useTools\)/.test(CORTEX) && /function_calling_config: \{ mode: "NONE" \}/.test(CORTEX) && /buildBody\(!thinkingUnsupported, true\)/.test(CORTEX), "gemini: an empty answer after tools gets one more words-only call (production error 2026-10-05)");

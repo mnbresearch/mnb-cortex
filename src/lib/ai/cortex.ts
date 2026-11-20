@@ -14,6 +14,7 @@ import { TOOL_DECLARATIONS, TOOL_NAMES, runTool, forModel, newRunGuard, type Run
 import { fence, UNTRUSTED_RULE } from "@/lib/ai/untrusted";
 import { NO_REDACTION, type Vault } from "@/lib/ai/dlp";
 import { anthropicModel, groqModel, openaiModel } from "@/lib/ai/model-defaults";
+import { currentAgentScope } from "@/lib/ai/agent-scope";
 
 export const COO_SYSTEM = `You are MNB Cortex — the AI Chief Operating Officer for an SME owner.
 You are NOT a chatbot or a dashboard. You behave like a McKinsey/BCG-grade operator who has read all of the company's data.
@@ -31,7 +32,24 @@ Rules:
 
 /** The system prompt every provider gets: the rules, then the snapshot fenced as data, then the owner's own instructions. */
 function systemPrompt(context: string): string {
-  return `${COO_SYSTEM}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
+  /* Inside an Agent Workspace step the agent's role rides after the rules — never instead of them. */
+  const brief = currentAgentScope()?.brief;
+  return `${COO_SYSTEM}${brief ? `\n\n--- YOUR ROLE IN THIS TASK ---\n${brief}` : ""}\n\n--- BUSINESS SNAPSHOT ---\n${context}`;
+}
+
+/** The tools on offer: the agent's own set inside an agent step, the chat set everywhere else. */
+function toolDeclarations(): readonly { name: string; description: string; parameters: unknown }[] {
+  return currentAgentScope()?.declarations ?? TOOL_DECLARATIONS;
+}
+
+/** Only declared names run. Inside an agent step the agent's dispatcher runs them (and records the call). */
+async function dispatchTool(fname: string, args: any, toolOrg: string, toolUser: string | null, guard: RunGuard) {
+  const scope = currentAgentScope();
+  if (scope) {
+    if (!scope.declarations.some((d) => d.name === fname)) return { ok: false, error: `Unknown tool: ${fname}` };
+    return scope.run(fname, args, guard);
+  }
+  return TOOL_NAMES.has(fname) ? runTool(fname, args, toolOrg, toolUser, guard) : { ok: false, error: `Unknown tool: ${fname}` };
 }
 
 export type Msg = { role: "user" | "assistant"; content: string };
@@ -173,7 +191,9 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
   try {
     const { getUserAndOrg } = await import("@/lib/data");
     const { getInstructions, instructionBlock } = await import("@/lib/ai-instructions");
-    const { orgId, user } = await getUserAndOrg();
+    /* An agent step carries its workspace in scope (a background step has no session to read it from). */
+    const scoped = currentAgentScope();
+    const { orgId, user } = scoped ? { orgId: scoped.orgId, user: scoped.userId ? { id: scoped.userId } : null } : await getUserAndOrg();
     sessionOrg = orgId || null;
     toolUser = user?.id || null;
     // Also used to scope every tool lookup below. No session -> no tools.
@@ -255,7 +275,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
       const buildBody = (withThinking: boolean, forceText = false) => JSON.stringify({
         system_instruction: { parts: [{ text: sys }] },
         contents,
-        ...(useTools ? { tools: [{ function_declarations: TOOL_DECLARATIONS }] } : {}),
+        ...(useTools ? { tools: [{ function_declarations: toolDeclarations() }] } : {}),
         /* forceText: tools stay declared (the history contains calls to them)
            but the model may not call another — it must answer in words. */
         ...(useTools && forceText ? { tool_config: { function_calling_config: { mode: "NONE" } } } : {}),
@@ -317,9 +337,7 @@ async function runOnce(provider: string, messages: Msg[], context: string, profi
               // Only names we declared. A model asking for anything else gets a
               // refusal rather than a lookup.
               /* Tokens in the model's arguments become real values before the lookup; real values in the result become tokens before the model sees them. */
-              const result = TOOL_NAMES.has(fname)
-                ? await runTool(fname, vault.restoreDeep(c.functionCall.args || {}), toolOrg!, toolUser ?? null, guard)
-                : { ok: false, error: `Unknown tool: ${fname}` };
+              const result = await dispatchTool(fname, vault.restoreDeep(c.functionCall.args || {}), toolOrg!, toolUser ?? null, guard);
               responses.push({ functionResponse: { name: fname, response: vault.redactDeep(forModel(result, guard)) } });
             }
             contents = [...contents, { role: "user", parts: responses }];
@@ -431,7 +449,7 @@ async function openaiCompatible(
 ): Promise<string | null> {
   const useTools = Boolean(toolOrg);
   let convo: any[] = [{ role: "system", content: sys }, ...messages];
-  const tools = useTools ? TOOL_DECLARATIONS.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } })) : undefined;
+  const tools = useTools ? toolDeclarations().map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } })) : undefined;
   let offerTools = useTools && !TOOLS_UNSUPPORTED.has(`${label}:${model}`);
   let lastText: string | null = null;
   for (let round = 0; round < 4; round++) {
@@ -469,9 +487,7 @@ async function openaiCompatible(
       const fname = String(c?.function?.name || "");
       let args: any = {};
       try { args = c?.function?.arguments ? JSON.parse(c.function.arguments) : {}; } catch { args = {}; }
-      const result = TOOL_NAMES.has(fname)
-        ? await runTool(fname, vault.restoreDeep(args), toolOrg!, toolUser ?? null, guard)
-        : { ok: false, error: `Unknown tool: ${fname}` };
+      const result = await dispatchTool(fname, vault.restoreDeep(args), toolOrg!, toolUser ?? null, guard);
       convo.push({ role: "tool", tool_call_id: c.id, content: JSON.stringify(vault.redactDeep(forModel(result, guard))) });
     }
   }

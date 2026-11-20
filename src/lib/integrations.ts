@@ -311,7 +311,7 @@ export const CATEGORIES = Array.from(new Set(INTEGRATIONS.map((i) => i.category)
 /** The plan a customer can actually buy at this rank — never a retired id like "growth" or "premium". */
 export function planLabel(minPlan: string | null | undefined): string {
   const r = PLAN_RANK[String(minPlan || "").toLowerCase()] ?? 1;
-  return ["Try", "Try", "Watch", "Watch Pro", "Command", "Enterprise"][Math.max(0, Math.min(5, r))];
+  return ["Essentials", "Essentials", "Team", "Pro", "Command", "Enterprise"][Math.max(0, Math.min(5, r))];
 }
 
 export function planAllows(plan: string | null | undefined, integration: Integration): boolean {
