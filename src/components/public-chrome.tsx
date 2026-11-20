@@ -23,6 +23,7 @@ const NAV = [
   { href: "/#platform", label: "Platform" },
   { href: "/solutions", label: "Solutions" },
   { href: "/#security", label: "Security" },
+  { href: "/compare", label: "Compare" },
   { href: "/pricing", label: "Pricing" },
   { href: "/business", label: "For SMEs" },
 ];
@@ -69,7 +70,7 @@ export function PublicHeader() {
             */}
             <BrandLockup />
           </Link>
-          <nav className="hidden md:flex items-center gap-8 text-sm">
+          <nav className="hidden xl:flex items-center gap-7 text-sm whitespace-nowrap">
             {NAV.map((n) => (
               <Link key={n.href} href={n.href} className="link-sweep text-muted-foreground hover:text-foreground transition-colors">{n.label}</Link>
             ))}
@@ -105,7 +106,7 @@ export function PublicHeader() {
             <span className="hidden sm:inline-flex"><ThemeToggle /></span>
             <Link
               href="/login?mode=signup"
-              className="hidden lg:inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-2"
+              className="hidden xl:inline-flex items-center whitespace-nowrap text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-2"
             >
               Create account
             </Link>
@@ -121,7 +122,7 @@ export function PublicHeader() {
             <Magnetic>
               <Link
                 href="/demo"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-full btn-ink px-5 h-10 text-sm font-medium"
+                className="hidden sm:inline-flex items-center gap-1.5 whitespace-nowrap rounded-full btn-ink px-5 h-10 text-sm font-medium"
               >
                 Book a demo <ArrowUpRight className="h-4 w-4" />
               </Link>
@@ -132,7 +133,7 @@ export function PublicHeader() {
             >
               Demo
             </Link>
-            <button onClick={() => setOpen(true)} className="md:hidden h-9 w-9 sm:h-10 sm:w-10 grid place-items-center rounded-full border" aria-label="Open menu"><Menu className="h-5 w-5" /></button>
+            <button onClick={() => setOpen(true)} className="xl:hidden h-9 w-9 sm:h-10 sm:w-10 grid place-items-center rounded-full border" aria-label="Open menu"><Menu className="h-5 w-5" /></button>
           </div>
         </div>
       </header>
@@ -154,7 +155,7 @@ export function PublicHeader() {
         aria-label="Menu"
         aria-hidden={!open}
         onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
-        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-300 ${
+        className={`fixed inset-0 z-50 xl:hidden transition-opacity duration-300 ${
           open ? "opacity-100 pointer-events-auto visible" : "opacity-0 pointer-events-none invisible delay-300"
         }`}
       >
@@ -201,7 +202,7 @@ export function PublicFooter() {
     than orphans that happen to exist.
   */
   const cols = [
-    { h: "Product", links: [["Platform", "/#platform"], ["Solutions", "/solutions"], ["Cortex for Finance", "/solutions/finance"], ["Features", "/features"], ["Industries", "/industries"], ["For SMEs", "/business"], ["Compare", "/compare"], ["Pricing", "/pricing"], ["Book a demo", "/demo"], ["AI Visibility check", "/ai-visibility"], ["Free health check", "/health-check"]] },
+    { h: "Product", links: [["Platform", "/#platform"], ["Solutions", "/solutions"], ["Cortex for Finance", "/solutions/finance"], ["Features", "/features"], ["Industries", "/industries"], ["For SMEs", "/business"], ["Compare", "/compare"], ["Model ML alternative", "/compare/model-ml-alternative"], ["Rogo alternative", "/compare/rogo-alternative"], ["Hebbia alternative", "/compare/hebbia-alternative"], ["Pricing", "/pricing"], ["Book a demo", "/demo"], ["AI Visibility check", "/ai-visibility"], ["Free health check", "/health-check"]] },
     { h: "Free tools", links: [["Free calculators", "/calculators"], ["Compliance calendar", "/deadlines"], ["Ledger check", "/health-check#ledger"]] },
     { h: "Company", links: [["Investors", "/investors"], ["Resources", "/resources"], ["Contact", "/contact"], ["Changelog", "/changelog"], ["Status", "/status"], ["MNB Research", "https://www.mnbresearch.com"]] },
     { h: "Legal", links: [["Terms", "/terms"], ["Privacy", "/privacy"], ["Refund Policy", "/refund"]] },

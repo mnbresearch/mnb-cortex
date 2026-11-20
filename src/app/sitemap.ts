@@ -3,6 +3,7 @@ import { ARTICLES } from "@/lib/resources";
 import { CALCULATOR_ROUTES } from "@/lib/calculator-seo";
 import { INDUSTRY_SLUGS } from "@/lib/industry-seo";
 import { DEADLINE_SLUGS } from "@/lib/deadline-seo";
+import { COMPETITORS } from "@/lib/competitors";
 
 /*
   THE SITEMAP LISTED 21 URLs AND LEFT OUT THE 29 PAGES MOST WORTH FINDING.
@@ -40,6 +41,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const marketing = ["", "/business", "/features", "/industries", "/compare", "/resources", "/ai-visibility", "/investors", "/contact", "/login", "/dashboard"];
   const support = ["/status", "/changelog", "/help", "/terms", "/privacy", "/refund"];
   const articleRoutes = ARTICLES.map((a) => `/resources/${a.slug}`);
+  /* Named comparisons — derived from the same data the pages render. */
+  const compareRoutes = COMPETITORS.map((c) => `/compare/${c.slug}`);
 
   /*
     THE TWO NEW PROGRAMMATIC SETS, derived from the same arrays the pages
@@ -92,6 +95,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...industryRoutes.map((r) => entry(r, 0.7, "monthly")),
     ...marketing.filter((r) => r !== "").map((r) => entry(r, 0.7, "weekly")),
     ...articleRoutes.map((r) => entry(r, 0.7, "monthly")),
+    ...compareRoutes.map((r) => entry(r, 0.8, "monthly")),
     ...support.map((r) => entry(r, 0.6, "monthly")),
   ];
 }

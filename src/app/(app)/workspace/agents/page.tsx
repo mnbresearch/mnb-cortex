@@ -6,6 +6,7 @@ import { TEAMS, agentsInTeam } from "@/lib/agents/teams";
 import { getUserAndOrg } from "@/lib/data";
 import { serviceClient } from "@/lib/supabase/server";
 import { ShieldCheck, Wrench, Crown, Inbox } from "lucide-react";
+import { AgentStudio } from "@/components/agent-studio";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +41,9 @@ export default async function AgentTeamsPage() {
   const stats = await statsFor(orgId);
   return (
     <>
-      <Topbar title="Agent teams" subtitle="Who your agents are, what they can look up, and what they are allowed to do." />
+      <Topbar title="Agent teams" subtitle="Who your agents are, what they can look up, and what they are allowed to do — and the ones you build yourself." />
       <PageShell>
+        <AgentStudio />
         <Card className="p-5 text-sm flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-primary shrink-0 mt-0.5" />
           <div>

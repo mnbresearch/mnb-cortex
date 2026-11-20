@@ -5,7 +5,12 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "7.2.0", date: "Latest", items: [
+  { v: "7.3.0", date: "Latest", items: [
+    "Agent Studio — build your own agents in plain words: Cortex drafts the agent, you choose exactly which tools it may use, and its permission card shows what it may read, what it may propose and what it can never do",
+    "Your agents join their team: the lead agent can plan them into team tasks, requests in their own words route to them, and they work under the same approvals, credit ceilings and Veritas checks as every built-in agent",
+    "A new comparison page sets MNB Cortex beside Model ML, Rogo, Hebbia and Microsoft's Finance agents — every cell sourced from each company's own website",
+  ] },
+  { v: "7.2.0", date: "Earlier", items: [
     "MNB Cortex has a new home: a site built around the agent workspace for finance and operations teams, with the product film, the platform shown working, and a Book a demo page",
     "Company admins can now pair Microsoft 365 and Google Workspace themselves from Settings → Company Knowledge connections — with Cortex's app or their own, step by step",
     "Everything for owner-run businesses — the free health check, the three-step start and the playbooks — now lives on its own page, For SMEs",
