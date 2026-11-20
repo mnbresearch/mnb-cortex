@@ -102,8 +102,11 @@ export function CompanyKnowledge({ notice, error: initialError }: { notice?: str
                   : !can ? <p className="text-xs text-muted-foreground">An admin can connect this.</p>
                   : p.id === "microsoft365" || p.id === "google_workspace"
                     ? (p.configured
-                        ? <a href={`/api/knowledge/connect/${p.id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90">Connect {p.name}</a>
-                        : <p className="text-xs text-muted-foreground">Switched on per company with your IT team. <Link href="/contact" className="underline">Ask us to enable it</Link>.</p>)
+                        ? <div className="flex flex-wrap items-center gap-2">
+                            <a href={`/api/knowledge/connect/${p.id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90">Connect {p.name}</a>
+                            <Link href="/settings#company-knowledge-connections" className="text-xs text-muted-foreground underline">Pairing settings</Link>
+                          </div>
+                        : <p className="text-xs text-muted-foreground">Pair it first under <Link href="/settings#company-knowledge-connections" className="underline">Settings → Company Knowledge connections</Link> — step by step, about ten minutes with your IT admin.</p>)
                   : p.id === "upload"
                     ? <div className="flex flex-wrap items-center gap-2">
                         <input ref={fileRef} type="file" multiple accept=".pdf,.docx,.xlsx,.csv,.tsv,.txt,.md,.json,.html,.htm,.eml" className="hidden" onChange={(e) => upload(e.target.files)} />

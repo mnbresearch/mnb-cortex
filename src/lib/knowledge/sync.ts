@@ -40,7 +40,7 @@ export async function syncSource(source: SourceRow): Promise<{ ok: boolean; writ
       await updateSource(source.org_id, source.id, { status: "needs_reauth", status_reason: "Sign in again to reconnect this account." } as any);
       return { ok: false, written: 0, note: "No stored sign-in." };
     }
-    const tok = await refreshAccess(source.provider as OAuthProvider, refresh);
+    const tok = await refreshAccess(source.provider as OAuthProvider, refresh, source.org_id);
     if ("error" in tok) {
       await updateSource(source.org_id, source.id, { status: "needs_reauth", status_reason: `Sign in again: ${tok.error}`, next_sync_at: next } as any);
       return { ok: false, written: 0, note: tok.error };

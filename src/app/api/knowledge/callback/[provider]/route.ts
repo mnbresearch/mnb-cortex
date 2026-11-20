@@ -26,7 +26,13 @@ export async function GET(req: Request, { params }: { params: { provider: string
   if (!user) return NextResponse.redirect(new URL("/login", req.url));
   const st = verifyState(String(u.searchParams.get("state") || ""), p, user.id);
   if (!st) return back("error=That%20sign-in%20link%20expired%20or%20was%20not%20yours.%20Try%20again.");
-  const tok = await exchangeCode(req, p, String(u.searchParams.get("code") || ""));
+  /* Microsoft organisation-wide consent returns here with no code: nothing to store, just say it worked. */
+  if (p === "microsoft365" && u.searchParams.get("admin_consent")) {
+    return u.searchParams.get("admin_consent") === "True"
+      ? back("notice=admin_consent")
+      : back("error=Organisation-wide%20consent%20was%20not%20granted.");
+  }
+  const tok = await exchangeCode(req, p, String(u.searchParams.get("code") || ""), st.orgId);
   if ("error" in tok) return back(`error=${encodeURIComponent(tok.error)}`);
   if (!tok.refresh_token) return back("error=The%20provider%20did%20not%20grant%20offline%20access.%20Try%20again%20and%20accept%20all%20permissions.");
   const account = p === "microsoft365" ? await microsoftAccount(tok.access_token) : await googleAccount(tok.access_token);

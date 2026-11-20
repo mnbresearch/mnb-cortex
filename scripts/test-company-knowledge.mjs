@@ -36,7 +36,8 @@ const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$
 const dir = mkdtempSync(join(tmpdir(), "knowledge-"));
 writeFileSync(join(dir, "core.ts"), read("src/lib/knowledge/core.ts"));
 const K = await import(pathToFileURL(join(dir, "core.ts")).href);
-writeFileSync(join(dir, "oauth.ts"), read("src/lib/knowledge/oauth.ts").replace(/^import "server-only";\s*$/m, "").replace(/from "@\/lib\/knowledge\/core"/, 'from "./core.ts"'));
+writeFileSync(join(dir, "apps-stub.ts"), "export const orgApp = async () => null;\n");
+writeFileSync(join(dir, "oauth.ts"), read("src/lib/knowledge/oauth.ts").replace(/^import "server-only";\s*$/m, "").replace(/from "@\/lib\/knowledge\/core"/, 'from "./core.ts"').replace(/from "@\/lib\/knowledge\/apps"/, 'from "./apps-stub.ts"'));
 process.env.ENCRYPTION_KEY = "test-key-for-state-signing-only-000000";
 const O = await import(pathToFileURL(join(dir, "oauth.ts")).href);
 
@@ -119,6 +120,26 @@ const caps = (id) => (cfg.match(new RegExp(`\\n  ${id}: \\[([^\\]]*)\\]`)) || ["
 check(!/workspace_connectors/.test(caps("watchpro")) && /workspace_connectors/.test(caps("command")) && /workspace_connectors/.test(caps("enterprise")), "Microsoft 365 / Google Workspace are Command and Enterprise");
 check(/knowledge/.test(caps("watchpro")) && !/knowledge/.test(caps("watch")) && !/knowledge/.test(caps("try")), "documents and MCP start at Pro");
 check(/mayConnect\(orgId, "mcp"\)/.test(sourcesRoute) && /mayConnect\(orgId, "upload"\)/.test(read("src/app/api/knowledge/upload/route.ts")) && /mayConnect\(orgId, p\)/.test(read("src/app/api/knowledge/connect/[provider]/route.ts")), "the plan is checked where every source is created");
+
+/* 7. a company's own app */
+const oauthSrc = strip(read("src/lib/knowledge/oauth.ts"));
+const cf = oauthSrc.slice(oauthSrc.indexOf("export async function clientFor"), oauthSrc.indexOf("export function configured"));
+check(cf.indexOf("orgApp(orgId, p)") !== -1 && cf.indexOf("orgApp(orgId, p)") < cf.indexOf("sharedClient(p)"), "a company's own app is used before Cortex's shared app");
+check(/exchangeCode\(req, p, String\(u\.searchParams\.get\("code"\) \|\| ""\), st\.orgId\)/.test(cb), "the code is exchanged with the app of the workspace named in the signed state");
+check(/refreshAccess\(source\.provider as OAuthProvider, refresh, source\.org_id\)/.test(read("src/lib/knowledge/sync.ts")), "tokens refresh through the source's own workspace app");
+const cbOrder = cb.indexOf("verifyState(") < cb.indexOf('get("admin_consent")');
+check(cbOrder, "organisation-wide consent is only acknowledged after the signed state is verified");
+check(/scope", "https:\/\/graph\.microsoft\.com\/\.default"/.test(oauthSrc) && /\/v2\.0\/adminconsent/.test(oauthSrc), "organisation-wide consent uses Microsoft's v2 admin-consent endpoint for the app's registered permissions");
+const apps = strip(read("src/lib/knowledge/apps.ts"));
+check(/client_secret: enc/.test(apps) && /encryptSecret\(String\(a\.clientSecret\)\.trim\(\)\)/.test(apps), "a company's client secret is encrypted before it is stored");
+check(/orgAppSummary[\s\S]*select\("client_id, tenant, updated_at"\)/.test(apps), "the settings screen never reads the secret back");
+check(/validateApp\(provider, a\); if \(bad\)/.test(apps) && /apps\.googleusercontent\.com/.test(apps) && /GUID\.test\(id\)/.test(apps), "client ids are shape-checked before saving");
+const appsSql = read("supabase/migrations/2026_zzzz_t_knowledge_oauth_apps.sql");
+check(/alter table knowledge_oauth_apps enable row level security/.test(appsSql) && /revoke all on knowledge_oauth_apps from anon, authenticated/.test(appsSql), "company app credentials are invisible to every signed-in user");
+check(read("supabase/RUN-2026-11-20-knowledge-apps.sql") === appsSql, "the hand-run apps file is the migration, byte for byte");
+const appsRoute = strip(read("src/app/api/knowledge/apps/route.ts"));
+check(/hasRole\("admin"\)/.test(appsRoute) && /orgCapability\(g\.orgId, "workspace_connectors"\)/.test(appsRoute), "only admins on a corporate-connector plan can save an app");
+check(/hasRole\("admin"\)/.test(read("src/app/(app)/settings/page.tsx").slice(0, 3000)) && /canEditAi && \(\s*<Section id="company-knowledge-connections"/.test(read("src/app/(app)/settings/page.tsx")), "the connections section shows only to admins");
 
 /* 6. text */
 const html = '<html><head><style>p{}</style><script>alert("x")</script></head><body><p>Dear team,</p><p>Please send the &amp; stock statement.</p></body></html>';
