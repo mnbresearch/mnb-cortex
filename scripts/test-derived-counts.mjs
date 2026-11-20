@@ -121,7 +121,8 @@ check(!/\b29 free calculators\b/.test(calcPage) && !/gratuity and 25 more/.test(
   "the hand-written 29 / 25-more is gone",
   "these are the strings Google indexes; the page body said 28 at the same time");
 
-const landing = read("src/app/page.tsx");
+/* The SME landing content moved to /business in the Nov 2026 redesign; the claim it backs is still made there. */
+const landing = read("src/app/business/page.tsx");
 check(/to: STATUTORY_CATALOGUE\.length/.test(landing),
   "the landing stat derives the statutory count");
 check(!/\{ to: 19,/.test(landing), "the hardcoded 19 is gone");

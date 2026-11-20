@@ -36,8 +36,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const base = "https://cortex.mnbresearch.com";
   const now = new Date();
 
-  const convert = ["/pricing", "/health-check"];
-  const marketing = ["", "/features", "/industries", "/compare", "/resources", "/ai-visibility", "/investors", "/contact", "/login", "/dashboard"];
+  const convert = ["/pricing", "/health-check", "/demo"];
+  const marketing = ["", "/business", "/features", "/industries", "/compare", "/resources", "/ai-visibility", "/investors", "/contact", "/login", "/dashboard"];
   const support = ["/status", "/changelog", "/help", "/terms", "/privacy", "/refund"];
   const articleRoutes = ARTICLES.map((a) => `/resources/${a.slug}`);
 

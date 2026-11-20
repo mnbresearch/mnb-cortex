@@ -197,7 +197,8 @@ check(!/b\.amount \* b\.days - a\.amount \* a\.days/.test(aging),
 
 /* The public claim itself must still be on the page — this suite is worthless
    if the copy quietly goes away and the mechanism is left untested. */
-const landing = read("src/app/page.tsx");
+/* The SME landing content moved to /business in the Nov 2026 redesign; the claim it backs is still made there. */
+const landing = read("src/app/business/page.tsx");
 check(/which customer/i.test(landing) || /the customer, the amount/i.test(landing),
   "the landing page still makes the named-customer claim this suite exists to back");
 

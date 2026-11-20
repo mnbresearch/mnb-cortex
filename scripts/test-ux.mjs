@@ -106,7 +106,8 @@ console.log("\nSEARCH: must have a visible front door, not only a shortcut");
 console.log("\nLEAD MAGNET: on the landing page, and asks for a phone");
 /* ========================================================================= */
 {
-  const landing = read("src", "app", "page.tsx");
+  /* The SME landing content moved to /business in the Nov 2026 redesign; the claim it backs is still made there. */
+  const landing = read("src", "app", "business", "page.tsx");
   const hc = read("src", "components", "health-check-client.tsx");
 
   check("the health check is rendered ON the landing page, not just linked",

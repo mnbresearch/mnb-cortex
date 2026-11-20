@@ -5,7 +5,13 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "7.1.0", date: "Latest", items: [
+  { v: "7.2.0", date: "Latest", items: [
+    "MNB Cortex has a new home: a site built around the agent workspace for finance and operations teams, with the product film, the platform shown working, and a Book a demo page",
+    "Company admins can now pair Microsoft 365 and Google Workspace themselves from Settings → Company Knowledge connections — with Cortex's app or their own, step by step",
+    "Everything for owner-run businesses — the free health check, the three-step start and the playbooks — now lives on its own page, For SMEs",
+    "A refreshed brand across the site and app: the MNB Cortex lockup, self-hosted type and a new share card",
+  ] },
+  { v: "7.1.0", date: "Earlier", items: [
     "Company Knowledge — connect Microsoft 365 (Outlook, Teams, OneDrive and SharePoint) or Google Workspace (Gmail, Drive) read-only, upload policies, contracts and reports, or connect any system with an MCP server",
     "Agents search your company's mail, chats and documents alongside your books, and name the email, chat or document behind every answer",
     "Connected systems: agents can use the read-only tools of an MCP server — only the ones you allow",
