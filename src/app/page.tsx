@@ -19,6 +19,7 @@ import { HealthCheckClient } from "@/components/health-check-client";
 import { UnrivaledMoat } from "@/components/unrivaled-moat";
 import { HowAgentsWork } from "@/components/solution-blocks";
 import { SOLUTIONS } from "@/lib/solutions";
+import { KnowledgeSection, UseCasesSection, EnterpriseSection } from "@/components/landing-knowledge";
 
 /*
   ORDERED BY WHAT STOPS THE SALE, not by what is interesting to explain.
@@ -314,9 +315,10 @@ export default function Home() {
           <p className="mt-7 text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto leading-8">
             Cortex gives your business a <span className="text-foreground font-medium">finance team</span>, an{" "}
             <span className="text-foreground font-medium">operations team</span> and a{" "}
-            <span className="text-foreground font-medium">growth team</span> of AI agents. They read your own Tally, Zoho Books or
-            spreadsheet data, chase what you&rsquo;re owed, track every filing date, close the month and find the customers slipping
-            away. Every action waits for your approval. Every figure is checked against your books.
+            <span className="text-foreground font-medium">growth team</span> of AI agents. They read your books — Tally, Zoho Books or
+            spreadsheets — and your company&rsquo;s <span className="text-foreground font-medium">mail, chats and documents</span>, then
+            chase what you&rsquo;re owed, track every filing date, close the month and find the customers slipping away. Every action
+            waits for your approval. Every answer names its source.
           </p>
 
           {/* Full-bleed on a phone, side by side from sm up. A centred pill
@@ -444,9 +446,15 @@ export default function Home() {
       </section>
 
       <hr className="rule-glow max-w-7xl mx-auto" />
+      <KnowledgeSection label={<SectionLabel n="02">Company Knowledge</SectionLabel>} />
+      <hr className="rule-glow max-w-7xl mx-auto" />
+      <UseCasesSection label={<SectionLabel n="03">What it&rsquo;s used for</SectionLabel>} />
+      <EnterpriseSection label={<SectionLabel n="04">For the corporate workspace</SectionLabel>} />
+
+      <hr className="rule-glow max-w-7xl mx-auto" />
       <section id="how" className="px-5 lg:px-10 py-20 lg:py-24">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="02">How it works</SectionLabel>
+          <SectionLabel n="05">How it works</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             Three steps.<br /><span className="text-primary">Then you stop doing anything.</span>
           </h2>
@@ -522,7 +530,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section id="moat" className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="03">Proprietary Moat</SectionLabel>
+          <SectionLabel n="06">Proprietary Moat</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-4xl">
             What your ERP was <span className="text-primary">never built to do</span>.
           </h2>
@@ -536,7 +544,7 @@ export default function Home() {
       {/* ---------- THE PROBLEM ---------- */}
       <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="04">The problem</SectionLabel>
+          <SectionLabel n="07">The problem</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Running an SME shouldn&rsquo;t mean flying blind.</h2>
           <p className="mt-4 text-muted-foreground max-w-2xl">You&rsquo;re the CEO, CFO, head of sales and firefighter — all at once. Cortex takes the analysis and the busywork off your plate.</p>
           <div className="mt-12 grid md:grid-cols-2 gap-px bg-border border rounded-2xl overflow-hidden hairline">
@@ -585,7 +593,7 @@ export default function Home() {
       <section id="health-check" className="px-5 lg:px-10 py-24 lg:py-28 bg-secondary/20">
         <div className="max-w-7xl mx-auto grid lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-16 items-start">
           <div>
-            <SectionLabel n="05">Free · about 2 minutes</SectionLabel>
+            <SectionLabel n="08">Free · about 2 minutes</SectionLabel>
             <h2 className="font-display display-3 tracking-tightest mt-6 leading-[1.1]">
               How healthy is <span className="text-primary">your</span> business, really?
             </h2>
@@ -629,7 +637,7 @@ export default function Home() {
           scarce; two of these and neither is special. */}
       <section className="relative px-5 lg:px-10 pb-24 lg:pb-32 pt-24 lg:pt-32 sheen">
         <div className="relative z-10 max-w-7xl mx-auto">
-          <SectionLabel n="06">What it is</SectionLabel>
+          <SectionLabel n="09">What it is</SectionLabel>
           <Reveal>
             {/*
               THE POSITION, IN ONE PARAGRAPH. See docs/positioning.md §1.
@@ -670,7 +678,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section id="playbooks" className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="07">Playbooks</SectionLabel>
+          <SectionLabel n="10">Playbooks</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             You don&rsquo;t configure it.<br />The playbooks are <span className="text-primary">already running.</span>
           </h2>
@@ -764,7 +772,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section className="px-5 lg:px-10 py-24 lg:py-32">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="08">The bit you&rsquo;re worried about</SectionLabel>
+          <SectionLabel n="11">The bit you&rsquo;re worried about</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">
             You&rsquo;ve been sold software before.<br /><span className="text-primary">This one asks almost nothing of you.</span>
           </h2>
@@ -862,7 +870,7 @@ export default function Home() {
       <hr className="rule-glow max-w-7xl mx-auto" />
       <section className="px-5 lg:px-10 py-24">
         <div className="max-w-3xl mx-auto">
-          <SectionLabel n="09">Questions</SectionLabel>
+          <SectionLabel n="12">Questions</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">Good to know.</h2>
           <Faq items={FAQS} />
         </div>

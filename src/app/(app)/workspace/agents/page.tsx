@@ -14,6 +14,7 @@ const TOOL_LABEL: Record<string, string> = {
   low_stock: "Low stock", find_party: "Customer & supplier lookup", collections_status: "Collections", revenue_by_month: "Revenue by month",
   propose_action: "Propose actions (wait for approval)", business_snapshot: "KPI snapshot", msme_exposure: "43B(h) exposure",
   statutory_deadlines: "Statutory calendar", customer_segments: "Customer segments", recall_memory: "Read memory", remember_fact: "Write memory (labelled AI-inferred)",
+  search_company_knowledge: "Company mail, chats & documents", list_company_sources: "Connected sources", query_connected_system: "Connected systems (MCP, read-only)",
 };
 
 /* Each agent's record in this workspace: steps finished and failed, and credits spent. Read-only, org-scoped. */

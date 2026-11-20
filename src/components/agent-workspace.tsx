@@ -31,6 +31,7 @@ const TOOL_LABEL: Record<string, string> = {
   low_stock: "Low stock", find_party: "Customer/supplier lookup", collections_status: "Collections", revenue_by_month: "Revenue by month",
   propose_action: "Proposed an action", business_snapshot: "KPI snapshot", msme_exposure: "43B(h) exposure",
   statutory_deadlines: "Statutory calendar", customer_segments: "Customer segments", recall_memory: "Memory", remember_fact: "Saved to memory",
+  search_company_knowledge: "Company knowledge", list_company_sources: "Connected sources", query_connected_system: "Connected system",
 };
 
 const LIVE = new Set(["queued", "running"]);

@@ -831,6 +831,9 @@ async function checkSchema(): Promise<Check> {
     ["agent_tasks", "status, plan, verification, lease_until, credit_ceiling, background", "RUN-2026-11-20-agent-workspace.sql"],
     ["agent_task_steps", "seq, kind, tool_calls, attempts", "RUN-2026-11-20-agent-workspace.sql"],
     ["agent_schedules", "cadence, hour_ist, weekday, monthday, next_run_at, last_task_id", "RUN-2026-11-20-agent-workspace.sql"],
+    /* Company Knowledge. Without these, sources cannot be connected and agents have no company documents to search. */
+    ["knowledge_sources", "provider, status, account, scopes, config, item_count, next_sync_at", "RUN-2026-11-20-company-knowledge.sql"],
+    ["knowledge_items", "kind, external_id, title, author, occurred_at, url, content, metadata", "RUN-2026-11-20-company-knowledge.sql"],
     ["funnel_events", "event", "RUN-NOW-2026-09-11.sql"],
     ["lifecycle_sends", "stage", "RUN-NOW-2026-09-11.sql"],
     ["leads", "company, note, score", "RUN-NOW-2026-09-11.sql"],

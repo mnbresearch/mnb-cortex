@@ -1,4 +1,4 @@
-export const APP_VERSION = "7.0.0";
+export const APP_VERSION = "7.1.0";
 /*
   …88480. The public footer, the contact page, the privacy, terms and refund
   pages all publish …88480; this default was …88481, so the pricing modal's
@@ -470,7 +470,16 @@ export function seatLimit(plan: string | null | undefined): number {
   than api_write (no leads, smaller batches on smaller plans — lib/api-keys.ts),
   which stays the Practice+ two-way API.
 */
-export type Capability = "api" | "webhooks" | "whitelabel" | "workflows" | "alert_rules" | "memory" | "api_write" | "autonomy" | "connectors";
+/*
+  COMPANY KNOWLEDGE (2026-11). Enforced where a source is CREATED
+  (lib/knowledge/access.ts); a workspace that downgrades keeps searching what
+  it already has.
+    knowledge             upload documents and connect MCP servers (Pro+)
+    workspace_connectors  connect Microsoft 365 (Outlook, Teams, OneDrive/
+                          SharePoint) and Google Workspace (Gmail, Drive) —
+                          the corporate-workspace tier (Command, Enterprise)
+*/
+export type Capability = "api" | "webhooks" | "whitelabel" | "workflows" | "alert_rules" | "memory" | "api_write" | "autonomy" | "connectors" | "knowledge" | "workspace_connectors";
 
 /* Exported so scripts/test-capabilities.mjs can check it against PLAN_SEATS —
    two maps keyed by plan id that drift apart is how `premium` lost everything. */
@@ -479,10 +488,10 @@ export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
   // smaller version of the product, not a differently-shaped one.
   try: ["connectors"],
   watch: ["connectors"],
-  watchpro: ["api", "webhooks", "workflows", "alert_rules", "memory", "connectors"],
-  practice: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "connectors"],
-  command: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy", "connectors"],
-  enterprise: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy", "connectors"],
+  watchpro: ["api", "webhooks", "workflows", "alert_rules", "memory", "connectors", "knowledge"],
+  practice: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "connectors", "knowledge"],
+  command: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy", "connectors", "knowledge", "workspace_connectors"],
+  enterprise: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy", "connectors", "knowledge", "workspace_connectors"],
 
   /*
     Retired tiers. These workspaces PAID for these capabilities under the old
@@ -493,8 +502,8 @@ export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
   starter: ["connectors"],
   /* api_write: every key these tiers issued could already push data, so they keep it. */
   growth: ["api", "webhooks", "workflows", "alert_rules", "api_write", "connectors"],
-  business: ["api", "webhooks", "workflows", "alert_rules", "memory", "api_write", "connectors"],
-  aicoo: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy", "connectors"],
+  business: ["api", "webhooks", "workflows", "alert_rules", "memory", "api_write", "connectors", "knowledge"],
+  aicoo: ["api", "webhooks", "workflows", "alert_rules", "memory", "whitelabel", "api_write", "autonomy", "connectors", "knowledge", "workspace_connectors"],
 
   /*
     `solo` and `premium` are NOT in PLANS or LEGACY_PLANS, but they are real:
@@ -509,7 +518,7 @@ export const PLAN_CAPABILITIES: Record<string, Capability[]> = {
     PLAN_SEATS, where premium sits at 20 seats alongside `business`.
   */
   solo: ["connectors"],
-  premium: ["api", "webhooks", "workflows", "alert_rules", "memory", "api_write", "connectors"],
+  premium: ["api", "webhooks", "workflows", "alert_rules", "memory", "api_write", "connectors", "knowledge"],
 };
 
 /** Payment reminders the nightly watch may propose per workspace per night. */
@@ -721,6 +730,7 @@ export const PLANS: Plan[] = [
       "Everything in Team",
       "5 agent tasks at once · 10 scheduled agent tasks",
       "Cortex Memory — agents remember how your business works",
+      "Company Knowledge — upload documents and connect MCP servers; agents search them and cite the source",
       "Executive Action Board with P0–P3 triage & counterparty follow-up tracking",
       "Daily decision-grade morning brief",
       "Alert rules you set, delivered by email",
@@ -751,6 +761,7 @@ export const PLANS: Plan[] = [
       "90,000 AI credits / month",
       "Everything in Pro",
       "15 agent tasks at once · 50 scheduled agent tasks",
+      "Company Knowledge for the corporate workspace — Microsoft 365 (Outlook, Teams, OneDrive & SharePoint) and Google Workspace (Gmail, Drive), read-only",
       "Autopilot — let reminders and other actions run on their own, within limits you set",
       "Two-way API — push data in from your own systems",
       "Nightly watch drafts up to 15 payment reminders a night (5 on Team)",
@@ -779,6 +790,7 @@ export const PLANS: Plan[] = [
       "Everything in Command",
       "40 agent tasks at once · 200 scheduled agent tasks",
       "Group workspaces — create your companies; each inherits Enterprise",
+      "Company Knowledge across every mailbox, chat and drive you connect, with named-source answers",
       "Priority daily run — sync, watch and reminders first, every business day",
       "Audit log export (CSV) for your auditors",
       // No code behind these — arranged per contract.

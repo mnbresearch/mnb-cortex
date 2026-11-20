@@ -54,6 +54,42 @@ workspace's own key when it has set one). Each step is charged at the
 
 ---
 
+## Company Knowledge — one SQL file, then a connector per company
+
+Run `supabase/RUN-2026-11-20-company-knowledge.sql` once. Then, under
+**Company Knowledge** (`/knowledge`):
+
+- **Documents** and **MCP servers** work immediately (Pro and above).
+- **Microsoft 365** (Outlook, Teams, OneDrive/SharePoint) needs an app
+  registration in Microsoft Entra ID:
+  1. Entra admin centre → App registrations → New registration. Supported
+     account types: *Accounts in any organizational directory* (or single
+     tenant, then set `MICROSOFT_TENANT` to the tenant id).
+  2. Redirect URI (Web): `https://<your app host>/api/knowledge/callback/microsoft365`.
+  3. API permissions → Microsoft Graph → Delegated: `User.Read`, `Mail.Read`,
+     `Chat.Read`, `Files.Read.All`, `offline_access`. Corporate tenants
+     usually need an admin to *Grant admin consent*.
+  4. Certificates & secrets → New client secret. Set `MICROSOFT_CLIENT_ID`
+     and `MICROSOFT_CLIENT_SECRET` in Vercel and redeploy.
+- **Google Workspace** (Gmail, Drive) needs an OAuth client:
+  1. Google Cloud console → APIs & Services → enable the Gmail API and the
+     Google Drive API.
+  2. OAuth consent screen: add scopes `gmail.readonly` and `drive.readonly`.
+     These are *restricted* scopes: for use outside your own Workspace domain
+     Google requires app verification (and a security assessment for Gmail).
+     Inside one Workspace domain, mark the app *Internal* and no review is
+     needed.
+  3. Credentials → OAuth client (Web), redirect URI
+     `https://<your app host>/api/knowledge/callback/google_workspace`. Set
+     `GOOGLE_CLIENT_SECRET` (the client id can be the existing
+     `NEXT_PUBLIC_GOOGLE_CLIENT_ID` if it is the same client).
+
+Sources sync every 6 hours from the agent runner (`/api/cron/agents`); admins
+can also press *Sync now*. Everything is read-only; removing a source deletes
+everything read from it.
+
+---
+
 ## WhatsApp — needs a Meta account
 
 Cortex has the full Meta Cloud API send path. It cannot work until you own a

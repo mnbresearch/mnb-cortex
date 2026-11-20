@@ -5,7 +5,13 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "7.0.0", date: "Latest", items: [
+  { v: "7.1.0", date: "Latest", items: [
+    "Company Knowledge — connect Microsoft 365 (Outlook, Teams, OneDrive and SharePoint) or Google Workspace (Gmail, Drive) read-only, upload policies, contracts and reports, or connect any system with an MCP server",
+    "Agents search your company's mail, chats and documents alongside your books, and name the email, chat or document behind every answer",
+    "Connected systems: agents can use the read-only tools of an MCP server — only the ones you allow",
+    "Search everything Cortex can see from the Company Knowledge page; remove a source and everything read from it goes with it",
+  ] },
+  { v: "7.0.0", date: "Earlier", items: [
     "Cortex is now a team of AI agents — the Agent Workspace lets you delegate work in plain words to Finance, Operations and Sales & Growth agents that look things up in your own books before they answer",
     "Team tasks — a lead agent (CFO, COO or CRO) plans the work across its specialists and writes one answer, with every step, every lookup and every credit shown on a timeline",
     "Agents keep working after you close the tab, on plans with background running, and can run on a schedule — daily, weekly or monthly, at an hour you choose",
