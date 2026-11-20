@@ -78,8 +78,8 @@ export default function Compare() {
           <Kinetic as="h1" text={"MNB Cortex vs the\nAI finance agents."} className="font-display display-2 tracking-tightest mt-6" />
           <p className="mt-6 text-lg text-muted-foreground max-w-3xl leading-8">
             Model ML, Rogo and Hebbia are built for investment professionals working on market data. Microsoft&rsquo;s Finance agents sit inside
-            Excel and Outlook on top of Dynamics 365 or SAP. MNB Cortex is built for the finance and operations teams that run a company — on
-            its own books, its own mail and documents, and India&rsquo;s statutory calendar. Here is how they compare, sourced.
+            Excel and Outlook on top of Dynamics 365 or SAP. MNB Cortex is the AI agent workspace for enterprises and growing businesses running their own operations — on
+            their own systems, their own mail and documents, and India&rsquo;s statutory calendar. Here is how they compare, sourced.
           </p>
         </div>
       </section>

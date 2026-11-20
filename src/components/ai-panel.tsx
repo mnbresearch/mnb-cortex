@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SafeForm } from "@/components/safe-form";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,9 +36,11 @@ async function extractPdf(f: File): Promise<string> {
 
 export function AIPanel({
   mode, placeholder, cta, multiline = false, allowFile = false, saveMode,
-  suggestions, inputOptional = false, onResult,
+  suggestions, inputOptional = false, onResult, seed,
   "aria-label": ariaLabel,
 }: {
+  /** Text to place in the input when it changes — e.g. a transcript from the Notetaker. */
+  seed?: string;
   mode: string; placeholder: string; cta: string; multiline?: boolean; allowFile?: boolean; saveMode?: string;
   /**
    * Starting points, rendered as real buttons that fill the field.
@@ -91,7 +93,8 @@ export function AIPanel({
    */
   "aria-label"?: string;
 }) {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(seed || "");
+  useEffect(() => { if (seed) setInput(seed); }, [seed]);
   const [out, setOut] = useState("");
   /* True when `out` is a failure message, not an analysis — it must not be announced as ready or offered for saving. */
   const [failed, setFailed] = useState(false);

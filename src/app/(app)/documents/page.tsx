@@ -5,6 +5,7 @@ import { Section } from "@/components/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AIPanel } from "@/components/ai-panel";
+import { DocumentReview } from "@/components/document-review";
 import { SavedAnalyses } from "@/components/saved-analyses";
 import { getDocumentsList } from "@/lib/data";
 import { FileText, FileSpreadsheet, AlertTriangle } from "lucide-react";
@@ -41,6 +42,7 @@ export default async function Documents() {
           The examples below are illustrative, not your data. Use the AI panel on this page to get this analysis
           built from your own numbers.
         </Card>
+        <DocumentReview />
         <AIPanel mode="document" saveMode="document" multiline allowFile
           placeholder="Paste a contract, invoice, GST return or report — or upload a PDF above. The AI summarizes and flags risks."
           cta="Analyze document" />

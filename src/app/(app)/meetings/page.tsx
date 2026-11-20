@@ -4,7 +4,7 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
-import { AIPanel } from "@/components/ai-panel";
+import { MeetingNotetaker } from "@/components/notetaker";
 import { SavedAnalyses } from "@/components/saved-analyses";
 import { getMeetingsList } from "@/lib/data";
 import { Video, CheckSquare } from "lucide-react";
@@ -23,7 +23,7 @@ export default async function Meetings() {
   const { rows, live } = await getMeetingsList();
   return (
     <>
-      <Topbar title="Meeting Assistant" subtitle="Paste a transcript or your notes — get minutes, decisions and actions" />
+      <Topbar title="Meeting Assistant" subtitle="Upload a recording or paste a transcript — get minutes, decisions and actions" />
       <PageShell>
         {/*
           THE GATE WAS INVERTED, AND THIS IS THE SIXTH PAGE WITH IT.
@@ -51,9 +51,7 @@ export default async function Meetings() {
             workspace.
           </div>
         </Card>
-        <AIPanel mode="meeting" saveMode="meeting" multiline
-          placeholder="Paste a meeting transcript or rough notes — the AI writes minutes, decisions and assigned action items."
-          cta="Generate minutes & actions" />
+        <MeetingNotetaker />
         <SavedAnalyses title="Saved meetings" rows={rows} live={live} table="meetings" path="/meetings"
           titleKey="title" metaKey="platform" textKey="summary"
           emptyHint="Generate minutes above and choose “Save to workspace” — the decisions and action items will be here in full." />

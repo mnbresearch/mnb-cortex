@@ -211,7 +211,9 @@ const home = readFileSync("src/app/page.tsx", "utf8");
 /* Nov 2026: the homepage speaks to finance and operations teams ("the agent
    workspace"); the owner-facing "work from your books" hero lives on /business. */
 const smb = readFileSync("src/app/business/page.tsx", "utf8");
-check(/agent workspace/.test(home) && /finance and operations teams/.test(home) && /work from your books/i.test(smb) && /finance team/.test(smb),
+/* Nov 2026 (later): enterprise-first. The homepage names enterprises first and
+   growing businesses as a capability; /business keeps the owner-facing pitch. */
+check(/AI agent workspace for <span[^>]*>enterprises<\/span>/.test(home) && /growing businesses/.test(home) && /work from your books/i.test(smb) && /finance team/.test(smb),
   "the hero states the agent position and names the teams");
 check(/SOLUTIONS\.(map|filter|find)/.test(home) && /\/solutions\/finance/.test(home),
   "the homepage carries the solution lines, with Cortex for Finance as the flagship");
@@ -221,7 +223,7 @@ check(/Tally/.test(home) && /accounting software/i.test(home),
 
 const layout = readFileSync("src/app/layout.tsx", "utf8");
 check(!/operating brain/i.test(layout), "page metadata no longer says 'operating brain'");
-check(/agent workspace for finance and operations/.test(layout) && !/early-warning system for Indian businesses/i.test(layout),
+check(/AI agent workspace for enterprises/.test(layout) && !/early-warning system for Indian businesses/i.test(layout),
   "page metadata carries the agent position, not the retired early-warning headline");
 
 /*

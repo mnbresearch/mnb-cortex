@@ -1,4 +1,5 @@
 import "server-only";
+import { asRoutingMode, routeOrder, type RoutingMode } from "@/lib/ai/routing";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { envKey } from "@/lib/env";
 import { generationConfig, FAST } from "@/lib/ai/generation";
@@ -97,9 +98,11 @@ export type OrgAiKeys = {
    * turns a silent cross-tenant key leak into nothing happening.
    */
   orgId: string | null;
+  /** The workspace's model-routing mode (lib/ai/routing.ts). "auto" when unset. */
+  routing: RoutingMode;
 };
 
-const EMPTY: OrgAiKeys = { keys: {}, own: false, verified: false, orgId: null };
+const EMPTY: OrgAiKeys = { keys: {}, own: false, verified: false, orgId: null, routing: "auto" };
 
 const store = new AsyncLocalStorage<OrgAiKeys>();
 
@@ -193,15 +196,22 @@ export async function loadOrgAiKeys(orgId: string | null | undefined): Promise<O
   if (!orgId) return EMPTY;
   try {
     const { credentialsFor } = await import("@/lib/credentials");
+    /*
+      The routing mode is read first, because it applies with or without keys of
+      the workspace's own: without them it orders the PLATFORM's providers.
+      A store with no keys and a routing mode is still metered (own: false).
+    */
+    const routing = await loadRouting(orgId);
+    const bare: OrgAiKeys = routing === "auto" ? EMPTY : { ...EMPTY, orgId, routing };
     const c = await credentialsFor(orgId, "ai");
-    if (!c) return EMPTY;
+    if (!c) return bare;
 
     const keys: Record<string, string> = {};
     for (const p of PROVIDERS) {
       const v = String((c as any)[p.id] ?? (c as any)[p.env] ?? "").trim();
       if (v.length >= 20) keys[p.env] = v;
     }
-    if (!Object.keys(keys).length) return EMPTY;
+    if (!Object.keys(keys).length) return bare;
 
     /*
       Did the key pass a real provider call when it was connected?
@@ -231,8 +241,8 @@ export async function loadOrgAiKeys(orgId: string | null | undefined): Promise<O
       that they stored something. providerChainFor() mirrors the ordering in
       lib/ai/cortex.ts, so this answers the same question the request will.
     */
-    const serving = firstServingProvider(keys);
-    return { keys, verified, orgId, own: verified && serving === "workspace" };
+    const serving = firstServingProvider(keys, routing);
+    return { keys, verified, orgId, routing, own: verified && serving === "workspace" };
   } catch {
     /*
       Credential store unreachable, or ENCRYPTION_KEY missing. Fall back to the
@@ -252,22 +262,28 @@ export async function loadOrgAiKeys(orgId: string | null | undefined): Promise<O
  * with ANY key available is one WE supply, the call runs on our spend and the
  * workspace must still be metered, whatever else they have stored.
  */
-function firstServingProvider(keys: Record<string, string>): "workspace" | "platform" | "none" {
+export function firstServingProvider(keys: Record<string, string>, routing: RoutingMode = "auto"): "workspace" | "platform" | "none" {
   const forced = (process.env.AI_PROVIDER || "").toLowerCase().trim();
-  const order = forced
-    ? [PROVIDERS.find((p) => p.id === forced)].filter(Boolean) as typeof PROVIDERS
-    : [
-        PROVIDERS.find((p) => p.id === "gemini")!,
-        PROVIDERS.find((p) => p.id === "groq")!,
-        PROVIDERS.find((p) => p.id === "anthropic")!,
-        PROVIDERS.find((p) => p.id === "openai")!,
-      ];
-  for (const p of order) {
+  /* The SAME order providerChain() in lib/ai/cortex.ts walks — routeOrder() is the single source. */
+  const order: string[] = forced ? [forced] : routeOrder(routing);
+  for (const id of order) {
+    if (id === "xai") { if (envKey("XAI_API_KEY") || envKey("GROK_API_KEY")) return "platform"; continue; }
+    const p = PROVIDERS.find((x) => x.id === id);
+    if (!p) continue;
     const mine = keys[p.env];
     if (mine && mine.trim().length >= 20) return "workspace";
     if (envKey(p.env)) return "platform";
   }
   return "none";
+}
+
+/** The workspace's routing mode (organizations.ai_routing). "auto" if unset or the column is missing. */
+async function loadRouting(orgId: string): Promise<RoutingMode> {
+  try {
+    const { serviceClient } = await import("@/lib/supabase/server");
+    const { data, error } = await (serviceClient() as any).from("organizations").select("ai_routing").eq("id", orgId).maybeSingle();
+    return error ? "auto" : asRoutingMode((data as any)?.ai_routing);
+  } catch { return "auto"; }
 }
 
 /**

@@ -151,3 +151,6 @@
 2026_zzzz_s_company_knowledge.sql
 2026_zzzz_t_knowledge_oauth_apps.sql
 2026_zzzz_u_workspace_agents.sql
+2026_zzzz_v_grids.sql
+2026_zzzz_w_shared_pages.sql
+2026_zzzz_x_model_router.sql

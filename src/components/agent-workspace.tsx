@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DeliverableBar } from "@/components/deliverable-bar";
+import { PROVIDER_LABEL } from "@/lib/ai/routing";
 import Link from "next/link";
 import {
   Bot, Send, Loader2, Pause, Play, X, CheckCircle2, AlertTriangle, Clock, ShieldCheck, ListChecks, Sparkles,
@@ -81,6 +83,7 @@ function StepRow({ s }: { s: Step }) {
           <span className="text-xs text-muted-foreground">{kindLabel}</span>
           <StatusPill status={s.status} />
           {s.credits > 0 && <span className="text-[11px] text-muted-foreground">{s.credits} credits</span>}
+          {(s as any).served_by && <span className="text-[11px] text-muted-foreground">· answered by {PROVIDER_LABEL[(s as any).served_by] || (s as any).served_by}</span>}
           {(s.output || s.tool_calls?.length > 0) && (open ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />)}
         </div>
         {s.instruction && s.kind === "agent" && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{s.instruction}</p>}
@@ -312,6 +315,7 @@ export function AgentWorkspace({ teams, agents, canDelegate, canSchedule, initia
                   <h3 className="text-sm font-semibold">Answer</h3>
                   <div className="rounded-lg border bg-background p-4"><AgentMarkdown text={t.result} /></div>
                   <VeritasBadge v={t.verification} />
+                  {t.status === "done" && <DeliverableBar kind="agent_task" refId={t.id} />}
                 </div>
               )}
               <div>

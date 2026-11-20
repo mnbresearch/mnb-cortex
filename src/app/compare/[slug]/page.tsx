@@ -23,7 +23,7 @@ export function generateMetadata({ params }: { params: { slug: string } }) {
   if (!c) return {};
   return {
     title: `${c.name} alternative for company finance teams — MNB Cortex vs ${c.name}`,
-    description: `MNB Cortex vs ${c.name}: ${c.name} is ${c.is}. MNB Cortex is the agent workspace for finance and operations teams running a company — Tally and Zoho Books, GST, TDS and 43B(h), custom agents with approvals. Sourced comparison, ${AS_OF}.`,
+    description: `MNB Cortex vs ${c.name}: ${c.name} is ${c.is}. MNB Cortex is the AI agent workspace for enterprises and growing businesses — custom agents, document grids, model routing, Word/PowerPoint/Excel deliverables, Indian statutory work, and approvals on every action. Sourced comparison, ${AS_OF}.`,
     alternates: { canonical: `/compare/${c.slug}` },
     keywords: c.keywords,
   };
@@ -33,7 +33,7 @@ export default function Alternative({ params }: { params: { slug: string } }) {
   const c = bySlug(params.slug);
   if (!c) notFound();
   const faqs = [
-    { q: `Is MNB Cortex an alternative to ${c.name}?`, a: `For a different job. ${c.name} is ${c.is}. MNB Cortex is built for finance and operations teams running a company: agents that work from your books and your company's mail, chats and documents, handle Indian statutory work, and wait for your approval before anything goes out.` },
+    { q: `Is MNB Cortex an alternative to ${c.name}?`, a: `For a different job. ${c.name} is ${c.is}. MNB Cortex is the AI agent workspace for enterprises and growing businesses running their own operations: agents that work from your books and your company's mail, chats and documents, handle Indian statutory work, and wait for your approval before anything goes out.` },
     { q: `When should we choose ${c.name} instead?`, a: c.chooseThem },
     { q: "When is MNB Cortex the better fit?", a: c.chooseCortex },
     { q: "Can we build our own agents in MNB Cortex?", a: "Yes. In Agent Studio you describe a job in plain words, Cortex drafts the agent, and you choose exactly which tools it may use. Its permission card shows what it may read and propose; every action it wants waits in Approvals, and every rupee figure it states is checked by Veritas v1." },
@@ -52,7 +52,7 @@ export default function Alternative({ params }: { params: { slug: string } }) {
           <div className="mt-6"><SectionLabel n="vs">{c.name} alternative</SectionLabel></div>
           <h1 className="font-display display-2 tracking-tightest mt-5">MNB Cortex vs {c.name}.</h1>
           <p className="mt-6 text-lg text-muted-foreground leading-8 max-w-3xl">
-            {c.name} is {c.is}. MNB Cortex is the agent workspace for <span className="text-foreground font-medium">finance and operations teams running a company</span>:
+            {c.name} is {c.is}. MNB Cortex is the AI agent workspace for <span className="text-foreground font-medium">enterprises and growing businesses running their own operations</span>:
             agents that work from your books and your company&rsquo;s knowledge, handle GST, TDS and 43B(h), and wait for your approval. Different jobs — here is how to tell which one is yours.
           </p>
           <div className="mt-8 grid sm:grid-cols-2 gap-4">

@@ -22,24 +22,30 @@
 export const AS_OF = "20 November 2026";
 export const NOT_STATED = "Not stated on the pages we read";
 
-export type RowKey = "builtFor" | "worksFrom" | "india" | "customAgents" | "approvals" | "verification" | "pricing" | "security";
+export type RowKey = "builtFor" | "worksFrom" | "india" | "customAgents" | "models" | "grids" | "deliverables" | "approvals" | "verification" | "pricing" | "security";
 export const ROW_LABELS: Record<RowKey, string> = {
   builtFor: "Built for",
   worksFrom: "Works from",
   india: "Indian statutory work (GST, TDS, 43B(h))",
   customAgents: "Build your own agents",
+  models: "Choice of AI models",
+  grids: "Questions across many documents",
+  deliverables: "Finished deliverables",
   approvals: "Agent actions wait for approval",
   verification: "Figures checked against the source",
   pricing: "Pricing published",
   security: "Security attestations stated",
 };
-export const ROW_ORDER: RowKey[] = ["builtFor", "worksFrom", "india", "customAgents", "approvals", "verification", "pricing", "security"];
+export const ROW_ORDER: RowKey[] = ["builtFor", "worksFrom", "india", "customAgents", "models", "grids", "deliverables", "approvals", "verification", "pricing", "security"];
 
 export const CORTEX: Record<RowKey, string> = {
-  builtFor: "Finance and operations teams running a company — from owner-run businesses to groups",
-  worksFrom: "Your books (Tally, Zoho Books, Vyapar, Busy, Odoo, spreadsheets) plus your company's mail, Teams chats, documents and MCP-connected systems",
+  builtFor: "Enterprises and growing businesses — finance, operations and growth teams running their own company or group",
+  worksFrom: "Your systems and books (Tally, Zoho Books, Odoo, Busy, Vyapar, Shopify, Razorpay, Stripe, spreadsheets, the REST API) plus your company's mail, Teams chats, documents and MCP-connected systems",
   india: "Built in: statutory calendar for your registration, GSTR-2B ITC reconciliation, MSME 43B(h) exposure, TDS and advance tax",
   customAgents: "Agent Studio: build agents in plain words, choose exactly which tools each may use, and see its permission card",
+  models: "Model Router: Balanced, Speed or Frontier order across Gemini, Groq, Claude and GPT, with your own keys if you have them; every agent step shows which model answered",
+  grids: "Grids: documents as rows, questions as columns; every cell quoted from its own document and the quote checked; export to Excel",
+  deliverables: "Any agent result as a Word document, PowerPoint deck or Excel workbook with the Veritas line and work log; live share links that expire and can be revoked",
   approvals: "Yes, by default. Every reminder, alert or export waits in Approvals unless you write an Autopilot rule with limits",
   verification: "Veritas v1 traces every rupee figure to the rows the agents read and flags any it cannot find",
   pricing: "Yes, in INR on the pricing page",
@@ -65,19 +71,22 @@ export const COMPETITORS: Competitor[] = [
     name: "Model ML",
     is: "an AI agent platform for investment banking, consulting, private equity and asset management",
     url: "https://modelml.com/",
-    sources: [{ label: "modelml.com", url: "https://modelml.com/" }, { label: "Model ML — Agent Harness", url: "https://modelml.com/product/agent-harness" }],
+    sources: [{ label: "modelml.com", url: "https://modelml.com/" }, { label: "Model ML — Agent Harness", url: "https://modelml.com/product/agent-harness" }, { label: "Model ML — Grids", url: "https://modelml.com/product/grids" }, { label: "Model ML — Sites", url: "https://modelml.com/product/sites" }],
     cells: {
       builtFor: "Investment banking, consulting, private equity & credit, asset & wealth management",
       worksFrom: "Firm context, files and connectors including PitchBook, FactSet, Capital IQ, SharePoint, DealCloud and Google Drive; MCP; works inside Excel, PowerPoint and Outlook",
       india: NOT_STATED,
       customAgents: "Yes — Custom Agents (“Build your own team”)",
+      models: "Routes each task to “the best model for the job”, including its own fine-tuned models",
+      grids: "Grids — structured analysis across many documents and companies, every source cited",
+      deliverables: "Works in Excel, PowerPoint, Word and Outlook; Sites for live pages",
       approvals: NOT_STATED,
       verification: NOT_STATED,
       pricing: "Not published — book a demo",
       security: "ISO 27001, SOC 2 Type II, GDPR",
     },
     chooseThem: "You are a bank, fund or consultancy whose work is pitch books, models and diligence on market data from PitchBook, FactSet or Capital IQ, done inside Excel and PowerPoint.",
-    chooseCortex: "You run a company's own finance and operations — collections, payables, the close, GST and TDS, the board pack — from Tally, Zoho Books or spreadsheets, and you want every agent action to wait for approval.",
+    chooseCortex: "You are an enterprise or growing business running its own operations — the close, collections, contracts, GST and TDS, the board pack — from your own systems and documents, and you want every agent action to wait for approval and every rupee checked.",
     keywords: ["Model ML alternative", "Model ML alternative India", "AI finance agent for companies"],
   },
   {
@@ -91,6 +100,9 @@ export const COMPETITORS: Competitor[] = [
       worksFrom: "Your firm's systems and data, including OneDrive, SharePoint, DealCloud, Salesforce, FactSet and PitchBook",
       india: NOT_STATED,
       customAgents: "Purpose-built financial agents and end-to-end workflows; a custom-agent builder is not described",
+      models: NOT_STATED,
+      grids: NOT_STATED,
+      deliverables: NOT_STATED,
       approvals: NOT_STATED,
       verification: NOT_STATED,
       pricing: "Not published — request a demo",
@@ -111,6 +123,9 @@ export const COMPETITORS: Competitor[] = [
       worksFrom: "Filings, earnings transcripts, FactSet, Capital IQ, PitchBook, SharePoint, OneDrive, Box, Dropbox, Salesforce, Snowflake and more",
       india: NOT_STATED,
       customAgents: NOT_STATED,
+      models: NOT_STATED,
+      grids: "Matrix — analysis across many documents side by side",
+      deliverables: NOT_STATED,
       approvals: NOT_STATED,
       verification: "Matrix shows the source documents behind each answer",
       pricing: NOT_STATED,
@@ -134,6 +149,9 @@ export const COMPETITORS: Competitor[] = [
       worksFrom: "ERP data in Excel (reconciliation) and Outlook (collections), connected to Dynamics 365 Finance, SAP and other ERPs",
       india: NOT_STATED,
       customAgents: NOT_STATED,
+      models: NOT_STATED,
+      grids: NOT_STATED,
+      deliverables: "Works inside Excel and Outlook",
       approvals: NOT_STATED,
       verification: NOT_STATED,
       pricing: NOT_STATED,
