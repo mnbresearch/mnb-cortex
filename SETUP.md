@@ -54,39 +54,44 @@ workspace's own key when it has set one). Each step is charged at the
 
 ---
 
-## Company Knowledge — one SQL file, then a connector per company
+## Company Knowledge — how companies pair Microsoft 365 and Google Workspace
 
-Run `supabase/RUN-2026-11-20-company-knowledge.sql` once. Then, under
-**Company Knowledge** (`/knowledge`):
+Run `supabase/RUN-2026-11-20-company-knowledge.sql` and
+`supabase/RUN-2026-11-20-knowledge-apps.sql` once.
 
-- **Documents** and **MCP servers** work immediately (Pro and above).
-- **Microsoft 365** (Outlook, Teams, OneDrive/SharePoint) needs an app
-  registration in Microsoft Entra ID:
-  1. Entra admin centre → App registrations → New registration. Supported
-     account types: *Accounts in any organizational directory* (or single
-     tenant, then set `MICROSOFT_TENANT` to the tenant id).
-  2. Redirect URI (Web): `https://<your app host>/api/knowledge/callback/microsoft365`.
-  3. API permissions → Microsoft Graph → Delegated: `User.Read`, `Mail.Read`,
-     `Chat.Read`, `Files.Read.All`, `offline_access`. Corporate tenants
-     usually need an admin to *Grant admin consent*.
-  4. Certificates & secrets → New client secret. Set `MICROSOFT_CLIENT_ID`
-     and `MICROSOFT_CLIENT_SECRET` in Vercel and redeploy.
-- **Google Workspace** (Gmail, Drive) needs an OAuth client:
-  1. Google Cloud console → APIs & Services → enable the Gmail API and the
-     Google Drive API.
-  2. OAuth consent screen: add scopes `gmail.readonly` and `drive.readonly`.
-     These are *restricted* scopes: for use outside your own Workspace domain
-     Google requires app verification (and a security assessment for Gmail).
-     Inside one Workspace domain, mark the app *Internal* and no review is
-     needed.
-  3. Credentials → OAuth client (Web), redirect URI
-     `https://<your app host>/api/knowledge/callback/google_workspace`. Set
-     `GOOGLE_CLIENT_SECRET` (the client id can be the existing
-     `NEXT_PUBLIC_GOOGLE_CLIENT_ID` if it is the same client).
+**Documents** and **MCP servers** work immediately (Pro and above), under
+Company Knowledge (`/knowledge`).
 
-Sources sync every 6 hours from the agent runner (`/api/cron/agents`); admins
-can also press *Sync now*. Everything is read-only; removing a source deletes
-everything read from it.
+**Microsoft 365 and Google Workspace** (Command, Enterprise) pair in one of two
+ways. The admin of each company does it in **Settings → Company Knowledge
+connections**, which shows every value to copy, step by step:
+
+1. **Cortex's shared app — one registration, owned by MNB, serves every
+   company.** Set it up once:
+   - Microsoft: Entra admin centre → App registrations → New registration,
+     *Accounts in any organizational directory (multitenant)*, redirect URI
+     (Web) `https://<app host>/api/knowledge/callback/microsoft365`, delegated
+     Graph permissions `User.Read`, `Mail.Read`, `Chat.Read`,
+     `Files.Read.All`, `offline_access`, a client secret. Set
+     `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` in Vercel. Complete
+     **Publisher verification** (Microsoft Partner Network ID) so customer
+     tenants show "verified" and allow consent. Each company's Global Admin then
+     presses *Grant organisation-wide consent* once.
+   - Google: one OAuth client (External) with `gmail.readonly` and
+     `drive.readonly`. These are *restricted* scopes: before more than 100 users
+     outside MNB can connect, Google requires restricted-scope verification and
+     a yearly third-party security assessment (CASA). Set
+     `GOOGLE_CLIENT_SECRET` (and `GOOGLE_CLIENT_ID` if it differs from
+     `NEXT_PUBLIC_GOOGLE_CLIENT_ID`).
+2. **The company's own app** — the company registers an app in its own Entra
+   tenant or Google Cloud organisation and pastes the client id and secret in
+   Settings. For Google, an **Internal** app needs no Google review, so this is
+   the same-day route until the shared app is verified. For Microsoft it suits
+   tenants that only allow apps registered inside them.
+
+The company's own app, when saved, always takes precedence. Sources sync every
+6 hours from the agent runner; admins can press *Sync now*. Everything is
+read-only; removing a source deletes everything read from it.
 
 ---
 

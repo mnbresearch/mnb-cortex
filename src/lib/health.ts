@@ -834,6 +834,7 @@ async function checkSchema(): Promise<Check> {
     /* Company Knowledge. Without these, sources cannot be connected and agents have no company documents to search. */
     ["knowledge_sources", "provider, status, account, scopes, config, item_count, next_sync_at", "RUN-2026-11-20-company-knowledge.sql"],
     ["knowledge_items", "kind, external_id, title, author, occurred_at, url, content, metadata", "RUN-2026-11-20-company-knowledge.sql"],
+    ["knowledge_oauth_apps", "provider, client_id, client_secret, tenant", "RUN-2026-11-20-knowledge-apps.sql"],
     ["funnel_events", "event", "RUN-NOW-2026-09-11.sql"],
     ["lifecycle_sends", "stage", "RUN-NOW-2026-09-11.sql"],
     ["leads", "company, note, score", "RUN-NOW-2026-09-11.sql"],

@@ -10,9 +10,10 @@ export const dynamic = "force-dynamic";
   Everything is read-only, and every agent answer drawn from it names its
   source (lib/knowledge/core.ts citationFor).
 */
-export default function KnowledgePage({ searchParams }: { searchParams?: { connected?: string; error?: string } }) {
+export default function KnowledgePage({ searchParams }: { searchParams?: { connected?: string; error?: string; notice?: string } }) {
   const notice = searchParams?.connected === "microsoft365" ? "Microsoft 365 connected. The first read is done; new mail, chats and files are read every 6 hours."
-    : searchParams?.connected === "google_workspace" ? "Google Workspace connected. The first read is done; new mail and files are read every 6 hours." : undefined;
+    : searchParams?.connected === "google_workspace" ? "Google Workspace connected. The first read is done; new mail and files are read every 6 hours."
+    : searchParams?.notice === "admin_consent" ? "Organisation-wide consent granted. Now connect each mailbox you want Cortex to read with “Connect Microsoft 365” — no one will see a permission prompt." : undefined;
   return (
     <>
       <Topbar title="Company Knowledge" subtitle="Your company's mail, chats, documents and systems — searchable by your agents, cited in every answer." />

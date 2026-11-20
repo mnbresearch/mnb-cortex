@@ -3,7 +3,7 @@ import { getUserAndOrg } from "@/lib/data";
 import { hasRole } from "@/lib/roles";
 import { PROVIDERS, allowableTools } from "@/lib/knowledge/core";
 import { listSources, getSource, createSource, updateSource, deleteSource, knowledgeReady, KNOWLEDGE_SETUP, knowledgeStats } from "@/lib/knowledge/store";
-import { configured } from "@/lib/knowledge/oauth";
+import { configuredFor } from "@/lib/knowledge/oauth";
 import { mayConnect, capabilityFor } from "@/lib/knowledge/access";
 import { orgCapability } from "@/lib/engine/plan-gate-server";
 import { discoverTools } from "@/lib/knowledge/mcp-client";
@@ -30,9 +30,10 @@ export async function GET() {
     orgCapability(orgId, "knowledge"), orgCapability(orgId, "workspace_connectors"),
   ]);
   const plan = { knowledge: k.verdict.ok, workspace_connectors: w.verdict.ok };
+  const [msOk, gOk] = await Promise.all([configuredFor("microsoft365", orgId), configuredFor("google_workspace", orgId)]);
   const providers = PROVIDERS.map((p) => ({
     ...p, allowedByPlan: plan[capabilityFor(p.id)],
-    configured: p.id === "microsoft365" || p.id === "google_workspace" ? configured(p.id) : true,
+    configured: p.id === "microsoft365" ? msOk : p.id === "google_workspace" ? gOk : true,
   }));
   return NextResponse.json({ ok: true, sources, stats, providers, canManage });
 }
