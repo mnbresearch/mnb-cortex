@@ -119,7 +119,7 @@ const ENT = [
   check(/messages\.map\(\(m\) => \(\{ \.\.\.m, content: vault\.redact\(m\.content\) \}\)\)/.test(cx), "wiring: the conversation is redacted");
   check(/runOnce\(provider, outbound,/.test(cx), "wiring: providers get the redacted conversation, not the original");
   check(/if \(out !== null\) return vault\.restore\(out\)/.test(cx), "wiring: the answer is restored before the owner sees it");
-  check((cx.match(/runTool\(fname, vault\.restoreDeep\(/g) || []).length === 2, "wiring: both tool loops restore the model's arguments before a lookup");
+  check((cx.match(/dispatchTool\(fname, vault\.restoreDeep\(/g) || []).length === 2, "wiring: both tool loops restore the model's arguments before a lookup (chat and agent steps alike, through dispatchTool)");
   check((cx.match(/vault\.redactDeep\(forModel\(result, guard\)\)/g) || []).length === 2, "wiring: both tool loops redact results before the model sees them");
   /* `deadline` rides along since model fetches became time-bounded (cortex.ts fetchSignal). */
   check((cx.match(/guard, vault(?:, deadline)?\);/g) || []).length >= 2, "wiring: both OpenAI-compatible providers get the vault");

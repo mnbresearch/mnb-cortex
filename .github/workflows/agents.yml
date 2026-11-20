@@ -1,0 +1,41 @@
+# Agent Workspace background runner.
+#
+# Advances agent tasks that keep running after the owner closes the Workspace
+# tab, and starts scheduled agent tasks when they fall due. Vercel's daily cron
+# (vercel.json) is the backstop; this is the heartbeat, because a scheduled task
+# that waits a day to start is a broken promise.
+#
+# Uses the same CRON_SECRET repository secret as autopilot.yml — see the setup
+# note at the top of that file. GitHub may delay scheduled runs by a few
+# minutes under load; the endpoint is idempotent, so a late or doubled run is
+# harmless.
+
+name: agents
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: agents-runner
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Advance agent tasks
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CORTEX_URL: ${{ vars.CORTEX_URL || 'https://cortex.mnbresearch.com' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not set in this repository's Actions secrets (see autopilot.yml)."
+            exit 1
+          fi
+          code=$(curl -s -S --max-time 320 -o response.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" "$CORTEX_URL/api/cron/agents")
+          echo "HTTP $code"; cat response.json; echo
+          if [ "$code" != "200" ]; then echo "::error::Agent runner returned HTTP $code"; exit 1; fi

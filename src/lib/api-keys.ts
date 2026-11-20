@@ -46,6 +46,14 @@ export const API_SCOPES = {
   */
   "connector:write": "Sync your books in from a connector such as the Tally bridge (POST /api/v1/ingest — sales, invoices, customers, stock)",
   "ai:ask": "Ask Cortex a question in plain language — charged in credits like chat (POST /api/v1/ask, and the MCP endpoint)",
+  /*
+    AGENT WORKSPACE (2026-11). Delegate work to Cortex agents and read the
+    results. Tasks started this way have no person behind them, so their
+    agents can look things up but cannot propose actions — propose_action
+    requires a signed-in analyst (lib/ai/tools.ts). An API caller still
+    cannot make Cortex act.
+  */
+  "agents:run": "Delegate work to Cortex agents and read their results — each step charged in credits; agents started by a key can look things up but cannot propose actions (/api/v1/agents/tasks, and the MCP endpoint)",
 } as const;
 
 export type ApiScope = keyof typeof API_SCOPES;
@@ -61,7 +69,7 @@ export const SCOPE_PRESETS: Record<string, ApiScope[]> = {
   full: [...ALL_SCOPES],
   /* "Connect an app" presets on /developers — one key per app. */
   tally: ["connector:write"],
-  assistant: ["ai:ask", "metrics:read", "invoices:read", "customers:read", "sales:read"],
+  assistant: ["ai:ask", "agents:run", "metrics:read", "invoices:read", "customers:read", "sales:read"],
   automation: ["metrics:read", "invoices:read", "customers:read", "sales:read", "leads:read"],
 };
 
@@ -82,13 +90,14 @@ export const SCOPE_CAPABILITIES: Record<ApiScope, readonly string[]> = {
   "ingest:write": ["api", "api_write"],
   "connector:write": ["connectors"],
   "ai:ask": ["api"],
+  "agents:run": ["api"],
 };
 
 /** Which rate-limit bucket a call spends, by the scope that admitted it. */
 export type LimitKind = "read" | "write" | "connector" | "ask";
 export function limitKindFor(scope: ApiScope, kind: "read" | "write"): LimitKind {
   if (scope === "connector:write") return "connector";
-  if (scope === "ai:ask") return "ask";
+  if (scope === "ai:ask" || scope === "agents:run") return "ask";
   return kind;
 }
 

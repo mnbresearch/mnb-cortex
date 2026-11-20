@@ -52,7 +52,7 @@ const LOOP = [
 
 const DOMAINS: { n: string; name: string; blurb: string; tools: string[] }[] = [
   { n: "01", name: "Cortex Workforce", blurb: "Ready-made agents for every department — run one on demand, or schedule it in a workflow.",
-    tools: ["7 departments, one brain", "326 runnable text agents", "Sales → Back Office coverage", "Industry packs (e.g. jewellery sketch → spec)", "Ask Cortex and Deep Dive use your memory", "Audit engine marks a deploy-first roadmap", "Cortex builds custom agents for you", "Image & video agents (Watch Pro and up)"] },
+    tools: ["7 departments, one brain", "326 runnable text agents", "Sales → Back Office coverage", "Industry packs (e.g. jewellery sketch → spec)", "Ask Cortex and Deep Dive use your memory", "Audit engine marks a deploy-first roadmap", "Cortex builds custom agents for you", "Image & video agents (Pro and up)"] },
   { n: "02", name: "Cortex Memory", blurb: "A living, permanent memory of your business that grounds every answer.",
     tools: ["Long-term business memory", "Grounds every AI response", "Knowledge graph of people, customers & vendors", "A self-updating company profile", "Extract memories from any pasted text", "Teach Cortex from your real data", "Export your memory anytime (JSON / Markdown)"] },
   { n: "03", name: "Finance & Money", blurb: "A CFO-grade financial cockpit, tuned for Indian businesses.",
@@ -217,8 +217,9 @@ export default function Features() {
           <Kinetic as="h1" text={"Your whole company,\nin one brain."} className="font-display display-1 tracking-tightest mt-6" />
           <div className="mt-6 grid lg:grid-cols-[1.2fr_1fr] gap-8 items-end">
             <p className="text-lg text-muted-foreground max-w-2xl">
-              Most tools give you a dashboard and leave the thinking to you. MNB Cortex is an AI operating system:
-              a runnable workforce, a permanent memory, and 100+ tools — and a nightly watch that proposes the actions, which run when you approve.
+              Most tools give you a dashboard and leave the thinking to you. Cortex gives you agent teams that work from your books —
+              Finance, Operations and Sales &amp; Growth — on top of a permanent memory and 100+ tools, with a nightly watch that proposes the
+              actions, which run when you approve. Every rupee figure an agent quotes is checked by Veritas v1.
             </p>
             <div className="flex gap-3 lg:justify-end">
               <Link href="/login?mode=signup" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-12 text-sm font-medium" data-cursor>Get started <ArrowUpRight className="h-4 w-4" /></Link>

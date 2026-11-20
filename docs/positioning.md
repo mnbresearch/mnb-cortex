@@ -1,4 +1,4 @@
-# MNB Cortex — strategic positioning
+# Cortex — strategic positioning
 
 *Working document. Written to be argued with, not admired. Every product claim
 in here is checkable against the repository; every number that is not yet true
@@ -6,7 +6,43 @@ is marked as a target rather than a fact.*
 
 ---
 
-## 1. The one-sentence position
+## 0. November 2026: agents, sold as solution lines
+
+**Cortex is a team of AI agents that works from an Indian business's own books.
+It is sold as solution lines — Cortex for Finance (flagship), Operations, Sales &
+Growth, and Practices — each a team of agents with named tools, a lead that plans
+the work, approve-first actions and Veritas v1 checking every figure.**
+
+What changed, and why:
+
+| Before (Oct 2026) | Now | Why |
+|---|---|---|
+| One wedge: money at risk | Four solution lines, Finance first | The product grew a real agent runtime (`src/lib/agents/`); a single wedge undersold it and made every buyer look like a receivables buyer |
+| "MNB Cortex" | **Cortex**, by MNB Research, brand domain `mnbcortex.app` | A product with its own identity, the way Model ML is a finance agent with its own brand; MNB Research is the maker, not the name |
+| Template agents as the headline | Tool-using agent teams; the 438 templates are the library | A form plus one model call is not an agent. The teams read rows, propose actions and show their working |
+| ₹1,499–₹59,999 | ₹2,999–₹99,999, Enterprise from ₹2,50,000 | Premium for agent teams, background tasks and schedules; every allowance re-derived above the ₹0.90 credit floor (`test:margins`) |
+
+What did **not** change, and must not:
+
+- **No "AI COO".** Agents have named jobs and named tools. The test that bans the
+  phrase stays.
+- **Keep your accounting software.** Cortex sits on top of Tally, Zoho Books,
+  Vyapar and spreadsheets.
+- **Approve-first.** Agents only propose. Autopilot rules (Command and above)
+  are the only way an action runs without a tap.
+- **Every number checkable.** Veritas v1 is the existing grounding code
+  (`lib/ai/untrusted.ts`), named and run on every agent answer. It checks rupee
+  figures only, and says so; it is never described as checking more.
+- **Name-collision caution.** Snowflake sells "Cortex Agents". Never use that
+  phrase or "agent platform"; say "Cortex" plus what it does for the owner.
+
+The wedge below is still how Finance wins a first customer — receivables,
+43B(h) and statutory dates are the first things a Finance agent finds. It is
+now the opening of one solution line rather than the whole story.
+
+---
+
+## 1. The one-sentence position (October 2026 — superseded by §0 as the headline, still the Finance wedge)
 
 **Cortex is the execution layer between an Indian SME's books and its business:
 it reads the company's own numbers every day, tells the owner the specific

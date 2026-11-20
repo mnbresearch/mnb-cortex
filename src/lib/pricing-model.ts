@@ -99,6 +99,9 @@ export const MODE_PROFILE_NAME: Record<string, keyof typeof PROFILE_OUTPUT_TOKEN
   scenario: "DEEP", forecast: "DEEP", strategy: "DEEP", investor: "DEEP",
   board: "DEEP", valuation: "DEEP", deepdive: "DEEP", report: "DEEP",
   gst: "EXTRACT", bankstatement: "EXTRACT",
+  /* Agent Workspace: the team lead's plan is one short JSON answer; the synthesis is one STANDARD call. */
+  agent_plan: "FAST",
+  agent_synthesis: "STANDARD",
 };
 
 /**
@@ -120,6 +123,13 @@ export const FIXED_COGS_INR: Record<string, number> = {
    * Search grounding is billed separately from tokens.
    */
   visibility: 12,
+  /**
+   * One Agent Workspace step. A step is not one call: the agent may look things
+   * up for up to three rounds before it answers, so the worst case is FOUR
+   * STANDARD calls, each carrying the growing conversation. Costed as 4 × the
+   * STANDARD worst case (₹2.51) — pessimistic on purpose, like everything here.
+   */
+  agent_step: 10.05,
 };
 
 /**
@@ -130,7 +140,7 @@ export const FIXED_COGS_INR: Record<string, number> = {
  * sold under cost from the day it is signed, and the better the customer adopts
  * Cortex the worse it gets.
  */
-export const ENTERPRISE_MIN_MONTHLY_INR = 150_000 * 0.90;
+export const ENTERPRISE_MIN_MONTHLY_INR = 250_000 * 0.90;
 
 /** Margin on a whole plan if the customer spends every credit they are given. */
 export function planMargin(monthlyPriceInr: number, monthlyCredits: number): number {

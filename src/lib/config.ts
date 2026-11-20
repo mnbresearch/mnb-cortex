@@ -1,4 +1,4 @@
-export const APP_VERSION = "6.45.0";
+export const APP_VERSION = "7.0.0";
 /*
   …88480. The public footer, the contact page, the privacy, terms and refund
   pages all publish …88480; this default was …88481, so the pricing modal's
@@ -132,6 +132,19 @@ export const CREDIT_COSTS: Record<string, number> = {
     (571), so using it is always cheaper than generating twice.
   */
   improve_prompt: 14,
+  /*
+    AGENT WORKSPACE. A team task is charged step by step, at these rates, so the
+    owner pays for the work that actually ran and a cancelled task stops
+    charging at once:
+      agent_plan       the team lead plans the work (FAST, one call)
+      agent_step       one agent works with its tools — up to 4 model calls,
+                       costed as such in pricing-model.ts (FIXED_COGS_INR)
+      agent_synthesis  the lead writes the final answer (STANDARD, one call)
+    Veritas v1 runs on every answer and is free: it is arithmetic, not a model.
+  */
+  agent_plan: 14,
+  agent_step: 75,
+  agent_synthesis: 19,
   /* Workbook transform: plans a short JSON op list from one instruction. FAST tier; the
      transform itself is deterministic code and costs nothing. */
   transform_plan: 14,
@@ -276,8 +289,22 @@ export const PLAN_CREDITS: Record<string, number> = {
     never a cheaper way to buy credits. npm run test:margins and
     test:entry-plan recompute both and fail if either moves.
   */
-  try: 1218,
-  watch: 6500, watchpro: 17500, practice: 36000, command: 55000,
+  /*
+    AGENT WORKSPACE REPRICE (2026-11, pilots only, no paying customers). The
+    product now ships agent teams, background tasks and schedules, so every
+    tier moved up and every allowance was re-derived the same way:
+
+      team (watch)  ₹1,49,990/yr → ₹12,499.17/mo ÷ 12,000  = ₹1.042 / credit
+      pro           ₹3,49,990    → ₹29,165.83   ÷ 29,000  = ₹1.006
+      practice      ₹6,99,990    → ₹58,332.50   ÷ 60,000  = ₹0.972
+      command       ₹9,99,990    → ₹83,332.50   ÷ 90,000  = ₹0.926
+
+    2399 = floor((29990 / 12) / 1.04160) — the entry plan's worst monthly price
+    divided by Team's worst-case rate, so Essentials is a smaller plan, never a
+    cheaper way to buy credits (test:entry-plan recomputes it).
+  */
+  try: 2399,
+  watch: 12000, watchpro: 29000, practice: 60000, command: 90000,
 
   // Retired tiers, at the economics they were actually sold at.
   starter: 1350, growth: 4600, business: 13850, aicoo: 37000,
@@ -291,7 +318,7 @@ export const PLAN_CREDITS: Record<string, number> = {
     An enterprise deal signed below that is sold under cost; see
     ENTERPRISE_MIN_MONTHLY_INR.
   */
-  enterprise: 150000,
+  enterprise: 250000,
   // legacy ids — an old row must still resolve to something sane
   solo: 1350, premium: 13850,
 };
@@ -496,6 +523,43 @@ export function planIncludes(plan: string | null | undefined, cap: Capability): 
   return (PLAN_CAPABILITIES[String(plan || "").toLowerCase()] ?? []).includes(cap);
 }
 
+/*
+  AGENT WORKSPACE LIMITS, per plan. Credits already meter how MUCH agent work a
+  workspace does; these bound how much runs AT ONCE and on a schedule, which
+  credits cannot — a hundred queued tasks each under budget is still a hundred
+  tasks on the runner. Enforced server-side in lib/agents/tasks.ts where a task
+  or schedule is CREATED; nothing already running is ever stopped by a limit.
+
+    activeTasks   tasks queued, running or waiting at the same time
+    teamTasks     a lead agent may plan and run several specialists
+    background    tasks keep running when the owner closes the tab (the
+                  runner sweeps them); without it a task advances only while
+                  the Workspace is open
+    schedules     recurring agent tasks
+    taskCeiling   default credit ceiling per task — the task pauses and asks
+                  before spending more
+*/
+export type AgentLimits = { activeTasks: number; teamTasks: boolean; background: boolean; schedules: number; taskCeiling: number };
+export const PLAN_AGENT_LIMITS: Record<string, AgentLimits> = {
+  try:        { activeTasks: 1,  teamTasks: false, background: false, schedules: 0,   taskCeiling: 200 },
+  watch:      { activeTasks: 3,  teamTasks: true,  background: true,  schedules: 3,   taskCeiling: 400 },
+  watchpro:   { activeTasks: 5,  teamTasks: true,  background: true,  schedules: 10,  taskCeiling: 600 },
+  practice:   { activeTasks: 8,  teamTasks: true,  background: true,  schedules: 25,  taskCeiling: 600 },
+  command:    { activeTasks: 15, teamTasks: true,  background: true,  schedules: 50,  taskCeiling: 1000 },
+  enterprise: { activeTasks: 40, teamTasks: true,  background: true,  schedules: 200, taskCeiling: 2000 },
+  /* Retired tiers map to the nearest live tier, generously, as everywhere else in this file. */
+  starter: { activeTasks: 1, teamTasks: false, background: false, schedules: 0, taskCeiling: 200 },
+  solo:    { activeTasks: 1, teamTasks: false, background: false, schedules: 0, taskCeiling: 200 },
+  growth:  { activeTasks: 3, teamTasks: true, background: true, schedules: 3, taskCeiling: 400 },
+  business:{ activeTasks: 5, teamTasks: true, background: true, schedules: 10, taskCeiling: 600 },
+  premium: { activeTasks: 5, teamTasks: true, background: true, schedules: 10, taskCeiling: 600 },
+  aicoo:   { activeTasks: 15, teamTasks: true, background: true, schedules: 50, taskCeiling: 1000 },
+};
+/** No plan (pay-as-you-go credits) gets the smallest shape, never nothing: a pack buyer can still run one task. */
+export function agentLimits(plan: string | null | undefined): AgentLimits {
+  return PLAN_AGENT_LIMITS[String(plan || "").toLowerCase()] ?? PLAN_AGENT_LIMITS.try;
+}
+
 /** The cheapest current plan that includes a capability, for the upgrade prompt. */
 export function lowestPlanWith(cap: Capability): string {
   for (const p of PLANS) if (planIncludes(p.id, cap)) return p.name;
@@ -621,77 +685,76 @@ export const PLANS: Plan[] = [
     zero there would create a ₹0 order. (That route is now also guarded against
     a non-positive amount, but the plan should not depend on the guard.)
   */
-  { id: "try", name: "Try Cortex", monthly: 1499, annual: 14990, usdMonthly: 19, usdAnnual: 189,
-    tagline: "See whether it finds anything in your numbers.",
-    cta: "Try it for a month",
+  { id: "try", name: "Essentials", monthly: 2999, annual: 29990, usdMonthly: 39, usdAnnual: 389,
+    tagline: "One agent at a time, working from your books.",
+    cta: "Start with Essentials",
     features: [
       "1 business · 1 user",
-      "1,218 AI credits / month",
-      "Receivables & overdue payments — watched daily",
-      "MSME 45-day (43B(h)) deduction exposure",
-      "GST & statutory deadline warnings",
+      "2,399 AI credits / month",
+      "Agent Workspace — one agent per task, while you watch",
+      "Finance, Operations and Sales & Growth agents",
+      "Receivables, MSME 43B(h) and statutory deadlines — watched daily",
       "Reads your Tally, Vyapar & Busy exports",
-      "About 27 bank statement or GST reads, or 64 questions",
+      "Veritas v1 checks every rupee figure in an answer",
       "Upgrade any time — your data stays exactly as it is",
     ] },
-  { id: "watch", name: "Watch", monthly: 7999, annual: 79990, usdMonthly: 95, usdAnnual: 949,
-    tagline: "Know what is going wrong, before it costs you.",
-    cta: "Start watching",
+  { id: "watch", name: "Team", monthly: 14999, annual: 149990, usdMonthly: 179, usdAnnual: 1789,
+    tagline: "A team of agents for a growing business.",
+    cta: "Choose Team",
     features: [
       "1 business · up to 5 users",
-      "6,500 AI credits / month",
+      "12,000 AI credits / month",
+      "Team tasks — a lead agent plans the work across specialists",
+      "3 agent tasks at once, running in the background",
+      "3 scheduled agent tasks",
       "Receivables, payables & cash — watched daily",
       "Nightly watch drafts up to 5 payment reminders for your approval",
-      "MSME 45-day (43B(h)) deduction exposure",
-      "GST & statutory deadline warnings",
       "Weekly brief by email, automatically",
-      "Reads your Tally, Vyapar & Busy exports",
       "Bank statement & GST return reader",
     ] },
-  { id: "watchpro", name: "Watch Pro", monthly: 19999, annual: 199990, usdMonthly: 239, usdAnnual: 2389,
-    tagline: "For companies where a missed number costs real money.", highlight: true,
-    cta: "Choose Watch Pro",
+  { id: "watchpro", name: "Pro", monthly: 34999, annual: 349990, usdMonthly: 419, usdAnnual: 4189,
+    tagline: "The full agent workspace, with memory and automation.", highlight: true,
+    cta: "Choose Pro",
     features: [
       "Up to 20 users",
-      "17,500 AI credits / month",
-      "Everything in Watch",
+      "29,000 AI credits / month",
+      "Everything in Team",
+      "5 agent tasks at once · 10 scheduled agent tasks",
+      "Cortex Memory — agents remember how your business works",
       "Executive Action Board with P0–P3 triage & counterparty follow-up tracking",
-      "Automated commitment tracker (we promised vs they promised)",
       "Daily decision-grade morning brief",
-      "Ask Cortex anything about your own rows",
       "Alert rules you set, delivered by email",
       "Workflow automation & executive routines on a schedule",
-      "Read API with scoped, expiring keys + signed outbound webhooks",
-      "Cortex Memory — permanent business context",
+      "Read API & MCP with scoped, expiring keys + signed outbound webhooks",
       "Image & video generation — 500 images and 20 videos a week",
     ] },
-  { id: "practice", name: "Practice", monthly: 39999, annual: 399990, usdMonthly: 479, usdAnnual: 4789,
-    tagline: "For CAs and advisory firms. Every client, one screen.",
+  { id: "practice", name: "Practice", monthly: 69999, annual: 699990, usdMonthly: 839, usdAnnual: 8389,
+    tagline: "For CAs and advisory firms. Every client, one screen, agents in each.",
     cta: "Talk to us about Practice",
     features: [
       "Up to 25 client workspaces",
-      "36,000 AI credits / month, shared across your clients",
+      "60,000 AI credits / month, shared across your clients",
+      "The Finance agent team inside every client workspace",
+      "8 agent tasks at once · 25 scheduled agent tasks",
       "Practice console — every client's exposure ranked",
       "Whose 43B(h) clock is running, client by client",
-      "Whose receivables moved this week",
       "Two-way API — push data in from your own systems",
       "Nightly watch drafts up to 15 reminders per workspace",
       "Your firm's name, logo and colour on the workspace — and on the alert and decision emails your clients receive",
-      "Everything in Watch Pro for your firm",
-      "Named onboarding for your team",
+      "Everything in Pro for your firm",
     ] },
-  { id: "command", name: "Command", monthly: 59999, annual: 599990, usdMonthly: 719, usdAnnual: 7189,
-    tagline: "Cortex acts, not just warns.",
+  { id: "command", name: "Command", monthly: 99999, annual: 999990, usdMonthly: 1199, usdAnnual: 11989,
+    tagline: "Agents that act, within limits you set.",
     cta: "Choose Command",
     features: [
       "Up to 75 users",
-      "55,000 AI credits / month",
-      "Everything in Watch Pro",
+      "90,000 AI credits / month",
+      "Everything in Pro",
+      "15 agent tasks at once · 50 scheduled agent tasks",
       "Autopilot — let reminders and other actions run on their own, within limits you set",
       "Two-way API — push data in from your own systems",
-      "Nightly watch drafts up to 15 payment reminders a night (5 on Watch)",
-      "WhatsApp reminders from your own number (also on Watch)",
-      "AI agents across every department",
+      "Nightly watch drafts up to 15 payment reminders a night (5 on Team)",
+      "WhatsApp reminders from your own number (also on Team)",
       /*
         SCOPED TO THE WORKSPACE, deliberately.
 
@@ -712,8 +775,9 @@ export const PLANS: Plan[] = [
     cta: "Talk to sales",
     features: [
       "Unlimited workspaces & users",
-      "1,50,000 AI credits / month — fair use",
+      "2,50,000 AI credits / month — fair use",
       "Everything in Command",
+      "40 agent tasks at once · 200 scheduled agent tasks",
       "Group workspaces — create your companies; each inherits Enterprise",
       "Priority daily run — sync, watch and reminders first, every business day",
       "Audit log export (CSV) for your auditors",

@@ -20,9 +20,9 @@ export const dynamic = "force-dynamic";
   listed under Command. planLabel() is the same mapping the gate uses.
 */
 const TIERS = [
-  { id: "try", label: "Try Cortex" },
-  { id: "watch", label: "Watch" },
-  { id: "watchpro", label: "Watch Pro" },
+  { id: "try", label: "Essentials" },
+  { id: "watch", label: "Team" },
+  { id: "watchpro", label: "Pro" },
   { id: "command", label: "Command" },
   { id: "enterprise", label: "Enterprise" },
 ] as const;

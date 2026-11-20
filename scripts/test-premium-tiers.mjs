@@ -28,7 +28,7 @@ const plan = (id) => C.PLANS.find((p) => p.id === id);
 
 /* 1. prices */
 {
-  const want = { try: [1499, 14990], watch: [7999, 79990], watchpro: [19999, 199990], practice: [39999, 399990], command: [59999, 599990] };
+  const want = { try: [2999, 29990], watch: [14999, 149990], watchpro: [34999, 349990], practice: [69999, 699990], command: [99999, 999990] };
   for (const [id, [m, y]] of Object.entries(want)) check(plan(id)?.monthly === m && plan(id)?.annual === y, `price: ${id} is ₹${m}/mo, ₹${y}/yr`);
   const worst = (p) => (p.annual / 12) / C.PLAN_CREDITS[p.id];
   for (const p of C.PLANS.filter((x) => x.monthly > 0)) check(worst(p) >= 0.9, `floor: ${p.id} sells a credit at ₹${worst(p).toFixed(3)} ≥ ₹0.90`);
@@ -41,7 +41,7 @@ const plan = (id) => C.PLANS.find((p) => p.id === id);
     check(p.features.some((f) => f.startsWith(`${shown} AI credits`)), `bullets: ${p.id} states its real allowance (${shown})`);
   }
   check(C.ANNUAL_SAVING_PCT === 16, "annual saving is still derived and honest (ten months for twelve = 16%)");
-  check(C.ENTRY_PRICE_LABEL === "₹1,499" && C.TOP_SELF_SERVE_PRICE_LABEL === "₹59,999" && C.SMALLEST_PACK_LABEL === "₹249", "copy labels derive from the catalogue");
+  check(C.ENTRY_PRICE_LABEL === "₹2,999" && C.TOP_SELF_SERVE_PRICE_LABEL === "₹99,999" && C.SMALLEST_PACK_LABEL === "₹249", "copy labels derive from the catalogue");
   check(C.PLAN_SEATS.watch === 5 && plan("watch").features[0].includes("up to 5 users"), "Watch: 5 seats, enforced and stated");
 }
 
@@ -99,7 +99,7 @@ const plan = (id) => C.PLANS.find((p) => p.id === id);
   }
   check(stale.length === 0, "copy: no ₹799 / ₹149 / old ladder left in customer-facing strings", stale.join(", "));
   check(/\$\{ENTRY_PRICE_LABEL\}/.test(read("src/lib/lifecycle.ts")) && /ENTRY_PRICE_LABEL/.test(read("src/app/page.tsx")) && /ENTRY_PRICE_LABEL/.test(read("src/app/pricing/page.tsx")), "copy: 'from ₹X' reads the catalogue, so the next reprice cannot go stale");
-  check(/₹59,999\/month or ₹5,99,990\/year · 55,000 AI credits/.test(read("src/app/terms/page.tsx")), "terms: the contract names the new prices");
+  check(/₹99,999\/month or ₹9,99,990\/year · 90,000 AI credits/.test(read("src/app/terms/page.tsx")), "terms: the contract names the new prices");
 }
 
 console.log(`\npremium-tiers: ${pass} passed, ${failures.length} failed`);

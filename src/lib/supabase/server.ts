@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createClient as createRawClient } from "@supabase/supabase-js";
 import { envKey } from "@/lib/env";
+import { currentAgentScope } from "@/lib/ai/agent-scope";
 
 /**
  * Database reads must never be served from Next's Data Cache.
@@ -49,6 +50,19 @@ const noStore: typeof fetch = (input, init) =>
   `await cookies()` is correct on both versions.
 */
 export async function createClient() {
+  /*
+    INSIDE AN AGENT WORKSPACE STEP (lib/agents/tasks.ts) there is no cookie
+    session — a background step runs from the sweeper — so the request-scoped
+    RLS client cannot be built. The step's reads go through the service client
+    instead, and stay scoped because every lookup an agent can reach filters on
+    the workspace id it was handed by the task row (lib/ai/tools.ts header;
+    scripts/test-ai-tools.mjs pins it). Outside an agent step this branch is
+    never taken.
+  */
+  if (currentAgentScope()?.serviceDb) {
+    const svc = serviceClient();
+    if (svc) return svc as unknown as ReturnType<typeof createServerClient>;
+  }
   const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

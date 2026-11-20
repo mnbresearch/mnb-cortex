@@ -47,16 +47,16 @@ export default function Terms() {
           neither their plan nor the price they had just agreed to pay. The
           paragraph below then told them their plan had been "retired".
         */}
-        <li><strong>Try Cortex</strong> — ₹1,499/month or ₹14,990/year · 1,218 AI credits/month</li>
-        <li><strong>Watch</strong> — ₹7,999/month or ₹79,990/year · 6,500 AI credits/month</li>
-        <li><strong>Watch Pro</strong> — ₹19,999/month or ₹1,99,990/year · 17,500 AI credits/month</li>
-        <li><strong>Practice</strong> — ₹39,999/month or ₹3,99,990/year · 36,000 AI credits/month, and access to up to 25 client workspaces from the Practice console</li>
-        <li><strong>Command</strong> — ₹59,999/month or ₹5,99,990/year · 55,000 AI credits/month</li>
-        <li><strong>Enterprise</strong> — custom pricing · 1,50,000 AI credits/month on a fair-use basis (contact us)</li>
+        <li><strong>Essentials</strong> — ₹2,999/month or ₹29,990/year · 2,399 AI credits/month</li>
+        <li><strong>Team</strong> — ₹14,999/month or ₹1,49,990/year · 12,000 AI credits/month</li>
+        <li><strong>Pro</strong> — ₹34,999/month or ₹3,49,990/year · 29,000 AI credits/month</li>
+        <li><strong>Practice</strong> — ₹69,999/month or ₹6,99,990/year · 60,000 AI credits/month, and access to up to 25 client workspaces from the Practice console</li>
+        <li><strong>Command</strong> — ₹99,999/month or ₹9,99,990/year · 90,000 AI credits/month</li>
+        <li><strong>Enterprise</strong> — custom pricing · 2,50,000 AI credits/month on a fair-use basis (contact us)</li>
       </UL>
       <P>
-        Plans previously sold as Starter, Growth, Business and AI COO have been retired and are no longer available to new
-        customers. Existing workspaces on those plans keep the price, credit allowance and seat count they purchased until
+        Plans previously sold as Starter, Growth, Business, AI COO, Try Cortex, Watch and Watch Pro have been retired or renamed
+        and are no longer available to new customers under those names. Existing workspaces on those plans keep the price, credit allowance and seat count they purchased until
         they choose to change.
       </P>
       <P>

@@ -827,6 +827,10 @@ async function checkSchema(): Promise<Check> {
       Named for the file to run, not the migration, because the answer to "this
       is missing" should be the command that fixes it.
     */
+    /* The Agent Workspace. Without these the Workspace shows its setup state and no task can be created. */
+    ["agent_tasks", "status, plan, verification, lease_until, credit_ceiling, background", "RUN-2026-11-20-agent-workspace.sql"],
+    ["agent_task_steps", "seq, kind, tool_calls, attempts", "RUN-2026-11-20-agent-workspace.sql"],
+    ["agent_schedules", "cadence, hour_ist, weekday, monthday, next_run_at, last_task_id", "RUN-2026-11-20-agent-workspace.sql"],
     ["funnel_events", "event", "RUN-NOW-2026-09-11.sql"],
     ["lifecycle_sends", "stage", "RUN-NOW-2026-09-11.sql"],
     ["leads", "company, note, score", "RUN-NOW-2026-09-11.sql"],

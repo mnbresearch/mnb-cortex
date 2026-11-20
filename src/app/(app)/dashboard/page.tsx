@@ -11,7 +11,7 @@ import { getMetrics, getInsights, getAlerts, getFinanceSeries, getUserAndOrg, ge
 import { getRecomputeFailure } from "@/lib/metrics";
 import { demoRevenueSeries } from "@/lib/demo";
 import { Landmark, ReceiptText, Upload as UploadIcon } from "lucide-react";
-import { AlertTriangle, Sparkles } from "lucide-react";
+import { AlertTriangle, Sparkles, Bot } from "lucide-react";
 import { PrintButton, ExportButton } from "@/components/export-button";
 import { AIPulse } from "@/components/ai-panel";
 import { ConnectBanner } from "@/components/connect-banner";
@@ -116,6 +116,18 @@ export default async function Dashboard() {
           never sees it.
         */}
         <SetupPath run={firstRun} />
+
+        {/* 3. The Agent Workspace: the one place to hand work over. */}
+        <Card className="p-4 no-print border-primary/25 bg-primary/5">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-lg bg-primary/15 p-2"><Bot className="h-5 w-5 text-primary" aria-hidden="true" /></div>
+            <div className="flex-1 min-w-[220px]">
+              <p className="text-sm font-semibold">Hand the work to your agents</p>
+              <p className="text-xs text-muted-foreground">Finance, Operations and Sales &amp; Growth agents read your books, propose the actions and show their working.</p>
+            </div>
+            <Link href="/workspace" className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-9 px-4 text-sm font-medium hover:opacity-90">Open Agent Workspace</Link>
+          </div>
+        </Card>
 
         {/* AI summary banner */}
         <Card className="glass p-5">
