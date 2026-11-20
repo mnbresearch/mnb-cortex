@@ -54,6 +54,7 @@ export const TEAMS: Team[] = [
     examples: [
       "Who owes us the most, and draft reminders for anything over 60 days",
       "What is our 43B(h) exposure and which suppliers should we pay first?",
+      "Audit our books for Big-4 qualification risks and duplicate invoices",
       "Prepare this month's board pack commentary from our numbers",
       "Which statutory deadlines are coming up in the next three weeks?",
       "Summarise what our bank and auditors emailed us this month",
@@ -144,6 +145,14 @@ export const CORE_AGENTS: CoreAgent[] = [
     tools: ["business_snapshot", "top_receivables", "top_payables", "statutory_deadlines", "propose_action", "search_company_knowledge"],
     outputs: ["Close checklist", "MIS pack export (for approval)"],
     keywords: ["close", "month-end", "month end", "reconcile", "reconciliation", "mis", "books", "year-end"],
+  },
+  {
+    id: "fin.audit", team: "finance", name: "Forensic Audit Agent",
+    role: "Conducts continuous Big-4 pre-flight audits, flags CARO 2020 qualification risks, and catches invoice anomalies.",
+    brief: `You are the Forensic Audit Agent in Cortex for Finance. Inspect the ledger for audit qualification risks under CARO 2020 and Companies Act Section 143, scan for duplicate invoices or round-sum disbursement surges, verify GSTR-2B vs 3B ITC match, and state the 0-100 audit readiness score and at-risk rupee exposure. ${RULES_FINANCE}${KNOWLEDGE_RULE}`,
+    tools: ["forensic_audit_score", "detect_invoice_anomalies", "msme_exposure", "statutory_deadlines", "top_payables", "top_receivables", "recall_memory", "propose_action", "search_company_knowledge"],
+    outputs: ["Audit Readiness Score & Grade", "Forensic Anomaly Report", "Statutory Disallowance Exposure", "CARO 2020 Pre-Flight Findings"],
+    keywords: ["audit", "auditor", "caro", "qualification", "anomaly", "forensic", "duplicate", "disallowance", "statutory audit", "workpaper", "big-4", "pre-flight"],
   },
   {
     id: "fin.board", team: "finance", name: "Board Pack Agent",

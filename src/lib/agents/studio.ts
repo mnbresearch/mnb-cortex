@@ -39,6 +39,8 @@ export const TOOL_CATALOG: ToolInfo[] = [
   { name: "find_party", label: "Find a customer or supplier", group: "Books", access: "read", plain: "Look up one party" },
   { name: "statutory_deadlines", label: "Statutory deadlines", group: "Compliance", access: "read", plain: "Read GST, TDS, ROC and other dates" },
   { name: "msme_exposure", label: "MSME 43B(h) exposure", group: "Compliance", access: "read", plain: "Read 43B(h) exposure" },
+  { name: "forensic_audit_score", label: "Forensic audit score", group: "Compliance", access: "read", plain: "Read statutory audit score, grade & disallowance exposure" },
+  { name: "detect_invoice_anomalies", label: "Detect invoice anomalies", group: "Compliance", access: "read", plain: "Scan invoices for duplicates, round sums & spikes" },
   { name: "top_customers", label: "Top customers", group: "Customers", access: "read", plain: "Read top customers" },
   { name: "customer_segments", label: "Customer segments", group: "Customers", access: "read", plain: "Read customer segments" },
   { name: "search_company_knowledge", label: "Search mail, chats and documents", group: "Company knowledge", access: "read", plain: "Search connected mail, chats and documents" },

@@ -32,6 +32,7 @@ const TOOL_LABEL: Record<string, string> = {
   propose_action: "Proposed an action", business_snapshot: "KPI snapshot", msme_exposure: "43B(h) exposure",
   statutory_deadlines: "Statutory calendar", customer_segments: "Customer segments", recall_memory: "Memory", remember_fact: "Saved to memory",
   search_company_knowledge: "Company knowledge", list_company_sources: "Connected sources", query_connected_system: "Connected system",
+  forensic_audit_score: "Forensic audit score", detect_invoice_anomalies: "Invoice anomalies",
 };
 
 const LIVE = new Set(["queued", "running"]);

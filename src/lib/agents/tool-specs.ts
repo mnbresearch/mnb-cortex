@@ -73,6 +73,26 @@ export const AGENT_TOOL_DECLARATIONS = [
     },
   },
   {
+    name: "forensic_audit_score",
+    description:
+      "Continuous Big-4 Forensic Audit Readiness & Statutory Score (0-100, Grade A+ to D, qualification status, and rupee exposure). "
+      + "Audits five statutory vectors: MSME 43B(h) disallowance, GSTR-2B vs Books ITC variance, TDS 194Q/C/J withholding rates, forensic anomalies, and bank/ledger clearing reconciliation. "
+      + "Use for audit, statutory defense, CARO 2020, Companies Act qualification, or forensic compliance questions.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "detect_invoice_anomalies",
+    description:
+      "Forensic accounting anomaly scanner: scans payables and receivables for duplicate invoice numbers, identical amounts within 7 days, unexpected round-number disbursements, and vendor volume surges. "
+      + "Use for fraud detection, audit sampling, internal controls, duplicate payment prevention, or forensic review.",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: { type: "integer", description: "How many anomalies to report (1-25, default 10)." },
+      },
+    },
+  },
+  {
     name: "search_company_knowledge",
     description:
       "Search the company's own knowledge: emails (Outlook, Gmail), Teams chats, documents and files (OneDrive, SharePoint, Google Drive, uploads) and reports the company has connected. "

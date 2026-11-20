@@ -11,6 +11,7 @@ import type { AgentToolCall } from "@/lib/ai/agent-scope";
 import { searchKnowledge, listSources, getSource, tokenFor } from "@/lib/knowledge/store";
 import { readOnlyTools } from "@/lib/knowledge/core";
 import { callTool } from "@/lib/knowledge/mcp-client";
+import { generateEnterpriseAuditReport, detectInvoiceAnomalies } from "@/lib/forensic-audit";
 
 /*
   THE AGENT TOOLKIT — what an Agent Workspace agent can look up or do.
@@ -119,6 +120,75 @@ async function agentLookup(name: AgentToolName, args: any, orgId: string, userId
         ok: true, rows,
         summary: `Section 43B(h): ₹${Math.round(atRiskTotal).toLocaleString("en-IN")} across ${atRisk.length} micro/small supplier(s) is past the payment window and at risk of disallowance. `
           + `${unclassified.length} supplier(s) are not yet classified, so their exposure is UNKNOWN, not zero.`,
+      };
+    }
+
+    case "forensic_audit_score": {
+      const { data: invRows } = await sb.from("invoices").select("id, invoice_number, party, total_amount, due_date, status").eq("org_id", orgId).limit(MAX_ROWS);
+      const invoices = (invRows || []).map((r: any) => ({
+        id: r.id,
+        invoice_number: r.invoice_number,
+        party: r.party,
+        customer_name: r.party,
+        amount: Number(r.total_amount) || 0,
+        due_date: r.due_date,
+        status: r.status,
+      }));
+      const report = generateEnterpriseAuditReport({
+        invoices,
+        msmeExposure: { atRisk: 0, atRiskCount: 0, unclassified: 0 },
+      });
+      const rows = [
+        {
+          metric: "Overall Audit Readiness Score",
+          score: report.overallScore,
+          grade: report.grade,
+          status: report.status,
+          total_at_risk_exposure: report.totalAtRiskExposure,
+          clean_checks: `${report.cleanChecksCount}/${report.totalChecksCount}`,
+        },
+        ...report.vectors.map((v) => ({
+          vector: v.title,
+          category: v.category,
+          score: v.score,
+          status: v.status,
+          exposure_rupees: v.exposureRupees,
+          finding: v.findings[0] || "Compliant",
+        })),
+      ];
+      return {
+        ok: true,
+        rows,
+        summary: `Audit Readiness: Grade ${report.grade} (${report.overallScore}/100) — Status: ${report.status.replace("_", " ")}. At-risk exposure: ₹${Math.round(report.totalAtRiskExposure).toLocaleString("en-IN")}. ${report.cleanChecksCount} of ${report.totalChecksCount} statutory checks clean.`,
+      };
+    }
+
+    case "detect_invoice_anomalies": {
+      const { data: invRows } = await sb.from("invoices").select("id, invoice_number, party, total_amount, due_date, status").eq("org_id", orgId).limit(50);
+      const invoices = (invRows || []).map((r: any) => ({
+        id: r.id,
+        invoice_number: r.invoice_number,
+        party: r.party,
+        customer_name: r.party,
+        amount: Number(r.total_amount) || 0,
+        due_date: r.due_date,
+        status: r.status,
+      }));
+      const anomalies = detectInvoiceAnomalies(invoices);
+      const rows = anomalies.slice(0, clamp(args?.limit, 10)).map((a) => ({
+        type: a.type,
+        party: a.party,
+        amount: a.amount,
+        severity: a.severity,
+        title: a.title,
+        detail: a.detail,
+      }));
+      return {
+        ok: true,
+        rows,
+        summary: anomalies.length
+          ? `Detected ${anomalies.length} forensic anomaly/duplicate pattern(s) across recent invoices.`
+          : "Zero duplicate invoices or disbursement surges detected across recent ledger records.",
       };
     }
 
