@@ -11,6 +11,7 @@ import { SOLUTIONS } from "@/lib/solutions";
 import { KnowledgeSection, EnterpriseSection } from "@/components/landing-knowledge";
 import { HeroFilm } from "@/components/home/hero-film";
 import { PlatformShowcase } from "@/components/home/platform-showcase";
+import { StudioDemo } from "@/components/home/studio-demo";
 
 /*
   THE HOMEPAGE, REBUILT FOR MNB CORTEX (November 2026).
@@ -58,6 +59,8 @@ const FAQS = [
   { q: "How do we know an answer is right?", a: "Every answer names the email, chat, document or rows it came from, so you can open it. Veritas v1 then traces each rupee figure back to what the agents actually read and flags any figure it cannot find. Percentages and day counts are reported as not checked, never as verified." },
   { q: "Where does our data live, and who can see it?", a: "Each workspace is isolated at the database level with row-level security. Traffic is encrypted in transit; sign-in tokens and app secrets are encrypted at rest with AES-256-GCM; names and IDs are masked before anything reaches an AI model. Admins decide what is connected, and you can export every table in your workspace as JSON, or delete it, at any time." },
   { q: "How is it priced?", a: `Plans start at ${ENTRY_PRICE_LABEL} a month, and each plan sets how many agent tasks run at once and how many schedules you can keep. Usage runs on credits. Enterprise is quoted for groups that need more entities, SSO or a dedicated environment.` },
+  { q: "How is Cortex different from Model ML, Rogo or Hebbia?", a: "Those are built for investment professionals working on market data — pitch books, diligence, research. Cortex is built for the team that runs a company's own finance and operations: its books, its mail and documents, GST, TDS and 43B(h), with agents you can build yourself and actions that wait for approval. The comparison page sets it out cell by cell, with sources." },
+  { q: "Can we build our own agents?", a: "Yes, in Agent Studio. Describe the job, Cortex drafts the agent, and you choose exactly which tools it may use. Its permission card shows what it may read and propose; anything it wants done waits in Approvals, and every rupee figure it states is checked by Veritas v1. Each plan includes a number of Agent Studio agents." },
   { q: "We're an owner-run business. Is this for us?", a: "Yes — Cortex started there. The page for growing businesses has the free 2-minute health check (no card, no account), the three-step start and the playbooks that run from day one." },
 ];
 
@@ -144,10 +147,47 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ---------- 3b. AGENT STUDIO: build your own, governed ----------
+        The capability no finance agent we compared states publicly in this
+        combination: agents a company builds itself, each with a permission
+        card — chosen tools, actions only as proposals, a credit ceiling, and
+        Veritas on every rupee. Real: lib/agents/studio.ts, components/
+        agent-studio.tsx, test-agent-studio.mjs. */}
+      <section id="studio" className="px-5 lg:px-10 py-24 lg:py-32 border-t scroll-mt-16">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-[1fr_1.15fr] gap-12 lg:gap-16 items-center">
+          <div>
+            <SectionLabel n="02">Agent Studio</SectionLabel>
+            <h2 className="font-display display-2 tracking-tightest mt-5">Build your own agent. <span className="serif-em">Govern</span> it like a hire.</h2>
+            <p className="mt-5 text-muted-foreground leading-7 max-w-xl">
+              Every company has work no off-the-shelf agent knows about. Describe the job in a sentence; Cortex drafts the agent; you decide
+              exactly what it may read and propose. Then it joins its team — the lead agent plans it in, and it works under the same
+              approvals, credit limits and Veritas checks as every built-in agent.
+            </p>
+            <ol className="mt-8 space-y-4">
+              {[
+                ["Describe the job", "In plain words: what to look at, for whom, how often, what to hand back."],
+                ["Read its permission card", "The exact tools it may use, what it may propose, and what it can never do — in words an auditor can sign off."],
+                ["It joins the team", "Routed to by its own words, planned in by the lead, paused or removed in one click."],
+              ].map(([t, d], i) => (
+                <li key={t} className="flex gap-4">
+                  <span className="font-display text-2xl tracking-tightest text-primary w-8 shrink-0">0{i + 1}</span>
+                  <div><p className="font-medium">{t}</p><p className="text-sm text-muted-foreground leading-6 mt-0.5">{d}</p></div>
+                </li>
+              ))}
+            </ol>
+            <div className="mt-9 flex flex-wrap items-center gap-3">
+              <Link href="/demo" className="inline-flex items-center gap-2 rounded-full btn-ink px-6 h-11 text-sm font-medium">See Agent Studio <ArrowUpRight className="h-4 w-4" /></Link>
+              <Link href="/compare" className="inline-flex items-center gap-2 text-sm font-medium link-sweep">How Cortex compares with Model ML, Rogo and Hebbia <ArrowRight className="h-4 w-4" /></Link>
+            </div>
+          </div>
+          <Reveal className="min-w-0"><StudioDemo /></Reveal>
+        </div>
+      </section>
+
       {/* ---------- 4. FLAGSHIP: Cortex for Finance ---------- */}
       <section id="finance" className="px-5 lg:px-10 py-24 lg:py-32 bg-secondary/20 border-y">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="02">Flagship</SectionLabel>
+          <SectionLabel n="03">Flagship</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             <div>
               <p className="eyebrow">{finance.name}</p>
@@ -178,7 +218,7 @@ export default function Home() {
       {/* ---------- 5. SOLUTIONS ---------- */}
       <section id="solutions" className="px-5 lg:px-10 py-24 lg:py-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="03">Solutions</SectionLabel>
+          <SectionLabel n="04">Solutions</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-[1fr_auto] gap-6 items-end">
             <h2 className="font-display display-2 tracking-tightest max-w-3xl">One platform. <span className="serif-em">Four</span> agent teams.</h2>
             <Link href="/solutions" className="inline-flex items-center gap-2 text-sm font-medium link-sweep">All solutions <ArrowRight className="h-4 w-4" /></Link>
@@ -200,24 +240,24 @@ export default function Home() {
       {/* ---------- 6. THE TEAM AT WORK (the animated floor) ---------- */}
       <section className="px-5 lg:px-10 pb-24 lg:pb-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="04">Watch the team work</SectionLabel>
+          <SectionLabel n="05">Watch the team work</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 max-w-3xl">One night in a business, desk to desk. Each agent picks up where the last left off — and the last desk is always yours.</h2>
           <div className="mt-10"><AgentFloor /></div>
         </div>
       </section>
 
       {/* ---------- 7. COMPANY KNOWLEDGE ---------- */}
-      <KnowledgeSection label={<SectionLabel n="05">Company Knowledge</SectionLabel>} />
+      <KnowledgeSection label={<SectionLabel n="06">Company Knowledge</SectionLabel>} />
 
       {/* ---------- 8. SECURITY ---------- */}
       <div id="security" className="scroll-mt-16">
-        <EnterpriseSection label={<SectionLabel n="06">Security &amp; control</SectionLabel>} />
+        <EnterpriseSection label={<SectionLabel n="07">Security &amp; control</SectionLabel>} />
       </div>
 
       {/* ---------- 9. HOW A PILOT RUNS ---------- */}
       <section className="px-5 lg:px-10 py-24 lg:py-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="07">Getting started</SectionLabel>
+          <SectionLabel n="08">Getting started</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Start with one workflow. <span className="serif-em">Widen</span> from there.</h2>
           <ol className="mt-12 grid md:grid-cols-2 lg:grid-cols-4 gap-px bg-border border rounded-2xl overflow-hidden hairline">
             {PILOT.map((p) => (
@@ -234,7 +274,7 @@ export default function Home() {
       {/* ---------- 10. PRICING TEASER ---------- */}
       <section id="pricing" className="px-5 lg:px-10 pb-24 lg:pb-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="08">Pricing</SectionLabel>
+          <SectionLabel n="09">Pricing</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-[1fr_auto] gap-6 items-end">
             <h2 className="font-display display-3 tracking-tightest max-w-2xl">Priced by the size of your agent team. Plans from {ENTRY_PRICE_LABEL} a month.</h2>
             <Link href="/pricing" className="inline-flex items-center gap-2 text-sm font-medium link-sweep">Compare every plan <ArrowRight className="h-4 w-4" /></Link>
@@ -250,6 +290,7 @@ export default function Home() {
                   <ul className="mt-4 space-y-1.5 text-sm">
                     <li className="flex gap-2"><Check className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden />{lim.activeTasks} agent tasks at once</li>
                     <li className="flex gap-2"><Check className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden />{lim.schedules} scheduled runs</li>
+                    <li className="flex gap-2"><Check className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden />{lim.studioAgents} Agent Studio agents</li>
                   </ul>
                   <Link href="/login?mode=signup" className="mt-5 inline-flex items-center justify-center gap-1.5 rounded-full border h-10 text-sm font-medium hover:bg-accent transition-colors">Create account</Link>
                 </div>
@@ -284,7 +325,7 @@ export default function Home() {
       {/* ---------- 12. QUESTIONS ---------- */}
       <section className="px-5 lg:px-10 pb-28">
         <div className="max-w-3xl mx-auto">
-          <SectionLabel n="09">Questions</SectionLabel>
+          <SectionLabel n="10">Questions</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">What teams ask before they start.</h2>
           <Faq items={FAQS} />
           <div className="mt-12 flex flex-wrap items-center gap-3">

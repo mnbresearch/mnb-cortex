@@ -1,4 +1,4 @@
-export const APP_VERSION = "7.2.0";
+export const APP_VERSION = "7.3.0";
 /*
   …88480. The public footer, the contact page, the privacy, terms and refund
   pages all publish …88480; this default was …88481, so the pricing modal's
@@ -547,22 +547,23 @@ export function planIncludes(plan: string | null | undefined, cap: Capability): 
     schedules     recurring agent tasks
     taskCeiling   default credit ceiling per task — the task pauses and asks
                   before spending more
+    studioAgents  the workspace's own Agent Studio agents (lib/agents/studio.ts)
 */
-export type AgentLimits = { activeTasks: number; teamTasks: boolean; background: boolean; schedules: number; taskCeiling: number };
+export type AgentLimits = { activeTasks: number; teamTasks: boolean; background: boolean; schedules: number; taskCeiling: number; studioAgents: number };
 export const PLAN_AGENT_LIMITS: Record<string, AgentLimits> = {
-  try:        { activeTasks: 1,  teamTasks: false, background: false, schedules: 0,   taskCeiling: 200 },
-  watch:      { activeTasks: 3,  teamTasks: true,  background: true,  schedules: 3,   taskCeiling: 400 },
-  watchpro:   { activeTasks: 5,  teamTasks: true,  background: true,  schedules: 10,  taskCeiling: 600 },
-  practice:   { activeTasks: 8,  teamTasks: true,  background: true,  schedules: 25,  taskCeiling: 600 },
-  command:    { activeTasks: 15, teamTasks: true,  background: true,  schedules: 50,  taskCeiling: 1000 },
-  enterprise: { activeTasks: 40, teamTasks: true,  background: true,  schedules: 200, taskCeiling: 2000 },
+  try:        { activeTasks: 1,  teamTasks: false, background: false, schedules: 0,   taskCeiling: 200, studioAgents: 1 },
+  watch:      { activeTasks: 3,  teamTasks: true,  background: true,  schedules: 3,   taskCeiling: 400, studioAgents: 3 },
+  watchpro:   { activeTasks: 5,  teamTasks: true,  background: true,  schedules: 10,  taskCeiling: 600, studioAgents: 10 },
+  practice:   { activeTasks: 8,  teamTasks: true,  background: true,  schedules: 25,  taskCeiling: 600, studioAgents: 15 },
+  command:    { activeTasks: 15, teamTasks: true,  background: true,  schedules: 50,  taskCeiling: 1000, studioAgents: 25 },
+  enterprise: { activeTasks: 40, teamTasks: true,  background: true,  schedules: 200, taskCeiling: 2000, studioAgents: 100 },
   /* Retired tiers map to the nearest live tier, generously, as everywhere else in this file. */
-  starter: { activeTasks: 1, teamTasks: false, background: false, schedules: 0, taskCeiling: 200 },
-  solo:    { activeTasks: 1, teamTasks: false, background: false, schedules: 0, taskCeiling: 200 },
-  growth:  { activeTasks: 3, teamTasks: true, background: true, schedules: 3, taskCeiling: 400 },
-  business:{ activeTasks: 5, teamTasks: true, background: true, schedules: 10, taskCeiling: 600 },
-  premium: { activeTasks: 5, teamTasks: true, background: true, schedules: 10, taskCeiling: 600 },
-  aicoo:   { activeTasks: 15, teamTasks: true, background: true, schedules: 50, taskCeiling: 1000 },
+  starter: { activeTasks: 1, teamTasks: false, background: false, schedules: 0, taskCeiling: 200, studioAgents: 1 },
+  solo:    { activeTasks: 1, teamTasks: false, background: false, schedules: 0, taskCeiling: 200, studioAgents: 1 },
+  growth:  { activeTasks: 3, teamTasks: true, background: true, schedules: 3, taskCeiling: 400, studioAgents: 3 },
+  business:{ activeTasks: 5, teamTasks: true, background: true, schedules: 10, taskCeiling: 600, studioAgents: 10 },
+  premium: { activeTasks: 5, teamTasks: true, background: true, schedules: 10, taskCeiling: 600, studioAgents: 10 },
+  aicoo:   { activeTasks: 15, teamTasks: true, background: true, schedules: 50, taskCeiling: 1000, studioAgents: 25 },
 };
 /** No plan (pay-as-you-go credits) gets the smallest shape, never nothing: a pack buyer can still run one task. */
 export function agentLimits(plan: string | null | undefined): AgentLimits {
@@ -701,6 +702,7 @@ export const PLANS: Plan[] = [
       "1 business · 1 user",
       "2,399 AI credits / month",
       "Agent Workspace — one agent per task, while you watch",
+      "Agent Studio — build 1 agent of your own, with a permission card",
       "Finance, Operations and Sales & Growth agents",
       "Receivables, MSME 43B(h) and statutory deadlines — watched daily",
       "Reads your Tally, Vyapar & Busy exports",
@@ -716,6 +718,7 @@ export const PLANS: Plan[] = [
       "Team tasks — a lead agent plans the work across specialists",
       "3 agent tasks at once, running in the background",
       "3 scheduled agent tasks",
+      "Agent Studio — build 3 agents of your own",
       "Receivables, payables & cash — watched daily",
       "Nightly watch drafts up to 5 payment reminders for your approval",
       "Weekly brief by email, automatically",
@@ -729,6 +732,7 @@ export const PLANS: Plan[] = [
       "29,000 AI credits / month",
       "Everything in Team",
       "5 agent tasks at once · 10 scheduled agent tasks",
+      "Agent Studio — build 10 agents of your own",
       "Cortex Memory — agents remember how your business works",
       "Company Knowledge — upload documents and connect MCP servers; agents search them and cite the source",
       "Executive Action Board with P0–P3 triage & counterparty follow-up tracking",
@@ -746,6 +750,7 @@ export const PLANS: Plan[] = [
       "60,000 AI credits / month, shared across your clients",
       "The Finance agent team inside every client workspace",
       "8 agent tasks at once · 25 scheduled agent tasks",
+      "Agent Studio — build 15 agents of your own",
       "Practice console — every client's exposure ranked",
       "Whose 43B(h) clock is running, client by client",
       "Two-way API — push data in from your own systems",
@@ -761,6 +766,7 @@ export const PLANS: Plan[] = [
       "90,000 AI credits / month",
       "Everything in Pro",
       "15 agent tasks at once · 50 scheduled agent tasks",
+      "Agent Studio — build 25 agents of your own",
       "Company Knowledge for the corporate workspace — Microsoft 365 (Outlook, Teams, OneDrive & SharePoint) and Google Workspace (Gmail, Drive), read-only",
       "Autopilot — let reminders and other actions run on their own, within limits you set",
       "Two-way API — push data in from your own systems",
@@ -789,6 +795,7 @@ export const PLANS: Plan[] = [
       "2,50,000 AI credits / month — fair use",
       "Everything in Command",
       "40 agent tasks at once · 200 scheduled agent tasks",
+      "Agent Studio — build 100 agents of your own",
       "Group workspaces — create your companies; each inherits Enterprise",
       "Company Knowledge across every mailbox, chat and drive you connect, with named-source answers",
       "Priority daily run — sync, watch and reminders first, every business day",

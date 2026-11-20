@@ -9,7 +9,8 @@ import { agentLimits, creditCost } from "@/lib/config";
 import { recallContext } from "@/lib/memory";
 import { declarationsFor, runAgentTool } from "@/lib/agents/toolkit";
 import { CORE_AGENTS_BY_ID, leadOf, type TeamId } from "@/lib/agents/teams";
-import { routeRequest, fallbackPlan, parsePlan, planningPrompt, synthesisPrompt, type PlanStep } from "@/lib/agents/orchestration";
+import { routeRequest, fallbackPlan, parsePlan, planningPrompt, synthesisPrompt, agentById, type PlanStep } from "@/lib/agents/orchestration";
+import { workspaceAgents } from "@/lib/agents/workspace-agents";
 import { verifyAnswer, type Verification } from "@/lib/veritas";
 import { nextRunAt, type Cadence } from "@/lib/agents/schedule";
 
@@ -104,9 +105,11 @@ export async function createTask(input: {
     return { ok: false, code: "limit", error: `Your plan runs ${limits.activeTasks} agent task${limits.activeTasks === 1 ? "" : "s"} at a time and that many are already running. Wait for one to finish, cancel one, or upgrade for more.` };
   }
 
-  const pinned = input.agentId ? CORE_AGENTS_BY_ID[input.agentId] : undefined;
+  /* The workspace's own Agent Studio agents join routing alongside the built-ins. */
+  const extra = await workspaceAgents(input.orgId);
+  const pinned = input.agentId ? agentById(input.agentId, extra) : undefined;
   const route = routeRequest(request, pinned?.team ?? input.team ?? "auto",
-    input.mode === "single" || input.mode === "team" ? input.mode : undefined);
+    input.mode === "single" || input.mode === "team" ? input.mode : undefined, extra);
   let mode = pinned ? "single" as const : route.mode;
   if (mode === "team" && !limits.teamTasks) mode = "single";   // downgrade, never refuse: one agent still answers
   const agent = pinned ?? (mode === "team" ? leadOf(route.team) : route.agent);
@@ -325,34 +328,35 @@ async function runModel(task: TaskRow, opts: { brief: string; tools: string[]; p
 async function runPlanStep(task: TaskRow, step: StepRow): Promise<"continue" | "stop"> {
   const charged = await chargeUnit(task, "agent_plan");
   if ("stop" in charged) return pauseFor(task, step, charged.stop);
+  const extra = await workspaceAgents(task.org_id);
   const lead = CORE_AGENTS_BY_ID[task.agent_id || ""] ?? leadOf(task.team);
-  const route = routeRequest(task.request, task.team, "team");
+  const route = routeRequest(task.request, task.team, "team", extra);
 
   let plan: PlanStep[] | null = null;
   let note = "";
-  const { text } = await runModel(task, { brief: lead.brief, tools: [], prompt: planningPrompt(task.request, task.team), context: "", profile: FAST });
+  const { text } = await runModel(task, { brief: lead.brief, tools: [], prompt: planningPrompt(task.request, task.team, extra), context: "", profile: FAST });
   if (isEngineFailure(text)) { await refundIfCharged(charged.gate, "agent_plan"); note = "The planner did not answer, so the standard plan for this request was used (not charged)."; }
-  else plan = parsePlan(text, task.team);
+  else plan = parsePlan(text, task.team, extra);
   if (!plan) { plan = fallbackPlan(route, task.request); note = note || "The planner's answer was not a usable plan, so the standard plan for this request was used."; }
 
   const cost = isEngineFailure(text) ? 0 : creditCost("agent_plan");
   const rows = [
-    ...plan.map((p, i) => ({ seq: i + 1, kind: "agent", agent_id: p.agent, agent_name: CORE_AGENTS_BY_ID[p.agent]?.name || p.agent, instruction: p.instruction })),
+    ...plan.map((p, i) => ({ seq: i + 1, kind: "agent", agent_id: p.agent, agent_name: agentById(p.agent, extra)?.name || p.agent, instruction: p.instruction })),
     { seq: plan.length + 1, kind: "synthesis", agent_id: lead.id, agent_name: lead.name, instruction: "Combine the specialists' findings into one answer." },
     { seq: plan.length + 2, kind: "verify", agent_id: null, agent_name: "Veritas v1", instruction: "Check every rupee figure against what the agents read." },
   ].map((r) => ({ ...r, task_id: task.id, org_id: task.org_id }));
   await db().from("agent_task_steps").upsert(rows, { onConflict: "task_id,seq", ignoreDuplicates: true });
   await markStep(step.id, {
     status: "done", credits: cost, finished_at: nowIso(),
-    output: `${lead.name} assigned ${plan.length} specialist(s): ${plan.map((p) => CORE_AGENTS_BY_ID[p.agent]?.name || p.agent).join(", ")}.${note ? " " + note : ""}`,
+    output: `${lead.name} assigned ${plan.length} specialist(s): ${plan.map((p) => agentById(p.agent, extra)?.name || p.agent).join(", ")}.${note ? " " + note : ""}`,
   });
   await bumpTask(task, { plan, credits_used: task.credits_used + cost, status_reason: `${plan.length} specialist(s) working.` });
   return "continue";
 }
 
 async function runSpecialistStep(task: TaskRow, step: StepRow, steps: StepRow[]): Promise<"continue" | "stop"> {
-  const agent = CORE_AGENTS_BY_ID[step.agent_id || ""];
-  if (!agent) { await markStep(step.id, { status: "skipped", error: "Unknown agent.", finished_at: nowIso() }); return "continue"; }
+  const agent = agentById(step.agent_id || "", await workspaceAgents(task.org_id));
+  if (!agent) { await markStep(step.id, { status: "skipped", error: "This agent is not available — it may have been removed or paused in Agent Studio.", finished_at: nowIso() }); return "continue"; }
   const charged = await chargeUnit(task, "agent_step");
   if ("stop" in charged) return pauseFor(task, step, charged.stop);
 
@@ -385,7 +389,7 @@ async function runSynthesisStep(task: TaskRow, step: StepRow, steps: StepRow[]):
   const charged = await chargeUnit(task, "agent_synthesis");
   if ("stop" in charged) return pauseFor(task, step, charged.stop);
   const lead = CORE_AGENTS_BY_ID[step.agent_id || ""] ?? leadOf(task.team);
-  const { text } = await runModel(task, { brief: lead.brief, tools: [], prompt: synthesisPrompt(task.request, findings), context: "" });
+  const { text } = await runModel(task, { brief: lead.brief, tools: [], prompt: synthesisPrompt(task.request, findings, await workspaceAgents(task.org_id)), context: "" });
   if (isEngineFailure(text)) {
     await refundIfCharged(charged.gate, "agent_synthesis");
     await markStep(step.id, { status: "pending", error: text.slice(0, 400) });
@@ -483,7 +487,7 @@ export async function createSchedule(input: {
   if ((count ?? 0) >= limits.schedules) return { ok: false, code: "limit", error: `Your plan includes ${limits.schedules} scheduled agent task(s), and they are all in use.` };
   const request = String(input.request || "").trim().slice(0, 2000);
   if (request.length < 4) return { ok: false, error: "Say what the agents should do each time." };
-  const route = routeRequest(request, input.team ?? "auto", input.mode);
+  const route = routeRequest(request, input.team ?? "auto", input.mode, await workspaceAgents(input.orgId));
   const row = {
     org_id: input.orgId, created_by: input.userId, title: titleFrom(request), request, team: route.team, mode: route.mode,
     cadence: input.cadence, hour_ist: clampInt(input.hourIst, 0, 23, 9), weekday: clampInt(input.weekday, 0, 6, 1), monthday: clampInt(input.monthday, 1, 28, 1),

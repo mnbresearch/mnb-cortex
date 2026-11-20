@@ -154,6 +154,7 @@ export const refundIfCharged = (g: any, mode: string) => globalThis.__refund(g, 
 export const recallContext = async () => "";
 export const declarationsFor = (names: string[]) => names.map((name) => ({ name, description: name, parameters: {} }));
 export const runAgentTool = (name: string, args: any, ctx: any) => globalThis.__runTool(name, args, ctx);
+export const workspaceAgents = async (_org: string) => (globalThis as any).__wsAgents || [];
 `);
 let src = read("src/lib/agents/tasks.ts")
   .replace(/^import "server-only";\s*$/m, "")
@@ -169,7 +170,8 @@ let src = read("src/lib/agents/tasks.ts")
   .replace(/from "@\/lib\/agents\/teams"/, 'from "./teams.ts"')
   .replace(/from "@\/lib\/agents\/orchestration"/, 'from "./orchestration.ts"')
   .replace(/from "@\/lib\/veritas"/, 'from "./veritas.ts"')
-  .replace(/from "@\/lib\/agents\/schedule"/, 'from "./schedule.ts"');
+  .replace(/from "@\/lib\/agents\/schedule"/, 'from "./schedule.ts"')
+  .replace(/from "@\/lib\/agents\/workspace-agents"/, 'from "./stubs.ts"');
 check(!/from "@\//.test(src), "harness: every import of the runner was redirected", (src.match(/from "@\/[^"]+"/g) || []).join(", "));
 const T = await import(put("tasks.ts", src));
 const C = await import(pathToFileURL(join(dir, "config.ts")).href);

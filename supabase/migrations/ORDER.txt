@@ -150,3 +150,4 @@
 2026_zzzz_r_agent_workspace.sql
 2026_zzzz_s_company_knowledge.sql
 2026_zzzz_t_knowledge_oauth_apps.sql
+2026_zzzz_u_workspace_agents.sql
