@@ -12,6 +12,7 @@ import { KnowledgeSection, EnterpriseSection } from "@/components/landing-knowle
 import { HeroFilm } from "@/components/home/hero-film";
 import { PlatformShowcase } from "@/components/home/platform-showcase";
 import { StudioDemo } from "@/components/home/studio-demo";
+import { UnrivaledMoat } from "@/components/unrivaled-moat";
 
 /*
   THE HOMEPAGE, REBUILT FOR MNB CORTEX (November 2026).
@@ -60,6 +61,7 @@ const FAQS = [
   { q: "Where does our data live, and who can see it?", a: "Each workspace is isolated at the database level with row-level security. Traffic is encrypted in transit; sign-in tokens and app secrets are encrypted at rest with AES-256-GCM; names and IDs are masked before anything reaches an AI model. Admins decide what is connected, and you can export every table in your workspace as JSON, or delete it, at any time." },
   { q: "How is it priced?", a: `Plans start at ${ENTRY_PRICE_LABEL} a month, and each plan sets how many agent tasks run at once and how many schedules you can keep. Usage runs on credits. Enterprise is quoted for groups that need more entities, SSO or a dedicated environment.` },
   { q: "How is Cortex different from Model ML, Rogo or Hebbia?", a: "Those are built for investment professionals working on market data — pitch books, diligence, research. Cortex is built for the team that runs a company's own finance and operations: its books, its mail and documents, GST, TDS and 43B(h), with agents you can build yourself and actions that wait for approval. The comparison page sets it out cell by cell, with sources." },
+  { q: "How does Cortex help with statutory audits and CARO 2020?", a: "Cortex runs a continuous Big-4 pre-flight audit sentinel over your live ledger. It scores statutory readiness (0–100, Grade A+ to D), defends Section 43B(h) MSME terms, catches GSTR-2B vs 3B ITC mismatches, and scans for forensic invoice anomalies (duplicates, round-sum disbursement spikes). The Forensic Audit Agent (fin.audit) prepares audit working papers in one click so you are never surprised by qualification remarks." },
   { q: "Can we build our own agents?", a: "Yes, in Agent Studio. Describe the job, Cortex drafts the agent, and you choose exactly which tools it may use. Its permission card shows what it may read and propose; anything it wants done waits in Approvals, and every rupee figure it states is checked by Veritas v1. Each plan includes a number of Agent Studio agents." },
   { q: "We're an owner-run business. Is this for us?", a: "Yes — Cortex started there. The page for growing businesses has the free 2-minute health check (no card, no account), the three-step start and the playbooks that run from day one." },
 ];
@@ -184,10 +186,32 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------- 4. FLAGSHIP: Cortex for Finance ---------- */}
-      <section id="finance" className="px-5 lg:px-10 py-24 lg:py-32 bg-secondary/20 border-y">
+      {/* ---------- 3. PROPRIETARY MOAT ---------- */}
+      <section id="moat" className="px-5 lg:px-10 py-24 lg:py-28 border-y bg-secondary/10">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="03">Flagship</SectionLabel>
+          <SectionLabel n="03">Proprietary Moat</SectionLabel>
+          <div className="mt-5 grid lg:grid-cols-[1fr_auto] gap-6 items-end mb-10">
+            <div>
+              <p className="eyebrow">Beyond simple chat wrappers</p>
+              <h2 className="font-display display-2 tracking-tightest mt-3">
+                Features that exist <span className="serif-em">nowhere else</span> in the market.
+              </h2>
+              <p className="mt-4 text-muted-foreground leading-7 max-w-2xl">
+                Traditional ERPs and generic AI copilots summarize what already happened. Cortex gives you live financial stress-testing, continuous Big-4 pre-flight audit defense, 0% fee UPI payment acceleration, and autonomous boardroom intelligence.
+              </p>
+            </div>
+            <Link href="/audit" className="inline-flex items-center gap-2 text-sm font-medium link-sweep">
+              Explore Audit Sentinel <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <UnrivaledMoat />
+        </div>
+      </section>
+
+      {/* ---------- 4. FLAGSHIP: Cortex for Finance ---------- */}
+      <section id="finance" className="px-5 lg:px-10 py-24 lg:py-32 bg-secondary/20 border-b">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="04">Flagship</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             <div>
               <p className="eyebrow">{finance.name}</p>
@@ -218,7 +242,7 @@ export default function Home() {
       {/* ---------- 5. SOLUTIONS ---------- */}
       <section id="solutions" className="px-5 lg:px-10 py-24 lg:py-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="04">Solutions</SectionLabel>
+          <SectionLabel n="05">Solutions</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-[1fr_auto] gap-6 items-end">
             <h2 className="font-display display-2 tracking-tightest max-w-3xl">One platform. <span className="serif-em">Four</span> agent teams.</h2>
             <Link href="/solutions" className="inline-flex items-center gap-2 text-sm font-medium link-sweep">All solutions <ArrowRight className="h-4 w-4" /></Link>
@@ -240,24 +264,24 @@ export default function Home() {
       {/* ---------- 6. THE TEAM AT WORK (the animated floor) ---------- */}
       <section className="px-5 lg:px-10 pb-24 lg:pb-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="05">Watch the team work</SectionLabel>
+          <SectionLabel n="06">Watch the team work</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 max-w-3xl">One night in a business, desk to desk. Each agent picks up where the last left off — and the last desk is always yours.</h2>
           <div className="mt-10"><AgentFloor /></div>
         </div>
       </section>
 
       {/* ---------- 7. COMPANY KNOWLEDGE ---------- */}
-      <KnowledgeSection label={<SectionLabel n="06">Company Knowledge</SectionLabel>} />
+      <KnowledgeSection label={<SectionLabel n="07">Company Knowledge</SectionLabel>} />
 
       {/* ---------- 8. SECURITY ---------- */}
       <div id="security" className="scroll-mt-16">
-        <EnterpriseSection label={<SectionLabel n="07">Security &amp; control</SectionLabel>} />
+        <EnterpriseSection label={<SectionLabel n="08">Security &amp; control</SectionLabel>} />
       </div>
 
       {/* ---------- 9. HOW A PILOT RUNS ---------- */}
       <section className="px-5 lg:px-10 py-24 lg:py-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="08">Getting started</SectionLabel>
+          <SectionLabel n="09">Getting started</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Start with one workflow. <span className="serif-em">Widen</span> from there.</h2>
           <ol className="mt-12 grid md:grid-cols-2 lg:grid-cols-4 gap-px bg-border border rounded-2xl overflow-hidden hairline">
             {PILOT.map((p) => (
@@ -274,7 +298,7 @@ export default function Home() {
       {/* ---------- 10. PRICING TEASER ---------- */}
       <section id="pricing" className="px-5 lg:px-10 pb-24 lg:pb-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="09">Pricing</SectionLabel>
+          <SectionLabel n="10">Pricing</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-[1fr_auto] gap-6 items-end">
             <h2 className="font-display display-3 tracking-tightest max-w-2xl">Priced by the size of your agent team. Plans from {ENTRY_PRICE_LABEL} a month.</h2>
             <Link href="/pricing" className="inline-flex items-center gap-2 text-sm font-medium link-sweep">Compare every plan <ArrowRight className="h-4 w-4" /></Link>
@@ -325,7 +349,7 @@ export default function Home() {
       {/* ---------- 12. QUESTIONS ---------- */}
       <section className="px-5 lg:px-10 pb-28">
         <div className="max-w-3xl mx-auto">
-          <SectionLabel n="10">Questions</SectionLabel>
+          <SectionLabel n="11">Questions</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">What teams ask before they start.</h2>
           <Faq items={FAQS} />
           <div className="mt-12 flex flex-wrap items-center gap-3">
