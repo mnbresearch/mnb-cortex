@@ -248,6 +248,20 @@ async function markStep(stepId: string, patch: Record<string, unknown>) {
   await db().from("agent_task_steps").update(patch).eq("id", stepId);
 }
 
+/*
+  "Answered by" — which provider served a step (Model Router). Written only once
+  the served_by column is known to exist (RUN-2026-11-20-model-router.sql), so
+  an unmigrated database keeps running agents exactly as before.
+*/
+let servedByColumn: boolean | null = null;
+async function servedPatch(servedBy: string | null): Promise<Record<string, unknown>> {
+  if (!servedBy) return {};
+  if (servedByColumn === null) {
+    try { const { error } = await db().from("agent_task_steps").select("served_by").limit(1); servedByColumn = !error; } catch { servedByColumn = false; }
+  }
+  return servedByColumn ? { served_by: servedBy } : {};
+}
+
 async function bumpTask(task: TaskRow, patch: Record<string, unknown>) {
   await db().from("agent_tasks").update({ ...patch, updated_at: nowIso() }).eq("id", task.id);
 }
@@ -312,8 +326,9 @@ async function contextFor(task: TaskRow, focus: string): Promise<string> {
   return [head, mem].filter(Boolean).join("\n\n");
 }
 
-async function runModel(task: TaskRow, opts: { brief: string; tools: string[]; prompt: string; context: string; profile?: typeof STANDARD }): Promise<{ text: string; calls: AgentToolCall[] }> {
+async function runModel(task: TaskRow, opts: { brief: string; tools: string[]; prompt: string; context: string; profile?: typeof STANDARD }): Promise<{ text: string; calls: AgentToolCall[]; servedBy: string | null }> {
   const calls: AgentToolCall[] = [];
+  let servedBy: string | null = null;
   const userId = task.created_by;
   const scope = {
     orgId: task.org_id, userId, brief: opts.brief,
@@ -321,8 +336,8 @@ async function runModel(task: TaskRow, opts: { brief: string; tools: string[]; p
     run: (name: string, args: any, guard: any) => runAgentTool(name, args, { orgId: task.org_id, userId, trace: calls }, guard),
   };
   const text = await withOrgAiKeys(task.org_id, () => runInAgentScope(scope, () =>
-    runCortex([{ role: "user", content: opts.prompt }], opts.context, opts.profile ?? STANDARD, { tools: opts.tools.length > 0, deadlineAt: Date.now() + STEP_BUDGET_MS })));
-  return { text, calls };
+    runCortex([{ role: "user", content: opts.prompt }], opts.context, opts.profile ?? STANDARD, { tools: opts.tools.length > 0, deadlineAt: Date.now() + STEP_BUDGET_MS, onServed: (x) => { servedBy = x.provider; } })));
+  return { text, calls, servedBy };
 }
 
 async function runPlanStep(task: TaskRow, step: StepRow): Promise<"continue" | "stop"> {
@@ -365,7 +380,7 @@ async function runSpecialistStep(task: TaskRow, step: StepRow, steps: StepRow[])
   const prompt = `${step.instruction}
 ${earlier ? `\nWHAT YOUR COLLEAGUES HAVE ALREADY FOUND (do not repeat their lookups):\n${earlier}\n` : ""}
 Use your tools to look up what you need — do not answer from memory. Report specific findings: names, amounts, dates. If something needs doing, use propose_action so it waits on the Approvals page, and say that it is waiting. If there is no data, say so plainly.`;
-  const { text, calls } = await runModel(task, { brief: agent.brief, tools: agent.tools, prompt, context: await contextFor(task, step.instruction || task.request) });
+  const { text, calls, servedBy } = await runModel(task, { brief: agent.brief, tools: agent.tools, prompt, context: await contextFor(task, step.instruction || task.request) });
 
   if (isEngineFailure(text)) {
     await refundIfCharged(charged.gate, "agent_step");
@@ -375,7 +390,7 @@ Use your tools to look up what you need — do not answer from memory. Report sp
   }
   const proposals = calls.filter((c) => c.name === "propose_action" && c.ok).length;
   const cost = creditCost("agent_step");
-  await markStep(step.id, { status: "done", output: text.slice(0, 20000), tool_calls: calls, credits: cost, error: null, finished_at: nowIso() });
+  await markStep(step.id, { status: "done", output: text.slice(0, 20000), tool_calls: calls, credits: cost, error: null, finished_at: nowIso(), ...(await servedPatch(servedBy)) });
   await bumpTask(task, { credits_used: task.credits_used + cost, proposals: task.proposals + proposals, status_reason: `${agent.name} finished.` });
   return "continue";
 }
@@ -389,14 +404,14 @@ async function runSynthesisStep(task: TaskRow, step: StepRow, steps: StepRow[]):
   const charged = await chargeUnit(task, "agent_synthesis");
   if ("stop" in charged) return pauseFor(task, step, charged.stop);
   const lead = CORE_AGENTS_BY_ID[step.agent_id || ""] ?? leadOf(task.team);
-  const { text } = await runModel(task, { brief: lead.brief, tools: [], prompt: synthesisPrompt(task.request, findings, await workspaceAgents(task.org_id)), context: "" });
+  const { text, servedBy } = await runModel(task, { brief: lead.brief, tools: [], prompt: synthesisPrompt(task.request, findings, await workspaceAgents(task.org_id)), context: "" });
   if (isEngineFailure(text)) {
     await refundIfCharged(charged.gate, "agent_synthesis");
     await markStep(step.id, { status: "pending", error: text.slice(0, 400) });
     return "stop";
   }
   const cost = creditCost("agent_synthesis");
-  await markStep(step.id, { status: "done", output: text.slice(0, 20000), credits: cost, finished_at: nowIso() });
+  await markStep(step.id, { status: "done", output: text.slice(0, 20000), credits: cost, finished_at: nowIso(), ...(await servedPatch(servedBy)) });
   await bumpTask(task, { credits_used: task.credits_used + cost, status_reason: `${lead.name} wrote the answer.` });
   return "continue";
 }

@@ -388,6 +388,7 @@ async function main() {
     ["source", "attribution"],
     ["score", "derived"],
     ["search", "derived"],
+    ["ai_routing", "model routing order (lib/ai/routing.ts); the credit waiver still requires the workspace's OWN verified key to serve the call (firstServingProvider), so reordering cannot move cost onto the platform"],
   ]);
 
   const unclassified = [...orgColumns].filter(

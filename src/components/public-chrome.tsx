@@ -213,7 +213,7 @@ export function PublicFooter() {
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-10 items-end">
             <div>
-              <p className="eyebrow text-background/50">MNB Cortex · The agent workspace</p>
+              <p className="eyebrow text-background/50">MNB Cortex · The enterprise agent workspace</p>
               <h2 className="font-display display-2 tracking-tightest mt-4">Agents run the work. <span className="serif-em">You</span> make the calls.</h2>
             </div>
             <div className="lg:justify-self-end flex flex-wrap gap-3">
@@ -236,7 +236,7 @@ export function PublicFooter() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-10">
             <div>
               <div className="flex items-center gap-2.5"><Logo size={30} /><BrandLockup tone="inverse" /></div>
-              <p className="mt-4 text-sm text-background/60 max-w-xs">The agent workspace for finance and operations teams: agents that work from your books and your company&rsquo;s knowledge, cite every answer and wait for your approval. Built by MNB Research, a brand of Abrobot Technologies Pvt Ltd, Delhi.</p>
+              <p className="mt-4 text-sm text-background/60 max-w-xs">The AI agent workspace for enterprises and growing businesses: agents that work from your systems and your company&rsquo;s knowledge, cite every answer and wait for your approval. Built by MNB Research, a brand of Abrobot Technologies Pvt Ltd, Delhi.</p>
               <a href="https://wa.me/919711488480" className="mt-4 inline-block text-sm link-sweep text-background/80">wa.me / +91 97114 88480</a>
             </div>
             {cols.map((c) => (

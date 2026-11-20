@@ -12,12 +12,15 @@ import { KnowledgeSection, EnterpriseSection } from "@/components/landing-knowle
 import { HeroFilm } from "@/components/home/hero-film";
 import { PlatformShowcase } from "@/components/home/platform-showcase";
 import { StudioDemo } from "@/components/home/studio-demo";
+import { PlatformCapabilities } from "@/components/home/capabilities";
 import { UnrivaledMoat } from "@/components/unrivaled-moat";
 
 /*
   THE HOMEPAGE, REBUILT FOR MNB CORTEX (November 2026).
 
-  Who it speaks to now: finance and operations teams at companies — the buyer
+  Who it speaks to now (Nov 2026, enterprise-first): enterprises first —
+  finance, operations and growth teams at companies and groups — with growing
+  businesses served as a capability of the same platform. The buyer
   who books a demo, brings IT in to pair Microsoft 365 or Google Workspace and
   asks about security before price. The owner-run business this page used to
   speak to has its own page, /business, with everything that was here (the
@@ -53,15 +56,15 @@ const PILOT = [
 ];
 
 const FAQS = [
-  { q: "What is MNB Cortex?", a: "An agent workspace for finance and operations teams. You hand Cortex an outcome — close the month, chase what is overdue, prepare the board pack — and a lead agent plans it, specialist agents do the steps in the background, and the result comes back with its sources, waiting for your approval." },
+  { q: "What is MNB Cortex?", a: "The AI agent workspace for enterprises — and for growing businesses. You hand Cortex an outcome — close the month, review a hundred contracts, chase what is overdue, prepare the board pack — and a lead agent plans it, specialist agents (built-in or your own) do the steps in the background on the models you choose, and the result comes back with its sources, checked, waiting for your approval, ready to send as Word, PowerPoint or Excel." },
   { q: "Does it replace our ERP or accounting software?", a: "No. Cortex reads exports from Tally, Zoho Books, Vyapar, Busy or your spreadsheets, and your company's mail, chats and documents. It never writes to your books. It does the work those systems were never built to do, on top of them." },
   { q: "What can the agents do without us?", a: "Nothing that leaves the workspace. Agents propose; reminders, status changes and exports wait in Approvals until someone says yes. The only exception is an Autopilot rule your admin writes, with limits such as an amount cap and a daily maximum." },
   { q: "How do we connect Microsoft 365 or Google Workspace?", a: "A workspace admin pairs them in Settings, step by step, in about ten minutes. Microsoft can use Cortex's app with one organisation-wide approval, or your own app in your own tenant; Google uses an Internal app in your own Workspace. Every permission is read-only. Available on Command and Enterprise." },
   { q: "How do we know an answer is right?", a: "Every answer names the email, chat, document or rows it came from, so you can open it. Veritas v1 then traces each rupee figure back to what the agents actually read and flags any figure it cannot find. Percentages and day counts are reported as not checked, never as verified." },
   { q: "Where does our data live, and who can see it?", a: "Each workspace is isolated at the database level with row-level security. Traffic is encrypted in transit; sign-in tokens and app secrets are encrypted at rest with AES-256-GCM; names and IDs are masked before anything reaches an AI model. Admins decide what is connected, and you can export every table in your workspace as JSON, or delete it, at any time." },
   { q: "How is it priced?", a: `Plans start at ${ENTRY_PRICE_LABEL} a month, and each plan sets how many agent tasks run at once and how many schedules you can keep. Usage runs on credits. Enterprise is quoted for groups that need more entities, SSO or a dedicated environment.` },
-  { q: "How is Cortex different from Model ML, Rogo or Hebbia?", a: "Those are built for investment professionals working on market data — pitch books, diligence, research. Cortex is built for the team that runs a company's own finance and operations: its books, its mail and documents, GST, TDS and 43B(h), with agents you can build yourself and actions that wait for approval. The comparison page sets it out cell by cell, with sources." },
-  { q: "How does Cortex help with statutory audits and CARO 2020?", a: "Cortex runs a continuous Big-4 pre-flight audit sentinel over your live ledger. It scores statutory readiness (0–100, Grade A+ to D), defends Section 43B(h) MSME terms, catches GSTR-2B vs 3B ITC mismatches, and scans for forensic invoice anomalies (duplicates, round-sum disbursement spikes). The Forensic Audit Agent (fin.audit) prepares audit working papers in one click so you are never surprised by qualification remarks." },
+  { q: "How is Cortex different from Model ML, Rogo or Hebbia?", a: "Those are built for investment professionals working on market data — pitch books, diligence, research. Cortex is built for the enterprise running its own operations: its books and systems, its mail and documents, Indian statutory work, with the same platform pieces — custom agents, document grids, model routing, finished deliverables, live share links, a notetaker and document review — plus approvals on every action and Veritas on every rupee. The comparison page sets it out cell by cell, with sources." },
+  { q: "How does Cortex help with statutory audits and CARO 2020?", a: "Cortex runs a daily pre-audit sentinel over your ledger, modelled on the checks statutory auditors run. It scores statutory readiness (0–100, Grade A+ to D), defends Section 43B(h) MSME terms, catches GSTR-2B vs 3B ITC mismatches, and scans for forensic invoice anomalies (duplicates, round-sum disbursement spikes). The Forensic Audit Agent (fin.audit) prepares audit working papers in one click so you are never surprised by qualification remarks." },
   { q: "Can we build our own agents?", a: "Yes, in Agent Studio. Describe the job, Cortex drafts the agent, and you choose exactly which tools it may use. Its permission card shows what it may read and propose; anything it wants done waits in Approvals, and every rupee figure it states is checked by Veritas v1. Each plan includes a number of Agent Studio agents." },
   { q: "We're an owner-run business. Is this for us?", a: "Yes — Cortex started there. The page for growing businesses has the free 2-minute health check (no card, no account), the three-step start and the playbooks that run from day one." },
 ];
@@ -87,15 +90,15 @@ export default function Home() {
         <div className="relative z-10 max-w-5xl mx-auto text-center">
           <Link href="/#platform" className="pill-label hover:text-foreground transition-colors">
             <span className="h-1.5 w-1.5 rounded-full bg-primary cx-pulse" />
-            Cortex 7 · The agent workspace
+            Cortex 7 · The enterprise agent workspace
           </Link>
           <h1 className="font-display display-xl tracking-tightest mt-8 text-balance">
             Agents that run the work.<br />You make the <span className="serif-em pr-1">calls.</span>
           </h1>
           <p className="mt-7 text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto leading-8 text-pretty">
-            MNB Cortex is the agent workspace for <span className="text-foreground font-medium">finance and operations teams</span>.
-            Agents read your books and your company&rsquo;s mail, chats and documents, do the work end to end, and bring you
-            the decisions — every answer cited, every rupee checked, nothing sent without your approval.
+            MNB Cortex is the AI agent workspace for <span className="text-foreground font-medium">enterprises</span> — and for the growing businesses on their way to becoming one.
+            Agent teams read your systems and your company&rsquo;s mail, chats and documents, do the work end to end on the models you choose,
+            and bring you the decisions — every answer cited, every rupee checked, nothing sent without your approval.
           </p>
           <div className="mt-9 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
             <Magnetic>
@@ -137,7 +140,7 @@ export default function Home() {
       {/* ---------- 3. PLATFORM: shown working ---------- */}
       <section id="platform" className="px-5 lg:px-10 py-24 lg:py-32 scroll-mt-16">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="01">Platform</SectionLabel>
+          <SectionLabel n="01">Shown working</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-[1.3fr_1fr] gap-6 items-end">
             <Kinetic as="h2" text={"One workspace.\nA team of agents that does the work."} className="font-display display-2 tracking-tightest" />
             <p className="text-muted-foreground leading-7 lg:pb-3">
@@ -186,18 +189,30 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ---------- THE WHOLE PLATFORM ---------- */}
+      <section id="capabilities" className="px-5 lg:px-10 py-24 lg:py-28 border-t scroll-mt-16">
+        <div className="max-w-7xl mx-auto">
+          <SectionLabel n="03">The platform</SectionLabel>
+          <div className="mt-5 grid lg:grid-cols-[1fr_auto] gap-6 items-end mb-12">
+            <h2 className="font-display display-2 tracking-tightest max-w-3xl">Everything an enterprise <span className="serif-em">agent</span> platform needs. In one workspace.</h2>
+            <Link href="/compare" className="inline-flex items-center gap-2 text-sm font-medium link-sweep">See how it compares <ArrowRight className="h-4 w-4" /></Link>
+          </div>
+          <PlatformCapabilities />
+        </div>
+      </section>
+
       {/* ---------- 3. PROPRIETARY MOAT ---------- */}
       <section id="moat" className="px-5 lg:px-10 py-24 lg:py-28 border-y bg-secondary/10">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="03">Proprietary Moat</SectionLabel>
+          <SectionLabel n="04">Beyond copilots</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-[1fr_auto] gap-6 items-end mb-10">
             <div>
               <p className="eyebrow">Beyond simple chat wrappers</p>
               <h2 className="font-display display-2 tracking-tightest mt-3">
-                Features that exist <span className="serif-em">nowhere else</span> in the market.
+                Built for what generic copilots <span className="serif-em">leave out.</span>
               </h2>
               <p className="mt-4 text-muted-foreground leading-7 max-w-2xl">
-                Traditional ERPs and generic AI copilots summarize what already happened. Cortex gives you live financial stress-testing, continuous Big-4 pre-flight audit defense, 0% fee UPI payment acceleration, and autonomous boardroom intelligence.
+                Traditional ERPs and generic AI copilots summarize what already happened. Cortex gives you live financial stress-testing, daily pre-audit checks, 0% fee UPI payment acceleration, and autonomous boardroom intelligence.
               </p>
             </div>
             <Link href="/audit" className="inline-flex items-center gap-2 text-sm font-medium link-sweep">
@@ -211,7 +226,7 @@ export default function Home() {
       {/* ---------- 4. FLAGSHIP: Cortex for Finance ---------- */}
       <section id="finance" className="px-5 lg:px-10 py-24 lg:py-32 bg-secondary/20 border-b">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="04">Flagship</SectionLabel>
+          <SectionLabel n="05">Flagship</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             <div>
               <p className="eyebrow">{finance.name}</p>
@@ -242,7 +257,7 @@ export default function Home() {
       {/* ---------- 5. SOLUTIONS ---------- */}
       <section id="solutions" className="px-5 lg:px-10 py-24 lg:py-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="05">Solutions</SectionLabel>
+          <SectionLabel n="06">Solutions</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-[1fr_auto] gap-6 items-end">
             <h2 className="font-display display-2 tracking-tightest max-w-3xl">One platform. <span className="serif-em">Four</span> agent teams.</h2>
             <Link href="/solutions" className="inline-flex items-center gap-2 text-sm font-medium link-sweep">All solutions <ArrowRight className="h-4 w-4" /></Link>
@@ -264,24 +279,24 @@ export default function Home() {
       {/* ---------- 6. THE TEAM AT WORK (the animated floor) ---------- */}
       <section className="px-5 lg:px-10 pb-24 lg:pb-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="06">Watch the team work</SectionLabel>
+          <SectionLabel n="07">Watch the team work</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 max-w-3xl">One night in a business, desk to desk. Each agent picks up where the last left off — and the last desk is always yours.</h2>
           <div className="mt-10"><AgentFloor /></div>
         </div>
       </section>
 
       {/* ---------- 7. COMPANY KNOWLEDGE ---------- */}
-      <KnowledgeSection label={<SectionLabel n="07">Company Knowledge</SectionLabel>} />
+      <KnowledgeSection label={<SectionLabel n="08">Company Knowledge</SectionLabel>} />
 
       {/* ---------- 8. SECURITY ---------- */}
       <div id="security" className="scroll-mt-16">
-        <EnterpriseSection label={<SectionLabel n="08">Security &amp; control</SectionLabel>} />
+        <EnterpriseSection label={<SectionLabel n="09">Security &amp; control</SectionLabel>} />
       </div>
 
       {/* ---------- 9. HOW A PILOT RUNS ---------- */}
       <section className="px-5 lg:px-10 py-24 lg:py-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="09">Getting started</SectionLabel>
+          <SectionLabel n="10">Getting started</SectionLabel>
           <h2 className="font-display display-2 tracking-tightest mt-5 max-w-3xl">Start with one workflow. <span className="serif-em">Widen</span> from there.</h2>
           <ol className="mt-12 grid md:grid-cols-2 lg:grid-cols-4 gap-px bg-border border rounded-2xl overflow-hidden hairline">
             {PILOT.map((p) => (
@@ -298,7 +313,7 @@ export default function Home() {
       {/* ---------- 10. PRICING TEASER ---------- */}
       <section id="pricing" className="px-5 lg:px-10 pb-24 lg:pb-28">
         <div className="max-w-7xl mx-auto">
-          <SectionLabel n="10">Pricing</SectionLabel>
+          <SectionLabel n="11">Pricing</SectionLabel>
           <div className="mt-5 grid lg:grid-cols-[1fr_auto] gap-6 items-end">
             <h2 className="font-display display-3 tracking-tightest max-w-2xl">Priced by the size of your agent team. Plans from {ENTRY_PRICE_LABEL} a month.</h2>
             <Link href="/pricing" className="inline-flex items-center gap-2 text-sm font-medium link-sweep">Compare every plan <ArrowRight className="h-4 w-4" /></Link>
@@ -349,7 +364,7 @@ export default function Home() {
       {/* ---------- 12. QUESTIONS ---------- */}
       <section className="px-5 lg:px-10 pb-28">
         <div className="max-w-3xl mx-auto">
-          <SectionLabel n="11">Questions</SectionLabel>
+          <SectionLabel n="12">Questions</SectionLabel>
           <h2 className="font-display display-3 tracking-tightest mt-5 mb-10">What teams ask before they start.</h2>
           <Faq items={FAQS} />
           <div className="mt-12 flex flex-wrap items-center gap-3">

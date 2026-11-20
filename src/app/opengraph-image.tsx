@@ -23,7 +23,7 @@ export default function OG() {
           <div style={{ display: "flex" }}>You make the&nbsp;<span style={{ color: "#c9a24a" }}>calls.</span></div>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 26, color: "#9a9aa4" }}>
-          <div>The agent workspace for finance and operations teams</div>
+          <div>The AI agent workspace for enterprises</div>
           <div style={{ color: "#c9a24a" }}>mnbcortex.app</div>
         </div>
       </div>
