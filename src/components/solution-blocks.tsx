@@ -18,9 +18,9 @@ const TOOL_LABEL: Record<string, string> = {
 
 export function AgentTeamGrid({ team }: { team: TeamId }) {
   return (
-    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-px bg-border border rounded-2xl overflow-hidden hairline">
+    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
       {agentsInTeam(team).map((a) => (
-        <div key={a.id} className="bg-card p-6 flex flex-col gap-3">
+        <div key={a.id} className={`rounded-2xl border p-6 flex flex-col gap-3 ${a.lead ? "bg-primary/5 border-primary/30" : "bg-card"}`}>
           <div className="flex items-center gap-2">
             {a.lead ? <Crown className="h-4 w-4 text-primary" aria-label="Team lead" /> : <Bot className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
             <div className="font-display text-xl tracking-tightest">{a.name}</div>

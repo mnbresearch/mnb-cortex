@@ -63,7 +63,7 @@ checkpointed, so a timeout or deploy never loses finished work.
 Supabase SQL editor. Until then the Workspace shows a setup message and
 `/api/health` reports the tables as not applied.
 
-Tests: `npm run test:agent-workspace`.
+Tests: `npm run test:agent-workspace` (shape and rules) and `npm run test:agent-runner` (the real runner, end to end against an in-memory database).
 
 ---
 
