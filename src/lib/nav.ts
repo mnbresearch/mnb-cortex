@@ -68,6 +68,7 @@ export const NAV = [
   { href: "/funding", label: "Funding & Loans", icon: Landmark, group: "Get Paid & Cash" },
   { href: "/captable", label: "Cap Table", icon: PieChart, group: "Get Paid & Cash" },
   { href: "/valuation", label: "Business Valuation", icon: Scale, group: "Get Paid & Cash" },
+  { href: "/audit", label: "Audit Sentinel", icon: ShieldCheck, group: "Tax & Compliance" },
   { href: "/msme", label: "MSME 45-day (43B(h))", icon: ShieldAlert, group: "Tax & Compliance" },
   { href: "/gst", label: "GST & Compliance", icon: Receipt, group: "Tax & Compliance" },
   { href: "/gst-reader", label: "GST Return Reader", icon: ReceiptText, group: "Tax & Compliance" },
