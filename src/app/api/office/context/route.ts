@@ -27,7 +27,7 @@ async function handleContext(req: NextRequest) {
     let orgProfile: any = null;
 
     if (orgId && sb) {
-      const { data: orgData } = await sb.from("orgs").select("name").eq("id", orgId).maybeSingle();
+      const { data: orgData } = await sb.from("organizations").select("name").eq("id", orgId).maybeSingle();
       if (orgData?.name) orgName = orgData.name;
       orgProfile = await getOrgProfile().catch(() => null);
     }
