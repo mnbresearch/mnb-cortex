@@ -291,7 +291,8 @@ export default function OutlookTaskpanePage() {
           <button
             onClick={() => fetchPartyContext(senderEmail)}
             disabled={loading}
-            className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+            aria-label="Refresh Party Intelligence"
+            className="h-9 w-9 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition-colors"
             title="Refresh Party Intelligence"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
