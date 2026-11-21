@@ -143,9 +143,9 @@ const nextConfig = {
   },
   async headers() {
     return [
+      { source: "/((?!office|api/office).*)", headers: securityHeaders },
       { source: "/office/:path*", headers: officeHeaders },
       { source: "/api/office/:path*", headers: officeHeaders },
-      { source: "/:path*", headers: securityHeaders },
     ];
   },
 };
