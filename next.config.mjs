@@ -78,7 +78,7 @@ const officeHeaders = [
     value: [
       "object-src 'none'",
       "base-uri 'self'",
-      "form-action 'self'",
+      "form-action 'self' https://api.cashfree.com https://sandbox.cashfree.com https://payments.cashfree.com https://payments-test.cashfree.com",
       "frame-ancestors 'self' https://*.officeapps.live.com https://*.office.com https://*.office365.com https://office.live.com https://outlook.office.com https://outlook.office365.com https://*.sharepoint.com https://*.microsoft.com",
     ].join("; "),
   },
