@@ -2,6 +2,7 @@ import { Topbar } from "@/components/topbar";
 import { PageShell } from "@/components/page-shell";
 import { Card } from "@/components/ui/card";
 import { Section } from "@/components/section";
+import { getUserAndOrg } from "@/lib/data";
 import Link from "next/link";
 import {
   FileSpreadsheet,
@@ -22,7 +23,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default function OfficeAddinsPage() {
+export default async function OfficeAddinsPage() {
+  const { orgId } = await getUserAndOrg();
   return (
     <>
       <Topbar

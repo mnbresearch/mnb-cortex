@@ -3,8 +3,8 @@
   "generated_from": "src/app/(app)/**/page.tsx, one hop through imports and /api route handlers",
   "totals": {
     "modules": 146,
-    "reads-only": 26,
-    "reference": 20,
+    "reads-only": 27,
+    "reference": 19,
     "data-backed": 99,
     "browser-only": 1
   },
@@ -858,8 +858,8 @@
     },
     "integrations/office": {
       "route": "integrations/office",
-      "depth": "reference",
-      "reads": false,
+      "depth": "reads-only",
+      "reads": true,
       "writes": false,
       "ai": false,
       "seeded": false,
