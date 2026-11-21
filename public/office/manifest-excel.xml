@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+  xsi:type="TaskpaneApp">
+
+  <Id>c817e042-494b-4fc4-8d7d-5cb90861c8a1</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>MNB Research</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="MNB Cortex for Excel" />
+  <Description DefaultValue="Autonomous finance, Big-4 forensic audit sentinel, and ledger intelligence directly inside Microsoft Excel." />
+  <IconUrl DefaultValue="https://cortex.mnbresearch.com/icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="https://cortex.mnbresearch.com/icon-128.png" />
+  <SupportUrl DefaultValue="https://cortex.mnbresearch.com/support" />
+
+  <AppDomains>
+    <AppDomain>https://cortex.mnbresearch.com</AppDomain>
+    <AppDomain>https://mnbresearch.com</AppDomain>
+  </AppDomains>
+
+  <Hosts>
+    <Host Name="Workbook" />
+  </Hosts>
+
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://cortex.mnbresearch.com/office/excel" />
+  </DefaultSettings>
+
+  <Permissions>ReadWriteDocument</Permissions>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Workbook">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title"/>
+            <Description resid="GetStarted.Desc"/>
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
+          </GetStarted>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <CustomTab id="MNB.Cortex.Tab">
+              <Group id="MNB.Cortex.Group">
+                <Label resid="Group.Label" />
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16" />
+                  <bt:Image size="32" resid="Icon.32" />
+                  <bt:Image size="80" resid="Icon.80" />
+                </Icon>
+                <Control xsi:type="Button" id="MNB.Cortex.TaskpaneBtn">
+                  <Label resid="Btn.Label" />
+                  <Supertip>
+                    <Title resid="Btn.Label" />
+                    <Description resid="Btn.Tooltip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16" />
+                    <bt:Image size="32" resid="Icon.32" />
+                    <bt:Image size="80" resid="Icon.80" />
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>MNB.Cortex.ExcelTaskpane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url" />
+                  </Action>
+                </Control>
+              </Group>
+              <Label resid="Tab.Label" />
+            </CustomTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://cortex.mnbresearch.com/icon-16.png" />
+        <bt:Image id="Icon.32" DefaultValue="https://cortex.mnbresearch.com/icon-32.png" />
+        <bt:Image id="Icon.80" DefaultValue="https://cortex.mnbresearch.com/icon-80.png" />
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://cortex.mnbresearch.com/integrations/office" />
+        <bt:Url id="Taskpane.Url" DefaultValue="https://cortex.mnbresearch.com/office/excel" />
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GetStarted.Title" DefaultValue="MNB Cortex Loaded" />
+        <bt:String id="Group.Label" DefaultValue="MNB Cortex" />
+        <bt:String id="Btn.Label" DefaultValue="Cortex Copilot" />
+        <bt:String id="Tab.Label" DefaultValue="Cortex" />
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="GetStarted.Desc" DefaultValue="Cortex Financial Copilot &amp; Forensic Audit Sentinel is ready to analyze your workbook." />
+        <bt:String id="Btn.Tooltip" DefaultValue="Open the MNB Cortex autonomous financial &amp; audit taskpane" />
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

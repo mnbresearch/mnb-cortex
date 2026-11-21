@@ -138,6 +138,7 @@ export const NAV = [
   { href: "/boardroom", label: "Board Deck", icon: MonitorPlay, group: "AI & Automation", sub: "Documents & reports" },
   { href: "/import", label: "Import data", icon: Upload, group: "Settings & Data", sub: "Your data" },
   { href: "/excel", label: "Excel", icon: FileSpreadsheet, group: "Settings & Data", sub: "Your data" },
+  { href: "/integrations/office", label: "Office Add-ins", icon: FileSpreadsheet, group: "Settings & Data", sub: "Your data" },
   { href: "/data", label: "Data Explorer", icon: Database, group: "Settings & Data", sub: "Your data" },
   { href: "/integrations", label: "Integrations", icon: Plug, group: "Settings & Data", sub: "Your data" },
   { href: "/setup-guides", label: "Connection guides", icon: KeyRound, group: "Settings & Data", sub: "Your data" },

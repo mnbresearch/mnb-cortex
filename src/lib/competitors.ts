@@ -37,7 +37,7 @@ export const ROW_ORDER: RowKey[] = ["builtFor", "worksFrom", "india", "customAge
 
 export const CORTEX: Record<RowKey, string> = {
   builtFor: "Finance and operations teams running a company — from owner-run businesses to groups",
-  worksFrom: "Your books (Tally, Zoho Books, Vyapar, Busy, Odoo, spreadsheets) plus your company's mail, Teams chats, documents and MCP-connected systems",
+  worksFrom: "Your books (Tally, Zoho Books, Vyapar, Busy, Odoo, spreadsheets) plus your company's mail, Teams chats, documents, native Microsoft Excel & Outlook add-ins, and MCP-connected systems",
   india: "Built in: statutory calendar for your registration, GSTR-2B ITC reconciliation, MSME 43B(h) exposure, TDS and advance tax",
   customAgents: "Agent Studio: build agents in plain words, choose exactly which tools each may use, and see its permission card",
   approvals: "Yes, by default. Every reminder, alert or export waits in Approvals unless you write an Autopilot rule with limits",
@@ -77,7 +77,7 @@ export const COMPETITORS: Competitor[] = [
       security: "ISO 27001, SOC 2 Type II, GDPR",
     },
     chooseThem: "You are a bank, fund or consultancy whose work is pitch books, models and diligence on market data from PitchBook, FactSet or Capital IQ, done inside Excel and PowerPoint.",
-    chooseCortex: "You run a company's own finance and operations — collections, payables, the close, GST and TDS, the board pack — from Tally, Zoho Books or spreadsheets, and you want every agent action to wait for approval.",
+    chooseCortex: "You run a company's own finance and operations — collections, payables, the close, GST and TDS, the board pack — from Tally, Zoho Books or spreadsheets, with native Excel & Outlook add-ins and approvals on every agent action.",
     keywords: ["Model ML alternative", "Model ML alternative India", "AI finance agent for companies"],
   },
   {

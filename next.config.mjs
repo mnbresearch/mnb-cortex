@@ -66,6 +66,23 @@ const securityHeaders = [
     ].join("; "),
   },
 ];
+
+const officeHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  { key: "X-DNS-Prefetch-Control", value: "on" },
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'self' https://*.officeapps.live.com https://*.office.com https://*.office365.com https://office.live.com https://outlook.office.com https://outlook.office365.com https://*.sharepoint.com https://*.microsoft.com",
+    ].join("; "),
+  },
+];
 const nextConfig = {
   reactStrictMode: true,
   /*
@@ -125,7 +142,11 @@ const nextConfig = {
     ],
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/office/:path*", headers: officeHeaders },
+      { source: "/api/office/:path*", headers: officeHeaders },
+      { source: "/:path*", headers: securityHeaders },
+    ];
   },
 };
 export default nextConfig;
