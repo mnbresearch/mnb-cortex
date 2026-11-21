@@ -5,13 +5,13 @@ import { Play, X, Volume2 } from "lucide-react";
 /*
   THE PRODUCT FILM, in the hero.
 
-  public/media/cortex-film-loop.mp4 is the MNB Cortex launch film (MNB Research
-  video studio, Nov 2026) cut to its first 29 seconds with the sound removed —
-  the old end card ("early-warning system") is trimmed off because the product
-  has moved on from that line. It plays muted and looped as the hero visual;
-  "Watch the film" opens the same cut with its voice-over.
+  public/media/cortex-film.mp4 is the MNB Cortex v2 launch film (Nov 2026,
+  45 s: hook, Delegate, Ask, Verify, Approve, security, end card), encoded at
+  1280x720 for the web. cortex-film-loop.mp4 is its first 30 seconds, muted,
+  with no end card — captions are burned in, so it reads without sound — and
+  plays looped as the hero visual; "Watch the film" opens the voiced cut.
 
-  The figures on the dashboard in the film are illustrative, and the caption
+  The figures on the product screens in the film are illustrative, and the caption
   under the frame says so — the same rule every mock-up on this site follows.
 
   Reduced motion: no autoplay; the poster stands in and the film is one click
@@ -68,7 +68,7 @@ export function HeroFilm() {
               <span className="grid place-items-center h-7 w-7 sm:h-9 sm:w-9 rounded-full bg-primary text-primary-foreground transition-transform group-hover:scale-105">
                 <Play className="h-4 w-4 translate-x-[1px]" fill="currentColor" />
               </span>
-              Watch the film <span className="text-muted-foreground font-normal">0:29</span>
+              Watch the film <span className="text-muted-foreground font-normal">0:45</span>
             </button>
           </div>
         </div>
