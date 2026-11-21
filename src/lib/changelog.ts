@@ -5,7 +5,16 @@
 export type Release = { v: string; date: string; items: string[] };
 
 export const RELEASES: Release[] = [
-  { v: "7.3.0", date: "Latest", items: [
+  { v: "7.4.0", date: "Latest", items: [
+    "MNB Cortex is now the AI agent workspace for enterprises — and for growing businesses, as one capability of the same platform",
+    "Grids: ask the same questions across many contracts, emails and reports at once; every cell is quoted from its own document, the quote is checked, and the grid exports to Excel",
+    "Finished deliverables: any agent result downloads as a Word document, PowerPoint deck or Excel workbook, with the Veritas line and the work log inside",
+    "Live share links: send a result or a grid as a read-only page that stays current, expires when you choose, counts its views and can be revoked",
+    "Model Router: choose Balanced, Speed or Frontier across Gemini, Groq, Claude and GPT in Settings; every agent step now shows which model answered",
+    "Notetaker: upload a meeting recording for a speaker-labelled transcript, then minutes, decisions and actions",
+    "Document Review: check a document before it goes out — placeholders, totals that don't add up, figures stated two ways — and see what changed since the last draft",
+  ] },
+  { v: "7.3.0", date: "Earlier", items: [
     "Agent Studio — build your own agents in plain words: Cortex drafts the agent, you choose exactly which tools it may use, and its permission card shows what it may read, what it may propose and what it can never do",
     "Your agents join their team: the lead agent can plan them into team tasks, requests in their own words route to them, and they work under the same approvals, credit ceilings and Veritas checks as every built-in agent",
     "A new comparison page sets MNB Cortex beside Model ML, Rogo, Hebbia and Microsoft's Finance agents — every cell sourced from each company's own website",

@@ -48,6 +48,7 @@ export const NAV = [
   { href: "/workspace", label: "Agent Workspace", icon: BrainCircuit, group: "Home" },
   { href: "/workspace/agents", label: "Agent Teams", icon: Network, group: "Home" },
   { href: "/knowledge", label: "Company Knowledge", icon: Database, group: "Home" },
+  { href: "/grids", label: "Grids", icon: Table2, group: "Home" },
   { href: "/chat", label: "Ask Cortex", icon: MessageSquare, group: "Home" },
   { href: "/brief", label: "Daily Brief", icon: Sunrise, group: "Home" },
   { href: "/action-center", label: "Action Center", icon: ListChecks, group: "Home" },

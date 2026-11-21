@@ -45,7 +45,8 @@ for (const c of C.COMPETITORS) {
   check(/^[a-z0-9-]+-alternative$/.test(c.slug), `${c.name}: slug is an "-alternative" page`, c.slug);
   check(!/cheap|cheaper|fraction of|expensive|overpriced/i.test(Object.values(c.cells).join(" ")), `${c.name}: no price judgement about them`);
 }
-const allText = JSON.stringify(C.CORTEX) + JSON.stringify(C.COMPETITORS) + JSON.stringify(C.TOPICS);
+/* Words inside curly quotes are the competitor's own, quoted from their site — not our claim. */
+const allText = (JSON.stringify(C.CORTEX) + JSON.stringify(C.COMPETITORS) + JSON.stringify(C.TOPICS)).replace(/\u201c[^\u201d]*\u201d/g, "");
 check(!/\b(best|#1|number one|world'?s leading|industry-leading|only one|unmatched|unrivalled|unrivaled)\b/i.test(allText), "no superlatives in the comparison data");
 check(/No third-party attestation yet/.test(C.CORTEX.security), "our own security cell is honest about attestations");
 
@@ -53,6 +54,9 @@ check(/No third-party attestation yet/.test(C.CORTEX.security), "our own securit
 const exists = (p) => existsSync(p);
 check(exists("src/lib/agents/studio.ts") && /Agent Studio/.test(C.CORTEX.customAgents), "Agent Studio exists for the custom-agents claim");
 check(exists("src/lib/veritas.ts") && /Veritas v1/.test(C.CORTEX.verification), "Veritas exists for the verification claim");
+check(exists("src/lib/ai/routing.ts") && /Model Router/.test(C.CORTEX.models), "the Model Router exists for the models claim");
+check(exists("src/lib/grids/core.ts") && /Grids/.test(C.CORTEX.grids), "Grids exists for the grids claim");
+check(exists("src/lib/deliverables/build.ts") && exists("src/lib/share.ts") && /Word/.test(C.CORTEX.deliverables), "deliverables and share links exist for the deliverables claim");
 for (const m of ["itc", "msme", "compliance", "tds", "close"]) check(exists(`src/app/(app)/${m}/page.tsx`), `module /${m} exists for the statutory/close claims`);
 for (const t of C.TOPICS) {
   const path = t.href.split("#")[0] || "/";

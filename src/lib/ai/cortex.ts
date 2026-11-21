@@ -1,4 +1,5 @@
-import { aiKey } from "@/lib/ai/byo";
+import { aiKey, currentOrgAiKeys } from "@/lib/ai/byo";
+import { routeOrder } from "@/lib/ai/routing";
 // Server-only AI layer for the AI COO.
 // Supports FREE providers (Google Gemini, Groq) and paid (Anthropic, OpenAI).
 // Set ONE key; provider is auto-detected (or force with AI_PROVIDER).
@@ -84,12 +85,17 @@ export type { GenProfile } from "@/lib/ai/generation";
 function providerChain(): string[] {
   const forced = (process.env.AI_PROVIDER || "").toLowerCase().trim();
   if (forced) return [forced];
-  const chain: string[] = [];
-  if (aiKey("GEMINI_API_KEY")) chain.push("gemini");
-  if (aiKey("GROQ_API_KEY")) chain.push("groq");
-  if (aiKey("XAI_API_KEY") || aiKey("GROK_API_KEY")) chain.push("xai");
-  if (aiKey("ANTHROPIC_API_KEY")) chain.push("anthropic");
-  if (aiKey("OPENAI_API_KEY")) chain.push("openai");
+  /*
+    The workspace's routing mode orders the providers (lib/ai/routing.ts). The
+    billing check, firstServingProvider() in lib/ai/byo.ts, walks the SAME
+    routeOrder(), so who answers and who pays can never disagree.
+  */
+  const has: Record<string, boolean> = {
+    gemini: !!aiKey("GEMINI_API_KEY"), groq: !!aiKey("GROQ_API_KEY"),
+    xai: !!(aiKey("XAI_API_KEY") || aiKey("GROK_API_KEY")),
+    anthropic: !!aiKey("ANTHROPIC_API_KEY"), openai: !!aiKey("OPENAI_API_KEY"),
+  };
+  const chain = routeOrder(currentOrgAiKeys().routing).filter((p) => has[p]);
   return chain.length ? chain : ["none"];
 }
 
@@ -139,7 +145,11 @@ export function hasAIKey(): boolean {
   platform killed the function, and a killed function never reaches the
   caller's refund. Default: DEFAULT_RUN_BUDGET_MS from now.
 */
-export type RunOptions = { tools?: boolean; deadlineAt?: number };
+export type RunOptions = {
+  tools?: boolean; deadlineAt?: number;
+  /** Told which provider answered — the agent runner records it on the step ("answered by"). */
+  onServed?: (s: { provider: string }) => void;
+};
 
 /** The first words of the answer runCortex gives when no provider answered — callers refund on it. */
 export const ENGINE_UNREACHABLE = "I couldn't reach the AI engine.";
@@ -231,7 +241,7 @@ export async function runCortex(messages: Msg[], context: string, profile: GenPr
         break outer;
       }
       const out = await runOnce(provider, outbound, context2, profile, toolOrg, toolUser, vault, deadline);
-      if (out !== null) return vault.restore(out);
+      if (out !== null) { try { opts.onServed?.({ provider }); } catch { /* reporting only */ } return vault.restore(out); }
 
       const st = lastFailure?.status;
       const worthRetrying = !st || st >= 500;   // network blip or provider 5xx

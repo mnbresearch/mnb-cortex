@@ -17,6 +17,7 @@ import { isSuperAdmin } from "@/lib/superadmin";
 import { ACCENT_NAMES } from "@/lib/utils";
 import { INDUSTRIES as AGENT_INDUSTRIES, SECTORS } from "@/lib/agents/catalog";
 import { BackupButton } from "@/components/backup-button";
+import { ModelRouterSettings } from "@/components/model-router";
 import { KnowledgeConnections } from "@/components/knowledge-connections";
 import { Database, LogOut, Building2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
@@ -140,6 +141,10 @@ export default async function Settings() {
                   </p>
                 )}
               </div>
+            </Section>
+
+            <Section id="model-routing" title="Model routing" desc="Which AI providers answer for this workspace, and in what order">
+              <ModelRouterSettings />
             </Section>
 
             {canEditAi && (

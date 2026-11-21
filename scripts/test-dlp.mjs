@@ -118,7 +118,7 @@ const ENT = [
   check(/fence\("business snapshot", vault\.redact\(context\)\)/.test(cx), "wiring: the snapshot is redacted (then fenced) before it leaves");
   check(/messages\.map\(\(m\) => \(\{ \.\.\.m, content: vault\.redact\(m\.content\) \}\)\)/.test(cx), "wiring: the conversation is redacted");
   check(/runOnce\(provider, outbound,/.test(cx), "wiring: providers get the redacted conversation, not the original");
-  check(/if \(out !== null\) return vault\.restore\(out\)/.test(cx), "wiring: the answer is restored before the owner sees it");
+  check(/if \(out !== null\)[^\n]*return vault\.restore\(out\)/.test(cx), "wiring: the answer is restored before the owner sees it");
   check((cx.match(/dispatchTool\(fname, vault\.restoreDeep\(/g) || []).length === 2, "wiring: both tool loops restore the model's arguments before a lookup (chat and agent steps alike, through dispatchTool)");
   check((cx.match(/vault\.redactDeep\(forModel\(result, guard\)\)/g) || []).length === 2, "wiring: both tool loops redact results before the model sees them");
   /* `deadline` rides along since model fetches became time-bounded (cortex.ts fetchSignal). */
@@ -150,6 +150,7 @@ const ENT = [
     ["src/lib/ai/image.ts", "image prompts the owner writes"],
     ["src/lib/ai/video.ts", "video prompts the owner writes"],
     ["src/lib/ai/visibility.ts", "asks engines about the business by name, by design"],
+    ["src/app/api/meetings/transcribe/route.ts", "meeting audio cannot be masked; sent only after the person ticks a box saying so (consent=1)"],
   ]);
   check(callers.length >= 8, "coverage: found the model callers", callers.join(", "));
   for (const f of callers) {
